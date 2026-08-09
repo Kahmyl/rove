@@ -31,14 +31,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
   readonly id = `browser_${randomUUID()}`;
 
   private closed = false;
-  private readonly pages = new PlaywrightPageRegistry();
+  private readonly pageRegistry = new PlaywrightPageRegistry();
   private recovering: Promise<void> | null = null;
 
   private constructor(
     private readonly browser: Browser,
     private readonly context: BrowserContext,
   ) {
-    this.pages.setOnPageClosed((_pageId, wasActive) => {
+    this.pageRegistry.setOnPageClosed((_pageId, wasActive) => {
       if (this.closed || !wasActive) return;
       void this.recoverActivePage();
     });
@@ -53,9 +53,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   private registerNewPage(page: Page): void {
-    const state = this.pages.registerPage(page);
+    const state = this.pageRegistry.registerPage(page);
     // A newly opened page becomes the active page (application-level state).
-    this.pages.activate(state.id);
+    this.pageRegistry.activate(state.id);
   }
 
   private ensureOpen(): void {
@@ -63,7 +63,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   private requireActivePageId(): string {
-    const pageId = this.pages.activeId();
+    const pageId = this.pageRegistry.activeId();
     if (pageId === undefined) {
       throw new RoveError({ code: "PAGE_NOT_FOUND", message: "The browser session has no active page." });
     }
@@ -74,10 +74,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private recoverActivePage(): Promise<void> {
     this.recovering ??= (async () => {
       try {
-        if (this.closed || this.pages.activeId() !== undefined) return;
-        const latest = this.pages.latestId();
+        if (this.closed || this.pageRegistry.activeId() !== undefined) return;
+        const latest = this.pageRegistry.latestId();
         if (latest !== undefined) {
-          this.pages.activate(latest);
+          this.pageRegistry.activate(latest);
           return;
         }
         await this.context.newPage();
@@ -91,8 +91,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async navigate(url: string): Promise<ActionResult> {
     this.ensureOpen();
     const pageId = this.requireActivePageId();
-    const page = this.pages.pageFor(pageId);
-    const previousRevision = this.pages.stateFor(pageId).revision;
+    const page = this.pageRegistry.pageFor(pageId);
+    const previousRevision = this.pageRegistry.stateFor(pageId).revision;
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
     } catch (error) {
@@ -107,12 +107,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
       throw new RoveError({ code: "NAVIGATION_FAILED", message: `Navigation to ${url} failed.` });
     }
     try {
-      await this.pages.syncMetadata(pageId);
+      await this.pageRegistry.syncMetadata(pageId);
     } catch (error) {
       if (isBrowserClosedError(error)) throw browserClosedError();
       throw error;
     }
-    const state = this.pages.stateFor(pageId);
+    const state = this.pageRegistry.stateFor(pageId);
     return {
       ok: true,
       action: "navigate",
@@ -128,34 +128,34 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async pages(): Promise<PageSummary[]> {
     this.ensureOpen();
     await Promise.all(
-      this.pages.summaries().map(async (summary) => {
+      this.pageRegistry.summaries().map(async (summary) => {
         try {
-          await this.pages.syncMetadata(summary.id);
+          await this.pageRegistry.syncMetadata(summary.id);
         } catch {
           // Page disappeared concurrently; the registry is re-read below.
         }
       }),
     );
-    return this.pages.summaries();
+    return this.pageRegistry.summaries();
   }
 
   async switchPage(pageId: string): Promise<PageSummary> {
     this.ensureOpen();
-    const page = this.pages.pageFor(pageId);
-    this.pages.activate(pageId);
+    const page = this.pageRegistry.pageFor(pageId);
+    this.pageRegistry.activate(pageId);
     try {
       await page.bringToFront();
     } catch (error) {
       if (isBrowserClosedError(error)) throw browserClosedError();
       throw error;
     }
-    const state = await this.pages.syncMetadata(pageId);
+    const state = await this.pageRegistry.syncMetadata(pageId);
     return this.toSummary(state);
   }
 
   async closePage(pageId: string): Promise<void> {
     this.ensureOpen();
-    const page = this.pages.pageFor(pageId);
+    const page = this.pageRegistry.pageFor(pageId);
     await page.close();
     await this.recoverActivePage();
   }
@@ -231,7 +231,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch {
       // Browser already closed; continue shutdown.
     }
-    this.pages.clear();
+    this.pageRegistry.clear();
   }
 
   private toSummary(state: PageState): PageSummary {

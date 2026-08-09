@@ -23,7 +23,8 @@
     "docker:reset": "docker compose down --volumes --remove-orphans",
     "dev:runtime": "pnpm --filter @rove/runtime dev",
     "dev:mcp": "pnpm --filter @rove/mcp dev",
-    "dev:companion": "pnpm --filter @rove/companion dev"
+    "dev:companion": "pnpm --filter @rove/companion dev",
+    "browser:demo": "pnpm --filter @rove/browser demo"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
