@@ -1,0 +1,27 @@
+export const TOOL_CATALOG = [
+  "session.start",
+  "session.status",
+  "session.end",
+  "session.observations",
+  "browser.navigate",
+  "browser.inspect",
+  "browser.click",
+  "browser.type",
+  "browser.press",
+  "browser.scroll",
+  "browser.back",
+  "browser.forward",
+  "browser.screenshot",
+  "browser.pages",
+  "browser.switch_page",
+  "browser.close_page",
+  "control.status",
+  "control.request_human",
+  "control.wait",
+  "evidence.capture",
+  "evidence.save_record",
+  "evidence.list",
+  "evidence.read",
+] as const;
+
+export type RoveToolName = (typeof TOOL_CATALOG)[number];

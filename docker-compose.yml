@@ -1,0 +1,55 @@
+name: rove
+
+x-node-build: &node-build
+  context: .
+  dockerfile: docker/Dockerfile.dev
+
+services:
+  runtime:
+    build: *node-build
+    environment:
+      ROVE_HOME: /workspace/.rove
+      ROVE_RUNTIME_HOST: 0.0.0.0
+      ROVE_RUNTIME_PORT: 47820
+      # Browser execution is host-side until PlaywrightBrowserEngine is implemented.
+      ROVE_BROWSER_HEADLESS: "true"
+    command: ["pnpm", "--filter", "@rove/runtime", "dev"]
+    ports:
+      - "127.0.0.1:${ROVE_RUNTIME_PORT:-47820}:47820"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:47820/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - rove-data:/workspace/.rove
+    restart: unless-stopped
+    stop_grace_period: 10s
+    init: true
+    develop:
+      watch:
+        - action: sync
+          path: apps/runtime/src
+          target: /workspace/apps/runtime/src
+        - action: rebuild
+          path: packages/protocol/src
+        - action: rebuild
+          path: packages/browser/src
+        - action: rebuild
+          path: packages/storage/src
+        - action: rebuild
+          path: packages/config/src
+        - action: rebuild
+          path: apps/runtime/package.json
+        - action: rebuild
+          path: pnpm-lock.yaml
+
+volumes:
+  rove-data:

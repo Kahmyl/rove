@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22-alpine
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+RUN corepack enable
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/runtime/package.json apps/runtime/package.json
+COPY apps/mcp/package.json apps/mcp/package.json
+COPY apps/companion/package.json apps/companion/package.json
+COPY packages/protocol/package.json packages/protocol/package.json
+COPY packages/browser/package.json packages/browser/package.json
+COPY packages/storage/package.json packages/storage/package.json
+COPY packages/config/package.json packages/config/package.json
+
+RUN --mount=type=cache,id=rove-pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+COPY . .
+
+# Workspace packages export their compiled output at runtime.
+RUN pnpm build
+
+CMD ["pnpm", "--filter", "@rove/runtime", "start"]

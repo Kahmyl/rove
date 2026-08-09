@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+.rove/*
+!.rove/.gitkeep

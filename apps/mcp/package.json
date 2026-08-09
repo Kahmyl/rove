@@ -1,0 +1,20 @@
+{
+  "name": "@rove/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.2",
+    "@rove/config": "workspace:*",
+    "@rove/protocol": "workspace:*",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": { "tsx": "^4.20.3" }
+}
