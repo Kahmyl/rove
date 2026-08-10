@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+import { McpProcess } from "./mcp-process.js";
+import { waitForMcpReady } from "./mcp-readiness.js";
 import { allocateLoopbackPort } from "./port-allocation.js";
 import { RuntimeProcess } from "./runtime-process.js";
 import { waitForRuntimeReady } from "./runtime-readiness.js";
@@ -7,14 +9,25 @@ import { waitForRuntimeReady } from "./runtime-readiness.js";
 export type DesktopHostState =
   "starting" | "ready" | "degraded" | "stopping" | "failed";
 
-export interface DesktopRuntimeConnection {
+export interface DesktopServiceConnection {
   baseUrl: string;
   token: string;
   port: number;
 }
 
+export interface DesktopMcpConnection extends DesktopServiceConnection {
+  path: string;
+  endpointUrl: string;
+}
+
+export interface DesktopHostConnection {
+  runtime: DesktopServiceConnection;
+  mcp: DesktopMcpConnection;
+}
+
 export interface DesktopHostOptions {
   runtimeDirectory: string;
+  mcpDirectory: string;
   home: string;
   browserHeadless: boolean;
   browser: "chrome" | "chromium";
@@ -26,6 +39,8 @@ export class DesktopHost {
 
   private runtime: RuntimeProcess | undefined;
 
+  private mcp: McpProcess | undefined;
+
   private intentionalStop = false;
 
   constructor(private readonly options: DesktopHostOptions) {}
@@ -34,8 +49,8 @@ export class DesktopHost {
     return this.state;
   }
 
-  async start(): Promise<DesktopRuntimeConnection> {
-    if (this.runtime !== undefined) {
+  async start(): Promise<DesktopHostConnection> {
+    if (this.runtime !== undefined || this.mcp !== undefined) {
       throw new Error("Rove Desktop Host is already running.");
     }
 
@@ -43,18 +58,19 @@ export class DesktopHost {
     this.intentionalStop = false;
 
     const host = "127.0.0.1";
-    const port = await allocateLoopbackPort();
 
-    const token = randomBytes(32).toString("hex");
+    const runtimePort = await allocateLoopbackPort();
 
-    const baseUrl = `http://${host}:${port}`;
+    const runtimeToken = randomBytes(32).toString("hex");
+
+    const runtimeBaseUrl = `http://${host}:${runtimePort}`;
 
     const runtime = new RuntimeProcess({
       runtimeDirectory: this.options.runtimeDirectory,
       home: this.options.home,
       host,
-      port,
-      token,
+      port: runtimePort,
+      token: runtimeToken,
       browserHeadless: this.options.browserHeadless,
       browser: this.options.browser,
     });
@@ -70,23 +86,68 @@ export class DesktopHost {
     runtime.start();
 
     try {
-      await waitForRuntimeReady(baseUrl, {
+      await waitForRuntimeReady(runtimeBaseUrl, {
+        timeoutMs: this.options.startupTimeoutMs ?? 15_000,
+      });
+
+      const mcpPort = await allocateLoopbackPort();
+
+      const mcpToken = randomBytes(32).toString("hex");
+
+      const mcpPath = "/mcp";
+
+      const mcpBaseUrl = `http://${host}:${mcpPort}`;
+
+      const mcp = new McpProcess({
+        mcpDirectory: this.options.mcpDirectory,
+        runtimeUrl: runtimeBaseUrl,
+        runtimeToken,
+        host,
+        port: mcpPort,
+        path: mcpPath,
+        token: mcpToken,
+        allowedHosts: [`${host}:${mcpPort}`, `localhost:${mcpPort}`],
+      });
+
+      this.mcp = mcp;
+
+      mcp.onExit(() => {
+        if (!this.intentionalStop && this.state !== "stopping") {
+          this.state = "degraded";
+        }
+      });
+
+      mcp.start();
+
+      await waitForMcpReady(mcpBaseUrl, {
         timeoutMs: this.options.startupTimeoutMs ?? 15_000,
       });
 
       this.state = "ready";
 
       return {
-        baseUrl,
-        token,
-        port,
+        runtime: {
+          baseUrl: runtimeBaseUrl,
+          token: runtimeToken,
+          port: runtimePort,
+        },
+        mcp: {
+          baseUrl: mcpBaseUrl,
+          endpointUrl: `${mcpBaseUrl}${mcpPath}`,
+          token: mcpToken,
+          port: mcpPort,
+          path: mcpPath,
+        },
       };
     } catch (error) {
       this.state = "failed";
       this.intentionalStop = true;
 
+      await this.mcp?.stop().catch(() => undefined);
+
       await runtime.stop().catch(() => undefined);
 
+      this.mcp = undefined;
       this.runtime = undefined;
 
       throw error;
@@ -94,17 +155,35 @@ export class DesktopHost {
   }
 
   async stop(): Promise<void> {
+    const mcp = this.mcp;
     const runtime = this.runtime;
 
-    if (runtime === undefined) {
+    if (mcp === undefined && runtime === undefined) {
       return;
     }
 
     this.state = "stopping";
     this.intentionalStop = true;
 
-    await runtime.stop();
+    let shutdownError: unknown;
 
+    try {
+      await mcp?.stop();
+    } catch (error) {
+      shutdownError = error;
+    }
+
+    try {
+      await runtime?.stop();
+    } catch (error) {
+      shutdownError ??= error;
+    }
+
+    this.mcp = undefined;
     this.runtime = undefined;
+
+    if (shutdownError !== undefined) {
+      throw shutdownError;
+    }
   }
 }

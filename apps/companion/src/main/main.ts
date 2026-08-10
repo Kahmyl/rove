@@ -17,7 +17,9 @@ if (existsSync(rootEnv)) {
 
 const config = loadConfig();
 
-const manageRuntime = process.argv.includes("--rove-manage-runtime");
+const manageRuntime =
+  process.argv.includes("--rove-manage-services") ||
+  process.argv.includes("--rove-manage-runtime");
 
 let companionWindow: BrowserWindow | undefined;
 
@@ -111,8 +113,12 @@ async function startDesktop(): Promise<void> {
       process.env.ROVE_DESKTOP_RUNTIME_DIR ??
       resolve(process.cwd(), "../runtime");
 
+    const mcpDirectory =
+      process.env.ROVE_DESKTOP_MCP_DIR ?? resolve(process.cwd(), "../mcp");
+
     desktopHost = new DesktopHost({
       runtimeDirectory,
+      mcpDirectory,
       home: config.home,
       browserHeadless: config.browser.headless,
       browser: config.browser.preferredBrowser,
@@ -121,7 +127,10 @@ async function startDesktop(): Promise<void> {
     const connection = await desktopHost.start();
 
     runtime = new CompanionRuntimeClient(
-      runtimeClientOptions(connection.baseUrl, connection.token),
+      runtimeClientOptions(
+        connection.runtime.baseUrl,
+        connection.runtime.token,
+      ),
     );
   } else {
     runtime = new CompanionRuntimeClient(
