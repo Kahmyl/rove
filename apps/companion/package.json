@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -b tsconfig.json --force && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "pnpm --filter @rove/config build && pnpm build && electron ."
+    "dev": "pnpm --filter @rove/config build && pnpm build && electron .",
+    "dev:desktop": "pnpm -w build && electron . --rove-manage-runtime"
   },
   "dependencies": {
     "@rove/protocol": "workspace:*",
