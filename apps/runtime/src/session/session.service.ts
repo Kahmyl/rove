@@ -59,6 +59,7 @@ export class SessionService {
       updatedAt: now,
       endedAt: now,
     };
+    delete ended.handoff;
     await this.sessions.update(ended);
     return ended;
   }

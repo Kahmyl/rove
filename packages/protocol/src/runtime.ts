@@ -1,8 +1,10 @@
 import type {
   ActionResult,
   ClickRequest,
-  ControlState,
-  ControlTransferRequest,
+  ControlStatus,
+  ControlWaitRequest,
+  ControlWaitResult,
+  RequestHumanRequest,
   Evidence,
   EvidenceReadResult,
   InspectOptions,
@@ -38,8 +40,11 @@ export interface RoveRuntime {
   switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
   closePage(sessionId: string, pageId: string): Promise<void>;
   captureScreenshot(sessionId: string, options?: ScreenshotOptions): Promise<Evidence>;
-  transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState>;
-  getControl(sessionId: string): Promise<ControlState>;
+  getControlStatus(sessionId: string): Promise<ControlStatus>;
+  requestHuman(sessionId: string, request: RequestHumanRequest): Promise<ControlStatus>;
+  takeHumanControl(sessionId: string): Promise<ControlStatus>;
+  returnAgentControl(sessionId: string): Promise<ControlStatus>;
+  waitForControl(sessionId: string, request?: ControlWaitRequest): Promise<ControlWaitResult>;
   saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence>;
   listEvidence(sessionId: string): Promise<Evidence[]>;
   readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult>;

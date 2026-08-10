@@ -240,6 +240,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
     );
   }
 
+  async invalidateAllTargets(): Promise<number> {
+    this.ensureOpen();
+    let invalidated = 0;
+    for (const summary of this.pageRegistry.summaries()) {
+      if (!this.pageRegistry.has(summary.id)) continue;
+      const page = this.pageRegistry.pageFor(summary.id);
+      const current = this.pageRegistry.stateFor(summary.id);
+      const next = this.pageRegistry.update(summary.id, recordMutation(current, true));
+      await this.inspector.invalidatePage(page, summary.id, next.revision);
+      invalidated += 1;
+    }
+    return invalidated;
+  }
+
   async click(target: TargetReference): Promise<ActionResult> {
     this.ensureOpen();
     const beforePages = this.pageRegistry.summaries();

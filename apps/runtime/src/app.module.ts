@@ -15,6 +15,7 @@ import { SessionController } from "./api/session.controller.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
+import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { RuntimeService } from "./runtime.service.js";
@@ -43,6 +44,7 @@ assertRuntimeBindingSafe(config);
     { provide: APP_FILTER, useClass: RoveErrorFilter },
     SessionService,
     ControlService,
+    ControlWaitService,
     BrowserCommandCoordinator,
     BrowserService,
     ObservationService,

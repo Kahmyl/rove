@@ -11,6 +11,7 @@ import { startFixtureServer, type FixtureServer } from "../../../packages/browse
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
+import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { RuntimeService } from "./runtime.service.js";
@@ -32,12 +33,14 @@ async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()): P
   homes.push(home);
   const sessions = new SessionService(new FileSessionStore(home));
   const browser = new BrowserService(engine);
+  const observations = new ObservationService(new FileObservationStore(home));
   const runtime = new RuntimeService(
     sessions,
     new ControlService(),
+    new ControlWaitService(sessions, observations),
     new BrowserCommandCoordinator(),
     browser,
-    new ObservationService(new FileObservationStore(home)),
+    observations,
     new EvidenceService(new FileEvidenceStore(home)),
     loadConfig({ cwd: home, env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" } }),
   );
@@ -165,6 +168,8 @@ describe("Milestone 4 runtime integration", () => {
     const order: string[] = [];
     let releaseSlow!: () => void;
     const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve; });
+    let markSlowStarted!: () => void;
+    const slowStarted = new Promise<void>((resolve) => { markSlowStarted = resolve; });
     let browserCounter = 0;
     const engine: BrowserEngine = {
       start: async () => {
@@ -175,6 +180,7 @@ describe("Milestone 4 runtime integration", () => {
           navigate: async (url: string) => {
             if (url.endsWith("/slow")) {
               order.push(`${browserId}:slow:start`);
+              markSlowStarted();
               await slowGate;
               order.push(`${browserId}:slow:end`);
             } else {
@@ -192,7 +198,7 @@ describe("Milestone 4 runtime integration", () => {
     active.push({ runtime, id: firstSession.id }, { runtime, id: secondSession.id });
 
     const first = runtime.navigate(firstSession.id, { url: "https://example.test/slow" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await slowStarted;
     const queued = runtime.navigate(firstSession.id, { url: "https://example.test/fast" });
     await runtime.navigate(secondSession.id, { url: "https://example.test/fast" });
     expect(order).toEqual(["browser_fake_0:slow:start", "browser_fake_1:fast"]);

@@ -63,7 +63,7 @@ services:
     environment:
       ROVE_HOME: /workspace/.rove
       ROVE_RUNTIME_URL: http://runtime:47820
-      ROVE_RUNTIME_TOKEN: ${ROVE_RUNTIME_TOKEN:-}
+      ROVE_RUNTIME_TOKEN: ${ROVE_RUNTIME_TOKEN:-rove-local-compose-token-change-me}
       ROVE_MCP_TRANSPORT: http
       ROVE_MCP_HOST: 0.0.0.0
       ROVE_MCP_PORT: 47821

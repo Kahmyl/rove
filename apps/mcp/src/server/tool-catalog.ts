@@ -16,6 +16,8 @@ export const TOOL_CATALOG = [
   "evidence.list",
   "evidence.read",
   "control.status",
+  "control.request_human",
+  "control.wait",
 ] as const;
 
 export type RoveToolName = (typeof TOOL_CATALOG)[number];

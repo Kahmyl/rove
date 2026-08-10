@@ -11,7 +11,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  handler(input: unknown): Promise<unknown>;
+  handler(input: unknown, signal?: AbortSignal): Promise<unknown>;
 }
 
 export function registerTools(server: Server, runtime: RuntimeClient): void {
@@ -22,13 +22,13 @@ export function registerTools(server: Server, runtime: RuntimeClient): void {
     tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<ToolResult> => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<ToolResult> => {
     const handler = handlers.get(request.params.name);
     if (handler === undefined) {
       return toolFailure(new Error(`Unknown tool: ${request.params.name}`));
     }
     try {
-      return toolSuccess(await handler(request.params.arguments ?? {}));
+      return toolSuccess(await handler(request.params.arguments ?? {}, extra.signal));
     } catch (error) {
       return toolFailure(error);
     }

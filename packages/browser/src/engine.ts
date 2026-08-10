@@ -25,6 +25,7 @@ export interface BrowserSession {
   switchPage(pageId: string): Promise<PageSummary>;
   closePage(pageId: string): Promise<void>;
   invalidateTargets(): Promise<void>;
+  invalidateAllTargets(): Promise<number>;
   close(): Promise<void>;
 }
 
