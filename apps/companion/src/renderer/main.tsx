@@ -1,38 +1,203 @@
-import { StrictMode, useEffect, useState } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
-import type { SessionSnapshot } from "@rove/protocol";
+
+import type { CompanionSnapshot } from "../shared/desktop-api.js";
+import { toCompanionViewModel } from "./state.js";
 import "./styles.css";
 
 function App() {
-  const [session, setSession] = useState<SessionSnapshot | null>(null);
-  useEffect(() => { void window.rove.getSession().then(setSession); }, []);
+  const [snapshot, setSnapshot] =
+    useState<CompanionSnapshot | null>(null);
 
-  const controller = session?.controller === "human" ? "You" : (session?.controller ?? "None");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const next =
+        await window.rove.getSnapshot();
+
+      setSnapshot(next);
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to reach the Rove runtime.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+
+    const timer = window.setInterval(
+      () => void refresh(),
+      1_000,
+    );
+
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  const run = async (
+    operation: () => Promise<CompanionSnapshot | null>,
+  ) => {
+    setBusy(true);
+
+    try {
+      setSnapshot(await operation());
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The Rove operation failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const view =
+    toCompanionViewModel(snapshot);
+
   return (
     <main className="shell">
-      <header><span className="mark">R</span><h1>Rove</h1><span className="status">Local</span></header>
+      <header>
+        <span className="mark">R</span>
+        <h1>Rove</h1>
+        <span className="status">
+          {error === null ? "Local" : "Offline"}
+        </span>
+      </header>
+
+      {view.handoffReason !== undefined && (
+        <section className="handoff">
+          <p className="eyebrow">
+            Agent needs your help
+          </p>
+          <strong>{view.handoffReason}</strong>
+          <button
+            disabled={
+              busy || !view.canTakeControl
+            }
+            onClick={() =>
+              void run(
+                window.rove.takeControl,
+              )
+            }
+          >
+            Take Control
+          </button>
+        </section>
+      )}
+
       <section className="card">
-        <p className="eyebrow">Current session</p>
+        <p className="eyebrow">
+          Current session
+        </p>
+
         <dl>
-          <div><dt>Status</dt><dd>{session?.status ?? "No session"}</dd></div>
-          <div><dt>Mode</dt><dd>{session?.mode ?? "—"}</dd></div>
-          <div><dt>Controller</dt><dd>{controller}</dd></div>
+          <div>
+            <dt>Session</dt>
+            <dd className="session-id">
+              {loading
+                ? "Loading…"
+                : view.sessionId}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Mode</dt>
+            <dd>{view.mode}</dd>
+          </div>
+
+          <div>
+            <dt>Controller</dt>
+            <dd>{view.controller}</dd>
+          </div>
+
+          <div>
+            <dt>Status</dt>
+            <dd>{view.status}</dd>
+          </div>
         </dl>
-        {session?.controller === "human" ? (
-          <button onClick={() => void window.rove.returnControl()}>Return control</button>
+
+        {view.canReturnControl ? (
+          <button
+            disabled={busy}
+            onClick={() =>
+              void run(
+                window.rove.returnControl,
+              )
+            }
+          >
+            Return Control
+          </button>
         ) : (
-          <button disabled={!session} onClick={() => void window.rove.takeControl()}>Take control</button>
+          <button
+            disabled={
+              busy || !view.canTakeControl
+            }
+            onClick={() =>
+              void run(
+                window.rove.takeControl,
+              )
+            }
+          >
+            Take Control
+          </button>
         )}
       </section>
+
       <section className="metrics">
-        <div><strong>0</strong><span>Observations</span></div>
-        <div><strong>0</strong><span>Evidence</span></div>
+        <div>
+          <strong>
+            {view.observationCount}
+          </strong>
+          <span>Observations</span>
+        </div>
+
+        <div>
+          <strong>
+            {view.evidenceCount}
+          </strong>
+          <span>Evidence</span>
+        </div>
       </section>
-      <button className="secondary" disabled={!session} onClick={() => void window.rove.finishSession()}>
-        Finish session
+
+      {error !== null && (
+        <p className="error">{error}</p>
+      )}
+
+      <button
+        className="secondary"
+        disabled={busy || !view.canFinish}
+        onClick={() =>
+          void run(
+            window.rove.finishSession,
+          )
+        }
+      >
+        Finish Session
       </button>
     </main>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
+createRoot(
+  document.getElementById("root")!,
+).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

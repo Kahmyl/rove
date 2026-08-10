@@ -203,3 +203,91 @@ describe("Milestone 4 runtime HTTP API", () => {
     await json(baseUrl, `/sessions/${sessionId}/end`, { method: "POST" }, authorization);
   });
 });
+
+describe("Milestone 8 Companion session discovery", () => {
+  it("lists active sessions and filters Companion Mode", async () => {
+    const {
+      baseUrl,
+      authorization,
+    } = await startHttp();
+
+    const agent = await json(
+      baseUrl,
+      "/sessions",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "agent",
+        }),
+      },
+      authorization,
+    );
+
+    expect(agent.response.status).toBe(201);
+
+    const companion = await json(
+      baseUrl,
+      "/sessions",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "companion",
+        }),
+      },
+      authorization,
+    );
+
+    expect(companion.response.status).toBe(201);
+
+    const companionId = String(companion.body.id);
+
+    const active = await json(
+      baseUrl,
+      "/sessions?mode=companion",
+      {},
+      authorization,
+    );
+
+    expect(active.response.status).toBe(200);
+
+    expect(
+      active.body as unknown as unknown[],
+    ).toEqual([
+      expect.objectContaining({
+        id: companionId,
+        mode: "companion",
+        status: "active",
+        controller: "agent",
+      }),
+    ]);
+
+    await json(
+      baseUrl,
+      `/sessions/${companionId}/end`,
+      {
+        method: "POST",
+      },
+      authorization,
+    );
+
+    const afterEnd = await json(
+      baseUrl,
+      "/sessions?mode=companion",
+      {},
+      authorization,
+    );
+
+    expect(
+      afterEnd.body as unknown as unknown[],
+    ).toEqual([]);
+
+    await json(
+      baseUrl,
+      `/sessions/${String(agent.body.id)}/end`,
+      {
+        method: "POST",
+      },
+      authorization,
+    );
+  });
+});

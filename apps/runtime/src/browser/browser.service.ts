@@ -32,6 +32,10 @@ export class BrowserService {
     await browser.close();
   }
 
+  sessionIds(): string[] {
+    return [...this.sessions.keys()];
+  }
+
   has(sessionId: string): boolean {
     return this.sessions.has(sessionId);
   }

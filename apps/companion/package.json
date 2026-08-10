@@ -3,16 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/main/main.js",
+  "main": "dist/main/main/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -b tsconfig.json --force && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "vite"
+    "dev": "pnpm --filter @rove/config build && pnpm build && electron ."
   },
   "dependencies": {
     "@rove/protocol": "workspace:*",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "@rove/config": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.1.10",

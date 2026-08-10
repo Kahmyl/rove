@@ -32,6 +32,9 @@ importers:
 
   apps/companion:
     dependencies:
+      '@rove/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@rove/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

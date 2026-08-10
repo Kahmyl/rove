@@ -21,6 +21,7 @@ import {
   type ScreenshotOptions,
   type ScrollOptions,
   type Session,
+  type SessionMode,
   type StartSessionRequest,
   type TypeRequest,
   type RequestHumanRequest,
@@ -87,6 +88,23 @@ export class RuntimeService implements RoveRuntime {
 
   getSession(sessionId: string): Promise<Session> {
     return this.sessions.get(sessionId);
+  }
+
+  async listActiveSessions(
+    mode?: SessionMode,
+  ): Promise<Session[]> {
+    const sessions = await Promise.all(
+      this.browser
+        .sessionIds()
+        .map((sessionId) => this.sessions.get(sessionId)),
+    );
+
+    return sessions.filter(
+      (session) =>
+        (session.status === "active" ||
+          session.status === "awaiting_human") &&
+        (mode === undefined || session.mode === mode),
+    );
   }
 
   async endSession(sessionId: string): Promise<Session> {

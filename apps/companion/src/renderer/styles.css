@@ -24,3 +24,35 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .metrics strong { font-size: 25px; }
 .metrics span { color: #647169; font-size: 12px; }
 .secondary { color: #34433b; background: transparent; border: 1px solid #cbd2cb; }
+
+.handoff {
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid #d8c9a6;
+  border-radius: 16px;
+  background: #fff9e8;
+}
+
+.handoff strong {
+  display: block;
+  margin-bottom: 16px;
+  line-height: 1.45;
+}
+
+.session-id {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  font-size: 12px;
+}
+
+.error {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 10px;
+  color: #7a2929;
+  background: #f8e3e3;
+  font-size: 13px;
+}
