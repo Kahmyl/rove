@@ -5,10 +5,16 @@ export function companionWindowOptions(
   dirname: string,
 ): BrowserWindowConstructorOptions {
   return {
+    title: "Rove Companion",
     width: 420,
-    height: 680,
+    height: 500,
     minWidth: 360,
-    minHeight: 520,
+    minHeight: 440,
+    backgroundColor: "#f3f5f1",
+    icon: join(
+      dirname,
+      "../../../resources/rove-app-icon.png",
+    ),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

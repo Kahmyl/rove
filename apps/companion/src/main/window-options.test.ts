@@ -6,11 +6,34 @@ import {
 
 import { companionWindowOptions } from "./window-options.js";
 
-describe("Companion BrowserWindow security", () => {
-  it("keeps the renderer isolated from unrestricted Node APIs", () => {
-    const options = companionWindowOptions(
-      "/tmp/rove/main",
+describe("Companion BrowserWindow", () => {
+  it("uses the compact Companion window defaults", () => {
+    const options =
+      companionWindowOptions(
+        "/tmp/rove/main",
+      );
+
+    expect(options).toMatchObject({
+      title: "Rove Companion",
+      width: 420,
+      height: 500,
+      minWidth: 360,
+      minHeight: 440,
+      backgroundColor: "#f3f5f1",
+    });
+
+    expect(
+      options.icon,
+    ).toMatch(
+      /rove-app-icon\.png$/,
     );
+  });
+
+  it("keeps the renderer isolated from unrestricted Node APIs", () => {
+    const options =
+      companionWindowOptions(
+        "/tmp/rove/main",
+      );
 
     expect(
       options.webPreferences,

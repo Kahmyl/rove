@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  nativeImage,
 } from "electron";
 import { loadConfig } from "@rove/config";
 import { existsSync } from "node:fs";
@@ -78,6 +79,23 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === "darwin") {
+    const iconPath = join(
+      import.meta.dirname,
+      "../../../resources/rove-app-icon.png",
+    );
+
+    const icon =
+      nativeImage.createFromPath(iconPath);
+
+    if (
+      !icon.isEmpty() &&
+      app.dock !== undefined
+    ) {
+      app.dock.setIcon(icon);
+    }
+  }
+
   registerIpc();
   createWindow();
 
