@@ -21,11 +21,13 @@ import { SessionController } from "./api/session.controller.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
+import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { RuntimeService } from "./runtime.service.js";
 import { SessionService } from "./session/session.service.js";
 import { ROVE_CONFIG } from "./tokens.js";
+import { ControlController } from "./api/control.controller.js";
 
 const apps: INestApplication[] = [];
 const homes: string[] = [];
@@ -37,7 +39,7 @@ function requiredTarget(inspection: PageInspection, name: string) {
   return item;
 }
 
-async function startHttp(token?: string): Promise<{ baseUrl: string; authorization: string; home: string }> {
+async function startHttp(token?: string): Promise<{ baseUrl: string; authorization: string; home: string; waits: ControlWaitService }> {
   const home = await mkdtemp(join(tmpdir(), "rove-http-"));
   homes.push(home);
   const config = loadConfig({
@@ -49,18 +51,21 @@ async function startHttp(token?: string): Promise<{ baseUrl: string; authorizati
     },
   });
   const sessions = new SessionService(new FileSessionStore(home));
+  const observations = new ObservationService(new FileObservationStore(home));
+  const waits = new ControlWaitService(sessions, observations);
   const runtime = new RuntimeService(
     sessions,
     new ControlService(),
+    waits,
     new BrowserCommandCoordinator(),
     new BrowserService(new PlaywrightBrowserEngine()),
-    new ObservationService(new FileObservationStore(home)),
+    observations,
     new EvidenceService(new FileEvidenceStore(home)),
     config,
   );
 
   @Module({
-    controllers: [HealthController, SessionController, BrowserController, ObservationController, EvidenceController],
+    controllers: [HealthController, SessionController, BrowserController, ObservationController, EvidenceController, ControlController],
     providers: [
       { provide: RuntimeService, useValue: runtime },
       { provide: ROVE_CONFIG, useValue: config },
@@ -74,7 +79,7 @@ async function startHttp(token?: string): Promise<{ baseUrl: string; authorizati
   apps.push(app);
   await app.listen(0, "127.0.0.1");
   const address = app.getHttpServer().address() as AddressInfo;
-  return { baseUrl: `http://127.0.0.1:${address.port}`, authorization: token === undefined ? "" : `Bearer ${token}`, home };
+  return { baseUrl: `http://127.0.0.1:${address.port}`, authorization: token === undefined ? "" : `Bearer ${token}`, home, waits };
 }
 
 async function json(baseUrl: string, path: string, init: RequestInit = {}, authorization = "") {
@@ -163,5 +168,38 @@ describe("Milestone 4 runtime HTTP API", () => {
   it("rejects non-loopback configuration without a token", () => {
     const config = loadConfig({ env: { ROVE_RUNTIME_HOST: "0.0.0.0" } });
     expect(() => assertRuntimeBindingSafe(config)).toThrowError(expect.objectContaining({ code: "INVALID_CONFIGURATION" }));
+  });
+
+  it("serves authenticated explicit control operations and cancels disconnected waits", async () => {
+    const token = "runtime-control-token-123456";
+    const { baseUrl, authorization, waits } = await startHttp(token);
+    const started = await json(baseUrl, "/sessions", { method: "POST", body: JSON.stringify({ mode: "agent" }) }, authorization);
+    const sessionId = String(started.body.id);
+    expect((await json(baseUrl, `/sessions/${sessionId}/control`, {}, authorization)).body).toMatchObject({ controller: "agent", status: "active" });
+    const requested = await json(baseUrl, `/sessions/${sessionId}/control/request-human`, {
+      method: "POST",
+      body: JSON.stringify({ reason: "Manual update" }),
+    }, authorization);
+    expect(requested.body).toMatchObject({ controller: null, status: "awaiting_human", handoff: { reason: "Manual update" } });
+    const waitPromise = json(baseUrl, `/sessions/${sessionId}/control/wait?afterSeq=${String(requested.body.observationSeq)}&timeoutMs=1000`, {}, authorization);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const taken = await json(baseUrl, `/sessions/${sessionId}/control/take`, { method: "POST" }, authorization);
+    expect(taken.body).toMatchObject({ controller: "human" });
+    expect((await waitPromise).body).toMatchObject({ event: "human_took_control" });
+    const returned = await json(baseUrl, `/sessions/${sessionId}/control/return`, { method: "POST" }, authorization);
+    expect(returned.body).toMatchObject({ controller: "agent" });
+
+    const abort = new AbortController();
+    const disconnected = fetch(`${baseUrl}/sessions/${sessionId}/control/wait?afterSeq=${String(returned.body.observationSeq)}&timeoutMs=10000`, {
+      headers: { authorization },
+      signal: abort.signal,
+    });
+    while (waits.waiterCount(sessionId) === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+    abort.abort();
+    await expect(disconnected).rejects.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(waits.waiterCount(sessionId)).toBe(0);
+    expect((await json(baseUrl, `/sessions/${sessionId}/control`, {}, authorization)).body).toMatchObject({ status: "active", controller: "agent" });
+    await json(baseUrl, `/sessions/${sessionId}/end`, { method: "POST" }, authorization);
   });
 });

@@ -15,6 +15,8 @@ describe("TOOL_CATALOG", () => {
         "browser.scroll",
         "browser.type",
         "control.status",
+        "control.request_human",
+        "control.wait",
         "evidence.list",
         "evidence.read",
         "evidence.save_record",
@@ -24,5 +26,9 @@ describe("TOOL_CATALOG", () => {
         "session.status",
       ].sort(),
     );
+    expect(TOOL_CATALOG).not.toContain("control.take_human");
+    expect(TOOL_CATALOG).not.toContain("control.return_agent");
+    expect(TOOL_CATALOG).not.toContain("control.transfer");
+    expect(TOOL_CATALOG).not.toContain("control.set");
   });
 });

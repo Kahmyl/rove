@@ -65,6 +65,12 @@ const RESULT_HTML = `<!doctype html><html><head><title>Rove Result Fixture</titl
 const HISTORY_A_HTML = `<!doctype html><html><head><title>History A</title></head><body><h1>History A</h1><a href="/history-b">History B</a></body></html>`;
 const HISTORY_B_HTML = `<!doctype html><html><head><title>History B</title></head><body><h1>History B</h1></body></html>`;
 const POPUP_TARGET_HTML = `<!doctype html><html><head><title>Popup target</title></head><body><h1>Popup target</h1></body></html>`;
+const HANDOFF_HTML = `<!doctype html><html><head><title>Human handoff</title></head><body>
+  <p id="current">Current value: initial</p>
+  <label for="handoff-input">New value</label><input id="handoff-input" value="initial" />
+  <button id="handoff-update">Update</button>
+  <script>document.querySelector('#handoff-update').addEventListener('click',()=>{document.querySelector('#current').textContent='Current value: '+document.querySelector('#handoff-input').value})</script>
+</body></html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -108,6 +114,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       "/history-a": HISTORY_A_HTML,
       "/history-b": HISTORY_B_HTML,
       "/popup-target": POPUP_TARGET_HTML,
+      "/handoff": HANDOFF_HTML,
       "/dynamic-target": DYNAMIC_TARGET_HTML,
     }[request.url ?? "/"] ?? inspectionHtml;
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });

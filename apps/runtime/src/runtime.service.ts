@@ -4,8 +4,9 @@ import {
   RoveError,
   type ActionResult,
   type ClickRequest,
-  type ControlState,
-  type ControlTransferRequest,
+  type ControlStatus,
+  type ControlWaitRequest,
+  type ControlWaitResult,
   type Evidence,
   type EvidenceReadResult,
   type InspectOptions,
@@ -22,10 +23,14 @@ import {
   type Session,
   type StartSessionRequest,
   type TypeRequest,
+  type RequestHumanRequest,
+  requestHumanRequestSchema,
+  controlWaitRequestSchema,
 } from "@rove/protocol";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
+import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { SessionService } from "./session/session.service.js";
@@ -36,6 +41,7 @@ export class RuntimeService implements RoveRuntime {
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(ControlService) private readonly control: ControlService,
+    @Inject(ControlWaitService) private readonly controlWait: ControlWaitService,
     @Inject(BrowserCommandCoordinator) private readonly coordinator: BrowserCommandCoordinator,
     @Inject(BrowserService) private readonly browser: BrowserService,
     @Inject(ObservationService) private readonly observations: ObservationService,
@@ -73,7 +79,8 @@ export class RuntimeService implements RoveRuntime {
       await this.browser.close(session.id).catch(() => undefined);
       const now = new Date().toISOString();
       await this.sessions.update({ ...session, status: "failed", controller: null, endedAt: now, updatedAt: now });
-      await this.observations.append(session.id, { actor: "system", type: "session_failed", data: {} });
+      const observation = await this.observations.append(session.id, { actor: "system", type: "session_failed", data: {} });
+      await this.controlWait.publish(session.id, observation);
       throw error;
     }
   }
@@ -95,7 +102,8 @@ export class RuntimeService implements RoveRuntime {
         closeError = error;
       }
       const session = await this.sessions.end(sessionId);
-      await this.observations.append(sessionId, { actor: "system", type: "session_completed", data: {} });
+      const observation = await this.observations.append(sessionId, { actor: "system", type: "session_completed", data: {} });
+      await this.controlWait.publish(sessionId, observation);
       if (closeError !== undefined) throw closeError;
       return session;
     });
@@ -204,30 +212,87 @@ export class RuntimeService implements RoveRuntime {
     });
   }
 
-  async transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState> {
+  async getControlStatus(sessionId: string): Promise<ControlStatus> {
+    return this.toControlStatus(await this.sessions.get(sessionId));
+  }
+
+  async requestHuman(sessionId: string, request: RequestHumanRequest): Promise<ControlStatus> {
+    const input = requestHumanRequestSchema.parse(request);
     return this.coordinator.execute(sessionId, async () => {
-      const session = await this.requireActive(sessionId);
-      if (request.actor === "agent" && request.controller === "human") {
-        throw new RoveError({ code: "HUMAN_CONTROL_REQUIRED", message: "The human must explicitly take control." });
-      }
+      const session = await this.sessions.get(sessionId);
+      this.control.assertCanRequestHuman(session);
+      if (session.status === "awaiting_human" && session.controller === null) return this.toControlStatus(session);
+      const requestedAt = new Date().toISOString();
       const next = await this.sessions.update({
         ...session,
-        controller: request.controller,
-        status: request.controller === null ? "awaiting_human" : "active",
+        status: "awaiting_human",
+        controller: null,
+        handoff: { reason: input.reason, requestedAt },
       });
-      if (session.controller === "human" && next.controller === "agent") await this.browser.get(sessionId).invalidateTargets();
-      await this.observations.append(sessionId, {
-        actor: request.actor,
-        type: next.controller === "agent" ? "control_returned" : "control_transferred",
-        data: { previous: session.controller, current: next.controller, reason: request.reason },
-      });
-      return this.control.nextState(next.controller, request.reason);
+      const observation = await this.observations.append(sessionId, { actor: "agent", type: "human_requested", data: { reason: input.reason } });
+      await this.controlWait.publish(sessionId, observation);
+      return this.toControlStatus(next, observation.seq);
     });
   }
 
-  async getControl(sessionId: string): Promise<ControlState> {
-    const session = await this.sessions.get(sessionId);
-    return this.control.nextState(session.controller);
+  async takeHumanControl(sessionId: string): Promise<ControlStatus> {
+    return this.coordinator.execute(sessionId, async () => {
+      const session = await this.sessions.get(sessionId);
+      this.control.assertCanTakeHuman(session);
+      if (session.controller === "human") return this.toControlStatus(session);
+      const requested = session.handoff !== undefined;
+      const next = await this.sessions.update({ ...session, status: "active", controller: "human" });
+      const observation = await this.observations.append(sessionId, { actor: "human", type: "human_took_control", data: { requested } });
+      await this.controlWait.publish(sessionId, observation);
+      return this.toControlStatus(next, observation.seq);
+    });
+  }
+
+  async returnAgentControl(sessionId: string): Promise<ControlStatus> {
+    return this.coordinator.execute(sessionId, async () => {
+      const session = await this.sessions.get(sessionId);
+      this.control.assertCanReturnAgent(session);
+      if (session.controller === "agent" && session.handoff === undefined) return this.toControlStatus(session);
+      try {
+        const pages = await this.browser.get(sessionId).pages();
+        const activePageId = pages.find((page) => page.active)?.id;
+        const invalidatedPages = await this.browser.get(sessionId).invalidateAllTargets();
+        const next: Session = {
+          ...session,
+          status: "active",
+          controller: "agent",
+          ...(activePageId === undefined ? {} : { activePageId }),
+        };
+        delete next.handoff;
+        const persisted = await this.sessions.update(next);
+        const observation = await this.observations.append(sessionId, {
+          actor: "human",
+          type: "human_returned_control",
+          data: { activePageId, invalidatedPages },
+        });
+        await this.controlWait.publish(sessionId, observation);
+        return this.toControlStatus(persisted, observation.seq);
+      } catch (error) {
+        if (!(error instanceof RoveError) || error.code !== "BROWSER_CLOSED") throw error;
+        const now = new Date().toISOString();
+        const failed: Session = { ...session, status: "failed", controller: null, endedAt: now, updatedAt: now };
+        delete failed.handoff;
+        await this.sessions.update(failed);
+        const observation = await this.observations.append(sessionId, { actor: "system", type: "session_failed", data: {} });
+        await this.controlWait.publish(sessionId, observation);
+        throw error;
+      }
+    });
+  }
+
+  async waitForControl(sessionId: string, request: ControlWaitRequest = {}, signal?: AbortSignal): Promise<ControlWaitResult> {
+    const input = controlWaitRequestSchema.parse(request);
+    return this.controlWait.wait(
+      sessionId,
+      input.afterSeq ?? 0,
+      input.timeoutMs ?? Math.min(this.config.timeouts.controlWaitMs, 60_000),
+      signal,
+    );
   }
 
   async saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence> {
@@ -296,5 +361,16 @@ export class RuntimeService implements RoveRuntime {
     const session = await this.sessions.get(sessionId);
     this.sessions.assertActive(session);
     return session;
+  }
+
+  private toControlStatus(session: Session, observationSeq?: number): ControlStatus {
+    return {
+      sessionId: session.id,
+      status: session.status,
+      controller: session.controller,
+      updatedAt: session.updatedAt,
+      ...(session.handoff === undefined ? {} : { handoff: session.handoff }),
+      ...(observationSeq === undefined ? {} : { observationSeq }),
+    };
   }
 }

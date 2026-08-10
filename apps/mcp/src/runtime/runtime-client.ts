@@ -1,6 +1,8 @@
 import type {
   ActionResult,
-  ControlState,
+  ControlStatus,
+  ControlWaitRequest,
+  ControlWaitResult,
   Evidence,
   EvidenceReadResult,
   InspectOptions,
@@ -107,8 +109,28 @@ export class RuntimeHttpClient implements RuntimeClient {
     return this.request("GET", `/sessions/${encodeURIComponent(sessionId)}/evidence/${encodeURIComponent(evidenceId)}`);
   }
 
-  getControl(sessionId: string): Promise<ControlState> {
+  getControlStatus(sessionId: string): Promise<ControlStatus> {
     return this.request("GET", `/sessions/${encodeURIComponent(sessionId)}/control`);
+  }
+
+  requestHuman(sessionId: string, reason: string): Promise<ControlStatus> {
+    return this.request("POST", `/sessions/${encodeURIComponent(sessionId)}/control/request-human`, { reason });
+  }
+
+  waitForControl(sessionId: string, input: ControlWaitRequest, signal?: AbortSignal): Promise<ControlWaitResult> {
+    const query = new URLSearchParams();
+    if (input.afterSeq !== undefined) query.set("afterSeq", String(input.afterSeq));
+    if (input.timeoutMs !== undefined) query.set("timeoutMs", String(input.timeoutMs));
+    const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+    const runtimeWaitMs = input.timeoutMs ?? 30_000;
+    return this.request(
+      "GET",
+      `/sessions/${encodeURIComponent(sessionId)}/control/wait${suffix}`,
+      undefined,
+      runtimeWaitMs + 5_000,
+      false,
+      signal,
+    );
   }
 
   private async request<T>(
@@ -117,6 +139,7 @@ export class RuntimeHttpClient implements RuntimeClient {
     body?: unknown,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     allowEmpty = false,
+    signal?: AbortSignal,
   ): Promise<T> {
     let response: Response;
     try {
@@ -127,7 +150,7 @@ export class RuntimeHttpClient implements RuntimeClient {
           ...(this.runtimeToken === undefined ? {} : { authorization: `Bearer ${this.runtimeToken}` }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal === undefined ? AbortSignal.timeout(timeoutMs) : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "TimeoutError") {

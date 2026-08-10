@@ -11,6 +11,10 @@ export const sessionStatusSchema = z.enum([
 ]);
 export const controllerSchema = z.enum(["agent", "human"]).nullable();
 export const actorSchema = z.enum(["agent", "human", "browser", "system"]);
+export const humanHandoffSchema = z.object({
+  reason: z.string().min(1).max(500),
+  requestedAt: z.string().datetime(),
+});
 
 export const temporaryProfileSchema = z.object({ mode: z.literal("temporary") });
 export const persistentProfileSchema = z.object({
@@ -34,6 +38,7 @@ export const sessionSchema = z.object({
   status: sessionStatusSchema,
   controller: controllerSchema,
   activePageId: z.string().optional(),
+  handoff: humanHandoffSchema.optional(),
   profile: browserProfileSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -156,8 +161,8 @@ export const evidenceReadResultSchema = evidenceSchema.extend({
     .optional(),
 });
 
-export const controlTransferRequestSchema = z.object({
-  actor: z.enum(["agent", "human"]),
-  controller: controllerSchema,
-  reason: z.string().max(500).optional(),
+export const requestHumanRequestSchema = z.object({ reason: z.string().trim().min(1).max(500) });
+export const controlWaitRequestSchema = z.object({
+  afterSeq: z.number().int().nonnegative().optional(),
+  timeoutMs: z.number().int().nonnegative().max(60_000).optional(),
 });

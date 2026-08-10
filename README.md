@@ -40,11 +40,14 @@ pnpm browser:demo
 pnpm browser:inspect
 pnpm browser:actions
 pnpm runtime:demo
+pnpm control:demo
 ```
 
 `browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
 
-The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces control ownership, and persists minimized observations and evidence. It is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
+`control:demo` exercises requested Agent handoff and voluntary Companion takeover without Electron. It verifies exclusive ownership, wait notifications, mutation blocking, human-to-agent return, and stale target references after handback. Set `ROVE_CONTROL_DEMO_WAIT=1` to pause both flows for manual interaction in the headed browser.
+
+The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces the Agent, Companion, and Capture control state machines, and persists minimized observations and evidence. Its private control routes support status, requested handoff, human take/return, and lost-wakeup-safe event waits. Human-to-agent handback invalidates all page target references before restoring agent ownership. The API is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
 
 ## Docker Compose
 
@@ -56,7 +59,9 @@ pnpm docker:up
 
 The runtime is available only on the host loopback interface at
 `http://127.0.0.1:47820`; its health endpoint is
-`http://127.0.0.1:47820/health`. Session data is retained in the named
+`http://127.0.0.1:47820/health`. Streamable HTTP MCP is available at
+`http://127.0.0.1:47821/mcp`, with health at `http://127.0.0.1:47821/health`.
+Session data is retained in the named
 `rove-data` volume. Compose installs the lockfile-matched Playwright Chromium
 browser and runs browser sessions headlessly inside the runtime container.
 
@@ -82,11 +87,10 @@ pnpm docker:down
 pnpm docker:reset # destructive: removes persisted local Rove session data
 ```
 
-The current container runs the runtime API and its headless Playwright browser.
-The Electron companion remains host-side. The MCP HTTP service is deferred until
-its Streamable HTTP adapter exists; exposing a placeholder service that
-immediately exits would make `docker:up --wait` misleading.
+Compose runs the runtime API, its headless Playwright browser, and the authenticated
+Streamable HTTP MCP service. The Electron companion remains host-side. Override
+`ROVE_MCP_TOKEN` alongside `ROVE_RUNTIME_TOKEN` outside local development.
 
-The repository includes the domain and persistence foundation, complete core Playwright browser actions, and runtime/browser/persistence integration. No public selector or arbitrary JavaScript fallback is present.
+The repository includes the domain and persistence foundation, complete core Playwright browser actions, runtime/browser/persistence integration, private runtime human-handoff operations, and MCP over stdio and Streamable HTTP. MCP exposes only the agent-facing control tools `control.status`, `control.request_human`, and `control.wait`; human take/return remain private runtime operations. No public selector or arbitrary JavaScript fallback is present.
 
 See [docs/architecture.md](docs/architecture.md) for boundaries and the next implementation slices.

@@ -51,10 +51,12 @@ The runtime owns the `ses_*` identity and maps each active session to one browse
 
 The private NestJS API exposes session, browser, page, observation, and evidence routes. A centralized bearer guard protects session routes when configured, non-loopback startup without a token is rejected, and structured Rove errors are mapped to stable HTTP responses.
 
+Control state is persisted on the session and validated centrally for Agent, Companion, and Capture modes. Requested handoff removes agent ownership before a human takes control; Companion may also take control voluntarily. Returning control synchronizes the active page and invalidates every page target registry before restoring agent ownership. Durable control-transition observations drive an in-process, lost-wakeup-safe wait service using query, waiter registration, and a second query rather than polling. Human take and return are private runtime operations intended for the future Companion.
+
 ## Implementation slices
 
 - Phase 1 browser lifecycle, semantic inspection, safe actions, and stale-target protection are implemented.
 - Phase 2 runtime/browser integration, lifecycle persistence, evidence, observations, and the private HTTP API are implemented.
-- Phase 3: register protocol schemas as MCP tools over stdio.
-- Phase 4: add Streamable HTTP transport with centralized bearer/host validation.
+- Phase 3/4 MCP tools, stdio, authenticated Streamable HTTP, and runtime HTTP adaptation are implemented.
+- Phase 7 runtime control protocol, exclusive-control state machine, private HTTP operations, durable waits, stale-target handback, and the agent-facing MCP tools `control.status`, `control.request_human`, and `control.wait` are implemented. Human take/return are not exposed through MCP.
 - Phase 5+: human observation instrumentation, Electron control workflow, then Capture mode.

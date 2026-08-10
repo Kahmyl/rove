@@ -1,6 +1,8 @@
 import type {
   ActionResult,
-  ControlState,
+  ControlStatus,
+  ControlWaitRequest,
+  ControlWaitResult,
   Evidence,
   EvidenceReadResult,
   InspectOptions,
@@ -44,5 +46,7 @@ export interface RuntimeClient {
   saveRecord(sessionId: string, input: SaveRecordInput): Promise<Evidence>;
   listEvidence(sessionId: string): Promise<Evidence[]>;
   readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult>;
-  getControl(sessionId: string): Promise<ControlState>;
+  getControlStatus(sessionId: string): Promise<ControlStatus>;
+  requestHuman(sessionId: string, reason: string): Promise<ControlStatus>;
+  waitForControl(sessionId: string, input: ControlWaitRequest, signal?: AbortSignal): Promise<ControlWaitResult>;
 }

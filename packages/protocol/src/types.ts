@@ -5,6 +5,7 @@ import type {
   clickRequestSchema,
   controllerSchema,
   evidenceReadResultSchema,
+  humanHandoffSchema,
   evidenceSchema,
   evidenceTypeSchema,
   inspectOptionsSchema,
@@ -20,6 +21,8 @@ import type {
   scrollOptionsSchema,
   startSessionRequestSchema,
   switchPageRequestSchema,
+  requestHumanRequestSchema,
+  controlWaitRequestSchema,
   targetKindSchema,
   targetReferenceSchema,
   typeRequestSchema,
@@ -28,6 +31,7 @@ import type {
 export type SessionMode = z.infer<typeof sessionModeSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 export type Controller = z.infer<typeof controllerSchema>;
+export type HumanHandoff = z.infer<typeof humanHandoffSchema>;
 export type Actor = z.infer<typeof actorSchema>;
 export type BrowserProfileConfig = z.infer<typeof browserProfileSchema>;
 export type Session = z.infer<typeof sessionSchema>;
@@ -50,10 +54,25 @@ export type ScrollOptions = z.input<typeof scrollOptionsSchema>;
 export type ScreenshotOptions = z.input<typeof screenshotOptionsSchema>;
 export type SwitchPageRequest = z.input<typeof switchPageRequestSchema>;
 
-export interface ControlState {
+export interface ControlStatus {
+  sessionId: string;
+  status: SessionStatus;
   controller: Controller;
-  reason?: string;
-  since: string;
+  handoff?: HumanHandoff;
+  updatedAt: string;
+  observationSeq?: number;
+}
+
+export type RequestHumanRequest = z.infer<typeof requestHumanRequestSchema>;
+export type ControlWaitRequest = z.infer<typeof controlWaitRequestSchema>;
+export type ControlWaitEvent = "human_requested" | "human_took_control" | "human_returned_control" | "session_completed" | "session_failed" | "timeout";
+export interface ControlWaitResult {
+  event: ControlWaitEvent;
+  sessionId: string;
+  controller: Controller;
+  status: SessionStatus;
+  observationSeq?: number;
+  handoff?: HumanHandoff;
 }
 
 export interface Viewport {
@@ -140,10 +159,4 @@ export interface BrowserLaunchConfig {
     actionMs?: number;
     inspectMs?: number;
   };
-}
-
-export interface ControlTransferRequest {
-  actor: "agent" | "human";
-  controller: Controller;
-  reason?: string;
 }
