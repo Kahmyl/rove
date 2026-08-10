@@ -28,6 +28,7 @@ export const roveConfigSchema = z.object({
   browser: z.object({
     headless: z.boolean(),
     preferredBrowser: z.enum(["chrome", "chromium"]),
+    executablePath: z.string().min(1).optional(),
   }),
   timeouts: z.object({
     navigationMs: z.number().int().positive(),
@@ -55,7 +56,9 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
   const defaults: RoveConfig = {
     home: resolve(cwd, env.ROVE_HOME ?? ".rove"),
     runtime: {
-      url: env.ROVE_RUNTIME_URL ?? `http://${env.ROVE_RUNTIME_HOST ?? "127.0.0.1"}:${Number(env.ROVE_RUNTIME_PORT ?? 47_820)}`,
+      url:
+        env.ROVE_RUNTIME_URL ??
+        `http://${env.ROVE_RUNTIME_HOST ?? "127.0.0.1"}:${Number(env.ROVE_RUNTIME_PORT ?? 47_820)}`,
       host: env.ROVE_RUNTIME_HOST ?? "127.0.0.1",
       port: Number(env.ROVE_RUNTIME_PORT ?? 47_820),
       ...(env.ROVE_RUNTIME_TOKEN ? { token: env.ROVE_RUNTIME_TOKEN } : {}),
@@ -74,6 +77,9 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
     browser: {
       headless: envHeadless ?? false,
       preferredBrowser: env.ROVE_BROWSER === "chromium" ? "chromium" : "chrome",
+      ...(env.ROVE_BROWSER_EXECUTABLE_PATH === undefined
+        ? {}
+        : { executablePath: env.ROVE_BROWSER_EXECUTABLE_PATH }),
     },
     timeouts: {
       navigationMs: 30_000,
@@ -88,7 +94,10 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
 
 function parseAllowedHosts(value: string | undefined): string[] | undefined {
   if (value === undefined || value.trim() === "") return undefined;
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export function isLoopbackHost(host: string): boolean {

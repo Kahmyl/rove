@@ -61,6 +61,11 @@ export class RuntimeService implements RoveRuntime {
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
         browser: this.config.browser.preferredBrowser,
+        ...(this.config.browser.executablePath === undefined
+          ? {}
+          : {
+              executablePath: this.config.browser.executablePath,
+            }),
         profile: session.profile,
         ...(session.profile.mode === "persistent"
           ? {

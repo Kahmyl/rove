@@ -8,7 +8,31 @@ export interface RuntimeProcessOptions {
   token: string;
   browserHeadless: boolean;
   browser: "chrome" | "chromium";
+  browserExecutablePath?: string;
   nodeExecutable?: string;
+}
+
+export function buildRuntimeProcessEnvironment(
+  options: RuntimeProcessOptions,
+  baseEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const baseUrl = `http://${options.host}:${options.port}`;
+
+  return {
+    ...baseEnvironment,
+    ROVE_HOME: options.home,
+    ROVE_RUNTIME_HOST: options.host,
+    ROVE_RUNTIME_PORT: String(options.port),
+    ROVE_RUNTIME_URL: baseUrl,
+    ROVE_RUNTIME_TOKEN: options.token,
+    ROVE_BROWSER_HEADLESS: String(options.browserHeadless),
+    ROVE_BROWSER: options.browser,
+    ...(options.browserExecutablePath === undefined
+      ? {}
+      : {
+          ROVE_BROWSER_EXECUTABLE_PATH: options.browserExecutablePath,
+        }),
+  };
 }
 
 export interface RuntimeExit {
@@ -31,20 +55,9 @@ export class RuntimeProcess {
     const nodeExecutable =
       this.options.nodeExecutable ?? process.env.npm_node_execpath ?? "node";
 
-    const baseUrl = `http://${this.options.host}:${this.options.port}`;
-
     const child = spawn(nodeExecutable, ["--import", "tsx", "src/main.ts"], {
       cwd: this.options.runtimeDirectory,
-      env: {
-        ...process.env,
-        ROVE_HOME: this.options.home,
-        ROVE_RUNTIME_HOST: this.options.host,
-        ROVE_RUNTIME_PORT: String(this.options.port),
-        ROVE_RUNTIME_URL: baseUrl,
-        ROVE_RUNTIME_TOKEN: this.options.token,
-        ROVE_BROWSER_HEADLESS: String(this.options.browserHeadless),
-        ROVE_BROWSER: this.options.browser,
-      },
+      env: buildRuntimeProcessEnvironment(this.options),
       stdio: ["ignore", "pipe", "pipe"],
     });
 

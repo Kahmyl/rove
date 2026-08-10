@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto";
 
+import {
+  discoverBrowser,
+  type BrowserInstallation,
+} from "../browser/browser-discovery.js";
 import { McpProcess } from "./mcp-process.js";
 import { waitForMcpReady } from "./mcp-readiness.js";
 import { allocateLoopbackPort } from "./port-allocation.js";
@@ -23,6 +27,7 @@ export interface DesktopMcpConnection extends DesktopServiceConnection {
 export interface DesktopHostConnection {
   runtime: DesktopServiceConnection;
   mcp: DesktopMcpConnection;
+  browser: BrowserInstallation;
 }
 
 export interface DesktopHostOptions {
@@ -31,6 +36,7 @@ export interface DesktopHostOptions {
   home: string;
   browserHeadless: boolean;
   browser: "chrome" | "chromium";
+  browserExecutablePath?: string;
   startupTimeoutMs?: number;
 }
 
@@ -57,6 +63,15 @@ export class DesktopHost {
     this.state = "starting";
     this.intentionalStop = false;
 
+    const browser = await discoverBrowser({
+      preferredBrowser: this.options.browser,
+      ...(this.options.browserExecutablePath === undefined
+        ? {}
+        : {
+            explicitExecutablePath: this.options.browserExecutablePath,
+          }),
+    });
+
     const host = "127.0.0.1";
 
     const runtimePort = await allocateLoopbackPort();
@@ -72,7 +87,12 @@ export class DesktopHost {
       port: runtimePort,
       token: runtimeToken,
       browserHeadless: this.options.browserHeadless,
-      browser: this.options.browser,
+      browser: browser.kind,
+      ...(browser.executablePath === undefined
+        ? {}
+        : {
+            browserExecutablePath: browser.executablePath,
+          }),
     });
 
     this.runtime = runtime;
@@ -126,6 +146,7 @@ export class DesktopHost {
       this.state = "ready";
 
       return {
+        browser,
         runtime: {
           baseUrl: runtimeBaseUrl,
           token: runtimeToken,

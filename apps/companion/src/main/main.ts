@@ -122,9 +122,22 @@ async function startDesktop(): Promise<void> {
       home: config.home,
       browserHeadless: config.browser.headless,
       browser: config.browser.preferredBrowser,
+      ...(config.browser.executablePath === undefined
+        ? {}
+        : {
+            browserExecutablePath: config.browser.executablePath,
+          }),
     });
 
     const connection = await desktopHost.start();
+
+    console.info(
+      `[desktop] Browser resolved: ${connection.browser.kind} (${connection.browser.source})${
+        connection.browser.executablePath === undefined
+          ? ""
+          : ` -> ${connection.browser.executablePath}`
+      }`,
+    );
 
     runtime = new CompanionRuntimeClient(
       runtimeClientOptions(
