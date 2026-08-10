@@ -15,7 +15,9 @@
     "test:manual:http:no-auth": "tsx test/manual/http-no-auth.ts",
     "test:manual:http:auth": "tsx test/manual/http-auth.ts",
     "test:manual:http:reconnect": "tsx test/manual/http-reconnect.ts",
-    "test:manual:http:redaction": "tsx test/manual/http-redaction.ts"
+    "test:manual:http:redaction": "tsx test/manual/http-redaction.ts",
+    "test:manual:handoff": "tsx test/manual/handoff.ts",
+    "test:manual:capture": "tsx test/manual/capture.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.2",

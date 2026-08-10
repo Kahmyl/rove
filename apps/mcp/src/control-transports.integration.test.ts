@@ -65,6 +65,53 @@ describe("M7 MCP control tools", () => {
     await assertControlWorkflow(client);
   });
 
+  it("rejects malformed JSON without destabilizing Streamable HTTP", async () => {
+    const port = await availablePort();
+    const runtime = createFakeRuntimeClient();
+
+    const server = await startStreamableHttpServer({
+      host: "127.0.0.1",
+      port,
+      path: "/mcp",
+      allowedHosts: [`127.0.0.1:${String(port)}`],
+      auth: new BearerTokenVerifier(TOKEN),
+      runtime,
+      createServer: () => createMcpServer(runtime),
+      logger: silentLogger,
+    });
+
+    openServers.push(server);
+
+    const malformed = await fetch(
+      `http://127.0.0.1:${String(port)}/mcp`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: '{"jsonrpc":',
+      },
+    );
+
+    expect(malformed.status).toBe(400);
+
+    await expect(
+      malformed.json(),
+    ).resolves.toEqual({
+      error: {
+        code: "INVALID_JSON",
+        message: "Request body must contain valid JSON.",
+      },
+    });
+
+    const health = await fetch(
+      `http://127.0.0.1:${String(port)}/health`,
+    );
+
+    expect(health.status).toBe(200);
+  });
+
   it("cancels a Streamable HTTP control.wait on client disconnect without changing ownership", async () => {
     const port = await availablePort();
     let waiters = 0;

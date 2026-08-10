@@ -1,9 +1,9 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import { BROWSER_ENGINE, type BrowserEngine, type BrowserSession } from "@rove/browser";
 import { RoveError, type BrowserLaunchConfig } from "@rove/protocol";
 
 @Injectable()
-export class BrowserService {
+export class BrowserService implements OnModuleDestroy {
   private readonly sessions = new Map<string, BrowserSession>();
 
   constructor(@Inject(BROWSER_ENGINE) private readonly engine: BrowserEngine) {}
@@ -38,5 +38,15 @@ export class BrowserService {
 
   has(sessionId: string): boolean {
     return this.sessions.has(sessionId);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    const sessionIds = this.sessionIds();
+
+    await Promise.allSettled(
+      sessionIds.map((sessionId) =>
+        this.close(sessionId),
+      ),
+    );
   }
 }
