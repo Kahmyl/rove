@@ -12,8 +12,12 @@ export class SessionController {
   }
 
   @Get(":id")
-  status(@Param("id") id: string) { return this.runtime.getSession(id); }
+  status(@Param("id") id: string) {
+    return this.runtime.getSession(id);
+  }
 
   @Post(":id/end")
-  end(@Param("id") id: string) { return this.runtime.endSession(id); }
+  end(@Param("id") id: string) {
+    return this.runtime.endSession(id);
+  }
 }

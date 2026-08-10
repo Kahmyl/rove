@@ -7,6 +7,7 @@ import {
   type ControlState,
   type ControlTransferRequest,
   type Evidence,
+  type EvidenceReadResult,
   type InspectOptions,
   type NavigateRequest,
   type ObservationPage,
@@ -57,7 +58,11 @@ export class RuntimeService implements RoveRuntime {
       });
       if (request.startUrl !== undefined) await browser.navigate(request.startUrl);
       const activePageId = (await browser.pages()).find((page) => page.active)?.id;
-      session = await this.sessions.update({ ...session, status: "active", ...(activePageId === undefined ? {} : { activePageId }) });
+      session = await this.sessions.update({
+        ...session,
+        status: "active",
+        ...(activePageId === undefined ? {} : { activePageId }),
+      });
       await this.observations.append(session.id, {
         actor: "system",
         type: "session_started",
@@ -73,7 +78,9 @@ export class RuntimeService implements RoveRuntime {
     }
   }
 
-  getSession(sessionId: string): Promise<Session> { return this.sessions.get(sessionId); }
+  getSession(sessionId: string): Promise<Session> {
+    return this.sessions.get(sessionId);
+  }
 
   async endSession(sessionId: string): Promise<Session> {
     return this.coordinator.execute(sessionId, async () => {
@@ -103,7 +110,14 @@ export class RuntimeService implements RoveRuntime {
     return this.mutateAction(
       sessionId,
       () => this.browser.get(sessionId).navigate(request.url),
-      (result) => ({ type: "browser_navigated", data: { url: result.url, previousRevision: result.previousRevision, currentRevision: result.currentRevision } }),
+      (result) => ({
+        type: "browser_navigated",
+        data: {
+          url: result.url,
+          previousRevision: result.previousRevision,
+          currentRevision: result.currentRevision,
+        },
+      }),
     );
   }
 
@@ -111,7 +125,10 @@ export class RuntimeService implements RoveRuntime {
     return this.mutateAction(
       sessionId,
       () => this.browser.get(sessionId).click(request.target),
-      (result) => ({ type: "agent_clicked", data: { targetRef: request.target.ref, pageChanged: result.pageChanged, url: result.url } }),
+      (result) => ({
+        type: "agent_clicked",
+        data: { targetRef: request.target.ref, pageChanged: result.pageChanged, url: result.url },
+      }),
     );
   }
 
@@ -127,7 +144,10 @@ export class RuntimeService implements RoveRuntime {
     return this.mutateAction(
       sessionId,
       () => this.browser.get(sessionId).press(request.target ?? null, request.key),
-      () => ({ type: "agent_pressed", data: { ...(request.target === undefined ? {} : { targetRef: request.target.ref }), key: request.key } }),
+      () => ({
+        type: "agent_pressed",
+        data: { ...(request.target === undefined ? {} : { targetRef: request.target.ref }), key: request.key },
+      }),
     );
   }
 
@@ -176,7 +196,7 @@ export class RuntimeService implements RoveRuntime {
       await this.observations.append(sessionId, {
         actor: "agent",
         type: "screenshot_captured",
-        data: { evidenceId: item.id },
+        data: { evidenceId: item.id, label: item.label },
         ...(item.pageId === undefined ? {} : { pageId: item.pageId }),
         ...(item.pageRevision === undefined ? {} : { pageRevision: item.pageRevision }),
       });
@@ -190,7 +210,11 @@ export class RuntimeService implements RoveRuntime {
       if (request.actor === "agent" && request.controller === "human") {
         throw new RoveError({ code: "HUMAN_CONTROL_REQUIRED", message: "The human must explicitly take control." });
       }
-      const next = await this.sessions.update({ ...session, controller: request.controller, status: request.controller === null ? "awaiting_human" : "active" });
+      const next = await this.sessions.update({
+        ...session,
+        controller: request.controller,
+        status: request.controller === null ? "awaiting_human" : "active",
+      });
       if (session.controller === "human" && next.controller === "agent") await this.browser.get(sessionId).invalidateTargets();
       await this.observations.append(sessionId, {
         actor: request.actor,
@@ -201,16 +225,20 @@ export class RuntimeService implements RoveRuntime {
     });
   }
 
+  async getControl(sessionId: string): Promise<ControlState> {
+    const session = await this.sessions.get(sessionId);
+    return this.control.nextState(session.controller);
+  }
+
   async saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence> {
     await this.sessions.get(sessionId);
     const item = await this.evidence.save(sessionId, request);
-    await this.observations.append(sessionId, { actor: "agent", type: "record_saved", data: { evidenceId: item.id, type: item.type, label: item.label } });
+    await this.observations.append(sessionId, {
+      actor: "agent",
+      type: "record_saved",
+      data: { evidenceId: item.id, type: item.type, label: item.label },
+    });
     return item;
-  }
-
-  async getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage> {
-    await this.sessions.get(sessionId);
-    return this.observations.list(sessionId, query);
   }
 
   async listEvidence(sessionId: string): Promise<Evidence[]> {
@@ -218,9 +246,14 @@ export class RuntimeService implements RoveRuntime {
     return this.evidence.list(sessionId);
   }
 
-  async readEvidence(sessionId: string, evidenceId: string): Promise<Evidence> {
+  async readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
     await this.sessions.get(sessionId);
-    return this.evidence.metadata(sessionId, evidenceId);
+    return this.evidence.read(sessionId, evidenceId);
+  }
+
+  async getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage> {
+    await this.sessions.get(sessionId);
+    return this.observations.list(sessionId, query);
   }
 
   private async mutateAction(

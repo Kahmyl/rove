@@ -14,6 +14,23 @@ describe("loadConfig", () => {
       loadConfig({ env: { ROVE_MCP_TRANSPORT: "http", ROVE_MCP_TOKEN: "short" } }),
     ).toThrow();
   });
+
+  it("loads HTTP MCP configuration", () => {
+    const config = loadConfig({
+      env: {
+        ROVE_MCP_TRANSPORT: "http",
+        ROVE_MCP_TOKEN: "a".repeat(24),
+        ROVE_MCP_ALLOWED_HOSTS: "127.0.0.1:47821,localhost:47821",
+      },
+    });
+    expect(config.mcp).toMatchObject({
+      transport: "http",
+      host: "127.0.0.1",
+      port: 47821,
+      path: "/mcp",
+      allowedHosts: ["127.0.0.1:47821", "localhost:47821"],
+    });
+  });
 });
 
 describe("isLoopbackHost", () => {

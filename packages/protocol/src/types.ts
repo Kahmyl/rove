@@ -2,26 +2,27 @@ import type { z } from "zod";
 import type {
   actorSchema,
   browserProfileSchema,
+  clickRequestSchema,
   controllerSchema,
+  evidenceReadResultSchema,
   evidenceSchema,
   evidenceTypeSchema,
   inspectOptionsSchema,
+  navigateRequestSchema,
   observationQuerySchema,
   observationSchema,
+  pressRequestSchema,
   saveEvidenceRequestSchema,
+  screenshotOptionsSchema,
   sessionModeSchema,
   sessionSchema,
   sessionStatusSchema,
-  startSessionRequestSchema,
-  navigateRequestSchema,
-  clickRequestSchema,
-  typeRequestSchema,
-  pressRequestSchema,
   scrollOptionsSchema,
-  screenshotOptionsSchema,
+  startSessionRequestSchema,
   switchPageRequestSchema,
   targetKindSchema,
   targetReferenceSchema,
+  typeRequestSchema,
 } from "./schemas.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
@@ -39,7 +40,15 @@ export type Observation = z.infer<typeof observationSchema>;
 export type ObservationQuery = z.input<typeof observationQuerySchema>;
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
+export type EvidenceReadResult = z.infer<typeof evidenceReadResultSchema>;
 export type SaveEvidenceRequest = z.infer<typeof saveEvidenceRequestSchema>;
+export type NavigateRequest = z.input<typeof navigateRequestSchema>;
+export type ClickRequest = z.input<typeof clickRequestSchema>;
+export type TypeRequest = z.input<typeof typeRequestSchema>;
+export type PressRequest = z.input<typeof pressRequestSchema>;
+export type ScrollOptions = z.input<typeof scrollOptionsSchema>;
+export type ScreenshotOptions = z.input<typeof screenshotOptionsSchema>;
+export type SwitchPageRequest = z.input<typeof switchPageRequestSchema>;
 
 export interface ControlState {
   controller: Controller;
@@ -133,13 +142,6 @@ export interface BrowserLaunchConfig {
   };
 }
 
-export type ScrollOptions = z.infer<typeof scrollOptionsSchema>;
-export type ScreenshotOptions = z.infer<typeof screenshotOptionsSchema>;
-export type NavigateRequest = z.infer<typeof navigateRequestSchema>;
-export type ClickRequest = z.infer<typeof clickRequestSchema>;
-export type TypeRequest = z.infer<typeof typeRequestSchema>;
-export type PressRequest = z.infer<typeof pressRequestSchema>;
-export type SwitchPageRequest = z.infer<typeof switchPageRequestSchema>;
 export interface ControlTransferRequest {
   actor: "agent" | "human";
   controller: Controller;

@@ -55,5 +55,54 @@ services:
         - action: rebuild
           path: pnpm-lock.yaml
 
+  mcp:
+    build: *node-build
+    depends_on:
+      runtime:
+        condition: service_healthy
+    environment:
+      ROVE_HOME: /workspace/.rove
+      ROVE_RUNTIME_URL: http://runtime:47820
+      ROVE_RUNTIME_TOKEN: ${ROVE_RUNTIME_TOKEN:-}
+      ROVE_MCP_TRANSPORT: http
+      ROVE_MCP_HOST: 0.0.0.0
+      ROVE_MCP_PORT: 47821
+      ROVE_MCP_PATH: /mcp
+      ROVE_MCP_TOKEN: ${ROVE_MCP_TOKEN:-rove-local-development-token-123456}
+      ROVE_MCP_ALLOWED_HOSTS: 127.0.0.1:47821,localhost:47821,0.0.0.0:47821,mcp:47821
+    command: ["pnpm", "--filter", "@rove/mcp", "dev"]
+    ports:
+      - "127.0.0.1:${ROVE_MCP_PORT:-47821}:47821"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:47821/health',{headers:{host:'127.0.0.1:47821'}}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - rove-data:/workspace/.rove
+    restart: unless-stopped
+    stop_grace_period: 10s
+    init: true
+    develop:
+      watch:
+        - action: sync
+          path: apps/mcp/src
+          target: /workspace/apps/mcp/src
+        - action: rebuild
+          path: packages/protocol/src
+        - action: rebuild
+          path: packages/config/src
+        - action: rebuild
+          path: apps/mcp/package.json
+        - action: rebuild
+          path: pnpm-lock.yaml
+
 volumes:
   rove-data:

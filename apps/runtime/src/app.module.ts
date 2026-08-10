@@ -1,16 +1,17 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
-import { PlaywrightBrowserEngine, BROWSER_ENGINE } from "@rove/browser";
+import { BROWSER_ENGINE, PlaywrightBrowserEngine } from "@rove/browser";
 import { loadConfig } from "@rove/config";
 import { ROVE_RUNTIME } from "@rove/protocol";
 import { FileEvidenceStore, FileObservationStore, FileSessionStore } from "@rove/storage";
-import { HealthController } from "./api/health.controller.js";
-import { SessionController } from "./api/session.controller.js";
 import { BrowserController } from "./api/browser.controller.js";
-import { ObservationController } from "./api/observation.controller.js";
+import { ControlController } from "./api/control.controller.js";
 import { EvidenceController } from "./api/evidence.controller.js";
-import { RuntimeAuthGuard, assertRuntimeBindingSafe } from "./api/runtime-auth.guard.js";
+import { HealthController } from "./api/health.controller.js";
+import { ObservationController } from "./api/observation.controller.js";
 import { RoveErrorFilter } from "./api/rove-error.filter.js";
+import { RuntimeAuthGuard, assertRuntimeBindingSafe } from "./api/runtime-auth.guard.js";
+import { SessionController } from "./api/session.controller.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
@@ -24,7 +25,14 @@ const config = loadConfig();
 assertRuntimeBindingSafe(config);
 
 @Module({
-  controllers: [HealthController, SessionController, BrowserController, ObservationController, EvidenceController],
+  controllers: [
+    HealthController,
+    SessionController,
+    BrowserController,
+    ControlController,
+    ObservationController,
+    EvidenceController,
+  ],
   providers: [
     { provide: SESSION_STORE, useValue: new FileSessionStore(config.home) },
     { provide: OBSERVATION_STORE, useValue: new FileObservationStore(config.home) },
