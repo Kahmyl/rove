@@ -22,6 +22,10 @@ export class CompanionRuntimeClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
+  async getActiveSession(): Promise<Session | null> {
+    return this.resolveSession();
+  }
+
   async getSnapshot(): Promise<CompanionSnapshot | null> {
     const session = await this.resolveSession();
 

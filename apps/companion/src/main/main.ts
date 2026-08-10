@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  nativeImage,
+  type MenuItemConstructorOptions,
+} from "electron";
 import { loadConfig } from "@rove/config";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -7,6 +14,8 @@ import { loadEnvFile } from "node:process";
 import { companionIpcChannels } from "../shared/desktop-api.js";
 import { DesktopHost } from "./host/desktop-host.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
+import { CompanionSurface } from "./surface/companion-surface.js";
+import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
 import { companionWindowOptions } from "./window-options.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
@@ -17,43 +26,24 @@ if (existsSync(rootEnv)) {
 
 const config = loadConfig();
 
-const manageRuntime =
+const manageServices =
   process.argv.includes("--rove-manage-services") ||
   process.argv.includes("--rove-manage-runtime");
 
-let companionWindow: BrowserWindow | undefined;
-
 let desktopHost: DesktopHost | undefined;
+
+let companionSurface: CompanionSurface | undefined;
+
+let sessionSurfaceMonitor: NodeJS.Timeout | undefined;
+
+let sessionSurfaceMonitorBusy = false;
 
 let allowQuit = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
-function focusCompanion(): void {
-  const window = companionWindow;
-
-  if (window === undefined) {
-    return;
-  }
-
-  if (window.isMinimized()) {
-    window.restore();
-  }
-
-  window.show();
-  window.focus();
-}
-
-function createWindow(): void {
+function createCompanionWindow(): BrowserWindow {
   const window = new BrowserWindow(companionWindowOptions(import.meta.dirname));
-
-  companionWindow = window;
-
-  window.once("closed", () => {
-    if (companionWindow === window) {
-      companionWindow = undefined;
-    }
-  });
 
   const developmentUrl = process.env.ROVE_COMPANION_DEV_URL;
 
@@ -64,6 +54,8 @@ function createWindow(): void {
       join(import.meta.dirname, "../../renderer/index.html"),
     );
   }
+
+  return window;
 }
 
 function registerIpc(runtime: CompanionRuntimeClient): void {
@@ -92,6 +84,129 @@ function runtimeClientOptions(baseUrl: string, token?: string) {
   };
 }
 
+function installApplicationMenu(surface: CompanionSurface): void {
+  const surfaceItems: MenuItemConstructorOptions[] = [
+    {
+      label: "Show Companion",
+      accelerator: "CmdOrCtrl+Shift+R",
+      click: () => surface.restore(),
+    },
+    {
+      label: "Hide Companion",
+      click: () => surface.hide(),
+    },
+  ];
+
+  const template: MenuItemConstructorOptions[] =
+    process.platform === "darwin"
+      ? [
+          {
+            label: "Rove",
+            submenu: [
+              {
+                role: "about",
+              },
+              {
+                type: "separator",
+              },
+              ...surfaceItems,
+              {
+                type: "separator",
+              },
+              {
+                role: "quit",
+              },
+            ],
+          },
+          {
+            label: "Window",
+            submenu: [
+              {
+                role: "minimize",
+              },
+              {
+                role: "zoom",
+              },
+              {
+                type: "separator",
+              },
+              {
+                label: "Show Companion",
+                accelerator: "CmdOrCtrl+Shift+R",
+                click: () => surface.restore(),
+              },
+            ],
+          },
+        ]
+      : [
+          {
+            label: "Rove",
+            submenu: [
+              ...surfaceItems,
+              {
+                type: "separator",
+              },
+              {
+                role: "quit",
+              },
+            ],
+          },
+        ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function stopSessionSurfaceMonitor(): void {
+  if (sessionSurfaceMonitor !== undefined) {
+    clearInterval(sessionSurfaceMonitor);
+
+    sessionSurfaceMonitor = undefined;
+  }
+}
+
+function startSessionSurfaceMonitor(
+  runtime: CompanionRuntimeClient,
+  surface: CompanionSurface,
+): void {
+  stopSessionSurfaceMonitor();
+
+  let previousSignalKey: string | undefined;
+
+  const inspect = async () => {
+    if (sessionSurfaceMonitorBusy) {
+      return;
+    }
+
+    sessionSurfaceMonitorBusy = true;
+
+    try {
+      const session = await runtime.getActiveSession();
+
+      const signal = toCompanionSurfaceSignal(session);
+
+      if (signal !== null && signal.key !== previousSignalKey) {
+        if (signal.action === "attention") {
+          surface.requestAttention();
+        } else {
+          surface.show();
+        }
+      }
+
+      previousSignalKey = signal?.key;
+    } catch {
+      previousSignalKey = undefined;
+    } finally {
+      sessionSurfaceMonitorBusy = false;
+    }
+  };
+
+  void inspect();
+
+  sessionSurfaceMonitor = setInterval(() => void inspect(), 750);
+
+  sessionSurfaceMonitor.unref();
+}
+
 async function startDesktop(): Promise<void> {
   if (process.platform === "darwin") {
     const iconPath = join(
@@ -108,7 +223,7 @@ async function startDesktop(): Promise<void> {
 
   let runtime: CompanionRuntimeClient;
 
-  if (manageRuntime) {
+  if (manageServices) {
     const runtimeDirectory =
       process.env.ROVE_DESKTOP_RUNTIME_DIR ??
       resolve(process.cwd(), "../runtime");
@@ -152,18 +267,24 @@ async function startDesktop(): Promise<void> {
   }
 
   registerIpc(runtime);
-  createWindow();
+
+  companionSurface = new CompanionSurface(
+    createCompanionWindow,
+    () => allowQuit,
+  );
+
+  installApplicationMenu(companionSurface);
+
+  companionSurface.show();
+
+  startSessionSurfaceMonitor(runtime, companionSurface);
 }
 
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (companionWindow === undefined) {
-      createWindow();
-    }
-
-    focusCompanion();
+    companionSurface?.restore();
   });
 
   app
@@ -177,33 +298,28 @@ if (!hasSingleInstanceLock) {
 }
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-    return;
-  }
-
-  focusCompanion();
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  companionSurface?.restore();
 });
 
 app.on("before-quit", (event) => {
-  if (desktopHost === undefined || allowQuit) {
+  stopSessionSurfaceMonitor();
+
+  if (allowQuit) {
+    return;
+  }
+
+  allowQuit = true;
+
+  if (desktopHost === undefined) {
     return;
   }
 
   event.preventDefault();
 
-  allowQuit = true;
-
   void desktopHost
     .stop()
     .catch((error) => {
-      console.error("Rove Runtime shutdown failed.", error);
+      console.error("Rove Desktop shutdown failed.", error);
     })
     .finally(() => {
       app.quit();
