@@ -19,7 +19,7 @@ export class SessionService {
     const session: Session = {
       id: `ses_${randomUUID().replaceAll("-", "")}`,
       mode: input.mode,
-      status: "active",
+      status: "starting",
       controller: input.mode === "capture" ? "human" : "agent",
       profile: input.profile,
       createdAt: now,

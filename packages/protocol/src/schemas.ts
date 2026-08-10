@@ -76,6 +76,20 @@ export const inspectOptionsSchema = z.object({
   pageId: z.string().optional(),
 });
 
+export const navigateRequestSchema = z.object({ url: z.string().url() });
+export const clickRequestSchema = z.object({ target: targetReferenceSchema });
+export const typeRequestSchema = z.object({ target: targetReferenceSchema, value: z.string() });
+export const pressRequestSchema = z.object({ target: targetReferenceSchema.optional(), key: z.string().min(1) });
+export const scrollOptionsSchema = z.object({
+  direction: z.enum(["up", "down", "left", "right"]),
+  amount: z.number().positive().optional(),
+});
+export const screenshotOptionsSchema = z.object({
+  mode: z.enum(["viewport", "full-page", "target"]).optional(),
+  target: targetReferenceSchema.optional(),
+});
+export const switchPageRequestSchema = z.object({ pageId: z.string().min(1) });
+
 export const observationSchema = z.object({
   id: z.string().startsWith("obs_"),
   seq: z.number().int().positive(),

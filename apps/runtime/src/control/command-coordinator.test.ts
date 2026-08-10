@@ -19,4 +19,21 @@ describe("BrowserCommandCoordinator", () => {
     await Promise.all([first, second]);
     expect(order).toEqual(["first:start", "first:end", "second"]);
   });
+
+  it("does not serialize different sessions globally", async () => {
+    const coordinator = new BrowserCommandCoordinator();
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const order: string[] = [];
+    const first = coordinator.execute("ses_one", async () => {
+      order.push("one:start");
+      await gate;
+      order.push("one:end");
+    });
+    const second = coordinator.execute("ses_two", async () => { order.push("two"); });
+    await second;
+    expect(order).toEqual(["one:start", "two"]);
+    releaseFirst();
+    await first;
+  });
 });

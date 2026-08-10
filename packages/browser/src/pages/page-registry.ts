@@ -20,6 +20,21 @@ export class PageRegistry {
     return state;
   }
 
+  has(pageId: string): boolean {
+    return this.states.has(pageId);
+  }
+
+  activeId(): string | undefined {
+    for (const state of this.states.values()) if (state.active) return state.id;
+    return undefined;
+  }
+
+  latestId(): string | undefined {
+    let latest: string | undefined;
+    for (const id of this.states.keys()) latest = id;
+    return latest;
+  }
+
   update(pageId: string, update: Partial<Omit<PageState, "id">>): PageState {
     const state = { ...this.get(pageId), ...update, id: pageId };
     this.states.set(pageId, state);

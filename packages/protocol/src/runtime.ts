@@ -13,6 +13,10 @@ import type {
   SessionSnapshot,
   StartSessionRequest,
   TypeRequest,
+  PressRequest,
+  ScrollOptions,
+  ScreenshotOptions,
+  PageSummary,
 } from "./types.js";
 
 export const ROVE_RUNTIME = Symbol.for("ROVE_RUNTIME");
@@ -25,7 +29,17 @@ export interface RoveRuntime {
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult>;
   click(sessionId: string, request: ClickRequest): Promise<ActionResult>;
   type(sessionId: string, request: TypeRequest): Promise<ActionResult>;
+  press(sessionId: string, request: PressRequest): Promise<ActionResult>;
+  scroll(sessionId: string, request: ScrollOptions): Promise<ActionResult>;
+  back(sessionId: string): Promise<ActionResult>;
+  forward(sessionId: string): Promise<ActionResult>;
+  pages(sessionId: string): Promise<PageSummary[]>;
+  switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
+  closePage(sessionId: string, pageId: string): Promise<void>;
+  captureScreenshot(sessionId: string, options?: ScreenshotOptions): Promise<Evidence>;
   transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState>;
   saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence>;
   getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage>;
+  listEvidence(sessionId: string): Promise<Evidence[]>;
+  readEvidence(sessionId: string, evidenceId: string): Promise<Evidence>;
 }
