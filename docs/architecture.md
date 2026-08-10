@@ -24,9 +24,28 @@ Electron companion ──> private API ───┤
 9. Evidence paths are generated below the Rove home directory.
 10. Sensitive typed values are represented only by redacted metadata.
 
+## Browser implementation
+
+The browser package currently implements:
+
+- a real Playwright Chromium/Chrome browser lifecycle with temporary profiles;
+- one BrowserContext per BrowserSession;
+- stable `page_01`, `page_02`, ... page identities and active-page management;
+- navigation with material page revision updates;
+- semantic inspection using visible body text and one-pass DOM target discovery;
+- deterministic accessible-name approximation and target classification;
+- sensitivity detection through the existing `isSensitiveTarget()` contract;
+- revision-scoped `tN` target references backed by one current TargetRegistry per page;
+- explicit target invalidation for the active page;
+- deterministic local fixture tests and headed manual verification.
+
+Inspection does not increment the page revision. For the current browser slice, revisions change on main-frame navigation/document change or explicit `invalidateTargets()`.
+
+Browser actions beyond navigation remain deferred and return structured `NOT_IMPLEMENTED` errors.
+
 ## Implementation slices
 
-- Phase 1: implement `PlaywrightBrowserEngine`, page registry, semantic inspection, target registry/resolution, and deterministic fixture tests.
+- Phase 1 browser lifecycle and semantic inspection are implemented.
 - Phase 2: connect runtime commands to browser instances, persist every lifecycle transition, and expose the authenticated private API.
 - Phase 3: register protocol schemas as MCP tools over stdio.
 - Phase 4: add Streamable HTTP transport with centralized bearer/host validation.

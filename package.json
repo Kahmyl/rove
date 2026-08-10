@@ -24,7 +24,8 @@
     "dev:runtime": "pnpm --filter @rove/runtime dev",
     "dev:mcp": "pnpm --filter @rove/mcp dev",
     "dev:companion": "pnpm --filter @rove/companion dev",
-    "browser:demo": "pnpm --filter @rove/browser demo"
+    "browser:demo": "pnpm --filter @rove/browser demo",
+    "browser:inspect": "pnpm --filter @rove/browser inspect-demo"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

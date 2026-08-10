@@ -13,8 +13,9 @@ import {
   type TargetReference,
 } from "@rove/protocol";
 import type { BrowserSession } from "./engine.js";
+import { PageInspector } from "./inspection/inspector.js";
 import { PlaywrightPageRegistry } from "./pages/playwright-page-registry.js";
-import type { PageState } from "./pages/page-state.js";
+import { recordMutation, type PageState } from "./pages/page-state.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 const NAVIGATION_TIMEOUT_MS = 30_000;
@@ -32,14 +33,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
+  private readonly inspector = new PageInspector();
   private recovering: Promise<void> | null = null;
 
   private constructor(
     private readonly browser: Browser,
     private readonly context: BrowserContext,
   ) {
-    this.pageRegistry.setOnPageClosed((_pageId, wasActive) => {
+    this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
+      this.inspector.forgetPage(pageId);
+
       if (this.closed || !wasActive) return;
+
       void this.recoverActivePage();
     });
   }
@@ -113,6 +118,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
       throw error;
     }
     const state = this.pageRegistry.stateFor(pageId);
+
+    await this.inspector.invalidatePage(
+      page,
+      pageId,
+      state.revision,
+    );
+
     return {
       ok: true,
       action: "navigate",
@@ -160,20 +172,52 @@ export class PlaywrightBrowserSession implements BrowserSession {
     await this.recoverActivePage();
   }
 
-  async inspect(_options?: InspectOptions): Promise<PageInspection> {
+  async inspect(options: InspectOptions = {}): Promise<PageInspection> {
     this.ensureOpen();
-    throw new RoveError({
-      code: "NOT_IMPLEMENTED",
-      message: "BrowserSession.inspect is implemented in Milestone 2.",
-    });
+
+    const pageId =
+      options.pageId ?? this.requireActivePageId();
+
+    const page = this.pageRegistry.pageFor(pageId);
+
+    let state: PageState;
+
+    try {
+      state = await this.pageRegistry.syncMetadata(pageId);
+    } catch (error) {
+      if (isBrowserClosedError(error)) {
+        throw browserClosedError();
+      }
+
+      throw error;
+    }
+
+    return this.inspector.inspect(
+      page,
+      state,
+      options,
+    );
   }
 
   async invalidateTargets(): Promise<void> {
     this.ensureOpen();
-    throw new RoveError({
-      code: "NOT_IMPLEMENTED",
-      message: "BrowserSession.invalidateTargets is implemented in Milestone 2.",
-    });
+
+    const pageId = this.requireActivePageId();
+    const page = this.pageRegistry.pageFor(pageId);
+
+    const current = this.pageRegistry.stateFor(pageId);
+    const next = recordMutation(current, true);
+
+    const state = this.pageRegistry.update(
+      pageId,
+      next,
+    );
+
+    await this.inspector.invalidatePage(
+      page,
+      pageId,
+      state.revision,
+    );
   }
 
   async click(_target: TargetReference): Promise<ActionResult> {
@@ -232,6 +276,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       // Browser already closed; continue shutdown.
     }
     this.pageRegistry.clear();
+    this.inspector.clear();
   }
 
   private toSummary(state: PageState): PageSummary {
