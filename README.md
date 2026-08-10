@@ -57,7 +57,16 @@ pnpm docker:up
 The runtime is available only on the host loopback interface at
 `http://127.0.0.1:47820`; its health endpoint is
 `http://127.0.0.1:47820/health`. Session data is retained in the named
-`rove-data` volume.
+`rove-data` volume. Compose installs the lockfile-matched Playwright Chromium
+browser and runs browser sessions headlessly inside the runtime container.
+
+Session routes require the Compose runtime bearer token. Local development uses
+`rove-local-compose-token-change-me` unless `ROVE_RUNTIME_TOKEN` is set; health
+remains unauthenticated. Override the token for any shared environment:
+
+```bash
+ROVE_RUNTIME_TOKEN=a-long-random-development-token pnpm docker:up
+```
 
 For Compose Watch development:
 
@@ -73,11 +82,10 @@ pnpm docker:down
 pnpm docker:reset # destructive: removes persisted local Rove session data
 ```
 
-The current container runs the runtime API only. The Electron companion and
-Playwright browser execution currently run on the host. Browser integration
-with the runtime container is deferred. The MCP HTTP service is likewise
-deferred until its Streamable HTTP adapter exists; exposing a placeholder
-service that immediately exits would make `docker:up --wait` misleading.
+The current container runs the runtime API and its headless Playwright browser.
+The Electron companion remains host-side. The MCP HTTP service is deferred until
+its Streamable HTTP adapter exists; exposing a placeholder service that
+immediately exits would make `docker:up --wait` misleading.
 
 The repository includes the domain and persistence foundation, complete core Playwright browser actions, and runtime/browser/persistence integration. No public selector or arbitrary JavaScript fallback is present.
 
