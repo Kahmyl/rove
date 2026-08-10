@@ -273,21 +273,6 @@ export function installDomActivityListeners(): void {
     );
   }
 
-  const rememberSelection = (
-    event: Event,
-  ) => {
-    if (
-      !(event.target instanceof HTMLSelectElement)
-    ) {
-      return;
-    }
-
-    selectedIndices.set(
-      event.target,
-      event.target.selectedIndex,
-    );
-  };
-
   const reportSelection = (
     element: HTMLSelectElement,
   ) => {
@@ -297,16 +282,8 @@ export function installDomActivityListeners(): void {
     const previousIndex =
       selectedIndices.get(element);
 
-    if (previousIndex === undefined) {
-      selectedIndices.set(
-        element,
-        selectedIndex,
-      );
-
-      return;
-    }
-
     if (
+      previousIndex !== undefined &&
       previousIndex === selectedIndex
     ) {
       return;
@@ -339,18 +316,6 @@ export function installDomActivityListeners(): void {
 
     reportSelection(event.target);
   };
-
-  document.addEventListener(
-    "focusin",
-    rememberSelection,
-    true,
-  );
-
-  document.addEventListener(
-    "pointerdown",
-    rememberSelection,
-    true,
-  );
 
   document.addEventListener(
     "input",

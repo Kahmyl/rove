@@ -32,7 +32,19 @@ export async function startStreamableHttpServer(options: StreamableHttpOptions):
   const allowedHosts = new Set(options.allowedHosts ?? [hostHeader(options.host, options.port)]);
 
   const httpServer = createServer((request, response) => {
-    void handleRequest(request, response, options, sessions, allowedHosts);
+    void handleRequest(
+      request,
+      response,
+      options,
+      sessions,
+      allowedHosts,
+    ).catch((error: unknown) => {
+      handleUnexpectedRequestError(
+        response,
+        options.logger,
+        error,
+      );
+    });
   });
 
   const cleanup = setInterval(() => cleanupExpiredSessions(sessions, options.logger), 60_000);
@@ -88,9 +100,33 @@ async function handleRequest(
     return;
   }
 
-  const body = request.method === "POST" ? await readJsonBody(request) : undefined;
+  let body: unknown;
+
+  if (request.method === "POST") {
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        writeJson(response, 400, {
+          error: {
+            code: "INVALID_JSON",
+            message: "Request body must contain valid JSON.",
+          },
+        });
+        return;
+      }
+
+      throw error;
+    }
+  }
+
   if (body === TOO_LARGE) {
-    writeJson(response, 413, { error: { code: "REQUEST_TOO_LARGE", message: "Request body exceeds 2 MiB." } });
+    writeJson(response, 413, {
+      error: {
+        code: "REQUEST_TOO_LARGE",
+        message: "Request body exceeds 2 MiB.",
+      },
+    });
     return;
   }
 
@@ -171,6 +207,33 @@ async function shutdown(httpServer: HttpServer, sessions: Map<string, TransportS
 async function closeServer(server: Server): Promise<void> {
   const closable = server as Server & { close?: () => Promise<void> };
   if (closable.close !== undefined) await closable.close();
+}
+
+function handleUnexpectedRequestError(
+  response: ServerResponse,
+  logger: McpLogger,
+  error: unknown,
+): void {
+  logger.error("Rove MCP HTTP request failed.", {
+    errorType:
+      error instanceof Error
+        ? error.name
+        : typeof error,
+  });
+
+  if (response.writableEnded) return;
+
+  if (!response.headersSent) {
+    writeJson(response, 500, {
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Internal server error.",
+      },
+    });
+    return;
+  }
+
+  response.end();
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
