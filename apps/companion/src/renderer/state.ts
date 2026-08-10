@@ -57,9 +57,13 @@ export function toCompanionViewModel(
       ? {}
       : { handoffReason: session.handoff.reason }),
     canTakeControl:
-      live && session.controller !== "human",
+      session.mode === "companion" &&
+      live &&
+      session.controller !== "human",
     canReturnControl:
-      live && session.controller === "human",
+      session.mode === "companion" &&
+      live &&
+      session.controller === "human",
     canFinish: live,
   };
 }

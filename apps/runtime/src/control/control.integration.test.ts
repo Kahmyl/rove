@@ -127,6 +127,7 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
     const actionResult = (action: "navigate" | "click") => ({ ok: true, action, sessionId: "browser_race", pageId: "page_01", pageChanged: false, previousRevision: 0, currentRevision: invalidated ? 1 : 0, url: "about:blank" });
     const fake: BrowserSession = {
       id: "browser_race",
+      onActivity: () => () => undefined,
       pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: invalidated ? 1 : 0 }],
       navigate: async () => {
         order.push("slow:start");

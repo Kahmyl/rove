@@ -9,9 +9,11 @@ import type {
   ScrollOptions,
   TargetReference,
 } from "@rove/protocol";
+import type { BrowserActivityListener } from "./observation/browser-activity.js";
 
 export interface BrowserSession {
   readonly id: string;
+  onActivity(listener: BrowserActivityListener): () => void;
   inspect(options?: InspectOptions): Promise<PageInspection>;
   navigate(url: string): Promise<ActionResult>;
   click(target: TargetReference): Promise<ActionResult>;

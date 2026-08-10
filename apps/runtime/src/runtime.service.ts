@@ -28,6 +28,7 @@ import {
   requestHumanRequestSchema,
   controlWaitRequestSchema,
 } from "@rove/protocol";
+import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
@@ -39,6 +40,9 @@ import { ROVE_CONFIG } from "./tokens.js";
 
 @Injectable()
 export class RuntimeService implements RoveRuntime {
+  private readonly humanActivityQueues =
+    new Map<string, Promise<void>>();
+
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(ControlService) private readonly control: ControlService,
@@ -63,6 +67,14 @@ export class RuntimeService implements RoveRuntime {
           inspectMs: this.config.timeouts.inspectMs,
         },
       });
+
+      browser.onActivity((activity) => {
+        this.enqueueHumanActivity(
+          session.id,
+          activity,
+        );
+      });
+
       if (request.startUrl !== undefined) await browser.navigate(request.startUrl);
       const activePageId = (await browser.pages()).find((page) => page.active)?.id;
       session = await this.sessions.update({
@@ -113,6 +125,8 @@ export class RuntimeService implements RoveRuntime {
       if (existing.status === "completed" || existing.status === "failed") {
         throw new RoveError({ code: "SESSION_ALREADY_ENDED", message: "Rove session has already ended." });
       }
+      await this.flushHumanActivity(sessionId);
+
       let closeError: unknown;
       try {
         await this.browser.close(sessionId);
@@ -271,6 +285,9 @@ export class RuntimeService implements RoveRuntime {
       const session = await this.sessions.get(sessionId);
       this.control.assertCanReturnAgent(session);
       if (session.controller === "agent" && session.handoff === undefined) return this.toControlStatus(session);
+
+      await this.flushHumanActivity(sessionId);
+
       try {
         const pages = await this.browser.get(sessionId).pages();
         const activePageId = pages.find((page) => page.active)?.id;
@@ -357,6 +374,98 @@ export class RuntimeService implements RoveRuntime {
       });
       return result;
     });
+  }
+
+  private enqueueHumanActivity(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    const previous =
+      this.humanActivityQueues.get(sessionId) ??
+      Promise.resolve();
+
+    const next = previous
+      .then(() =>
+        this.persistHumanActivity(
+          sessionId,
+          activity,
+        ),
+      )
+      .catch(() => undefined)
+      .finally(() => {
+        if (
+          this.humanActivityQueues.get(sessionId) ===
+          next
+        ) {
+          this.humanActivityQueues.delete(sessionId);
+        }
+      });
+
+    this.humanActivityQueues.set(
+      sessionId,
+      next,
+    );
+  }
+
+  private async persistHumanActivity(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): Promise<void> {
+    const session =
+      await this.sessions
+        .get(sessionId)
+        .catch(() => null);
+
+    if (
+      session === null ||
+      session.status !== "active" ||
+      session.controller !== "human"
+    ) {
+      return;
+    }
+
+    const observationType =
+      this.humanObservationType(
+        activity.type,
+      );
+
+    await this.observations.append(sessionId, {
+      actor: "human",
+      type: observationType,
+      data: activity.data,
+      pageId: activity.pageId,
+      ...(activity.pageRevision === undefined
+        ? {}
+        : {
+            pageRevision:
+              activity.pageRevision,
+          }),
+    });
+  }
+
+  private async flushHumanActivity(
+    sessionId: string,
+  ): Promise<void> {
+    await this.humanActivityQueues.get(
+      sessionId,
+    );
+  }
+
+  private humanObservationType(
+    type: BrowserActivity["type"],
+  ): string {
+    switch (type) {
+      case "interaction_click":
+        return "human_click";
+      case "form_submitted":
+        return "human_submit";
+      case "scroll_milestone":
+        return "human_scroll";
+      case "selection_changed":
+        return "human_selection";
+      default:
+        return type;
+    }
   }
 
   private async mutateValue<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {

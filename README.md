@@ -65,6 +65,18 @@ For an active Companion Mode session, the desktop interface displays the session
 
 When the agent requests human assistance, the Companion displays the handoff reason and provides `Take Control`. The Electron main process communicates directly with the private runtime API; the isolated renderer receives only the narrow preload bridge and has no unrestricted Node access.
 
+## Capture Mode
+
+Capture Mode starts human-owned and records a minimized browser journey without raw cursor recording or sensitive form values.
+
+Rove captures navigation, URL and title changes, meaningful clicks, safe form submission metadata, fixed scroll milestones, selections, opened tabs, and real human tab switches.
+
+Human tab selection is reconciled from Chromium's browser-level tab state and mapped back to Rove's stable page IDs. Agent browser mutations remain blocked while the human owns a Capture session, while read-only MCP session, observation, and evidence operations remain available.
+
+The Companion discovers active Capture sessions, displays their observation and evidence counts, keeps takeover and handback controls unavailable, and allows the human to finish the session.
+
+See [docs/implementation/m9-human-activity-observation-capture-mode.md](docs/implementation/m9-human-activity-observation-capture-mode.md) for the observation model, privacy rules, and manual verification.
+
 
 The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces the Agent, Companion, and Capture control state machines, and persists minimized observations and evidence. Its private control routes support status, requested handoff, human take/return, and lost-wakeup-safe event waits. Human-to-agent handback invalidates all page target references before restoring agent ownership. The API is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
 
@@ -110,6 +122,6 @@ Compose runs the runtime API, its headless Playwright browser, and the authentic
 Streamable HTTP MCP service. The Electron companion remains host-side. Override
 `ROVE_MCP_TOKEN` alongside `ROVE_RUNTIME_TOKEN` outside local development.
 
-The repository includes the domain and persistence foundation, complete core Playwright browser actions, runtime/browser/persistence integration, private runtime human-handoff operations, the Electron Companion, and MCP over stdio and Streamable HTTP. MCP exposes only the agent-facing control tools `control.status`, `control.request_human`, and `control.wait`; human take/return remain private runtime operations. No public selector or arbitrary JavaScript fallback is present.
+The repository includes the domain and persistence foundation, complete core Playwright browser actions, runtime/browser/persistence integration, private runtime human-handoff operations, the Electron Companion, human activity observation and Capture Mode, and MCP over stdio and Streamable HTTP. MCP exposes only the agent-facing control tools `control.status`, `control.request_human`, and `control.wait`; human take/return remain private runtime operations. No public selector or arbitrary JavaScript fallback is present.
 
 See [docs/architecture.md](docs/architecture.md) for boundaries and the next implementation slices.

@@ -63,6 +63,14 @@ describe("CompanionRuntimeClient", () => {
         }
 
         if (
+          url.endsWith(
+            "/sessions?mode=capture",
+          )
+        ) {
+          return jsonResponse([]);
+        }
+
+        if (
           url.includes("/observations?")
         ) {
           return jsonResponse({
@@ -125,6 +133,77 @@ describe("CompanionRuntimeClient", () => {
     });
   });
 
+
+  it("discovers an active Capture Mode session", async () => {
+    const capture: Session = {
+      ...session,
+      id: "ses_capture",
+      mode: "capture",
+      controller: "human",
+      createdAt:
+        "2026-08-10T08:00:00.000Z",
+      updatedAt:
+        "2026-08-10T08:00:00.000Z",
+    };
+
+    const fetchImpl = vi.fn(
+      async (
+        input: string | URL | Request,
+      ) => {
+        const url = String(input);
+
+        if (
+          url.endsWith(
+            "/sessions?mode=companion",
+          )
+        ) {
+          return jsonResponse([session]);
+        }
+
+        if (
+          url.endsWith(
+            "/sessions?mode=capture",
+          )
+        ) {
+          return jsonResponse([capture]);
+        }
+
+        if (
+          url.includes("/observations?")
+        ) {
+          return jsonResponse({
+            items: [],
+          });
+        }
+
+        if (url.endsWith("/evidence")) {
+          return jsonResponse([]);
+        }
+
+        throw new Error(
+          `Unexpected request: ${url}`,
+        );
+      },
+    ) as typeof fetch;
+
+    const client =
+      new CompanionRuntimeClient({
+        baseUrl:
+          "http://127.0.0.1:47820",
+        fetchImpl,
+      });
+
+    await expect(
+      client.getSnapshot(),
+    ).resolves.toMatchObject({
+      session: {
+        id: "ses_capture",
+        mode: "capture",
+        controller: "human",
+      },
+    });
+  });
+
   it("uses runtime control and finish endpoints", async () => {
     const requests: {
       url: string;
@@ -155,6 +234,14 @@ describe("CompanionRuntimeClient", () => {
           return jsonResponse(
             ended ? [] : [session],
           );
+        }
+
+        if (
+          url.endsWith(
+            "/sessions?mode=capture",
+          )
+        ) {
+          return jsonResponse([]);
         }
 
         if (

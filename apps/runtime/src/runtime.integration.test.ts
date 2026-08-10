@@ -59,6 +59,36 @@ function target(inspection: PageInspection, name: string): TargetReference {
   return { pageId: inspection.pageId, revision: inspection.revision, ref: item.ref };
 }
 
+async function waitForObservation(
+  runtime: RuntimeService,
+  sessionId: string,
+  type: string,
+) {
+  const deadline = Date.now() + 2_000;
+
+  while (Date.now() < deadline) {
+    const observations =
+      await runtime.getObservations(sessionId);
+
+    const observation =
+      observations.items.find(
+        (item) => item.type === type,
+      );
+
+    if (observation !== undefined) {
+      return observation;
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 20),
+    );
+  }
+
+  throw new Error(
+    `Timed out waiting for observation ${type}.`,
+  );
+}
+
 async function allFileText(directory: string): Promise<string> {
   const chunks: string[] = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -176,6 +206,7 @@ describe("Milestone 4 runtime integration", () => {
         const browserId = `browser_fake_${browserCounter++}`;
         return {
           id: browserId,
+          onActivity: () => () => undefined,
           pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: 0 }],
           navigate: async (url: string) => {
             if (url.endsWith("/slow")) {
@@ -205,5 +236,291 @@ describe("Milestone 4 runtime integration", () => {
     releaseSlow();
     await Promise.all([first, queued]);
     expect(order).toEqual(["browser_fake_0:slow:start", "browser_fake_1:fast", "browser_fake_0:slow:end", "browser_fake_0:fast"]);
+  });
+});
+
+
+describe("Milestone 9 human activity foundation", () => {
+  it("persists browser lifecycle activity only while human owns control", async () => {
+    const server = await fixture();
+    const {
+      runtime,
+      browser,
+    } = await harness();
+
+    const capture =
+      await runtime.startSession({
+        mode: "capture",
+      });
+
+    active.push({
+      runtime,
+      id: capture.id,
+    });
+
+    await browser
+      .get(capture.id)
+      .navigate(`${server.url}/actions`);
+
+    const urlChanged =
+      await waitForObservation(
+        runtime,
+        capture.id,
+        "url_changed",
+      );
+
+    expect(urlChanged).toMatchObject({
+      actor: "human",
+      type: "url_changed",
+      pageId: "page_01",
+      data: {
+        previousUrl: "about:blank",
+        url: `${server.url}/actions`,
+      },
+    });
+
+    const navigation =
+      await waitForObservation(
+        runtime,
+        capture.id,
+        "navigation_completed",
+      );
+
+    expect(navigation).toMatchObject({
+      actor: "human",
+      type: "navigation_completed",
+      pageId: "page_01",
+      data: {
+        url: `${server.url}/actions`,
+      },
+    });
+
+    const agent =
+      await runtime.startSession({
+        mode: "agent",
+      });
+
+    active.push({
+      runtime,
+      id: agent.id,
+    });
+
+    await browser
+      .get(agent.id)
+      .navigate(`${server.url}/actions`);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 100),
+    );
+
+    expect(
+      (
+        await runtime.getObservations(
+          agent.id,
+        )
+      ).items.map((item) => item.type),
+    ).toEqual([
+      "session_started",
+    ]);
+  });
+});
+
+describe("Milestone 9 human DOM activity", () => {
+  it("persists ordered minimized human interactions without sensitive field values", async () => {
+    const server = await fixture();
+
+    const {
+      runtime,
+      browser,
+      home,
+    } = await harness();
+
+    const capture =
+      await runtime.startSession({
+        mode: "capture",
+      });
+
+    active.push({
+      runtime,
+      id: capture.id,
+    });
+
+    const sessionBrowser =
+      browser.get(capture.id);
+
+    await sessionBrowser.navigate(
+      `${server.url}/actions`,
+    );
+
+    await waitForObservation(
+      runtime,
+      capture.id,
+      "navigation_completed",
+    );
+
+    const secret =
+      "M9_SECRET_MUST_NEVER_PERSIST";
+
+    let inspection =
+      await sessionBrowser.inspect();
+
+    await sessionBrowser.type(
+      target(
+        inspection,
+        "Password",
+      ),
+      secret,
+    );
+
+    inspection =
+      await sessionBrowser.inspect();
+
+    await sessionBrowser.click(
+      target(
+        inspection,
+        "Submit search",
+      ),
+    );
+
+    await waitForObservation(
+      runtime,
+      capture.id,
+      "human_submit",
+    );
+
+    inspection =
+      await sessionBrowser.inspect();
+
+    const select =
+      inspection.targets?.find(
+        (item) =>
+          item.kind === "select",
+      );
+
+    if (select === undefined) {
+      throw new Error(
+        "Missing select target.",
+      );
+    }
+
+    await sessionBrowser.press(
+      {
+        pageId: inspection.pageId,
+        revision:
+          inspection.revision,
+        ref: select.ref,
+      },
+      "o",
+    );
+
+    const selection =
+      await waitForObservation(
+        runtime,
+        capture.id,
+        "human_selection",
+      );
+
+    expect(
+      selection.data,
+    ).toMatchObject({
+      selectedIndex: 1,
+    });
+
+    await sessionBrowser.scroll({
+      direction: "down",
+      amount: 2_000,
+    });
+
+    await waitForObservation(
+      runtime,
+      capture.id,
+      "human_scroll",
+    );
+
+    inspection =
+      await sessionBrowser.inspect();
+
+    await sessionBrowser.click(
+      target(
+        inspection,
+        "Open popup",
+      ),
+    );
+
+    await waitForObservation(
+      runtime,
+      capture.id,
+      "page_opened",
+    );
+
+    await sessionBrowser.switchPage(
+      "page_01",
+    );
+
+    await waitForObservation(
+      runtime,
+      capture.id,
+      "page_switched",
+    );
+
+    const observations =
+      (
+        await runtime.getObservations(
+          capture.id,
+        )
+      ).items;
+
+    const types =
+      observations.map(
+        (item) => item.type,
+      );
+
+    expect(types).toEqual(
+      expect.arrayContaining([
+        "navigation_completed",
+        "url_changed",
+        "human_click",
+        "human_submit",
+        "human_selection",
+        "human_scroll",
+        "page_opened",
+        "page_switched",
+      ]),
+    );
+
+    expect(
+      observations.map(
+        (item) => item.seq,
+      ),
+    ).toEqual(
+      observations.map(
+        (_, index) => index + 1,
+      ),
+    );
+
+    expect(
+      JSON.stringify(observations),
+    ).not.toContain(secret);
+
+    expect(
+      await allFileText(
+        join(
+          home,
+          "sessions",
+          capture.id,
+        ),
+      ),
+    ).not.toContain(secret);
+
+    await expect(
+      runtime.navigate(
+        capture.id,
+        {
+          url: `${server.url}/result`,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
   });
 });

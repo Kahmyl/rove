@@ -88,6 +88,32 @@ describe("Companion renderer state", () => {
     });
   });
 
+
+  it("represents human-owned Capture Mode without handback controls", () => {
+    const snapshot: CompanionSnapshot = {
+      session: {
+        ...baseSession,
+        id: "ses_capture",
+        mode: "capture",
+        controller: "human",
+      },
+      observationCount: 8,
+      evidenceCount: 2,
+    };
+
+    expect(
+      toCompanionViewModel(snapshot),
+    ).toMatchObject({
+      mode: "capture",
+      controller: "You",
+      observationCount: 8,
+      evidenceCount: 2,
+      canTakeControl: false,
+      canReturnControl: false,
+      canFinish: true,
+    });
+  });
+
   it("represents the absence of a session safely", () => {
     expect(
       toCompanionViewModel(null),
