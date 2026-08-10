@@ -4,9 +4,11 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Tray,
   type MenuItemConstructorOptions,
 } from "electron";
 import { loadConfig } from "@rove/config";
+import type { Session } from "@rove/protocol";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
@@ -16,6 +18,7 @@ import { DesktopHost } from "./host/desktop-host.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
 import { CompanionSurface } from "./surface/companion-surface.js";
 import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
+import { toTrayStatusLabel } from "./surface/tray-state.js";
 import { companionWindowOptions } from "./window-options.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
@@ -33,6 +36,10 @@ const manageServices =
 let desktopHost: DesktopHost | undefined;
 
 let companionSurface: CompanionSurface | undefined;
+
+let desktopTray: Tray | undefined;
+
+let trayStatusLabel = "";
 
 let sessionSurfaceMonitor: NodeJS.Timeout | undefined;
 
@@ -156,6 +163,76 @@ function installApplicationMenu(surface: CompanionSurface): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function trayIconPath(): string {
+  return join(import.meta.dirname, "../../../resources/rove-tray-icon.png");
+}
+
+function updateTrayMenu(
+  tray: Tray,
+  surface: CompanionSurface,
+  session: Session | null,
+): void {
+  const status = toTrayStatusLabel(session);
+
+  if (status === trayStatusLabel) {
+    return;
+  }
+
+  trayStatusLabel = status;
+
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: `Rove — ${status}`,
+        enabled: false,
+      },
+      {
+        type: "separator",
+      },
+      {
+        label: "Show Companion",
+        click: () => surface.restore(),
+      },
+      {
+        label: "Hide Companion",
+        click: () => surface.hide(),
+      },
+      {
+        type: "separator",
+      },
+      {
+        label: "Quit Rove",
+        click: () => app.quit(),
+      },
+    ]),
+  );
+}
+
+function installTray(surface: CompanionSurface): Tray {
+  const icon = nativeImage.createFromPath(trayIconPath());
+
+  if (icon.isEmpty()) {
+    throw new Error("Rove tray icon could not be loaded.");
+  }
+
+  if (process.platform === "darwin") {
+    icon.setTemplateImage(true);
+  }
+
+  const tray = new Tray(icon);
+
+  tray.setToolTip("Rove");
+
+  tray.on("click", () => {
+    surface.restore();
+  });
+
+  trayStatusLabel = "";
+  updateTrayMenu(tray, surface, null);
+
+  return tray;
+}
+
 function stopSessionSurfaceMonitor(): void {
   if (sessionSurfaceMonitor !== undefined) {
     clearInterval(sessionSurfaceMonitor);
@@ -167,6 +244,7 @@ function stopSessionSurfaceMonitor(): void {
 function startSessionSurfaceMonitor(
   runtime: CompanionRuntimeClient,
   surface: CompanionSurface,
+  onSession?: (session: Session | null) => void,
 ): void {
   stopSessionSurfaceMonitor();
 
@@ -181,6 +259,8 @@ function startSessionSurfaceMonitor(
 
     try {
       const session = await runtime.getActiveSession();
+
+      onSession?.(session);
 
       const signal = toCompanionSurfaceSignal(session);
 
@@ -268,16 +348,21 @@ async function startDesktop(): Promise<void> {
 
   registerIpc(runtime);
 
-  companionSurface = new CompanionSurface(
-    createCompanionWindow,
-    () => allowQuit,
-  );
+  const surface = new CompanionSurface(createCompanionWindow, () => allowQuit);
 
-  installApplicationMenu(companionSurface);
+  companionSurface = surface;
 
-  companionSurface.show();
+  installApplicationMenu(surface);
 
-  startSessionSurfaceMonitor(runtime, companionSurface);
+  desktopTray = installTray(surface);
+
+  surface.show();
+
+  startSessionSurfaceMonitor(runtime, surface, (session) => {
+    if (desktopTray !== undefined) {
+      updateTrayMenu(desktopTray, surface, session);
+    }
+  });
 }
 
 if (!hasSingleInstanceLock) {
@@ -303,6 +388,9 @@ app.on("activate", () => {
 
 app.on("before-quit", (event) => {
   stopSessionSurfaceMonitor();
+
+  desktopTray?.destroy();
+  desktopTray = undefined;
 
   if (allowQuit) {
     return;
