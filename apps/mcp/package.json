@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx watch src/main.ts",
+    "dev": "node --watch --env-file-if-exists=../../.env --import tsx src/main.ts",
     "start": "node dist/main.js",
     "test": "vitest run",
     "test:manual:stdio": "tsx test/manual/stdio.ts",

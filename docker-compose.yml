@@ -14,8 +14,8 @@ services:
       # Published only on host loopback. Override this development token via
       # ROVE_RUNTIME_TOKEN in environments shared with other users.
       ROVE_RUNTIME_TOKEN: ${ROVE_RUNTIME_TOKEN:-rove-local-compose-token-change-me}
-      ROVE_BROWSER_HEADLESS: "true"
-      ROVE_BROWSER: chromium
+      ROVE_BROWSER_HEADLESS: ${ROVE_BROWSER_HEADLESS:-true}
+      ROVE_BROWSER: ${ROVE_BROWSER:-chrome}
     command: ["pnpm", "--filter", "@rove/runtime", "dev"]
     ports:
       - "127.0.0.1:${ROVE_RUNTIME_PORT:-47820}:47820"

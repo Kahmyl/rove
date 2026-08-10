@@ -9,3 +9,4 @@ coverage/
 !.env.example
 .rove/*
 !.rove/.gitkeep
+apps/runtime/.rove/

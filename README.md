@@ -29,6 +29,11 @@ pnpm dev:mcp
 pnpm dev:companion
 ```
 
+The runtime and MCP development commands load the repository-root `.env` when
+it exists. Environment variables already set by the invoking shell take
+precedence, so the same commands work from POSIX shells, PowerShell, and
+Command Prompt without shell-specific environment syntax.
+
 ## Browser verification
 
 Rove supports real Playwright browser sessions with temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking.
