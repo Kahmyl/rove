@@ -6,3 +6,4 @@ export * from "./pages/page-state.js";
 export * from "./targets/target-identity.js";
 export * from "./targets/target-registry.js";
 export * from "./fixtures/fixture-server.js";
+export * from "./observation/browser-activity.js";

@@ -93,9 +93,22 @@ export class CompanionRuntimeClient {
       );
     }
 
-    const sessions = await this.request<Session[]>(
-      "/sessions?mode=companion",
-    );
+    const [
+      companionSessions,
+      captureSessions,
+    ] = await Promise.all([
+      this.request<Session[]>(
+        "/sessions?mode=companion",
+      ),
+      this.request<Session[]>(
+        "/sessions?mode=capture",
+      ),
+    ]);
+
+    const sessions = [
+      ...companionSessions,
+      ...captureSessions,
+    ];
 
     if (sessions.length === 0) {
       return null;
@@ -113,7 +126,7 @@ export class CompanionRuntimeClient {
 
     if (session === null) {
       throw new Error(
-        "No active Companion Mode session is available.",
+        "No active Companion or Capture Mode session is available.",
       );
     }
 

@@ -31,6 +31,11 @@ const ACTIONS_HTML = `<!doctype html>
         <label for="search">Search</label><input id="search" name="search" value="old text" />
         <label for="password">Password</label><input id="password" name="password" type="password" />
         <label for="otp">One-time code</label><input id="otp" name="otp" autocomplete="one-time-code" />
+        <label for="sort">Sort</label>
+        <select id="sort" name="sort">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+        </select>
         <button id="submit" type="submit">Submit search</button>
       </form>
       <p id="result-state">idle</p>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { errors as playwrightErrors, type Browser, type BrowserContext, type Page } from "playwright";
+import { errors as playwrightErrors, type Browser, type BrowserContext, type CDPSession, type Page } from "playwright";
 import {
   RoveError,
   type ActionResult,
@@ -13,6 +13,14 @@ import {
   type TargetReference,
 } from "@rove/protocol";
 import type { BrowserSession } from "./engine.js";
+import type {
+  BrowserActivity,
+  BrowserActivityListener,
+} from "./observation/browser-activity.js";
+import {
+  installDomActivityListeners,
+  normalizeDomActivityPayload,
+} from "./observation/dom-activity.js";
 import { PageInspector } from "./inspection/inspector.js";
 import { PlaywrightPageRegistry } from "./pages/playwright-page-registry.js";
 import { recordMutation, type PageState } from "./pages/page-state.js";
@@ -42,7 +50,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
+  private readonly activityListeners =
+    new Set<BrowserActivityListener>();
   private recovering: Promise<void> | null = null;
+  private browserCdp:
+    | CDPSession
+    | undefined;
+  private activeTabTimer:
+    | ReturnType<typeof setInterval>
+    | undefined;
+  private reconcilingActiveTab = false;
 
   private constructor(
     private readonly browser: Browser,
@@ -57,6 +74,42 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
       void this.recoverActivePage();
     });
+
+    this.pageRegistry.setOnPageNavigated(
+      ({
+        pageId,
+        previousUrl,
+        url,
+        revision,
+      }) => {
+        if (
+          previousUrl !== url
+        ) {
+          this.emitActivity({
+            type: "url_changed",
+            pageId,
+            pageRevision: revision,
+            timestamp:
+              new Date().toISOString(),
+            data: {
+              previousUrl,
+              url,
+            },
+          });
+        }
+
+        this.emitActivity({
+          type: "navigation_completed",
+          pageId,
+          pageRevision: revision,
+          timestamp:
+            new Date().toISOString(),
+          data: {
+            url,
+          },
+        });
+      },
+    );
   }
 
   static async create(browser: Browser, config: BrowserLaunchConfig): Promise<PlaywrightBrowserSession> {
@@ -67,15 +120,332 @@ export class PlaywrightBrowserSession implements BrowserSession {
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
     );
+    await session.installDomActivityBridge();
     context.on("page", (page) => session.registerNewPage(page));
     await context.newPage();
+    await session.startActiveTabObservation();
     return session;
+  }
+
+  private async installDomActivityBridge(): Promise<void> {
+    await this.context.exposeBinding(
+      "__roveReportActivity",
+      ({ page }, payload: unknown) => {
+        this.handleDomActivity(
+          page,
+          payload,
+        );
+      },
+    );
+
+    await this.context.addInitScript(
+      installDomActivityListeners,
+    );
+  }
+
+  private async startActiveTabObservation(): Promise<void> {
+    if (this.browserCdp !== undefined) {
+      return;
+    }
+
+    this.browserCdp =
+      await this.browser.newBrowserCDPSession();
+
+    await this.reconcileActiveTab();
+
+    this.activeTabTimer =
+      setInterval(
+        () => {
+          void this.reconcileActiveTab();
+        },
+        250,
+      );
+  }
+
+  private async reconcileActiveTab(): Promise<void> {
+    if (
+      this.closed ||
+      this.reconcilingActiveTab ||
+      this.browserCdp === undefined
+    ) {
+      return;
+    }
+
+    this.reconcilingActiveTab = true;
+
+    try {
+      const result =
+        await this.browserCdp.send(
+          "Target.getTargets",
+          {
+            filter: [
+              {
+                type: "tab",
+                exclude: false,
+              },
+              {
+                exclude: true,
+              },
+            ],
+          },
+        ) as {
+          targetInfos: Array<{
+            type: string;
+            title: string;
+            url: string;
+            embedderData?: {
+              tabActive?: boolean;
+              tabStripIndex?: number;
+            };
+          }>;
+        };
+
+      const activeTarget =
+        result.targetInfos.find(
+          target =>
+            target.type === "tab" &&
+            target.embedderData?.tabActive ===
+              true,
+        );
+
+      if (activeTarget === undefined) {
+        return;
+      }
+
+      const pageId =
+        this.resolveTabTargetPageId(
+          activeTarget,
+        );
+
+      if (
+        pageId === undefined ||
+        this.pageRegistry.activeId() ===
+          pageId
+      ) {
+        return;
+      }
+
+      const state =
+        this.pageRegistry.activate(
+          pageId,
+        );
+
+      this.emitActivity({
+        type: "page_switched",
+        pageId,
+        pageRevision: state.revision,
+        timestamp:
+          new Date().toISOString(),
+        data: {
+          url: state.url,
+        },
+      });
+    } catch {
+      return;
+    } finally {
+      this.reconcilingActiveTab = false;
+    }
+  }
+
+  private resolveTabTargetPageId(
+    target: {
+      title: string;
+      url: string;
+      embedderData?: {
+        tabStripIndex?: number;
+      };
+    },
+  ): string | undefined {
+    const summaries =
+      this.pageRegistry.summaries();
+
+    const exact =
+      summaries.filter(
+        summary =>
+          summary.url === target.url &&
+          summary.title === target.title,
+      );
+
+    if (exact.length === 1) {
+      return exact[0]?.id;
+    }
+
+    const matchingUrl =
+      summaries.filter(
+        summary =>
+          summary.url === target.url,
+      );
+
+    if (matchingUrl.length === 1) {
+      return matchingUrl[0]?.id;
+    }
+
+    const tabStripIndex =
+      target.embedderData
+        ?.tabStripIndex;
+
+    if (
+      typeof tabStripIndex !== "number" ||
+      !Number.isInteger(tabStripIndex) ||
+      tabStripIndex < 0
+    ) {
+      return undefined;
+    }
+
+    const page =
+      this.context.pages()[
+        tabStripIndex
+      ];
+
+    if (page === undefined) {
+      return undefined;
+    }
+
+    return this.pageRegistry.pageIdFor(
+      page,
+    );
+  }
+
+  private handleDomActivity(
+    page: Page,
+    payload: unknown,
+  ): void {
+    if (this.closed) {
+      return;
+    }
+
+    const pageId =
+      this.pageRegistry.pageIdFor(page);
+
+    if (
+      pageId === undefined ||
+      !this.pageRegistry.has(pageId)
+    ) {
+      return;
+    }
+
+    const activity =
+      normalizeDomActivityPayload(payload);
+
+    if (activity === null) {
+      return;
+    }
+
+    if (
+      this.pageRegistry.activeId() !==
+      pageId
+    ) {
+      const state =
+        this.pageRegistry.activate(pageId);
+
+      this.emitActivity({
+        type: "page_switched",
+        pageId,
+        pageRevision: state.revision,
+        timestamp:
+          new Date().toISOString(),
+        data: {
+          url: page.url(),
+        },
+      });
+    }
+
+    const state =
+      this.pageRegistry.stateFor(pageId);
+
+    this.emitActivity({
+      type: activity.type,
+      pageId,
+      pageRevision: state.revision,
+      timestamp:
+        new Date().toISOString(),
+      data: activity.data,
+    });
   }
 
   private registerNewPage(page: Page): void {
     const state = this.pageRegistry.registerPage(page);
-    // A newly opened page becomes the active page (application-level state).
     this.pageRegistry.activate(state.id);
+    this.observePage(page, state.id);
+
+    this.emitActivity({
+      type: "page_opened",
+      pageId: state.id,
+      pageRevision: state.revision,
+      timestamp: new Date().toISOString(),
+      data: {
+        url: state.url,
+      },
+    });
+  }
+
+  onActivity(
+    listener: BrowserActivityListener,
+  ): () => void {
+    this.activityListeners.add(listener);
+
+    return () => {
+      this.activityListeners.delete(listener);
+    };
+  }
+
+  private observePage(
+    page: Page,
+    pageId: string,
+  ): void {
+    let previousTitle: string | undefined;
+
+    const observeTitle = () => {
+      if (
+        page.isClosed() ||
+        !this.pageRegistry.has(pageId)
+      ) {
+        return;
+      }
+
+      void page
+        .title()
+        .then((title) => {
+          if (
+            title === previousTitle ||
+            !this.pageRegistry.has(pageId)
+          ) {
+            return;
+          }
+
+          previousTitle = title;
+
+          const state =
+            this.pageRegistry.stateFor(pageId);
+
+          this.emitActivity({
+            type: "page_title_changed",
+            pageId,
+            pageRevision: state.revision,
+            timestamp: new Date().toISOString(),
+            data: {
+              title,
+              url: page.url(),
+            },
+          });
+        })
+        .catch(() => undefined);
+    };
+
+    page.on("domcontentloaded", observeTitle);
+    page.on("load", observeTitle);
+  }
+
+  private emitActivity(
+    activity: BrowserActivity,
+  ): void {
+    for (const listener of this.activityListeners) {
+      try {
+        listener(activity);
+      } catch {
+        // Browser activity observers must never break browser execution.
+      }
+    }
   }
 
   private ensureOpen(): void {
@@ -168,15 +538,45 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   async switchPage(pageId: string): Promise<PageSummary> {
     this.ensureOpen();
-    const page = this.pageRegistry.pageFor(pageId);
+
+    const previousActivePageId =
+      this.pageRegistry.activeId();
+
+    const page =
+      this.pageRegistry.pageFor(pageId);
+
     this.pageRegistry.activate(pageId);
+
     try {
       await page.bringToFront();
     } catch (error) {
-      if (isBrowserClosedError(error)) throw browserClosedError();
+      if (isBrowserClosedError(error)) {
+        throw browserClosedError();
+      }
+
       throw error;
     }
-    const state = await this.pageRegistry.syncMetadata(pageId);
+
+    const state =
+      await this.pageRegistry.syncMetadata(
+        pageId,
+      );
+
+    if (
+      previousActivePageId !== pageId
+    ) {
+      this.emitActivity({
+        type: "page_switched",
+        pageId,
+        pageRevision: state.revision,
+        timestamp:
+          new Date().toISOString(),
+        data: {
+          url: state.url,
+        },
+      });
+    }
+
     return this.toSummary(state);
   }
 
@@ -482,6 +882,29 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+
+    if (
+      this.activeTabTimer !== undefined
+    ) {
+      clearInterval(
+        this.activeTabTimer,
+      );
+      this.activeTabTimer =
+        undefined;
+    }
+
+    const browserCdp =
+      this.browserCdp;
+
+    this.browserCdp = undefined;
+
+    if (browserCdp !== undefined) {
+      await browserCdp
+        .detach()
+        .catch(() => undefined);
+    }
+
+    this.activityListeners.clear();
     try {
       await this.context.close();
     } catch {

@@ -41,6 +41,8 @@ The browser package currently implements:
 - `click`, replacement-style `type`, targeted/page `press`, viewport `scroll`, `back`, and `forward`;
 - viewport, full-page, and target PNG screenshots with temporary sensitive-field masking;
 - popup discovery and shared post-action page/revision synchronization;
+- normalized human browser activity for navigation, titles, meaningful interaction, form submission, fixed scroll milestones, selections, page creation, and page switching;
+- browser-level Chromium tab reconciliation using CDP `tab` target `embedderData.tabActive`, mapped back to stable Rove page IDs without persisting CDP target identity;
 - deterministic local fixture tests and headed manual verification.
 
 Inspection does not increment the page revision. Revisions change on main-frame navigation/document change, explicit invalidation, and material action results.
@@ -53,13 +55,15 @@ The private NestJS API exposes session, browser, page, observation, and evidence
 
 Control state is persisted on the session and validated centrally for Agent, Companion, and Capture modes. Requested handoff removes agent ownership before a human takes control; Companion may also take control voluntarily. Returning control synchronizes the active page and invalidates every page target registry before restoring agent ownership. Durable control-transition observations drive an in-process, lost-wakeup-safe wait service using query, waiter registration, and a second query rather than polling. Human take and return remain private runtime operations consumed by the Electron Companion.
 
+Browser activity is actor-neutral at the browser boundary. Runtime persistence assigns actor `human` only while the persisted session is active and human-controlled. Capture Mode therefore records the human journey without allowing the activity channel to misclassify agent-owned browser execution. Human interaction payloads are minimized before persistence and do not contain raw typed values.
+
 ## Electron companion
 
-The Electron main process owns runtime connectivity and authentication. It discovers the current active Companion Mode session through the private runtime API and retrieves session state, observations, and evidence without routing through MCP.
+The Electron main process owns runtime connectivity and authentication. It discovers the current active Companion or Capture Mode session through the private runtime API and retrieves session state, observations, and evidence without routing through MCP.
 
 The renderer runs with `contextIsolation=true`, `nodeIntegration=false`, and sandboxing enabled. A CommonJS preload exposes only the narrow `window.rove` API for snapshot retrieval, Take Control, Return Control, and Finish Session.
 
-The renderer presents session, mode, controller, status, observation count, and evidence count. Requested human handoffs surface their persisted reason in the desktop UI. Human-to-agent return continues to use the runtime control state machine, including all-page target invalidation before agent ownership is restored.
+The renderer presents session, mode, controller, status, observation count, and evidence count. Requested human handoffs surface their persisted reason in the desktop UI. Human-to-agent return continues to use the runtime control state machine, including all-page target invalidation before agent ownership is restored. Capture Mode remains human-owned, exposes no usable take/return transition, and may be completed from the Companion.
 
 ## Implementation slices
 
@@ -68,4 +72,4 @@ The renderer presents session, mode, controller, status, observation count, and 
 - Phase 3/4 MCP tools, stdio, authenticated Streamable HTTP, and runtime HTTP adaptation are implemented.
 - Phase 7 runtime control protocol, exclusive-control state machine, private HTTP operations, durable waits, stale-target handback, and the agent-facing MCP tools `control.status`, `control.request_human`, and `control.wait` are implemented. Human take/return are not exposed through MCP.
 - Phase 8 Electron Companion, secure preload bridge, runtime session discovery, control UI, handoff presentation, and session completion are implemented.
-- Phase 9+: human activity observation instrumentation and Capture Mode.
+- Phase 9 human activity observation instrumentation, minimized Capture Mode persistence, real human tab-switch observation, Capture discovery in Companion, mutation blocking, and read-only MCP access are implemented.

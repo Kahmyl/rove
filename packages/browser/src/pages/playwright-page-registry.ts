@@ -12,9 +12,28 @@ export class PlaywrightPageRegistry {
   private readonly pagesById = new Map<string, Page>();
   private readonly idsByPage = new WeakMap<Page, string>();
   private onPageClosed: ((pageId: string, wasActive: boolean) => void) | undefined;
+  private onPageNavigated:
+    | ((event: {
+        pageId: string;
+        previousUrl: string;
+        url: string;
+        revision: number;
+      }) => void)
+    | undefined;
 
   setOnPageClosed(handler: (pageId: string, wasActive: boolean) => void): void {
     this.onPageClosed = handler;
+  }
+
+  setOnPageNavigated(
+    handler: (event: {
+      pageId: string;
+      previousUrl: string;
+      url: string;
+      revision: number;
+    }) => void,
+  ): void {
+    this.onPageNavigated = handler;
   }
 
   registerPage(page: Page): PageState {
@@ -27,10 +46,41 @@ export class PlaywrightPageRegistry {
     this.idsByPage.set(page, pageId);
 
     page.on("framenavigated", (frame) => {
-      if (frame !== page.mainFrame() || !this.registry.has(pageId)) return;
-      const next = recordMutation(this.registry.get(pageId), true);
-      this.registry.update(pageId, { ...next, url: page.url() });
+      if (
+        frame !== page.mainFrame() ||
+        !this.registry.has(pageId)
+      ) {
+        return;
+      }
+
+      const previous =
+        this.registry.get(pageId);
+
+      const url = page.url();
+
+      const next =
+        recordMutation(
+          previous,
+          true,
+        );
+
+      const updated =
+        this.registry.update(
+          pageId,
+          {
+            ...next,
+            url,
+          },
+        );
+
+      this.onPageNavigated?.({
+        pageId,
+        previousUrl: previous.url,
+        url,
+        revision: updated.revision,
+      });
     });
+
     const syncTitle = () => {
       if (!this.registry.has(pageId) || page.isClosed()) return;
       void page
