@@ -1,0 +1,3 @@
+export const DEFAULT_ACTION_TIMEOUT_MS = 10_000;
+export const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
+export const POPUP_GRACE_MS = 500;

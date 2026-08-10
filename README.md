@@ -31,18 +31,20 @@ pnpm dev:companion
 
 ## Browser verification
 
-Rove currently supports a real Playwright browser session with temporary profiles, stable page IDs, active-page lifecycle, navigation, semantic page inspection, and revision-scoped target references.
+Rove supports real Playwright browser sessions with temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking.
 
 Manual verification commands:
 
 ```bash
 pnpm browser:demo
 pnpm browser:inspect
+pnpm browser:actions
+pnpm runtime:demo
 ```
 
-`browser:demo` verifies the headed browser lifecycle against the local deterministic fixture. `browser:inspect` opens the same fixture and prints the semantic inspection JSON for comparison with the visible page.
+`browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
 
-Browser actions beyond navigation (`click`, `type`, `press`, `scroll`, `back`, `forward`, and `screenshot`) remain explicitly deferred.
+The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces control ownership, and persists minimized observations and evidence. It is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
 
 ## Docker Compose
 
@@ -77,6 +79,6 @@ with the runtime container is deferred. The MCP HTTP service is likewise
 deferred until its Streamable HTTP adapter exists; exposing a placeholder
 service that immediately exits would make `docker:up --wait` misleading.
 
-The repository now includes the domain and persistence foundation plus the Playwright browser lifecycle and semantic-inspection slice. Browser actions beyond navigation remain explicit `NOT_IMPLEMENTED` boundaries; no unsafe selector or arbitrary JavaScript fallback is present.
+The repository includes the domain and persistence foundation, complete core Playwright browser actions, and runtime/browser/persistence integration. No public selector or arbitrary JavaScript fallback is present.
 
 See [docs/architecture.md](docs/architecture.md) for boundaries and the next implementation slices.

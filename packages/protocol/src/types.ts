@@ -13,6 +13,13 @@ import type {
   sessionSchema,
   sessionStatusSchema,
   startSessionRequestSchema,
+  navigateRequestSchema,
+  clickRequestSchema,
+  typeRequestSchema,
+  pressRequestSchema,
+  scrollOptionsSchema,
+  screenshotOptionsSchema,
+  switchPageRequestSchema,
   targetKindSchema,
   targetReferenceSchema,
 } from "./schemas.js";
@@ -119,22 +126,20 @@ export interface BrowserLaunchConfig {
   viewport?: Viewport;
   executablePath?: string;
   launchArgs?: string[];
+  timeouts?: {
+    navigationMs?: number;
+    actionMs?: number;
+    inspectMs?: number;
+  };
 }
 
-export interface ScrollOptions {
-  direction: "up" | "down" | "left" | "right";
-  amount?: number;
-}
-
-export interface ScreenshotOptions {
-  mode?: "viewport" | "full-page" | "target";
-  target?: TargetReference;
-}
-
-export interface NavigateRequest { url: string; }
-export interface ClickRequest { target: TargetReference; }
-export interface TypeRequest { target: TargetReference; value: string; }
-export interface PressRequest { target?: TargetReference; key: string; }
+export type ScrollOptions = z.infer<typeof scrollOptionsSchema>;
+export type ScreenshotOptions = z.infer<typeof screenshotOptionsSchema>;
+export type NavigateRequest = z.infer<typeof navigateRequestSchema>;
+export type ClickRequest = z.infer<typeof clickRequestSchema>;
+export type TypeRequest = z.infer<typeof typeRequestSchema>;
+export type PressRequest = z.infer<typeof pressRequestSchema>;
+export type SwitchPageRequest = z.infer<typeof switchPageRequestSchema>;
 export interface ControlTransferRequest {
   actor: "agent" | "human";
   controller: Controller;

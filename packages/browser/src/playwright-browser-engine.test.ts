@@ -217,17 +217,4 @@ describe("PlaywrightBrowserEngine", () => {
     });
   });
 
-  it("keeps Milestone 3 actions explicitly unimplemented", async () => {
-    const session = await startSession();
-
-    await expect(
-      session.click({
-        pageId: "page_01",
-        revision: 0,
-        ref: "t1",
-      }),
-    ).rejects.toMatchObject({
-      code: "NOT_IMPLEMENTED",
-    });
-  });
 });

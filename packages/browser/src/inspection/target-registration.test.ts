@@ -165,7 +165,6 @@ describe("target registration", () => {
       name: "Submit",
     });
 
-    expect(resolved.handle.page).toBe(page);
     expect(resolved.handle.marker).toMatch(/^r\d+$/);
 
     const matchingNodeCount = await page

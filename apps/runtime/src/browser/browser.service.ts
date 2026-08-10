@@ -9,6 +9,9 @@ export class BrowserService {
   constructor(@Inject(BROWSER_ENGINE) private readonly engine: BrowserEngine) {}
 
   async start(sessionId: string, config: BrowserLaunchConfig): Promise<BrowserSession> {
+    if (this.sessions.has(sessionId)) {
+      throw new RoveError({ code: "INVALID_CONFIGURATION", message: "A browser is already attached to this session." });
+    }
     const browser = await this.engine.start(config);
     this.sessions.set(sessionId, browser);
     return browser;
@@ -27,5 +30,9 @@ export class BrowserService {
     if (!browser) return;
     this.sessions.delete(sessionId);
     await browser.close();
+  }
+
+  has(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
   }
 }

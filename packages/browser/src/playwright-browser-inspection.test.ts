@@ -212,7 +212,7 @@ describe("PlaywrightBrowserSession inspection", () => {
     expect(second.targets?.[0]?.ref).toBe("t1");
   });
 
-  it("keeps Milestone 3 actions unimplemented after inspection wiring", async () => {
+  it("allows inspected targets to drive Milestone 3 actions", async () => {
     const server = await startServer();
     const session = await startSession();
 
@@ -226,9 +226,7 @@ describe("PlaywrightBrowserSession inspection", () => {
         revision: inspection.revision,
         ref: inspection.targets![0]!.ref,
       }),
-    ).rejects.toMatchObject({
-      code: "NOT_IMPLEMENTED",
-    });
+    ).resolves.toMatchObject({ ok: true, action: "click" });
   });
 });
 

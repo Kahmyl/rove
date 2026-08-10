@@ -7,7 +7,6 @@ import {
 import type { IdentifiedTargetCandidate } from "./target-identity-builder.js";
 
 export interface TargetHandle {
-  page: Page;
   marker: string;
 }
 
@@ -56,7 +55,6 @@ export function registerIdentifiedTargets(
 ): RegisteredInspectionTarget[] {
   return candidates.map((candidate) => {
     const registered = registry.register(candidate.identity, {
-      page,
       marker: candidate.marker,
     });
 

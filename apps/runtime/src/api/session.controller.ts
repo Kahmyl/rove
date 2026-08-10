@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
 import { startSessionRequestSchema, type StartSessionRequest } from "@rove/protocol";
 import { RuntimeService } from "../runtime.service.js";
 
 @Controller("sessions")
 export class SessionController {
-  constructor(private readonly runtime: RuntimeService) {}
+  constructor(@Inject(RuntimeService) private readonly runtime: RuntimeService) {}
 
   @Post()
   start(@Body() request: StartSessionRequest) {
