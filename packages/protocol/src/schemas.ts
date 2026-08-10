@@ -46,6 +46,14 @@ export const startSessionRequestSchema = z.object({
   startUrl: z.string().url().optional(),
 });
 
+export const httpUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  }, "URL must use http or https.");
+
 export const targetKindSchema = z.enum([
   "button",
   "link",
@@ -70,8 +78,8 @@ export const inspectOptionsSchema = z.object({
   includeText: z.boolean().optional(),
   includeTargets: z.boolean().optional(),
   includeViewport: z.boolean().optional(),
-  maxTextChars: z.number().int().positive().max(100_000).optional(),
-  targetLimit: z.number().int().positive().max(1_000).optional(),
+  maxTextChars: z.number().int().positive().max(50_000).optional(),
+  targetLimit: z.number().int().positive().max(500).optional(),
   targetKinds: z.array(targetKindSchema).optional(),
   pageId: z.string().optional(),
 });
@@ -119,4 +127,34 @@ export const controlTransferRequestSchema = z.object({
   actor: z.enum(["agent", "human"]),
   controller: controllerSchema,
   reason: z.string().max(500).optional(),
+});
+
+export const navigateRequestSchema = z.object({ url: httpUrlSchema });
+export const clickRequestSchema = z.object({ target: targetReferenceSchema });
+export const typeRequestSchema = z.object({
+  target: targetReferenceSchema,
+  value: z.string().max(100_000),
+});
+export const pressRequestSchema = z.object({
+  target: targetReferenceSchema.optional(),
+  key: z.string().min(1).max(100),
+});
+export const scrollRequestSchema = z.object({
+  direction: z.enum(["up", "down", "left", "right"]),
+  amount: z.number().int().min(1).max(10_000).optional().default(600),
+});
+export const screenshotRequestSchema = z.object({
+  mode: z.enum(["viewport", "full-page"]).optional().default("viewport"),
+  label: z.string().max(200).optional(),
+});
+
+export const evidenceReadResultSchema = z.object({
+  evidence: evidenceSchema,
+  content: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+  binary: z
+    .object({
+      available: z.literal(true),
+      encoding: z.literal("external"),
+    })
+    .optional(),
 });

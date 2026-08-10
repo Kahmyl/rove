@@ -2,19 +2,26 @@ import type { z } from "zod";
 import type {
   actorSchema,
   browserProfileSchema,
+  clickRequestSchema,
   controllerSchema,
+  evidenceReadResultSchema,
   evidenceSchema,
   evidenceTypeSchema,
   inspectOptionsSchema,
+  navigateRequestSchema,
   observationQuerySchema,
   observationSchema,
+  pressRequestSchema,
   saveEvidenceRequestSchema,
+  screenshotRequestSchema,
   sessionModeSchema,
   sessionSchema,
   sessionStatusSchema,
+  scrollRequestSchema,
   startSessionRequestSchema,
   targetKindSchema,
   targetReferenceSchema,
+  typeRequestSchema,
 } from "./schemas.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
@@ -33,6 +40,13 @@ export type ObservationQuery = z.input<typeof observationQuerySchema>;
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
 export type SaveEvidenceRequest = z.infer<typeof saveEvidenceRequestSchema>;
+export type NavigateRequest = z.input<typeof navigateRequestSchema>;
+export type ClickRequest = z.input<typeof clickRequestSchema>;
+export type TypeRequest = z.input<typeof typeRequestSchema>;
+export type PressRequest = z.input<typeof pressRequestSchema>;
+export type ScrollOptions = z.input<typeof scrollRequestSchema>;
+export type ScreenshotOptions = z.input<typeof screenshotRequestSchema>;
+export type EvidenceReadResult = z.infer<typeof evidenceReadResultSchema>;
 
 export interface ControlState {
   controller: Controller;
@@ -121,20 +135,6 @@ export interface BrowserLaunchConfig {
   launchArgs?: string[];
 }
 
-export interface ScrollOptions {
-  direction: "up" | "down" | "left" | "right";
-  amount?: number;
-}
-
-export interface ScreenshotOptions {
-  mode?: "viewport" | "full-page" | "target";
-  target?: TargetReference;
-}
-
-export interface NavigateRequest { url: string; }
-export interface ClickRequest { target: TargetReference; }
-export interface TypeRequest { target: TargetReference; value: string; }
-export interface PressRequest { target?: TargetReference; key: string; }
 export interface ControlTransferRequest {
   actor: "agent" | "human";
   controller: Controller;

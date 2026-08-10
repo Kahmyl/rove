@@ -9,6 +9,7 @@ const booleanFromEnv = z
 export const roveConfigSchema = z.object({
   home: z.string().min(1),
   runtime: z.object({
+    url: z.string().url(),
     host: z.string().min(1),
     port: z.number().int().min(1).max(65_535),
     token: z.string().min(24).optional(),
@@ -16,7 +17,7 @@ export const roveConfigSchema = z.object({
   mcp: z.discriminatedUnion("transport", [
     z.object({ transport: z.literal("stdio") }),
     z.object({
-      transport: z.literal("streamable-http"),
+      transport: z.literal("http"),
       host: z.string().min(1),
       port: z.number().int().min(1).max(65_535),
       path: z.string().startsWith("/"),
@@ -47,12 +48,14 @@ export interface LoadConfigOptions {
 export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
   const env = options.env ?? process.env;
   const cwd = options.cwd ?? process.cwd();
-  const transport = env.ROVE_MCP_TRANSPORT === "http" ? "streamable-http" : "stdio";
+  const transport = env.ROVE_MCP_TRANSPORT === "http" ? "http" : "stdio";
   const envHeadless = booleanFromEnv.parse(env.ROVE_BROWSER_HEADLESS);
+  const allowedHosts = parseAllowedHosts(env.ROVE_MCP_ALLOWED_HOSTS);
 
   const defaults: RoveConfig = {
     home: resolve(cwd, env.ROVE_HOME ?? ".rove"),
     runtime: {
+      url: env.ROVE_RUNTIME_URL ?? `http://${env.ROVE_RUNTIME_HOST ?? "127.0.0.1"}:${Number(env.ROVE_RUNTIME_PORT ?? 47_820)}`,
       host: env.ROVE_RUNTIME_HOST ?? "127.0.0.1",
       port: Number(env.ROVE_RUNTIME_PORT ?? 47_820),
       ...(env.ROVE_RUNTIME_TOKEN ? { token: env.ROVE_RUNTIME_TOKEN } : {}),
@@ -66,6 +69,7 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
             port: Number(env.ROVE_MCP_PORT ?? 47_821),
             path: env.ROVE_MCP_PATH ?? "/mcp",
             bearerToken: env.ROVE_MCP_TOKEN ?? "",
+            ...(allowedHosts === undefined ? {} : { allowedHosts }),
           },
     browser: {
       headless: envHeadless ?? false,
@@ -80,6 +84,11 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
   };
 
   return roveConfigSchema.parse({ ...defaults, ...options.overrides });
+}
+
+function parseAllowedHosts(value: string | undefined): string[] | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 export function isLoopbackHost(host: string): boolean {

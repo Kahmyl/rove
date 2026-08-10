@@ -8,7 +8,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:manual:stdio": "tsx test/manual/stdio.ts",
+    "test:manual:http": "tsx test/manual/http.ts",
+    "test:manual:http:no-auth": "tsx test/manual/http-no-auth.ts",
+    "test:manual:http:auth": "tsx test/manual/http-auth.ts",
+    "test:manual:http:reconnect": "tsx test/manual/http-reconnect.ts",
+    "test:manual:http:redaction": "tsx test/manual/http-redaction.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.2",
@@ -16,5 +23,8 @@
     "@rove/protocol": "workspace:*",
     "zod": "^4.0.17"
   },
-  "devDependencies": { "tsx": "^4.20.3" }
+  "devDependencies": {
+    "tsx": "^4.20.3",
+    "vitest": "^3.2.4"
+  }
 }

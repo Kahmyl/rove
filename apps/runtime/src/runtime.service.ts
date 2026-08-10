@@ -6,14 +6,18 @@ import {
   type ControlState,
   type ControlTransferRequest,
   type Evidence,
+  type EvidenceReadResult,
   type InspectOptions,
   type NavigateRequest,
   type ObservationPage,
   type ObservationQuery,
   type PageInspection,
+  type PressRequest,
   type RoveRuntime,
   type SaveEvidenceRequest,
+  type ScreenshotOptions,
   type Session,
+  type ScrollOptions,
   type StartSessionRequest,
   type TypeRequest,
 } from "@rove/protocol";
@@ -75,6 +79,47 @@ export class RuntimeService implements RoveRuntime {
     return this.mutate(sessionId, () => this.browser.get(sessionId).type(request.target, request.value));
   }
 
+  press(sessionId: string, request: PressRequest): Promise<ActionResult> {
+    return this.mutate(sessionId, () => this.browser.get(sessionId).press(request.target ?? null, request.key));
+  }
+
+  scroll(sessionId: string, request: ScrollOptions): Promise<ActionResult> {
+    return this.mutate(sessionId, () => this.browser.get(sessionId).scroll(request));
+  }
+
+  back(sessionId: string): Promise<ActionResult> {
+    return this.mutate(sessionId, () => this.browser.get(sessionId).back());
+  }
+
+  forward(sessionId: string): Promise<ActionResult> {
+    return this.mutate(sessionId, () => this.browser.get(sessionId).forward());
+  }
+
+  async screenshot(sessionId: string, request: ScreenshotOptions = { mode: "viewport" }): Promise<Evidence> {
+    const artifact = await this.coordinator.execute(sessionId, async () => {
+      await this.requireActive(sessionId);
+      return this.browser.get(sessionId).screenshot(request);
+    });
+    const item = await this.evidence.savePayload(
+      sessionId,
+      {
+        type: "screenshot",
+        ...(request.label === undefined ? {} : { label: request.label }),
+        metadata: {
+          mimeType: artifact.mimeType,
+          ...(artifact.metadata ?? {}),
+        },
+      },
+      artifact.bytes,
+    );
+    await this.observations.append(sessionId, {
+      actor: "agent",
+      type: "screenshot_saved",
+      data: { evidenceId: item.id, label: item.label },
+    });
+    return item;
+  }
+
   async transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState> {
     return this.coordinator.execute(sessionId, async () => {
       const session = await this.requireActive(sessionId);
@@ -101,6 +146,11 @@ export class RuntimeService implements RoveRuntime {
     });
   }
 
+  async getControl(sessionId: string): Promise<ControlState> {
+    const session = await this.sessions.get(sessionId);
+    return this.control.nextState(session.controller);
+  }
+
   async saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence> {
     await this.sessions.get(sessionId);
     const item = await this.evidence.save(sessionId, request);
@@ -110,6 +160,16 @@ export class RuntimeService implements RoveRuntime {
       data: { evidenceId: item.id, type: item.type, label: item.label },
     });
     return item;
+  }
+
+  async listEvidence(sessionId: string): Promise<Evidence[]> {
+    await this.sessions.get(sessionId);
+    return this.evidence.list(sessionId);
+  }
+
+  async readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
+    await this.sessions.get(sessionId);
+    return this.evidence.read(sessionId, evidenceId);
   }
 
   async getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage> {

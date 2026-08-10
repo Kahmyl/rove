@@ -1,12 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { RoveError } from "@rove/protocol";
+import { validateBearerToken } from "./bearer-token.js";
 
 export class BearerTokenVerifier {
   private readonly expected: Buffer;
 
   constructor(token: string) {
-    if (!token) throw new RoveError({ code: "INVALID_CONFIGURATION", message: "MCP token is required." });
-    this.expected = Buffer.from(token);
+    this.expected = Buffer.from(validateBearerToken(token));
   }
 
   authenticate(authorization: string | null | undefined): void {
@@ -22,4 +22,8 @@ export class BearerTokenVerifier {
       throw new RoveError({ code: "MCP_AUTH_INVALID", message: "Bearer authentication is invalid." });
     }
   }
+}
+
+export function unauthorizedBody(): { error: { code: "UNAUTHORIZED"; message: string } } {
+  return { error: { code: "UNAUTHORIZED", message: "Unauthorized." } };
 }

@@ -4,13 +4,17 @@ import type {
   ControlState,
   ControlTransferRequest,
   Evidence,
+  EvidenceReadResult,
   InspectOptions,
   NavigateRequest,
   ObservationPage,
   ObservationQuery,
   PageInspection,
+  PressRequest,
   SaveEvidenceRequest,
+  ScreenshotOptions,
   SessionSnapshot,
+  ScrollOptions,
   StartSessionRequest,
   TypeRequest,
 } from "./types.js";
@@ -25,7 +29,15 @@ export interface RoveRuntime {
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult>;
   click(sessionId: string, request: ClickRequest): Promise<ActionResult>;
   type(sessionId: string, request: TypeRequest): Promise<ActionResult>;
+  press(sessionId: string, request: PressRequest): Promise<ActionResult>;
+  scroll(sessionId: string, request: ScrollOptions): Promise<ActionResult>;
+  back(sessionId: string): Promise<ActionResult>;
+  forward(sessionId: string): Promise<ActionResult>;
+  screenshot(sessionId: string, request?: ScreenshotOptions): Promise<Evidence>;
   transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState>;
+  getControl(sessionId: string): Promise<ControlState>;
   saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence>;
+  listEvidence(sessionId: string): Promise<Evidence[]>;
+  readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult>;
   getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage>;
 }

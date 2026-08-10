@@ -4,6 +4,9 @@ import { loadConfig } from "@rove/config";
 import { ROVE_RUNTIME } from "@rove/protocol";
 import { FileEvidenceStore, FileObservationStore, FileSessionStore } from "@rove/storage";
 import { HealthController } from "./api/health.controller.js";
+import { BrowserController } from "./api/browser.controller.js";
+import { ControlController } from "./api/control.controller.js";
+import { EvidenceController } from "./api/evidence.controller.js";
 import { SessionController } from "./api/session.controller.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
@@ -17,7 +20,7 @@ import { EVIDENCE_STORE, OBSERVATION_STORE, SESSION_STORE } from "./tokens.js";
 const config = loadConfig();
 
 @Module({
-  controllers: [HealthController, SessionController],
+  controllers: [HealthController, SessionController, BrowserController, ControlController, EvidenceController],
   providers: [
     { provide: SESSION_STORE, useValue: new FileSessionStore(config.home) },
     { provide: OBSERVATION_STORE, useValue: new FileObservationStore(config.home) },
