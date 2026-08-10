@@ -1,6 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { RoveError, type Evidence, type EvidencePayload, type EvidenceReadResult, type SaveEvidenceRequest } from "@rove/protocol";
+import {
+  RoveError,
+  type Artifact,
+  type Evidence,
+  type EvidencePayload,
+  type EvidenceReadResult,
+  type SaveEvidenceRequest,
+  type ScreenshotOptions,
+} from "@rove/protocol";
 import type { EvidenceStore } from "@rove/storage";
 import { EVIDENCE_STORE } from "../tokens.js";
 
@@ -28,7 +36,24 @@ export class EvidenceService {
       ...(request.url === undefined ? {} : { url: request.url }),
       ...(request.metadata === undefined ? {} : { metadata: request.metadata }),
     };
-    await this.evidence.save(item, payload);
+    await this.persist(item, payload);
+    return item;
+  }
+
+  async saveScreenshot(sessionId: string, artifact: Artifact, options: ScreenshotOptions = {}): Promise<Evidence> {
+    const metadata = artifact.metadata ?? {};
+    const item: Evidence = {
+      id: `ev_${randomUUID().replaceAll("-", "")}`,
+      sessionId,
+      type: "screenshot",
+      createdAt: typeof metadata.timestamp === "string" ? metadata.timestamp : new Date().toISOString(),
+      ...(options.label === undefined ? {} : { label: options.label }),
+      ...(typeof metadata.pageId === "string" ? { pageId: metadata.pageId } : {}),
+      ...(typeof metadata.revision === "number" ? { pageRevision: metadata.revision } : {}),
+      ...(typeof metadata.url === "string" ? { url: metadata.url } : {}),
+      metadata: { mimeType: artifact.mimeType, mode: options.mode ?? "viewport" },
+    };
+    await this.persist(item, artifact.bytes);
     return item;
   }
 
@@ -36,18 +61,27 @@ export class EvidenceService {
     return this.evidence.list(sessionId);
   }
 
-  async read(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
-    const evidence = (await this.evidence.list(sessionId)).find((item) => item.id === evidenceId);
-    if (evidence === undefined) {
-      throw new RoveError({ code: "EVIDENCE_NOT_FOUND", message: "Evidence was not found." });
-    }
-    return this.toReadResult(evidence, await this.evidence.read(sessionId, evidenceId));
+  async metadata(sessionId: string, evidenceId: string): Promise<Evidence> {
+    const item = (await this.evidence.list(sessionId)).find((candidate) => candidate.id === evidenceId);
+    if (!item) throw new RoveError({ code: "EVIDENCE_NOT_FOUND", message: "Evidence was not found." });
+    return item;
   }
 
-  private toReadResult(evidence: Evidence, payload: EvidencePayload): EvidenceReadResult {
+  async read(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
+    const item = await this.metadata(sessionId, evidenceId);
+    const payload = await this.evidence.read(sessionId, evidenceId);
     if (payload instanceof Uint8Array) {
-      return { evidence, binary: { available: true, encoding: "external" } };
+      return { ...item, binary: { available: true, encoding: "external" } };
     }
-    return { evidence, content: payload };
+    return { ...item, content: payload };
+  }
+
+  private async persist(item: Evidence, payload: EvidencePayload): Promise<void> {
+    try {
+      await this.evidence.save(item, payload);
+    } catch (error) {
+      if (error instanceof RoveError) throw error;
+      throw new RoveError({ code: "EVIDENCE_WRITE_FAILED", message: "Evidence could not be persisted." });
+    }
   }
 }

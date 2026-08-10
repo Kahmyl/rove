@@ -10,6 +10,7 @@ import type {
   ObservationPage,
   ObservationQuery,
   PageInspection,
+  PageSummary,
   PressRequest,
   SaveEvidenceRequest,
   ScreenshotOptions,
@@ -33,7 +34,10 @@ export interface RoveRuntime {
   scroll(sessionId: string, request: ScrollOptions): Promise<ActionResult>;
   back(sessionId: string): Promise<ActionResult>;
   forward(sessionId: string): Promise<ActionResult>;
-  screenshot(sessionId: string, request?: ScreenshotOptions): Promise<Evidence>;
+  pages(sessionId: string): Promise<PageSummary[]>;
+  switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
+  closePage(sessionId: string, pageId: string): Promise<void>;
+  captureScreenshot(sessionId: string, options?: ScreenshotOptions): Promise<Evidence>;
   transferControl(sessionId: string, request: ControlTransferRequest): Promise<ControlState>;
   getControl(sessionId: string): Promise<ControlState>;
   saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence>;

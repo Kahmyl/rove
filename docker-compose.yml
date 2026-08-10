@@ -11,8 +11,11 @@ services:
       ROVE_HOME: /workspace/.rove
       ROVE_RUNTIME_HOST: 0.0.0.0
       ROVE_RUNTIME_PORT: 47820
-      # Browser execution is host-side until PlaywrightBrowserEngine is implemented.
+      # Published only on host loopback. Override this development token via
+      # ROVE_RUNTIME_TOKEN in environments shared with other users.
+      ROVE_RUNTIME_TOKEN: ${ROVE_RUNTIME_TOKEN:-rove-local-compose-token-change-me}
       ROVE_BROWSER_HEADLESS: "true"
+      ROVE_BROWSER: chromium
     command: ["pnpm", "--filter", "@rove/runtime", "dev"]
     ports:
       - "127.0.0.1:${ROVE_RUNTIME_PORT:-47820}:47820"
@@ -32,6 +35,7 @@ services:
       - rove-data:/workspace/.rove
     restart: unless-stopped
     stop_grace_period: 10s
+    shm_size: 1gb
     init: true
     develop:
       watch:

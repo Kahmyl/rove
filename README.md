@@ -8,7 +8,7 @@ Rove is a local-first, headed-browser task runtime shared by an external MCP age
 - `apps/mcp` — MCP transport and tool adapter boundary
 - `apps/companion` — Electron + React companion client
 - `packages/protocol` — shared schemas, contracts, and structured errors
-- `packages/browser` — browser-engine boundary (Playwright implementation follows in Phase 1)
+- `packages/browser` — Playwright browser lifecycle, semantic inspection, and target registry
 - `packages/storage` — atomic filesystem and JSONL persistence
 - `packages/config` — configuration precedence and validation
 
@@ -29,6 +29,23 @@ pnpm dev:mcp
 pnpm dev:companion
 ```
 
+## Browser verification
+
+Rove supports real Playwright browser sessions with temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking.
+
+Manual verification commands:
+
+```bash
+pnpm browser:demo
+pnpm browser:inspect
+pnpm browser:actions
+pnpm runtime:demo
+```
+
+`browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
+
+The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces control ownership, and persists minimized observations and evidence. It is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
+
 ## Docker Compose
 
 Start the local runtime in Docker:
@@ -40,7 +57,16 @@ pnpm docker:up
 The runtime is available only on the host loopback interface at
 `http://127.0.0.1:47820`; its health endpoint is
 `http://127.0.0.1:47820/health`. Session data is retained in the named
-`rove-data` volume.
+`rove-data` volume. Compose installs the lockfile-matched Playwright Chromium
+browser and runs browser sessions headlessly inside the runtime container.
+
+Session routes require the Compose runtime bearer token. Local development uses
+`rove-local-compose-token-change-me` unless `ROVE_RUNTIME_TOKEN` is set; health
+remains unauthenticated. Override the token for any shared environment:
+
+```bash
+ROVE_RUNTIME_TOKEN=a-long-random-development-token pnpm docker:up
+```
 
 For Compose Watch development:
 
@@ -56,12 +82,11 @@ pnpm docker:down
 pnpm docker:reset # destructive: removes persisted local Rove session data
 ```
 
-The current container runs the runtime API only. The Electron companion must
-run on the host, and browser execution will be added to Compose when the real
-Playwright engine is implemented. The MCP HTTP service is likewise deferred
-until its Streamable HTTP adapter exists; exposing a placeholder service that
+The current container runs the runtime API and its headless Playwright browser.
+The Electron companion remains host-side. The MCP HTTP service is deferred until
+its Streamable HTTP adapter exists; exposing a placeholder service that
 immediately exits would make `docker:up --wait` misleading.
 
-The current scaffold implements the Phase 0 domain and persistence foundation. Browser and MCP adapters deliberately expose typed seams and explicit `NOT_IMPLEMENTED` failures until their Phase 1/3 implementations land; no unsafe selector or arbitrary JavaScript fallback is present.
+The repository includes the domain and persistence foundation, complete core Playwright browser actions, and runtime/browser/persistence integration. No public selector or arbitrary JavaScript fallback is present.
 
 See [docs/architecture.md](docs/architecture.md) for boundaries and the next implementation slices.

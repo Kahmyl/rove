@@ -84,6 +84,29 @@ export const inspectOptionsSchema = z.object({
   pageId: z.string().optional(),
 });
 
+export const navigateRequestSchema = z.object({ url: httpUrlSchema });
+export const clickRequestSchema = z.object({ target: targetReferenceSchema });
+export const typeRequestSchema = z.object({
+  target: targetReferenceSchema,
+  value: z.string().max(100_000),
+});
+export const pressRequestSchema = z.object({
+  target: targetReferenceSchema.optional(),
+  key: z.string().min(1).max(100),
+});
+export const scrollOptionsSchema = z.object({
+  direction: z.enum(["up", "down", "left", "right"]),
+  amount: z.number().int().min(1).max(10_000).optional().default(600),
+});
+export const scrollRequestSchema = scrollOptionsSchema;
+export const screenshotOptionsSchema = z.object({
+  mode: z.enum(["viewport", "full-page", "target"]).optional().default("viewport"),
+  target: targetReferenceSchema.optional(),
+  label: z.string().max(200).optional(),
+});
+export const screenshotRequestSchema = screenshotOptionsSchema;
+export const switchPageRequestSchema = z.object({ pageId: z.string().min(1) });
+
 export const observationSchema = z.object({
   id: z.string().startsWith("obs_"),
   seq: z.number().int().positive(),
@@ -123,33 +146,7 @@ export const saveEvidenceRequestSchema = z.object({
   payload: z.union([z.string(), z.record(z.string(), z.unknown())]),
 });
 
-export const controlTransferRequestSchema = z.object({
-  actor: z.enum(["agent", "human"]),
-  controller: controllerSchema,
-  reason: z.string().max(500).optional(),
-});
-
-export const navigateRequestSchema = z.object({ url: httpUrlSchema });
-export const clickRequestSchema = z.object({ target: targetReferenceSchema });
-export const typeRequestSchema = z.object({
-  target: targetReferenceSchema,
-  value: z.string().max(100_000),
-});
-export const pressRequestSchema = z.object({
-  target: targetReferenceSchema.optional(),
-  key: z.string().min(1).max(100),
-});
-export const scrollRequestSchema = z.object({
-  direction: z.enum(["up", "down", "left", "right"]),
-  amount: z.number().int().min(1).max(10_000).optional().default(600),
-});
-export const screenshotRequestSchema = z.object({
-  mode: z.enum(["viewport", "full-page"]).optional().default("viewport"),
-  label: z.string().max(200).optional(),
-});
-
-export const evidenceReadResultSchema = z.object({
-  evidence: evidenceSchema,
+export const evidenceReadResultSchema = evidenceSchema.extend({
   content: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
   binary: z
     .object({
@@ -157,4 +154,10 @@ export const evidenceReadResultSchema = z.object({
       encoding: z.literal("external"),
     })
     .optional(),
+});
+
+export const controlTransferRequestSchema = z.object({
+  actor: z.enum(["agent", "human"]),
+  controller: controllerSchema,
+  reason: z.string().max(500).optional(),
 });

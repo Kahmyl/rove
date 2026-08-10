@@ -1,14 +1,14 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
 import { saveEvidenceRequestSchema, type SaveEvidenceRequest } from "@rove/protocol";
 import { RuntimeService } from "../runtime.service.js";
 
 @Controller("sessions/:id/evidence")
 export class EvidenceController {
-  constructor(private readonly runtime: RuntimeService) {}
+  constructor(@Inject(RuntimeService) private readonly runtime: RuntimeService) {}
 
   @Post()
-  save(@Param("id") id: string, @Body() request: SaveEvidenceRequest) {
-    return this.runtime.saveEvidence(id, saveEvidenceRequestSchema.parse(request));
+  save(@Param("id") id: string, @Body() body: SaveEvidenceRequest) {
+    return this.runtime.saveEvidence(id, saveEvidenceRequestSchema.parse(body));
   }
 
   @Get()

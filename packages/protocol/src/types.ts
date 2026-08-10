@@ -13,12 +13,13 @@ import type {
   observationSchema,
   pressRequestSchema,
   saveEvidenceRequestSchema,
-  screenshotRequestSchema,
+  screenshotOptionsSchema,
   sessionModeSchema,
   sessionSchema,
   sessionStatusSchema,
-  scrollRequestSchema,
+  scrollOptionsSchema,
   startSessionRequestSchema,
+  switchPageRequestSchema,
   targetKindSchema,
   targetReferenceSchema,
   typeRequestSchema,
@@ -39,14 +40,15 @@ export type Observation = z.infer<typeof observationSchema>;
 export type ObservationQuery = z.input<typeof observationQuerySchema>;
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
+export type EvidenceReadResult = z.infer<typeof evidenceReadResultSchema>;
 export type SaveEvidenceRequest = z.infer<typeof saveEvidenceRequestSchema>;
 export type NavigateRequest = z.input<typeof navigateRequestSchema>;
 export type ClickRequest = z.input<typeof clickRequestSchema>;
 export type TypeRequest = z.input<typeof typeRequestSchema>;
 export type PressRequest = z.input<typeof pressRequestSchema>;
-export type ScrollOptions = z.input<typeof scrollRequestSchema>;
-export type ScreenshotOptions = z.input<typeof screenshotRequestSchema>;
-export type EvidenceReadResult = z.infer<typeof evidenceReadResultSchema>;
+export type ScrollOptions = z.input<typeof scrollOptionsSchema>;
+export type ScreenshotOptions = z.input<typeof screenshotOptionsSchema>;
+export type SwitchPageRequest = z.input<typeof switchPageRequestSchema>;
 
 export interface ControlState {
   controller: Controller;
@@ -133,6 +135,11 @@ export interface BrowserLaunchConfig {
   viewport?: Viewport;
   executablePath?: string;
   launchArgs?: string[];
+  timeouts?: {
+    navigationMs?: number;
+    actionMs?: number;
+    inspectMs?: number;
+  };
 }
 
 export interface ControlTransferRequest {

@@ -81,48 +81,61 @@ export class FileEvidenceStore implements EvidenceStore {
   constructor(private readonly home: string) {}
 
   async save(evidence: Evidence, payload: EvidencePayload): Promise<void> {
-    const directory = pathWithin(sessionDirectory(this.home, evidence.sessionId), "evidence");
+    const subdirectory = {
+      screenshot: "screenshots",
+      record: "records",
+      page: "pages",
+      file: "files",
+      text: "records",
+    }[evidence.type];
+    const directory = pathWithin(sessionDirectory(this.home, evidence.sessionId), "evidence", subdirectory);
     const id = assertSafeSegment(evidence.id, "evidence ID");
     await mkdir(directory, { recursive: true });
-    await atomicJsonWrite(pathWithin(directory, `${id}.metadata.json`), evidenceSchema.parse(evidence));
     if (payload instanceof Uint8Array) {
-      await writeFile(pathWithin(directory, `${id}.bin`), payload, { mode: 0o600 });
+      const extension = evidence.type === "screenshot" ? ".png" : ".bin";
+      await writeFile(pathWithin(directory, `${id}${extension}`), payload, { mode: 0o600 });
     } else if (typeof payload === "string") {
       await writeFile(pathWithin(directory, `${id}.txt`), payload, { mode: 0o600 });
     } else {
       await atomicJsonWrite(pathWithin(directory, `${id}.json`), payload);
     }
+    await atomicJsonWrite(pathWithin(directory, `${id}.metadata.json`), evidenceSchema.parse(evidence));
   }
 
   async list(sessionId: string): Promise<Evidence[]> {
-    const directory = pathWithin(sessionDirectory(this.home, sessionId), "evidence");
-    try {
-      const names = await readdir(directory);
-      return Promise.all(
-        names
+    const root = pathWithin(sessionDirectory(this.home, sessionId), "evidence");
+    const directories = ["screenshots", "records", "pages", "files"];
+    const groups = await Promise.all(directories.map(async (subdirectory) => {
+      const directory = pathWithin(root, subdirectory);
+      try {
+        const names = await readdir(directory);
+        return Promise.all(names
           .filter((name) => name.endsWith(".metadata.json"))
           .map(async (name) => {
             const raw = await readFile(pathWithin(directory, name), "utf8");
             return evidenceSchema.parse(JSON.parse(raw));
-          }),
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
+          }));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+        throw error;
+      }
+    }));
+    return groups.flat().sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
   async read(sessionId: string, evidenceId: string): Promise<EvidencePayload> {
-    const directory = pathWithin(sessionDirectory(this.home, sessionId), "evidence");
     const id = assertSafeSegment(evidenceId, "evidence ID");
-    for (const extension of [".json", ".txt", ".bin"] as const) {
-      try {
-        const payload = await readFile(pathWithin(directory, `${id}${extension}`));
-        if (extension === ".json") return JSON.parse(payload.toString("utf8")) as Record<string, unknown>;
-        if (extension === ".txt") return payload.toString("utf8");
-        return new Uint8Array(payload);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    for (const subdirectory of ["screenshots", "records", "pages", "files"]) {
+      const directory = pathWithin(sessionDirectory(this.home, sessionId), "evidence", subdirectory);
+      for (const extension of [".json", ".txt", ".bin", ".png"] as const) {
+        try {
+          const payload = await readFile(pathWithin(directory, `${id}${extension}`));
+          if (extension === ".json") return JSON.parse(payload.toString("utf8")) as Record<string, unknown>;
+          if (extension === ".txt") return payload.toString("utf8");
+          return new Uint8Array(payload);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
       }
     }
     throw new RoveError({ code: "EVIDENCE_NOT_FOUND", message: "Evidence payload was not found." });
