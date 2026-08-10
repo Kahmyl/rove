@@ -1,4 +1,7 @@
-import { observationQuerySchema, startSessionRequestSchema } from "@rove/protocol";
+import {
+  observationQuerySchema,
+  startSessionRequestSchema,
+} from "@rove/protocol";
 import { z } from "zod";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
 import type { ToolDefinition } from "../server/register-tools.js";
@@ -8,16 +11,25 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
   return [
     {
       name: "session.start",
-      description: "Start a Rove browser session.",
+      description:
+        "Start a Rove browser session. Use agent for autonomous work where human control requires an explicit handoff, companion when the human may voluntarily take over at any time, and capture for human-driven browsing that Rove observes.",
       inputSchema: {
         type: "object",
         properties: {
-          mode: { type: "string", enum: ["agent", "companion", "capture"] },
+          mode: {
+            type: "string",
+            enum: ["agent", "companion", "capture"],
+            description:
+              "agent = autonomous with explicit human handoff; companion = collaborative with voluntary human takeover; capture = human-controlled observation",
+          },
           startUrl: { type: "string" },
           profile: {
             type: "object",
             properties: {
-              mode: { type: "string", enum: ["temporary", "persistent", "existing"] },
+              mode: {
+                type: "string",
+                enum: ["temporary", "persistent", "existing"],
+              },
               name: { type: "string" },
               userDataDir: { type: "string" },
               profileDirectory: { type: "string" },
@@ -29,7 +41,8 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["mode"],
         additionalProperties: false,
       },
-      handler: (input) => runtime.startSession(startSessionRequestSchema.parse(input)),
+      handler: (input) =>
+        runtime.startSession(startSessionRequestSchema.parse(input)),
     },
     {
       name: "session.status",
@@ -70,7 +83,10 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
             limit: z.number().int().positive().max(500).optional().default(100),
           })
           .parse(input);
-        const page = await runtime.getObservations(parsed.sessionId, observationQuerySchema.parse(parsed));
+        const page = await runtime.getObservations(
+          parsed.sessionId,
+          observationQuerySchema.parse(parsed),
+        );
         return { observations: page.items, nextSeq: page.nextSeq ?? null };
       },
     },

@@ -154,6 +154,7 @@ export interface BrowserLaunchConfig {
   viewport?: Viewport;
   executablePath?: string;
   launchArgs?: string[];
+  profileUserDataDir?: string;
   timeouts?: {
     navigationMs?: number;
     actionMs?: number;

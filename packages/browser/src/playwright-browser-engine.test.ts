@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { BrowserLaunchConfig } from "@rove/protocol";
@@ -73,14 +76,80 @@ describe("PlaywrightBrowserEngine", () => {
     });
   });
 
-  it("rejects unsupported profile modes without silently using temporary", async () => {
-    const engine = new PlaywrightBrowserEngine();
+  it("starts a persistent Chromium session in the resolved Rove profile directory", async () => {
+    const userDataDir =
+      await mkdtemp(
+        join(
+          tmpdir(),
+          "rove-profile-",
+        ),
+      );
 
+    try {
+      const session =
+        await new PlaywrightBrowserEngine()
+          .start({
+            ...config,
+            profile: {
+              mode: "persistent",
+              name: "test-profile",
+            },
+            profileUserDataDir:
+              userDataDir,
+          });
+
+      sessions.push(session);
+
+      const pages =
+        await session.pages();
+
+      expect(pages.length).toBeGreaterThan(0);
+      expect(
+        pages.some(
+          (page) => page.active,
+        ),
+      ).toBe(true);
+    } finally {
+      while (sessions.length > 0) {
+        await sessions.pop()?.close();
+      }
+
+      await rm(
+        userDataDir,
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+    }
+  });
+
+  it("requires a resolved directory for persistent profiles", async () => {
     await expect(
-      engine.start({
-        ...config,
-        profile: { mode: "persistent", name: "test-profile" },
-      }),
+      new PlaywrightBrowserEngine()
+        .start({
+          ...config,
+          profile: {
+            mode: "persistent",
+            name: "test-profile",
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION",
+    });
+  });
+
+  it("keeps direct existing-profile attachment disabled", async () => {
+    await expect(
+      new PlaywrightBrowserEngine()
+        .start({
+          ...config,
+          profile: {
+            mode: "existing",
+            userDataDir:
+              "/tmp/not-used",
+          },
+        }),
     ).rejects.toMatchObject({
       code: "NOT_IMPLEMENTED",
     });

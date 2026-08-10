@@ -114,16 +114,68 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   static async create(browser: Browser, config: BrowserLaunchConfig): Promise<PlaywrightBrowserSession> {
     const context = await browser.newContext({ viewport: config.viewport ?? DEFAULT_VIEWPORT });
+    return this.createFromContext(
+      browser,
+      context,
+      config,
+      false,
+    );
+  }
+
+  static async createPersistent(
+    context: BrowserContext,
+    config: BrowserLaunchConfig,
+  ): Promise<PlaywrightBrowserSession> {
+    const browser = context.browser();
+
+    if (browser === null) {
+      throw new RoveError({
+        code: "BROWSER_LAUNCH_FAILED",
+        message:
+          "Persistent browser context has no owning browser.",
+      });
+    }
+
+    return this.createFromContext(
+      browser,
+      context,
+      config,
+      true,
+    );
+  }
+
+  private static async createFromContext(
+    browser: Browser,
+    context: BrowserContext,
+    config: BrowserLaunchConfig,
+    preserveExistingPages: boolean,
+  ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
     );
+
     await session.installDomActivityBridge();
-    context.on("page", (page) => session.registerNewPage(page));
-    await context.newPage();
+
+    context.on(
+      "page",
+      (page) => session.registerNewPage(page),
+    );
+
+    if (preserveExistingPages) {
+      for (const page of context.pages()) {
+        session.registerNewPage(page);
+      }
+    }
+
+    if (context.pages().length === 0) {
+      await context.newPage();
+    }
+
     await session.startActiveTabObservation();
+
     return session;
   }
 

@@ -9,10 +9,7 @@ export type CompanionExperience =
   | "session_ended";
 
 export type CompanionPrimaryAction =
-  | "take_control"
-  | "return_control"
-  | "finish_capture"
-  | null;
+  "take_control" | "return_control" | "finish_capture" | null;
 
 export interface CompanionViewModel {
   hasSession: boolean;
@@ -73,8 +70,7 @@ export function toCompanionViewModel(
   const { session } = snapshot;
 
   const live =
-    session.status === "active" ||
-    session.status === "awaiting_human";
+    session.status === "active" || session.status === "awaiting_human";
 
   const controller =
     session.controller === "human"
@@ -83,20 +79,23 @@ export function toCompanionViewModel(
         ? "Agent"
         : "Waiting";
 
+  const requestedHandoff =
+    session.status === "awaiting_human" &&
+    session.controller === null &&
+    session.handoff !== undefined;
+
   const canTakeControl =
-    session.mode === "companion" &&
     live &&
-    session.controller !== "human";
+    session.controller !== "human" &&
+    (session.mode === "companion" ||
+      (session.mode === "agent" && requestedHandoff));
 
   const canReturnControl =
-    session.mode === "companion" &&
-    live &&
-    session.controller === "human";
+    live && session.controller === "human" && session.mode !== "capture";
 
   const canFinish = live;
 
-  const handoffReason =
-    session.handoff?.reason;
+  const handoffReason = session.handoff?.reason;
 
   const shared = {
     hasSession: true,
@@ -106,9 +105,7 @@ export function toCompanionViewModel(
     controller,
     observationCount: snapshot.observationCount,
     evidenceCount: snapshot.evidenceCount,
-    ...(handoffReason === undefined
-      ? {}
-      : { handoffReason }),
+    ...(handoffReason === undefined ? {} : { handoffReason }),
     canTakeControl,
     canReturnControl,
     canFinish,
@@ -142,55 +139,39 @@ export function toCompanionViewModel(
 
       kicker: "Capture mode",
       title: "You're in control",
-      description:
-        "Rove is observing this browser session while you work.",
-      primaryAction:
-        canFinish
-          ? "finish_capture"
-          : null,
+      description: "Rove is observing this browser session while you work.",
+      primaryAction: canFinish ? "finish_capture" : null,
       ...(canFinish
         ? {
-            primaryActionLabel:
-              "Finish Capture",
+            primaryActionLabel: "Finish Capture",
           }
         : {}),
     };
   }
 
-  if (
-    session.status === "awaiting_human" &&
-    session.controller === null
-  ) {
+  if (session.status === "awaiting_human" && session.controller === null) {
     return {
       ...shared,
 
       experience: "handoff_waiting",
 
       kicker: "Your turn",
-      title:
-        "Rove needs you for one step",
+      title: "Rove needs you for one step",
       description:
-        handoffReason ??
-        "Complete the requested step in the browser.",
-      supportingText:
-        "Rove is paused until you take over.",
+        handoffReason ?? "Complete the requested step in the browser.",
+      supportingText: "Rove is paused until you take over.",
 
-      primaryAction:
-        canTakeControl
-          ? "take_control"
-          : null,
+      primaryAction: canTakeControl ? "take_control" : null,
       ...(canTakeControl
         ? {
-            primaryActionLabel:
-              "Start this step",
+            primaryActionLabel: "Start this step",
           }
         : {}),
     };
   }
 
   if (session.controller === "human") {
-    const requestedStep =
-      handoffReason !== undefined;
+    const requestedStep = handoffReason !== undefined;
 
     return {
       ...shared,
@@ -198,26 +179,20 @@ export function toCompanionViewModel(
       experience: "human_step",
 
       kicker: "You're in control",
-      title:
-        requestedStep
-          ? "You're handling this step"
-          : "Browser control is yours",
+      title: requestedStep
+        ? "You're handling this step"
+        : "Browser control is yours",
       description:
         handoffReason ??
         "Use the browser directly, then resume automation when you're done.",
-      supportingText:
-        "Rove is paused while you work.",
+      supportingText: "Rove is paused while you work.",
 
-      primaryAction:
-        canReturnControl
-          ? "return_control"
-          : null,
+      primaryAction: canReturnControl ? "return_control" : null,
       ...(canReturnControl
         ? {
-            primaryActionLabel:
-              requestedStep
-                ? "Done — Resume Automation"
-                : "Resume Automation",
+            primaryActionLabel: requestedStep
+              ? "Done — Resume Automation"
+              : "Resume Automation",
           }
         : {}),
     };
@@ -229,21 +204,17 @@ export function toCompanionViewModel(
     experience: "agent_working",
 
     kicker: "Agent working",
-    title:
-      "Working in the browser",
-    description:
-      "No action is needed from you right now.",
+    title: "Working in the browser",
+    description: "No action is needed from you right now.",
     supportingText:
-      "You can take over whenever you need to.",
+      session.mode === "companion"
+        ? "You can take over whenever you need to."
+        : "Rove will ask when it needs your help.",
 
-    primaryAction:
-      canTakeControl
-        ? "take_control"
-        : null,
+    primaryAction: canTakeControl ? "take_control" : null,
     ...(canTakeControl
       ? {
-          primaryActionLabel:
-            "Take over",
+          primaryActionLabel: "Take over",
         }
       : {}),
   };

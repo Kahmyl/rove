@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { Inject, Injectable } from "@nestjs/common";
 import type { RoveConfig } from "@rove/config";
 import {
@@ -61,6 +62,15 @@ export class RuntimeService implements RoveRuntime {
         headless: this.config.browser.headless,
         browser: this.config.browser.preferredBrowser,
         profile: session.profile,
+        ...(session.profile.mode === "persistent"
+          ? {
+              profileUserDataDir: resolve(
+                this.config.home,
+                "profiles",
+                session.profile.name,
+              ),
+            }
+          : {}),
         timeouts: {
           navigationMs: this.config.timeouts.navigationMs,
           actionMs: this.config.timeouts.actionMs,

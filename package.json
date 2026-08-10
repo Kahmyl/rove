@@ -30,7 +30,8 @@
     "browser:actions": "pnpm --filter @rove/browser actions-demo",
     "runtime:demo": "pnpm build && ROVE_HOME=../../.rove-demo pnpm --filter @rove/runtime runtime-demo",
     "control:demo": "pnpm build && ROVE_HOME=../../.rove-control-demo pnpm --filter @rove/runtime control-demo",
-    "test:e2e": "pnpm build && vitest run apps/mcp/test/e2e/v1.e2e.test.ts"
+    "test:e2e": "pnpm build && vitest run apps/mcp/test/e2e/v1.e2e.test.ts",
+    "auth:profile": "node scripts/auth-profile.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

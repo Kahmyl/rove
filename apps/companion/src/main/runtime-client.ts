@@ -1,8 +1,4 @@
-import type {
-  Evidence,
-  ObservationPage,
-  Session,
-} from "@rove/protocol";
+import type { Evidence, ObservationPage, Session } from "@rove/protocol";
 
 import type { CompanionSnapshot } from "../shared/desktop-api.js";
 
@@ -35,9 +31,7 @@ export class CompanionRuntimeClient {
 
     const [observationCount, evidence] = await Promise.all([
       this.countObservations(session.id),
-      this.request<Evidence[]>(
-        `/sessions/${session.id}/evidence`,
-      ),
+      this.request<Evidence[]>(`/sessions/${session.id}/evidence`),
     ]);
 
     return {
@@ -50,12 +44,9 @@ export class CompanionRuntimeClient {
   async takeControl(): Promise<CompanionSnapshot | null> {
     const sessionId = await this.requireSessionId();
 
-    await this.request(
-      `/sessions/${sessionId}/control/take`,
-      {
-        method: "POST",
-      },
-    );
+    await this.request(`/sessions/${sessionId}/control/take`, {
+      method: "POST",
+    });
 
     return this.getSnapshot();
   }
@@ -63,12 +54,9 @@ export class CompanionRuntimeClient {
   async returnControl(): Promise<CompanionSnapshot | null> {
     const sessionId = await this.requireSessionId();
 
-    await this.request(
-      `/sessions/${sessionId}/control/return`,
-      {
-        method: "POST",
-      },
-    );
+    await this.request(`/sessions/${sessionId}/control/return`, {
+      method: "POST",
+    });
 
     return this.getSnapshot();
   }
@@ -76,12 +64,9 @@ export class CompanionRuntimeClient {
   async finishSession(): Promise<CompanionSnapshot | null> {
     const sessionId = await this.requireSessionId();
 
-    await this.request(
-      `/sessions/${sessionId}/end`,
-      {
-        method: "POST",
-      },
-    );
+    await this.request(`/sessions/${sessionId}/end`, {
+      method: "POST",
+    });
 
     return this.getSnapshot();
   }
@@ -93,19 +78,15 @@ export class CompanionRuntimeClient {
       );
     }
 
-    const [
-      companionSessions,
-      captureSessions,
-    ] = await Promise.all([
-      this.request<Session[]>(
-        "/sessions?mode=companion",
-      ),
-      this.request<Session[]>(
-        "/sessions?mode=capture",
-      ),
-    ]);
+    const [agentSessions, companionSessions, captureSessions] =
+      await Promise.all([
+        this.request<Session[]>("/sessions?mode=agent"),
+        this.request<Session[]>("/sessions?mode=companion"),
+        this.request<Session[]>("/sessions?mode=capture"),
+      ]);
 
     const sessions = [
+      ...agentSessions,
       ...companionSessions,
       ...captureSessions,
     ];
@@ -115,9 +96,7 @@ export class CompanionRuntimeClient {
     }
 
     return [...sessions].sort(
-      (left, right) =>
-        Date.parse(right.createdAt) -
-        Date.parse(left.createdAt),
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
     )[0]!;
   }
 
@@ -133,9 +112,7 @@ export class CompanionRuntimeClient {
     return session.id;
   }
 
-  private async countObservations(
-    sessionId: string,
-  ): Promise<number> {
+  private async countObservations(sessionId: string): Promise<number> {
     let afterSeq = 0;
     let total = 0;
 
@@ -152,10 +129,7 @@ export class CompanionRuntimeClient {
 
       const nextSeq = page.items.at(-1)?.seq;
 
-      if (
-        nextSeq === undefined ||
-        nextSeq <= afterSeq
-      ) {
+      if (nextSeq === undefined || nextSeq <= afterSeq) {
         return total;
       }
 
@@ -163,33 +137,21 @@ export class CompanionRuntimeClient {
     }
   }
 
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<T> {
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
 
-    if (
-      init.body !== undefined &&
-      !headers.has("content-type")
-    ) {
+    if (init.body !== undefined && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
 
     if (this.token !== undefined) {
-      headers.set(
-        "authorization",
-        `Bearer ${this.token}`,
-      );
+      headers.set("authorization", `Bearer ${this.token}`);
     }
 
-    const response = await this.fetchImpl(
-      `${this.baseUrl}${path}`,
-      {
-        ...init,
-        headers,
-      },
-    );
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
 
     if (!response.ok) {
       let detail = response.statusText;
@@ -204,10 +166,7 @@ export class CompanionRuntimeClient {
         };
 
         detail =
-          body.error?.code ??
-          body.error?.message ??
-          body.message ??
-          detail;
+          body.error?.code ?? body.error?.message ?? body.message ?? detail;
       } catch {
         // Response body is optional for transport failures.
       }

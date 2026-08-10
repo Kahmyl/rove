@@ -1,9 +1,4 @@
-import {
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Session } from "@rove/protocol";
 
@@ -21,65 +16,44 @@ const session: Session = {
   updatedAt: "2026-08-10T07:00:00.000Z",
 };
 
-function jsonResponse(
-  value: unknown,
-  status = 200,
-): Response {
-  return new Response(
-    JSON.stringify(value),
-    {
-      status,
-      headers: {
-        "content-type": "application/json",
-      },
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "content-type": "application/json",
     },
-  );
+  });
 }
 
 describe("CompanionRuntimeClient", () => {
   it("discovers Companion Mode and returns live counts", async () => {
     const fetchImpl = vi.fn(
-      async (
-        input: string | URL | Request,
-        init?: RequestInit,
-      ) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
 
-        const authorization =
-          new Headers(
-            init?.headers,
-          ).get("authorization");
+        const authorization = new Headers(init?.headers).get("authorization");
 
-        expect(authorization).toBe(
-          "Bearer runtime-secret-123456789012",
-        );
+        expect(authorization).toBe("Bearer runtime-secret-123456789012");
 
-        if (
-          url.endsWith(
-            "/sessions?mode=companion",
-          )
-        ) {
-          return jsonResponse([session]);
-        }
-
-        if (
-          url.endsWith(
-            "/sessions?mode=capture",
-          )
-        ) {
+        if (url.endsWith("/sessions?mode=agent")) {
           return jsonResponse([]);
         }
 
-        if (
-          url.includes("/observations?")
-        ) {
+        if (url.endsWith("/sessions?mode=companion")) {
+          return jsonResponse([session]);
+        }
+
+        if (url.endsWith("/sessions?mode=capture")) {
+          return jsonResponse([]);
+        }
+
+        if (url.includes("/observations?")) {
           return jsonResponse({
             items: [
               {
                 id: "obs_1",
                 seq: 1,
-                timestamp:
-                  "2026-08-10T07:00:01.000Z",
+                timestamp: "2026-08-10T07:00:01.000Z",
                 actor: "system",
                 type: "session_started",
                 data: {},
@@ -87,8 +61,7 @@ describe("CompanionRuntimeClient", () => {
               {
                 id: "obs_2",
                 seq: 2,
-                timestamp:
-                  "2026-08-10T07:00:02.000Z",
+                timestamp: "2026-08-10T07:00:02.000Z",
                 actor: "agent",
                 type: "agent_clicked",
                 data: {},
@@ -106,24 +79,17 @@ describe("CompanionRuntimeClient", () => {
           ]);
         }
 
-        throw new Error(
-          `Unexpected request: ${url}`,
-        );
+        throw new Error(`Unexpected request: ${url}`);
       },
     ) as typeof fetch;
 
-    const client =
-      new CompanionRuntimeClient({
-        baseUrl:
-          "http://127.0.0.1:47820/",
-        token:
-          "runtime-secret-123456789012",
-        fetchImpl,
-      });
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820/",
+      token: "runtime-secret-123456789012",
+      fetchImpl,
+    });
 
-    await expect(
-      client.getSnapshot(),
-    ).resolves.toMatchObject({
+    await expect(client.getSnapshot()).resolves.toMatchObject({
       session: {
         id: "ses_companion",
         mode: "companion",
@@ -133,73 +99,111 @@ describe("CompanionRuntimeClient", () => {
     });
   });
 
-
   it("discovers an active Capture Mode session", async () => {
     const capture: Session = {
       ...session,
       id: "ses_capture",
       mode: "capture",
       controller: "human",
-      createdAt:
-        "2026-08-10T08:00:00.000Z",
-      updatedAt:
-        "2026-08-10T08:00:00.000Z",
+      createdAt: "2026-08-10T08:00:00.000Z",
+      updatedAt: "2026-08-10T08:00:00.000Z",
     };
 
-    const fetchImpl = vi.fn(
-      async (
-        input: string | URL | Request,
-      ) => {
-        const url = String(input);
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
 
-        if (
-          url.endsWith(
-            "/sessions?mode=companion",
-          )
-        ) {
-          return jsonResponse([session]);
-        }
+      if (url.endsWith("/sessions?mode=agent")) {
+        return jsonResponse([]);
+      }
 
-        if (
-          url.endsWith(
-            "/sessions?mode=capture",
-          )
-        ) {
-          return jsonResponse([capture]);
-        }
+      if (url.endsWith("/sessions?mode=companion")) {
+        return jsonResponse([session]);
+      }
 
-        if (
-          url.includes("/observations?")
-        ) {
-          return jsonResponse({
-            items: [],
-          });
-        }
+      if (url.endsWith("/sessions?mode=capture")) {
+        return jsonResponse([capture]);
+      }
 
-        if (url.endsWith("/evidence")) {
-          return jsonResponse([]);
-        }
+      if (url.includes("/observations?")) {
+        return jsonResponse({
+          items: [],
+        });
+      }
 
-        throw new Error(
-          `Unexpected request: ${url}`,
-        );
-      },
-    ) as typeof fetch;
+      if (url.endsWith("/evidence")) {
+        return jsonResponse([]);
+      }
 
-    const client =
-      new CompanionRuntimeClient({
-        baseUrl:
-          "http://127.0.0.1:47820",
-        fetchImpl,
-      });
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
 
-    await expect(
-      client.getSnapshot(),
-    ).resolves.toMatchObject({
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
+
+    await expect(client.getSnapshot()).resolves.toMatchObject({
       session: {
         id: "ses_capture",
         mode: "capture",
         controller: "human",
+      },
+    });
+  });
+
+  it("discovers an Agent Mode session that is waiting for human help", async () => {
+    const agent: Session = {
+      ...session,
+      id: "ses_agent",
+      mode: "agent",
+      status: "awaiting_human",
+      controller: null,
+      handoff: {
+        reason: "Sign in to your account, then return to Rove.",
+        requestedAt: "2026-08-10T08:30:00.000Z",
+      },
+      createdAt: "2026-08-10T08:30:00.000Z",
+      updatedAt: "2026-08-10T08:30:00.000Z",
+    };
+
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.endsWith("/sessions?mode=agent")) {
+        return jsonResponse([agent]);
+      }
+
+      if (
+        url.endsWith("/sessions?mode=companion") ||
+        url.endsWith("/sessions?mode=capture")
+      ) {
+        return jsonResponse([]);
+      }
+
+      if (url.includes("/observations?")) {
+        return jsonResponse({
+          items: [],
+        });
+      }
+
+      if (url.endsWith("/evidence")) {
+        return jsonResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
+
+    await expect(client.getSnapshot()).resolves.toMatchObject({
+      session: {
+        id: "ses_agent",
+        mode: "agent",
+        status: "awaiting_human",
+        controller: null,
       },
     });
   });
@@ -213,41 +217,28 @@ describe("CompanionRuntimeClient", () => {
     let ended = false;
 
     const fetchImpl = vi.fn(
-      async (
-        input: string | URL | Request,
-        init?: RequestInit,
-      ) => {
+      async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
-        const method =
-          init?.method ?? "GET";
+        const method = init?.method ?? "GET";
 
         requests.push({
           url,
           method,
         });
 
-        if (
-          url.endsWith(
-            "/sessions?mode=companion",
-          )
-        ) {
-          return jsonResponse(
-            ended ? [] : [session],
-          );
-        }
-
-        if (
-          url.endsWith(
-            "/sessions?mode=capture",
-          )
-        ) {
+        if (url.endsWith("/sessions?mode=agent")) {
           return jsonResponse([]);
         }
 
-        if (
-          url.endsWith("/control/take") ||
-          url.endsWith("/control/return")
-        ) {
+        if (url.endsWith("/sessions?mode=companion")) {
+          return jsonResponse(ended ? [] : [session]);
+        }
+
+        if (url.endsWith("/sessions?mode=capture")) {
+          return jsonResponse([]);
+        }
+
+        if (url.endsWith("/control/take") || url.endsWith("/control/return")) {
           return jsonResponse({
             sessionId: session.id,
             status: "active",
@@ -265,9 +256,7 @@ describe("CompanionRuntimeClient", () => {
           });
         }
 
-        if (
-          url.includes("/observations?")
-        ) {
+        if (url.includes("/observations?")) {
           return jsonResponse({
             items: [],
           });
@@ -277,18 +266,14 @@ describe("CompanionRuntimeClient", () => {
           return jsonResponse([]);
         }
 
-        throw new Error(
-          `Unexpected request: ${url}`,
-        );
+        throw new Error(`Unexpected request: ${url}`);
       },
     ) as typeof fetch;
 
-    const client =
-      new CompanionRuntimeClient({
-        baseUrl:
-          "http://127.0.0.1:47820",
-        fetchImpl,
-      });
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
 
     await client.takeControl();
     await client.returnControl();
@@ -297,21 +282,15 @@ describe("CompanionRuntimeClient", () => {
     expect(requests).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          url: expect.stringContaining(
-            "/control/take",
-          ),
+          url: expect.stringContaining("/control/take"),
           method: "POST",
         }),
         expect.objectContaining({
-          url: expect.stringContaining(
-            "/control/return",
-          ),
+          url: expect.stringContaining("/control/return"),
           method: "POST",
         }),
         expect.objectContaining({
-          url: expect.stringContaining(
-            "/end",
-          ),
+          url: expect.stringContaining("/end"),
           method: "POST",
         }),
       ]),
