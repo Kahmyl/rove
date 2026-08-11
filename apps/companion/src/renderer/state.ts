@@ -1,4 +1,7 @@
-import type { CompanionSnapshot } from "../shared/desktop-api.js";
+import type {
+  CompanionSnapshot,
+  DesktopNotice,
+} from "../shared/desktop-api.js";
 
 export type CompanionExperience =
   | "no_session"
@@ -6,7 +9,8 @@ export type CompanionExperience =
   | "handoff_waiting"
   | "human_step"
   | "capture"
-  | "session_ended";
+  | "session_ended"
+  | "interrupted";
 
 export type CompanionPrimaryAction =
   "take_control" | "return_control" | "finish_capture" | null;
@@ -40,7 +44,34 @@ export interface CompanionViewModel {
 
 export function toCompanionViewModel(
   snapshot: CompanionSnapshot | null,
+  notice: DesktopNotice | null = null,
 ): CompanionViewModel {
+  if (notice !== null) {
+    return {
+      hasSession: false,
+      experience: "interrupted",
+
+      kicker: "Session interrupted",
+      title: notice.title,
+      description: notice.message,
+      supportingText: notice.supportingText,
+
+      primaryAction: null,
+
+      sessionId: notice.sessionId,
+      mode: "—",
+      status: "Interrupted",
+      controller: "None",
+
+      observationCount: 0,
+      evidenceCount: 0,
+
+      canTakeControl: false,
+      canReturnControl: false,
+      canFinish: false,
+    };
+  }
+
   if (snapshot === null) {
     return {
       hasSession: false,

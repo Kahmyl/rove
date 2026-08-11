@@ -84,6 +84,14 @@ async function handleRequest(
   }
 
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  if (request.method === "GET" && url.pathname === "/live") {
+    writeJson(response, 200, {
+      status: "ok",
+      service: "rove-mcp",
+      transport: "http",
+    });
+    return;
+  }
   if (request.method === "GET" && url.pathname === "/health") {
     await handleHealth(response, options.runtime);
     return;

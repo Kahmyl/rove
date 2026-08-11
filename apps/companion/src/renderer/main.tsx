@@ -6,7 +6,10 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 
-import type { CompanionSnapshot } from "../shared/desktop-api.js";
+import type {
+  CompanionSnapshot,
+  DesktopNotice,
+} from "../shared/desktop-api.js";
 import {
   toCompanionViewModel,
   type CompanionExperience,
@@ -18,6 +21,9 @@ import "./styles.css";
 function App() {
   const [snapshot, setSnapshot] =
     useState<CompanionSnapshot | null>(null);
+
+  const [notice, setNotice] =
+    useState<DesktopNotice | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -33,6 +39,11 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
+      const nextNotice =
+        await window.rove.getNotice();
+
+      setNotice(nextNotice);
+
       const next =
         await window.rove.getSnapshot();
 
@@ -89,7 +100,10 @@ function App() {
   };
 
   const view =
-    toCompanionViewModel(snapshot);
+    toCompanionViewModel(
+      snapshot,
+      notice,
+    );
 
   const performPrimaryAction = (
     action: CompanionPrimaryAction,
@@ -432,7 +446,10 @@ function StateGlyph({
     );
   }
 
-  if (experience === "session_ended") {
+  if (
+    experience === "session_ended" ||
+    experience === "interrupted"
+  ) {
     return (
       <svg
         viewBox="0 0 24 24"

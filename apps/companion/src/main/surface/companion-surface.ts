@@ -6,6 +6,7 @@ export interface CompanionWindowHandle {
   isDestroyed(): boolean;
   isMinimized(): boolean;
   restore(): void;
+  reload(): void;
   show(): void;
   hide(): void;
   focus(): void;
@@ -72,6 +73,13 @@ export class CompanionSurface {
   }
 
   restore(): void {
+    this.show();
+  }
+
+  recover(): void {
+    const window = this.ensure();
+
+    window.reload();
     this.show();
   }
 

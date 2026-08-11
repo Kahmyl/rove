@@ -24,6 +24,16 @@ function toLaunchError(error: unknown): RoveError {
   return roveError;
 }
 
+function secureDefaultArgs(): string[] {
+  return [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    ...(process.platform === "darwin"
+      ? ["--use-mock-keychain", "--password-store=basic"]
+      : []),
+  ];
+}
+
 export class PlaywrightBrowserEngine implements BrowserEngine {
   async start(config: BrowserLaunchConfig): Promise<BrowserSession> {
     if (config.profile.mode === "existing") {
@@ -106,14 +116,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
           width: 1440,
           height: 900,
         },
-      ...(process.platform === "darwin"
-        ? {
-            ignoreDefaultArgs: [
-              "--use-mock-keychain",
-              "--password-store=basic",
-            ],
-          }
-        : {}),
+      ignoreDefaultArgs: secureDefaultArgs(),
       ...(config.launchArgs === undefined
         ? {}
         : {
@@ -166,6 +169,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
   private async launch(config: BrowserLaunchConfig): Promise<Browser> {
     const base: LaunchOptions = {
       headless: config.headless,
+      ignoreDefaultArgs: secureDefaultArgs(),
       ...(config.launchArgs === undefined ? {} : { args: config.launchArgs }),
     };
     try {

@@ -1,6 +1,7 @@
 import {
   companionIpcChannels,
   type CompanionSnapshot,
+  type DesktopNotice,
   type RoveDesktopApi,
 } from "../shared/desktop-api.js";
 
@@ -8,14 +9,15 @@ export interface IpcInvoker {
   invoke(channel: string): Promise<unknown>;
 }
 
-export function createDesktopApi(
-  ipc: IpcInvoker,
-): RoveDesktopApi {
+export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
   return {
     getSnapshot: () =>
       ipc.invoke(
         companionIpcChannels.snapshot,
       ) as Promise<CompanionSnapshot | null>,
+
+    getNotice: () =>
+      ipc.invoke(companionIpcChannels.notice) as Promise<DesktopNotice | null>,
 
     takeControl: () =>
       ipc.invoke(

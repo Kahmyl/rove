@@ -6,6 +6,13 @@ const booleanFromEnv = z
   .transform((value) => value === "true")
   .optional();
 
+function nonnegativeInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new Error(`Expected a non-negative integer, received ${value}.`);
+  return parsed;
+}
+
 export const roveConfigSchema = z.object({
   home: z.string().min(1),
   runtime: z.object({
@@ -29,6 +36,8 @@ export const roveConfigSchema = z.object({
     headless: z.boolean(),
     preferredBrowser: z.enum(["chrome", "chromium"]),
     executablePath: z.string().min(1).optional(),
+    minimumActionIntervalMs: z.number().int().nonnegative(),
+    typingDelayMs: z.number().int().nonnegative(),
   }),
   timeouts: z.object({
     navigationMs: z.number().int().positive(),
@@ -77,6 +86,8 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
     browser: {
       headless: envHeadless ?? false,
       preferredBrowser: env.ROVE_BROWSER === "chromium" ? "chromium" : "chrome",
+      minimumActionIntervalMs: nonnegativeInteger(env.ROVE_BROWSER_MIN_ACTION_INTERVAL_MS, 3_000),
+      typingDelayMs: nonnegativeInteger(env.ROVE_BROWSER_TYPING_DELAY_MS, 35),
       ...(env.ROVE_BROWSER_EXECUTABLE_PATH === undefined
         ? {}
         : { executablePath: env.ROVE_BROWSER_EXECUTABLE_PATH }),

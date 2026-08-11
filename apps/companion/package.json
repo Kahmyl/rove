@@ -1,6 +1,8 @@
 {
   "name": "@rove/companion",
   "version": "0.1.0",
+  "description": "Local-first browser automation with human-agent collaboration",
+  "author": "Rove",
   "private": true,
   "type": "module",
   "main": "dist/main/main/main.js",
@@ -8,19 +10,70 @@
     "build": "tsc -b tsconfig.json --force && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "pnpm --filter @rove/config build && pnpm build && electron .",
-    "dev:desktop": "pnpm -w build && electron . --rove-manage-services"
+    "dev:desktop": "pnpm --filter @rove/runtime... --filter @rove/companion... build && node --env-file-if-exists=../../.env node_modules/electron/cli.js . --rove-manage-services",
+    "package:prepare": "node ../../scripts/package-desktop.mjs --prepare-only",
+    "package:dir": "node ../../scripts/package-desktop.mjs --dir",
+    "package": "node ../../scripts/package-desktop.mjs"
   },
   "dependencies": {
+    "@rove/config": "workspace:*",
     "@rove/protocol": "workspace:*",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "@rove/config": "workspace:*"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^37.2.6",
+    "electron-builder": "^26.15.3",
     "vite": "^7.1.2"
+  },
+  "build": {
+    "appId": "com.rove.desktop",
+    "productName": "Rove",
+    "asar": true,
+    "files": [
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "resources/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../services",
+        "to": "services"
+      },
+      {
+        "from": "../browsers",
+        "to": "browsers"
+      }
+    ],
+    "directories": {
+      "output": "../../artifacts",
+      "buildResources": "resources"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "resources/rove-app-icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "resources/rove-app-icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Utility",
+      "icon": "resources/rove-app-icon.png",
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

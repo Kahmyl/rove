@@ -29,6 +29,64 @@ pnpm dev:mcp
 pnpm dev:companion
 ```
 
+To run the local desktop Hub model from source:
+
+```bash
+pnpm dev:desktop
+```
+
+This development command builds and starts the Companion plus the local Runtime.
+It does not start the MCP service; run `pnpm dev:mcp` separately when exercising
+the current development adapter.
+
+## Local Hub/control-plane development
+
+The production-shaped local path keeps the Runtime private and routes MCP calls
+through a separate control plane. Copy the relay values from `.env.example` into
+`.env`, then run these in separate terminals:
+
+```bash
+pnpm dev:control-plane
+pnpm dev:desktop
+pnpm dev:mcp
+```
+
+When `ROVE_CONTROL_PLANE_URL` is configured, Desktop starts an outbound Hub
+connector and MCP uses the control-plane Runtime adapter. Without that variable,
+MCP retains its explicit direct-to-Runtime development mode.
+
+The local control plane currently uses an in-memory command queue, development
+pre-shared tokens, and one process. It validates the intended network boundary;
+it is not production infrastructure and does not yet provide durable delivery,
+device enrollment, accounts, horizontal scaling, or key rotation.
+
+## Desktop packaging
+
+> Packaging is deferred. The commands and staged service layout in this section
+> are experimental and are not the supported development or production topology.
+
+Build the installer for the current platform with:
+
+```bash
+pnpm package:desktop
+```
+
+The packaging pipeline builds every workspace package, stages production-only
+Desktop, Runtime, and MCP dependency trees, installs the matching Playwright
+Chromium fallback, and writes platform artifacts under `release/artifacts/`.
+Use `pnpm package:desktop:dir` for an unpacked application during development.
+
+Verify an unpacked package—including its embedded Node runtime, Runtime and MCP
+health, and a real session using the shipped Chromium—with:
+
+```bash
+pnpm test:desktop:package
+```
+
+macOS release distribution still requires a valid Developer ID certificate and
+notarization credentials. Local unsigned builds remain suitable for packaging
+and smoke verification.
+
 The runtime, MCP, and Companion development commands load the repository-root `.env` when
 it exists. Environment variables already set by the invoking shell take
 precedence, so the same commands work from POSIX shells, PowerShell, and
@@ -36,7 +94,15 @@ Command Prompt without shell-specific environment syntax.
 
 ## Browser verification
 
-Rove supports real Playwright browser sessions with temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking.
+Rove supports real headed Playwright browser sessions with managed persistent or explicitly requested temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive restarts.
+
+### Responsible browsing boundary
+
+Rove is designed as a user-directed assistant, not an anti-detection system. In headed mode it uses normal system Chrome with JavaScript enabled, applies a configurable minimum interval between agent actions, and emits sequential keyboard events for normal-sized text input. Explicit site restriction or human-verification pages pause the session, remove agent control, persist a `site_access_restricted` observation, and surface a human handoff.
+
+These safeguards reduce accidental rapid automation and disposable-session behavior, but they do not guarantee access to any site. Rove does not spoof browser fingerprints, hide automation or developer tooling, rotate proxies, solve CAPTCHAs, or bypass a site's access controls. A site's restriction remains authoritative and must be handled by the user or site operator.
+
+Local pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS` and `ROVE_BROWSER_TYPING_DELAY_MS`. Setting either to `0` disables that delay; headed development defaults to `3000` ms between actions and `35` ms between key events. Rove also removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults so normal operating-system browser sandboxing remains enabled.
 
 Manual verification commands:
 
@@ -82,27 +148,29 @@ The private runtime API starts and closes real browser sessions, serializes agen
 
 ## Docker Compose
 
-Start the local runtime in Docker:
+Start the server-side control plane and MCP in Docker:
 
 ```bash
 pnpm docker:up
 ```
 
-The runtime is available only on the host loopback interface at
-`http://127.0.0.1:47820`; its health endpoint is
-`http://127.0.0.1:47820/health`. Streamable HTTP MCP is available at
-`http://127.0.0.1:47821/mcp`, with health at `http://127.0.0.1:47821/health`.
-Session data is retained in the named
-`rove-data` volume. Compose installs the lockfile-matched Playwright Chromium
-browser and runs browser sessions headlessly inside the runtime container.
+Compose starts only the deployable server boundary. The control plane is
+published on host loopback at `http://127.0.0.1:47830`, and Streamable HTTP MCP
+is published at `http://127.0.0.1:47821/mcp`. MCP liveness is available at
+`http://127.0.0.1:47821/live`; `/health` additionally reports whether the target
+Hub and its Runtime are reachable.
 
-Session routes require the Compose runtime bearer token. Local development uses
-`rove-local-compose-token-change-me` unless `ROVE_RUNTIME_TOKEN` is set; health
-remains unauthenticated. Override the token for any shared environment:
+Runtime, Companion, Playwright, browser profiles, and browser windows are not
+containerized. Start them on the host so the browser remains headed:
 
 ```bash
-ROVE_RUNTIME_TOKEN=a-long-random-development-token pnpm docker:up
+pnpm dev:desktop
 ```
+
+The host Hub connects outbound to the published control-plane port using
+`ROVE_CONTROL_PLANE_URL`, `ROVE_HUB_DEVICE_ID`, and `ROVE_HUB_TOKEN` from `.env`.
+The Compose defaults match `.env.example` for local development only. Replace
+the Hub, control-plane service, and MCP tokens anywhere shared with other users.
 
 For Compose Watch development:
 
@@ -115,12 +183,12 @@ Operational commands:
 ```bash
 pnpm docker:logs
 pnpm docker:down
-pnpm docker:reset # destructive: removes persisted local Rove session data
+pnpm docker:reset # removes Compose containers and any future named volumes
 ```
 
-Compose runs the runtime API, its headless Playwright browser, and the authenticated
-Streamable HTTP MCP service. The Electron companion remains host-side. Override
-`ROVE_MCP_TOKEN` alongside `ROVE_RUNTIME_TOKEN` outside local development.
+Compose never starts a Runtime or browser. Stopping or rebuilding server
+containers therefore does not close the host-owned headed browser directly,
+although active MCP commands will fail while the control plane is unavailable.
 
 The repository includes the domain and persistence foundation, complete core Playwright browser actions, runtime/browser/persistence integration, private runtime human-handoff operations, the Electron Companion, human activity observation and Capture Mode, and MCP over stdio and Streamable HTTP. MCP exposes only the agent-facing control tools `control.status`, `control.request_human`, and `control.wait`; human take/return remain private runtime operations. No public selector or arbitrary JavaScript fallback is present.
 

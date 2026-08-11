@@ -14,6 +14,7 @@ class FakeWindow implements CompanionWindowHandle {
   hideCount = 0;
   focusCount = 0;
   restoreCount = 0;
+  reloadCount = 0;
 
   private closeListener: ((event: PreventableCloseEvent) => void) | undefined;
 
@@ -30,6 +31,10 @@ class FakeWindow implements CompanionWindowHandle {
   restore(): void {
     this.minimized = false;
     this.restoreCount += 1;
+  }
+
+  reload(): void {
+    this.reloadCount += 1;
   }
 
   show(): void {
@@ -86,9 +91,7 @@ describe("CompanionSurface", () => {
     surface.show();
 
     expect(window.emitClose()).toBe(true);
-
     expect(window.hideCount).toBe(1);
-
     expect(window.destroyed).toBe(false);
   });
 
@@ -103,7 +106,6 @@ describe("CompanionSurface", () => {
     surface.show();
 
     expect(window.emitClose()).toBe(false);
-
     expect(window.hideCount).toBe(0);
   });
 
@@ -120,9 +122,23 @@ describe("CompanionSurface", () => {
     surface.restore();
 
     expect(window.restoreCount).toBe(1);
-
     expect(window.showCount).toBe(1);
-
     expect(window.focusCount).toBe(1);
+  });
+
+  it("reloads the renderer without replacing the managed surface", () => {
+    const window = new FakeWindow();
+
+    const surface = new CompanionSurface(
+      () => window,
+      () => false,
+    );
+
+    surface.show();
+    surface.recover();
+
+    expect(window.reloadCount).toBe(1);
+    expect(window.showCount).toBe(2);
+    expect(window.focusCount).toBe(2);
   });
 });

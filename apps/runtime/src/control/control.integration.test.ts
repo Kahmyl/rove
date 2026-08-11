@@ -85,8 +85,9 @@ describe("Milestone 7 requested handoff", () => {
     expect(returned).toMatchObject({ status: "active", controller: "agent" });
     expect(returned.handoff).toBeUndefined();
     await expect(waitForReturn).resolves.toMatchObject({ event: "human_returned_control", observationSeq: returned.observationSeq });
-    await expect(runtime.click(session.id, { target: oldTarget })).rejects.toMatchObject({ code: "TARGET_STALE" });
+    await expect(runtime.click(session.id, { target: oldTarget })).rejects.toMatchObject({ code: "INSPECTION_REQUIRED" });
     const fresh = await runtime.inspectBrowser(session.id);
+    await expect(runtime.click(session.id, { target: oldTarget })).rejects.toMatchObject({ code: "TARGET_STALE" });
     await expect(runtime.click(session.id, { target: target(fresh, "Update") })).resolves.toMatchObject({ ok: true });
 
     const events = (await runtime.getObservations(session.id)).items.filter((item) => item.type.startsWith("human_"));
@@ -129,6 +130,12 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
       id: "browser_race",
       onActivity: () => () => undefined,
       pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: invalidated ? 1 : 0 }],
+      inspect: async () => ({
+        pageId: "page_01",
+        revision: invalidated ? 1 : 0,
+        url: "about:blank",
+        title: "",
+      }),
       navigate: async () => {
         order.push("slow:start");
         await gate;
@@ -160,7 +167,10 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
     const returned = runtime.returnAgentControl(session.id);
     const stale = runtime.click(session.id, { target: { pageId: "page_01", revision: 0, ref: "t1" } }).catch((error: unknown) => error);
     await returned;
-    await expect(stale).resolves.toMatchObject({ code: "TARGET_STALE" });
+    await expect(stale).resolves.toMatchObject({ code: "INSPECTION_REQUIRED" });
+    expect(order.at(-1)).toBe("invalidate");
+    await runtime.inspectBrowser(session.id);
+    await expect(runtime.click(session.id, { target: { pageId: "page_01", revision: 0, ref: "t1" } })).rejects.toMatchObject({ code: "TARGET_STALE" });
     expect(order.slice(-2)).toEqual(["invalidate", "click:validate"]);
   });
 
@@ -188,6 +198,8 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
     for (const page of before) {
       expect(after.find((item) => item.id === page.id)?.revision).toBe(page.revision + 1);
     }
+    await expect(runtime.click(session.id, { target: ref1 })).rejects.toMatchObject({ code: "INSPECTION_REQUIRED" });
+    await runtime.inspectBrowser(session.id);
     await expect(runtime.click(session.id, { target: ref1 })).rejects.toMatchObject({ code: "TARGET_STALE" });
     await expect(runtime.click(session.id, { target: ref2 })).rejects.toMatchObject({ code: "TARGET_STALE" });
   });

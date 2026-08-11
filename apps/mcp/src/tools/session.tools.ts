@@ -12,7 +12,7 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "session.start",
       description:
-        "Start a Rove browser session. Use agent for autonomous work where human control requires an explicit handoff, companion when the human may voluntarily take over at any time, and capture for human-driven browsing that Rove observes.",
+        "Start a Rove browser session. Sessions use the managed persistent 'default' profile unless a profile is explicitly supplied, preserving user-authorized cookies and preferences between runs. Use agent for autonomous work where human control requires an explicit handoff, companion when the human may voluntarily take over at any time, and capture for human-driven browsing that Rove observes.",
       inputSchema: {
         type: "object",
         properties: {
@@ -41,8 +41,15 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["mode"],
         additionalProperties: false,
       },
-      handler: (input) =>
-        runtime.startSession(startSessionRequestSchema.parse(input)),
+      handler: (input) => {
+        const record = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
+        return runtime.startSession(
+          startSessionRequestSchema.parse({
+            ...record,
+            profile: record.profile ?? { mode: "persistent", name: "default" },
+          }),
+        );
+      },
     },
     {
       name: "session.status",

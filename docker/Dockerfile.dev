@@ -9,25 +9,18 @@ RUN corepack enable
 WORKDIR /workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
-COPY apps/runtime/package.json apps/runtime/package.json
+COPY apps/control-plane/package.json apps/control-plane/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
-COPY apps/companion/package.json apps/companion/package.json
 COPY packages/protocol/package.json packages/protocol/package.json
-COPY packages/browser/package.json packages/browser/package.json
-COPY packages/storage/package.json packages/storage/package.json
 COPY packages/config/package.json packages/config/package.json
 
 RUN --mount=type=cache,id=rove-pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Runtime sessions launch bundled Chromium inside the container. Installing via
-# the locked workspace Playwright version keeps the browser and driver aligned;
-# --with-deps supplies the Debian libraries and fonts required by Chromium.
-RUN pnpm --filter @rove/browser exec playwright install --with-deps chromium
-
 COPY . .
 
-# Workspace packages export their compiled output at runtime.
-RUN pnpm build
+# Build only deployable server-side applications and their shared packages.
+# Runtime, Companion, Playwright, and browser binaries remain on the host Hub.
+RUN pnpm --filter @rove/control-plane... --filter @rove/mcp... build
 
-CMD ["pnpm", "--filter", "@rove/runtime", "start"]
+CMD ["pnpm", "--filter", "@rove/control-plane", "start"]

@@ -33,6 +33,7 @@ import {
 import { readMaterialMutationVersion, installMutationTracker } from "./mutations/mutation-tracker.js";
 import { resolveTarget, type ResolvedTarget } from "./targets/target-resolver.js";
 import { isSensitiveTarget } from "./targets/target-identity.js";
+import { classifyPageState, detectAccessRestriction } from "./safety/page-state-classifier.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -60,12 +61,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
     | ReturnType<typeof setInterval>
     | undefined;
   private reconcilingActiveTab = false;
+  private readonly mainDocumentStatuses = new Map<string, number>();
 
   private constructor(
     private readonly browser: Browser,
     private readonly context: BrowserContext,
     private readonly actionTimeoutMs: number,
     private readonly navigationTimeoutMs: number,
+    private readonly typingDelayMs: number,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -155,6 +158,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
+      config.interaction?.typingDelayMs ?? 0,
     );
 
     await session.installDomActivityBridge();
@@ -486,6 +490,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     page.on("domcontentloaded", observeTitle);
     page.on("load", observeTitle);
+    page.on("response", (response) => {
+      if (
+        response.request().resourceType() === "document" &&
+        response.frame() === page.mainFrame()
+      ) {
+        this.mainDocumentStatuses.set(pageId, response.status());
+      }
+    });
   }
 
   private emitActivity(
@@ -664,11 +676,41 @@ export class PlaywrightBrowserSession implements BrowserSession {
       mutationVersion: await readMaterialMutationVersion(page),
     });
 
-    return this.inspector.inspect(
+    const inspection = await this.inspector.inspect(
       page,
       state,
       options,
     );
+    const [bodyText, rawHtml, readyState, targetCount] = await Promise.all([
+      inspection.text ?? page.locator("body").innerText({ timeout: this.actionTimeoutMs }).catch(() => ""),
+      page.content().catch(() => ""),
+      page.evaluate(() => document.readyState).catch(() => "unknown"),
+      inspection.targets?.length ?? page.locator("a,button,input,textarea,select,[role]").count().catch(() => 0),
+    ]);
+    const httpStatus = this.mainDocumentStatuses.get(pageId);
+    const pageState = classifyPageState({
+      url: inspection.url,
+      title: inspection.title,
+      text: bodyText,
+      rawHtml,
+      readyState,
+      ...(httpStatus === undefined ? {} : { httpStatus }),
+      frameUrls: page.frames().map((frame) => frame.url()),
+      targetCount,
+    });
+    const restrictionText = bodyText.trim().length > 0 ? bodyText : rawHtml;
+    const accessRestriction = detectAccessRestriction({
+      title: inspection.title,
+      text: restrictionText,
+    });
+    return {
+      ...inspection,
+      metadata: {
+        ...inspection.metadata,
+        pageState,
+        ...(accessRestriction === undefined ? {} : { accessRestriction }),
+      },
+    };
   }
 
   async invalidateTargets(): Promise<void> {
@@ -731,7 +773,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
     void isSensitiveTarget(resolved.state.identity);
     const previous = this.pageRegistry.stateFor(target.pageId);
     try {
-      await resolved.locator.fill(value, { timeout: this.actionTimeoutMs });
+      if (this.typingDelayMs > 0 && value.length <= 500) {
+        await resolved.locator.fill("", { timeout: this.actionTimeoutMs });
+        await resolved.locator.pressSequentially(value, {
+          delay: this.typingDelayMs,
+          timeout: this.actionTimeoutMs + value.length * this.typingDelayMs,
+        });
+      } else {
+        await resolved.locator.fill(value, { timeout: this.actionTimeoutMs });
+      }
     } catch (error) {
       throw actionError(error, "Type");
     }

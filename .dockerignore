@@ -8,6 +8,9 @@
 **/.vite
 **/*.tsbuildinfo
 .rove
+release
+.pnpm-store
+artifacts
 coverage
 test-results
 playwright-report

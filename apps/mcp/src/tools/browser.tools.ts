@@ -16,7 +16,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
   return [
     {
       name: "browser.navigate",
-      description: "Navigate the active page to an absolute http or https URL.",
+      description: "Navigate the active page to an absolute http or https URL. Runtime policy may reject repeated, over-budget, or unsafe mutations. Stop and follow structured policy errors; never retry them in a tight loop.",
       inputSchema: {
         type: "object",
         properties: { sessionId: { type: "string", minLength: 1 }, url: { type: "string" } },
@@ -30,7 +30,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.inspect",
-      description: "Inspect page text and actionable targets.",
+      description: "Inspect page text, actionable targets, and metadata.pageState. Respect its recommendedAction: continue, wait_and_inspect, request_human, or stop. Never guess that an ambiguous page is a CAPTCHA or attempt human-only verification.",
       inputSchema: {
         type: "object",
         properties: {
@@ -61,7 +61,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.click",
-      description: "Click an actionable target returned by browser.inspect.",
+      description: "Click an actionable target returned by browser.inspect. Do not rapidly repeat clicks. If policy rejects the action, inspect or request human control as directed instead of bypassing the limit.",
       inputSchema: targetToolSchema(),
       handler: (input) => {
         const parsed = z.object({ sessionId: sessionIdSchema, target: targetSchema }).parse(input);
@@ -70,7 +70,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.type",
-      description: "Type text into an inspected target.",
+      description: "Type text into an inspected target at Runtime-controlled pacing. Authentication secrets and human-verification responses must be entered only by the human during control handoff.",
       inputSchema: {
         type: "object",
         properties: { sessionId: { type: "string", minLength: 1 }, target: targetJsonSchema, value: { type: "string", maxLength: 100000 } },
@@ -84,7 +84,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.press",
-      description: "Press a key, optionally targeting an inspected element.",
+      description: "Press a key, optionally targeting an inspected element. Runtime policy rejects unsafe or repeated mutation campaigns.",
       inputSchema: {
         type: "object",
         properties: { sessionId: { type: "string", minLength: 1 }, target: targetJsonSchema, key: { type: "string", minLength: 1, maxLength: 100 } },
@@ -98,7 +98,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.scroll",
-      description: "Scroll the active page by CSS pixels.",
+      description: "Scroll the active page by CSS pixels. Use bounded increments and inspect between repeated navigation or pagination steps.",
       inputSchema: {
         type: "object",
         properties: {

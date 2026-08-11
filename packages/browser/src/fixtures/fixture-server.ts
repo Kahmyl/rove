@@ -76,6 +76,23 @@ const HANDOFF_HTML = `<!doctype html><html><head><title>Human handoff</title></h
   <button id="handoff-update">Update</button>
   <script>document.querySelector('#handoff-update').addEventListener('click',()=>{document.querySelector('#current').textContent='Current value: '+document.querySelector('#handoff-input').value})</script>
 </body></html>`;
+const ACCESS_RESTRICTED_HTML = `<!doctype html><html><head><title>Access restricted</title></head><body>
+  <h1>Access is temporarily restricted</h1>
+  <p>We detected unusual activity from your device or network.</p>
+</body></html>`;
+const HUMAN_VERIFICATION_HTML = `<!doctype html><html><head><title>Security check</title></head><body>
+  <h1>Complete the security check</h1>
+  <iframe title="Human verification" src="/captcha-frame"></iframe>
+</body></html>`;
+const AUTHENTICATION_HTML = `<!doctype html><html><head><title>Sign in</title></head><body>
+  <h1>Sign in to continue</h1><label>Email <input type="email" /></label>
+</body></html>`;
+const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html><html><head><title>Challenge</title></head><body>
+  <canvas data-rendered-content="${"x".repeat(300)}"></canvas>
+</body></html>`;
+const SERVER_ERROR_HTML = `<!doctype html><html><head><title>Service unavailable</title></head><body>
+  <h1>Service unavailable</h1>
+</body></html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -111,7 +128,7 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
   const server = createServer((request, response) => {
-    const body = {
+    const fixture: string | { body: string; status: number } = {
       "/": inspectionHtml,
       "/popup": POPUP_HTML,
       "/actions": ACTIONS_HTML,
@@ -120,10 +137,16 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       "/history-b": HISTORY_B_HTML,
       "/popup-target": POPUP_TARGET_HTML,
       "/handoff": HANDOFF_HTML,
+      "/access-restricted": ACCESS_RESTRICTED_HTML,
+      "/human-verification": HUMAN_VERIFICATION_HTML,
+      "/captcha-frame": "<!doctype html><html><body>hCaptcha</body></html>",
+      "/authentication": AUTHENTICATION_HTML,
+      "/unknown-interstitial": UNKNOWN_INTERSTITIAL_HTML,
+      "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
       "/dynamic-target": DYNAMIC_TARGET_HTML,
     }[request.url ?? "/"] ?? inspectionHtml;
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    response.end(body);
+    response.writeHead(typeof fixture === "string" ? 200 : fixture.status, { "content-type": "text/html; charset=utf-8" });
+    response.end(typeof fixture === "string" ? fixture : fixture.body);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

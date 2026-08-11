@@ -15,6 +15,7 @@ import {
   type ObservationPage,
   type ObservationQuery,
   type PageInspection,
+  type PageStateAssessment,
   type PageSummary,
   type PressRequest,
   type RoveRuntime,
@@ -36,6 +37,7 @@ import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
+import { InteractionPolicy } from "./policy/interaction-policy.js";
 import { SessionService } from "./session/session.service.js";
 import { ROVE_CONFIG } from "./tokens.js";
 
@@ -43,6 +45,8 @@ import { ROVE_CONFIG } from "./tokens.js";
 export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues =
     new Map<string, Promise<void>>();
+  private readonly lastAgentActionAt = new Map<string, number>();
+  private readonly interactionPolicy = new InteractionPolicy();
 
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
@@ -81,6 +85,9 @@ export class RuntimeService implements RoveRuntime {
           actionMs: this.config.timeouts.actionMs,
           inspectMs: this.config.timeouts.inspectMs,
         },
+        interaction: {
+          typingDelayMs: this.config.browser.typingDelayMs,
+        },
       });
 
       browser.onActivity((activity) => {
@@ -92,9 +99,15 @@ export class RuntimeService implements RoveRuntime {
 
       if (request.startUrl !== undefined) await browser.navigate(request.startUrl);
       const activePageId = (await browser.pages()).find((page) => page.active)?.id;
+      const pageState = await this.assessBrowser(session.id, browser);
+      const handoff = this.handoffForPageState(pageState);
       session = await this.sessions.update({
         ...session,
-        status: "active",
+        status: handoff === undefined ? "active" : "awaiting_human",
+        controller: handoff === undefined ? session.controller : null,
+        ...(handoff === undefined
+          ? {}
+          : { handoff: { reason: handoff.reason, requestedAt: new Date().toISOString() } }),
         ...(activePageId === undefined ? {} : { activePageId }),
       });
       await this.observations.append(session.id, {
@@ -102,6 +115,14 @@ export class RuntimeService implements RoveRuntime {
         type: "session_started",
         data: { mode: session.mode, controller: session.controller },
       });
+      if (handoff !== undefined) {
+        const observation = await this.observations.append(session.id, {
+          actor: "system",
+          type: handoff.observationType,
+          data: pageState,
+        });
+        await this.controlWait.publish(session.id, observation);
+      }
       return session;
     } catch (error) {
       await this.browser.close(session.id).catch(() => undefined);
@@ -141,6 +162,8 @@ export class RuntimeService implements RoveRuntime {
         throw new RoveError({ code: "SESSION_ALREADY_ENDED", message: "Rove session has already ended." });
       }
       await this.flushHumanActivity(sessionId);
+      this.lastAgentActionAt.delete(sessionId);
+      this.interactionPolicy.clear(sessionId);
 
       let closeError: unknown;
       try {
@@ -158,12 +181,18 @@ export class RuntimeService implements RoveRuntime {
 
   async inspectBrowser(sessionId: string, options?: InspectOptions): Promise<PageInspection> {
     await this.requireActive(sessionId);
-    return this.browser.get(sessionId).inspect(options);
+    const inspection = await this.browser.get(sessionId).inspect(options);
+    const pageState = this.interactionPolicy.recordInspection(sessionId, inspection);
+    if (this.handoffForPageState(pageState) !== undefined) {
+      await this.coordinator.execute(sessionId, () => this.pauseForPageState(sessionId, pageState));
+    }
+    return inspection;
   }
 
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult> {
     return this.mutateAction(
       sessionId,
+      `navigate:${request.url}`,
       () => this.browser.get(sessionId).navigate(request.url),
       (result) => ({
         type: "browser_navigated",
@@ -179,6 +208,7 @@ export class RuntimeService implements RoveRuntime {
   click(sessionId: string, request: ClickRequest): Promise<ActionResult> {
     return this.mutateAction(
       sessionId,
+      `click:${request.target.ref}`,
       () => this.browser.get(sessionId).click(request.target),
       (result) => ({
         type: "agent_clicked",
@@ -190,6 +220,7 @@ export class RuntimeService implements RoveRuntime {
   type(sessionId: string, request: TypeRequest): Promise<ActionResult> {
     return this.mutateAction(
       sessionId,
+      `type:${request.target.ref}`,
       () => this.browser.get(sessionId).type(request.target, request.value),
       () => ({ type: "agent_typed", data: { targetRef: request.target.ref } }),
     );
@@ -198,6 +229,7 @@ export class RuntimeService implements RoveRuntime {
   press(sessionId: string, request: PressRequest): Promise<ActionResult> {
     return this.mutateAction(
       sessionId,
+      `press:${request.target?.ref ?? "page"}:${request.key}`,
       () => this.browser.get(sessionId).press(request.target ?? null, request.key),
       () => ({
         type: "agent_pressed",
@@ -209,17 +241,18 @@ export class RuntimeService implements RoveRuntime {
   scroll(sessionId: string, request: ScrollOptions): Promise<ActionResult> {
     return this.mutateAction(
       sessionId,
+      `scroll:${request.direction}:${request.amount ?? 600}`,
       () => this.browser.get(sessionId).scroll(request),
       () => ({ type: "agent_scrolled", data: { direction: request.direction, amount: request.amount ?? 600 } }),
     );
   }
 
   back(sessionId: string): Promise<ActionResult> {
-    return this.mutateAction(sessionId, () => this.browser.get(sessionId).back(), () => ({ type: "browser_back", data: {} }));
+    return this.mutateAction(sessionId, "back", () => this.browser.get(sessionId).back(), () => ({ type: "browser_back", data: {} }));
   }
 
   forward(sessionId: string): Promise<ActionResult> {
-    return this.mutateAction(sessionId, () => this.browser.get(sessionId).forward(), () => ({ type: "browser_forward", data: {} }));
+    return this.mutateAction(sessionId, "forward", () => this.browser.get(sessionId).forward(), () => ({ type: "browser_forward", data: {} }));
   }
 
   async pages(sessionId: string): Promise<PageSummary[]> {
@@ -229,18 +262,22 @@ export class RuntimeService implements RoveRuntime {
 
   switchPage(sessionId: string, pageId: string): Promise<PageSummary> {
     return this.mutateValue(sessionId, async () => {
+      await this.authorizeMutation(sessionId, `switch_page:${pageId}`);
       const page = await this.browser.get(sessionId).switchPage(pageId);
       await this.syncActivePage(sessionId);
       await this.observations.append(sessionId, { actor: "agent", type: "page_switched", data: { pageId } });
+      await this.assessAndPause(sessionId);
       return page;
     });
   }
 
   closePage(sessionId: string, pageId: string): Promise<void> {
     return this.mutateValue(sessionId, async () => {
+      await this.authorizeMutation(sessionId, `close_page:${pageId}`);
       await this.browser.get(sessionId).closePage(pageId);
       await this.syncActivePage(sessionId);
       await this.observations.append(sessionId, { actor: "agent", type: "page_closed", data: { pageId } });
+      await this.assessAndPause(sessionId);
     });
   }
 
@@ -307,6 +344,7 @@ export class RuntimeService implements RoveRuntime {
         const pages = await this.browser.get(sessionId).pages();
         const activePageId = pages.find((page) => page.active)?.id;
         const invalidatedPages = await this.browser.get(sessionId).invalidateAllTargets();
+        this.interactionPolicy.requireInspection(sessionId);
         const next: Session = {
           ...session,
           status: "active",
@@ -373,10 +411,13 @@ export class RuntimeService implements RoveRuntime {
 
   private async mutateAction(
     sessionId: string,
+    signature: string,
     operation: () => Promise<ActionResult>,
     observation: (result: ActionResult) => { type: string; data: unknown },
   ): Promise<ActionResult> {
     return this.mutateValue(sessionId, async () => {
+      await this.authorizeMutation(sessionId, signature);
+      await this.paceAgentAction(sessionId);
       const result = { ...(await operation()), sessionId };
       await this.syncActivePage(sessionId);
       const event = observation(result);
@@ -387,8 +428,105 @@ export class RuntimeService implements RoveRuntime {
         ...(result.pageId === undefined ? {} : { pageId: result.pageId }),
         ...(result.currentRevision === undefined ? {} : { pageRevision: result.currentRevision }),
       });
+      await this.assessAndPause(sessionId);
       return result;
     });
+  }
+
+  private async paceAgentAction(sessionId: string): Promise<void> {
+    if (this.config.browser.headless) return;
+    const interval = this.config.browser.minimumActionIntervalMs;
+    const last = this.lastAgentActionAt.get(sessionId) ?? 0;
+    const remaining = interval - (Date.now() - last);
+    if (remaining > 0) await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, remaining));
+    this.lastAgentActionAt.set(sessionId, Date.now());
+  }
+
+  private async authorizeMutation(sessionId: string, signature: string): Promise<void> {
+    try {
+      this.interactionPolicy.authorizeMutation(sessionId, signature);
+    } catch (error) {
+      if (error instanceof RoveError) {
+        await this.observations.append(sessionId, {
+          actor: "system",
+          type: "policy_action_rejected",
+          data: {
+            action: signature.split(":", 1)[0],
+            code: error.code,
+            retryable: error.retryable,
+            ...(error.details === undefined ? {} : { details: error.details }),
+          },
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async assessBrowser(
+    sessionId: string,
+    browser: { inspect(options?: InspectOptions): Promise<PageInspection> },
+  ): Promise<PageStateAssessment> {
+    const inspection = await browser.inspect({ includeText: false, includeTargets: false });
+    return this.interactionPolicy.recordInspection(sessionId, inspection);
+  }
+
+  private async assessAndPause(sessionId: string): Promise<PageStateAssessment> {
+    const pageState = await this.assessBrowser(sessionId, this.browser.get(sessionId));
+    if (this.handoffForPageState(pageState) !== undefined) {
+      await this.pauseForPageState(sessionId, pageState);
+    }
+    return pageState;
+  }
+
+  private handoffForPageState(pageState: PageStateAssessment):
+    { reason: string; observationType: string } | undefined {
+    switch (pageState.kind) {
+      case "authentication_required":
+        return {
+          reason: "The page requires authentication that must be completed by a human.",
+          observationType: "authentication_required",
+        };
+      case "human_verification":
+        return {
+          reason: "The site requires a human verification step.",
+          observationType: "human_verification_required",
+        };
+      case "access_restricted":
+        return {
+          reason: "The site has restricted access and requires human review.",
+          observationType: "site_access_restricted",
+        };
+      case "unknown_interstitial":
+        return {
+          reason: "The page is an unrecognized interstitial and requires human review.",
+          observationType: "unknown_interstitial",
+        };
+      default:
+        return undefined;
+    }
+  }
+
+  private async pauseForPageState(
+    sessionId: string,
+    pageState: PageStateAssessment,
+  ): Promise<void> {
+    const handoff = this.handoffForPageState(pageState);
+    if (handoff === undefined) return;
+    const session = await this.sessions.get(sessionId);
+    if (session.status === "awaiting_human") return;
+    const requestedAt = new Date().toISOString();
+    await this.sessions.update({
+      ...session,
+      status: "awaiting_human",
+      controller: null,
+      handoff: { reason: handoff.reason, requestedAt },
+    });
+    const observation = await this.observations.append(sessionId, {
+      actor: "system",
+      type: handoff.observationType,
+      data: pageState,
+    });
+    await this.controlWait.publish(sessionId, observation);
   }
 
   private enqueueHumanActivity(

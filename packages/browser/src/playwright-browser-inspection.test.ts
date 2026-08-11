@@ -543,11 +543,18 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     expect(
       Object.keys(inspection.metadata ?? {}).sort(),
     ).toEqual([
+      "pageState",
       "targetsTruncated",
       "textTruncated",
     ]);
 
     expect(inspection.metadata).toEqual({
+      pageState: {
+        kind: "ready",
+        confidence: "high",
+        signals: ["dom:content_available"],
+        recommendedAction: "continue",
+      },
       textTruncated: false,
       targetsTruncated: false,
     });

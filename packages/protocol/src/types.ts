@@ -27,6 +27,7 @@ import type {
   targetReferenceSchema,
   typeRequestSchema,
 } from "./schemas.js";
+import type { RoveErrorCode } from "./errors.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
@@ -101,6 +102,37 @@ export interface PageInspection {
   metadata?: Record<string, unknown>;
 }
 
+export type PageStateKind =
+  | "ready"
+  | "loading"
+  | "authentication_required"
+  | "human_verification"
+  | "access_restricted"
+  | "unknown_interstitial"
+  | "error";
+
+export type PageStateRecommendedAction =
+  | "continue"
+  | "wait_and_inspect"
+  | "request_human"
+  | "stop";
+
+/** Deterministic assessment attached to every browser inspection. */
+export interface PageStateAssessment {
+  kind: PageStateKind;
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+  recommendedAction: PageStateRecommendedAction;
+}
+
+export interface PolicyDecision {
+  allowed: boolean;
+  code?: RoveErrorCode;
+  reason: string;
+  retryable: boolean;
+  pageState?: PageStateAssessment;
+}
+
 export interface PageSummary {
   id: string;
   url: string;
@@ -159,5 +191,8 @@ export interface BrowserLaunchConfig {
     navigationMs?: number;
     actionMs?: number;
     inspectMs?: number;
+  };
+  interaction?: {
+    typingDelayMs?: number;
   };
 }

@@ -13,8 +13,13 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 
-import { companionIpcChannels } from "../shared/desktop-api.js";
+import {
+  companionIpcChannels,
+  type DesktopNotice,
+} from "../shared/desktop-api.js";
 import { DesktopHost } from "./host/desktop-host.js";
+import { HubConnector } from "./host/hub-connector.js";
+import { resolveDesktopServiceLayout } from "./host/service-layout.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
 import { CompanionSurface } from "./surface/companion-surface.js";
 import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
@@ -30,16 +35,23 @@ if (existsSync(rootEnv)) {
 const config = loadConfig();
 
 const manageServices =
+  app.isPackaged ||
   process.argv.includes("--rove-manage-services") ||
   process.argv.includes("--rove-manage-runtime");
 
 let desktopHost: DesktopHost | undefined;
+
+let hubConnector: HubConnector | undefined;
 
 let companionSurface: CompanionSurface | undefined;
 
 let desktopTray: Tray | undefined;
 
 let trayStatusLabel = "";
+
+let desktopNotice: DesktopNotice | null = null;
+
+let lastLiveSession: Session | null = null;
 
 let sessionSurfaceMonitor: NodeJS.Timeout | undefined;
 
@@ -51,6 +63,24 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 function createCompanionWindow(): BrowserWindow {
   const window = new BrowserWindow(companionWindowOptions(import.meta.dirname));
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (allowQuit) {
+      return;
+    }
+
+    console.error(
+      `[desktop] Companion renderer exited (${details.reason}). Reloading.`,
+    );
+
+    const timer = setTimeout(() => {
+      if (!allowQuit) {
+        companionSurface?.recover();
+      }
+    }, 100);
+
+    timer.unref();
+  });
 
   const developmentUrl = process.env.ROVE_COMPANION_DEV_URL;
 
@@ -68,15 +98,22 @@ function createCompanionWindow(): BrowserWindow {
 function registerIpc(runtime: CompanionRuntimeClient): void {
   ipcMain.handle(companionIpcChannels.snapshot, () => runtime.getSnapshot());
 
+  ipcMain.handle(companionIpcChannels.notice, () => desktopNotice);
+
   ipcMain.handle(companionIpcChannels.takeControl, () => runtime.takeControl());
 
   ipcMain.handle(companionIpcChannels.returnControl, () =>
     runtime.returnControl(),
   );
 
-  ipcMain.handle(companionIpcChannels.finishSession, () =>
-    runtime.finishSession(),
-  );
+  ipcMain.handle(companionIpcChannels.finishSession, async () => {
+    const snapshot = await runtime.finishSession();
+
+    lastLiveSession = null;
+    desktopNotice = null;
+
+    return snapshot;
+  });
 }
 
 function runtimeClientOptions(baseUrl: string, token?: string) {
@@ -304,16 +341,18 @@ async function startDesktop(): Promise<void> {
   let runtime: CompanionRuntimeClient;
 
   if (manageServices) {
-    const runtimeDirectory =
-      process.env.ROVE_DESKTOP_RUNTIME_DIR ??
-      resolve(process.cwd(), "../runtime");
-
-    const mcpDirectory =
-      process.env.ROVE_DESKTOP_MCP_DIR ?? resolve(process.cwd(), "../mcp");
+    const serviceLayout = resolveDesktopServiceLayout({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      cwd: process.cwd(),
+      electronExecutable: process.execPath,
+      ...(process.env.ROVE_DESKTOP_RUNTIME_DIR === undefined
+        ? {}
+        : { runtimeDirectory: process.env.ROVE_DESKTOP_RUNTIME_DIR }),
+    });
 
     desktopHost = new DesktopHost({
-      runtimeDirectory,
-      mcpDirectory,
+      runtimeDirectory: serviceLayout.runtimeDirectory,
       home: config.home,
       browserHeadless: config.browser.headless,
       browser: config.browser.preferredBrowser,
@@ -322,9 +361,94 @@ async function startDesktop(): Promise<void> {
         : {
             browserExecutablePath: config.browser.executablePath,
           }),
+      ...(serviceLayout.nodeExecutable === undefined
+        ? {}
+        : {
+            runtimeNodeExecutable: serviceLayout.nodeExecutable,
+          }),
+      ...(serviceLayout.runtimeEntrypoint === undefined
+        ? {}
+        : { runtimeEntrypoint: serviceLayout.runtimeEntrypoint }),
+      ...(serviceLayout.electronRunAsNode ? { electronRunAsNode: true } : {}),
+      ...(serviceLayout.playwrightBrowsersPath === undefined
+        ? {}
+        : {
+            playwrightBrowsersPath: serviceLayout.playwrightBrowsersPath,
+          }),
+    });
+
+    desktopHost.onEvent((event) => {
+      if (event.type === "runtime-exited") {
+        console.error("[desktop] Runtime exited unexpectedly.");
+
+        if (lastLiveSession !== null) {
+          desktopNotice = {
+            type: "session_interrupted",
+            sessionId: lastLiveSession.id,
+            title: "Session interrupted",
+            message: "Rove's browser runtime stopped unexpectedly.",
+            supportingText: "Rove is recovering its local services.",
+          };
+
+          companionSurface?.requestAttention();
+        }
+
+        return;
+      }
+
+      if (event.type === "runtime-restarting") {
+        console.info(`[desktop] Restarting Runtime (${event.attempt}).`);
+        return;
+      }
+
+      if (event.type === "runtime-recovered") {
+        console.info("[desktop] Runtime recovered.");
+
+        if (desktopNotice !== null) {
+          desktopNotice = {
+            ...desktopNotice,
+            supportingText:
+              "Rove recovered its local services and is ready for a new session.",
+          };
+        }
+
+        return;
+      }
+
+      if (event.type === "runtime-recovery-failed") {
+        console.error(`[desktop] Runtime recovery failed: ${event.message}`);
+
+        if (desktopNotice !== null) {
+          desktopNotice = {
+            ...desktopNotice,
+            supportingText:
+              "Rove could not recover the browser runtime. Restart Rove to continue.",
+          };
+        }
+
+        companionSurface?.requestAttention();
+        return;
+      }
+
     });
 
     const connection = await desktopHost.start();
+
+    const controlPlaneUrl = process.env.ROVE_CONTROL_PLANE_URL;
+
+    if (controlPlaneUrl !== undefined) {
+      hubConnector = new HubConnector({
+        controlPlaneUrl,
+        deviceId: process.env.ROVE_HUB_DEVICE_ID ?? "local-dev",
+        token: process.env.ROVE_HUB_TOKEN ?? "rove-local-hub-token-change-me",
+        runtime: {
+          baseUrl: connection.runtime.baseUrl,
+          token: connection.runtime.token,
+        },
+      });
+      hubConnector.start();
+      console.info("[hub] Outbound control-plane connector started.");
+    }
 
     console.info(
       `[desktop] Browser resolved: ${connection.browser.kind} (${connection.browser.source})${
@@ -359,6 +483,16 @@ async function startDesktop(): Promise<void> {
   surface.show();
 
   startSessionSurfaceMonitor(runtime, surface, (session) => {
+    if (session !== null) {
+      if (desktopNotice !== null && desktopNotice.sessionId !== session.id) {
+        desktopNotice = null;
+      }
+
+      lastLiveSession = session;
+    } else if (desktopNotice === null) {
+      lastLiveSession = null;
+    }
+
     if (desktopTray !== undefined) {
       updateTrayMenu(desktopTray, surface, session);
     }
@@ -397,15 +531,15 @@ app.on("before-quit", (event) => {
   }
 
   allowQuit = true;
-
   if (desktopHost === undefined) {
     return;
   }
 
   event.preventDefault();
 
-  void desktopHost
-    .stop()
+  void Promise.resolve()
+    .then(() => hubConnector?.stop())
+    .then(() => desktopHost?.stop())
     .catch((error) => {
       console.error("Rove Desktop shutdown failed.", error);
     })

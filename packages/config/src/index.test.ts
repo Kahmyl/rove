@@ -7,6 +7,19 @@ describe("loadConfig", () => {
     expect(config.runtime.host).toBe("127.0.0.1");
     expect(config.mcp.transport).toBe("stdio");
     expect(config.browser.headless).toBe(false);
+    expect(config.browser.minimumActionIntervalMs).toBe(3_000);
+    expect(config.browser.typingDelayMs).toBe(35);
+  });
+
+  it("loads conservative browser interaction settings", () => {
+    const config = loadConfig({
+      env: {
+        ROVE_BROWSER_MIN_ACTION_INTERVAL_MS: "750",
+        ROVE_BROWSER_TYPING_DELAY_MS: "50",
+      },
+    });
+    expect(config.browser.minimumActionIntervalMs).toBe(750);
+    expect(config.browser.typingDelayMs).toBe(50);
   });
 
   it("requires a strong-enough token for HTTP", () => {

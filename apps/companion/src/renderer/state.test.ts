@@ -210,6 +210,29 @@ describe("Companion renderer state", () => {
     });
   });
 
+  it("presents an interrupted Runtime session without pretending it survived", () => {
+    expect(
+      toCompanionViewModel(null, {
+        type: "session_interrupted",
+        sessionId: "ses_interrupted",
+        title: "Session interrupted",
+        message: "Rove's browser runtime stopped unexpectedly.",
+        supportingText:
+          "Rove recovered its local services and is ready for a new session.",
+      }),
+    ).toMatchObject({
+      hasSession: false,
+      experience: "interrupted",
+      kicker: "Session interrupted",
+      title: "Session interrupted",
+      status: "Interrupted",
+      primaryAction: null,
+      canTakeControl: false,
+      canReturnControl: false,
+      canFinish: false,
+    });
+  });
+
   it("represents the absence of a session without exposing internal state", () => {
     expect(toCompanionViewModel(null)).toMatchObject({
       hasSession: false,

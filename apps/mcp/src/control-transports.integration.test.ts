@@ -110,6 +110,12 @@ describe("M7 MCP control tools", () => {
     );
 
     expect(health.status).toBe(200);
+
+    const live = await fetch(
+      `http://127.0.0.1:${String(port)}/live`,
+    );
+
+    expect(live.status).toBe(200);
   });
 
   it("cancels a Streamable HTTP control.wait on client disconnect without changing ownership", async () => {

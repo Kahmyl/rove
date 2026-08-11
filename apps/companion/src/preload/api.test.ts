@@ -1,12 +1,6 @@
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 
-import {
-  companionIpcChannels,
-} from "../shared/desktop-api.js";
+import { companionIpcChannels } from "../shared/desktop-api.js";
 import { createDesktopApi } from "./api.js";
 
 describe("Companion preload API", () => {
@@ -20,22 +14,23 @@ describe("Companion preload API", () => {
       },
     });
 
-    expect(
-      Object.keys(api).sort(),
-    ).toEqual([
+    expect(Object.keys(api).sort()).toEqual([
       "finishSession",
+      "getNotice",
       "getSnapshot",
       "returnControl",
       "takeControl",
     ]);
 
     await api.getSnapshot();
+    await api.getNotice();
     await api.takeControl();
     await api.returnControl();
     await api.finishSession();
 
     expect(channels).toEqual([
       companionIpcChannels.snapshot,
+      companionIpcChannels.notice,
       companionIpcChannels.takeControl,
       companionIpcChannels.returnControl,
       companionIpcChannels.finishSession,

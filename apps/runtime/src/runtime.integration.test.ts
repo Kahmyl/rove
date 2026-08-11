@@ -148,6 +148,65 @@ describe("Milestone 4 runtime integration", () => {
     expect((await runtime.getObservations(sessionId)).items.map((item) => item.type)).toEqual(["session_failed"]);
   });
 
+  it("pauses for human review when a site explicitly restricts access", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/access-restricted`,
+    });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      handoff: { reason: "The site has restricted access and requires human review." },
+    });
+    expect((await runtime.getObservations(session.id)).items.map((item) => item.type)).toEqual([
+      "session_started",
+      "site_access_restricted",
+    ]);
+    await expect(runtime.navigate(session.id, { url: server.url })).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+  });
+
+  it.each([
+    ["human-verification", "human_verification_required", "human verification step"],
+    ["authentication", "authentication_required", "requires authentication"],
+    ["unknown-interstitial", "unknown_interstitial", "unrecognized interstitial"],
+  ])("classifies %s as a distinct human-only page state", async (route, eventType, reason) => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({ mode: "agent", startUrl: `${server.url}/${route}` });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({ status: "awaiting_human", controller: null });
+    expect(session.handoff?.reason).toContain(reason);
+    expect((await runtime.getObservations(session.id)).items.map((item) => item.type)).toEqual([
+      "session_started",
+      eventType,
+    ]);
+  });
+
+  it("requires a fresh inspection after human control returns", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({ mode: "agent", startUrl: `${server.url}/actions` });
+    active.push({ runtime, id: session.id });
+
+    await runtime.requestHuman(session.id, { reason: "Smoke-test handoff" });
+    await runtime.takeHumanControl(session.id);
+    await browser.get(session.id).navigate(`${server.url}/result`);
+    await runtime.returnAgentControl(session.id);
+
+    await expect(runtime.navigate(session.id, { url: `${server.url}/actions` })).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+    });
+    await runtime.inspectBrowser(session.id);
+    await expect(runtime.navigate(session.id, { url: `${server.url}/actions` })).resolves.toMatchObject({ ok: true });
+  });
+
   it("orchestrates real actions, persistence, evidence, and historical reads without persisting typed values", async () => {
     const server = await fixture();
     const { runtime, browser, home } = await harness();
@@ -208,6 +267,12 @@ describe("Milestone 4 runtime integration", () => {
           id: browserId,
           onActivity: () => () => undefined,
           pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: 0 }],
+          inspect: async () => ({
+            pageId: "page_01",
+            revision: 0,
+            url: "about:blank",
+            title: "",
+          }),
           navigate: async (url: string) => {
             if (url.endsWith("/slow")) {
               order.push(`${browserId}:slow:start`);

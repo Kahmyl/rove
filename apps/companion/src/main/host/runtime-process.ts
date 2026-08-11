@@ -1,5 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
 
+import {
+  shouldDetachManagedChild,
+  terminateProcessTree,
+} from "./process-tree.js";
+
 export interface RuntimeProcessOptions {
   runtimeDirectory: string;
   home: string;
@@ -9,7 +14,10 @@ export interface RuntimeProcessOptions {
   browserHeadless: boolean;
   browser: "chrome" | "chromium";
   browserExecutablePath?: string;
+  playwrightBrowsersPath?: string;
   nodeExecutable?: string;
+  entrypoint?: string;
+  electronRunAsNode?: boolean;
 }
 
 export function buildRuntimeProcessEnvironment(
@@ -32,12 +40,23 @@ export function buildRuntimeProcessEnvironment(
       : {
           ROVE_BROWSER_EXECUTABLE_PATH: options.browserExecutablePath,
         }),
+    ...(options.playwrightBrowsersPath === undefined
+      ? {}
+      : {
+          PLAYWRIGHT_BROWSERS_PATH: options.playwrightBrowsersPath,
+        }),
+    ...(options.electronRunAsNode === true
+      ? {
+          ELECTRON_RUN_AS_NODE: "1",
+        }
+      : {}),
   };
 }
 
 export interface RuntimeExit {
   code: number | null;
   signal: NodeJS.Signals | null;
+  error?: string;
 }
 
 export class RuntimeProcess {
@@ -55,10 +74,16 @@ export class RuntimeProcess {
     const nodeExecutable =
       this.options.nodeExecutable ?? process.env.npm_node_execpath ?? "node";
 
-    const child = spawn(nodeExecutable, ["--import", "tsx", "src/main.ts"], {
+    const args =
+      this.options.entrypoint === undefined
+        ? ["--import", "tsx", "src/main.ts"]
+        : [this.options.entrypoint];
+
+    const child = spawn(nodeExecutable, args, {
       cwd: this.options.runtimeDirectory,
       env: buildRuntimeProcessEnvironment(this.options),
       stdio: ["ignore", "pipe", "pipe"],
+      detached: shouldDetachManagedChild(),
     });
 
     this.child = child;
@@ -71,16 +96,62 @@ export class RuntimeProcess {
       process.stderr.write(`[runtime] ${chunk.toString()}`);
     });
 
-    child.once("exit", (code, signal) => {
-      this.child = undefined;
+    let exitReported = false;
+
+    const reportExit = (
+      code: number | null,
+      signal: NodeJS.Signals | null,
+      error?: Error,
+    ) => {
+      if (exitReported) {
+        return;
+      }
+
+      exitReported = true;
+
+      const pid = child.pid;
+
+      if (this.child === child) {
+        this.child = undefined;
+      }
+
+      if (pid !== undefined) {
+        void terminateProcessTree(pid, "SIGKILL").catch(() => undefined);
+      }
 
       for (const listener of this.exitListeners) {
         listener({
           code,
           signal,
+          ...(error === undefined ? {} : { error: error.message }),
         });
       }
+    };
+
+    child.once("error", (error) => {
+      if (child.pid === undefined) {
+        reportExit(null, null, error);
+        return;
+      }
+
+      process.stderr.write(`[runtime] ${error.message}\n`);
     });
+
+    child.once("exit", (code, signal) => {
+      reportExit(code, signal);
+    });
+  }
+
+  isRunning(): boolean {
+    return (
+      this.child !== undefined &&
+      this.child.exitCode === null &&
+      this.child.signalCode === null
+    );
+  }
+
+  getPid(): number | undefined {
+    return this.child?.pid;
   }
 
   onExit(listener: (exit: RuntimeExit) => void): () => void {
@@ -102,7 +173,13 @@ export class RuntimeProcess {
       return;
     }
 
-    child.kill("SIGTERM");
+    const pid = child.pid;
+
+    if (pid === undefined) {
+      child.kill("SIGTERM");
+    } else {
+      await terminateProcessTree(pid, "SIGTERM");
+    }
 
     const exited = await this.waitForExit(child, timeoutMs);
 
@@ -110,7 +187,11 @@ export class RuntimeProcess {
       return;
     }
 
-    child.kill("SIGKILL");
+    if (pid === undefined) {
+      child.kill("SIGKILL");
+    } else {
+      await terminateProcessTree(pid, "SIGKILL");
+    }
 
     await this.waitForExit(child, 1_000);
   }
