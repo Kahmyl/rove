@@ -10,7 +10,7 @@
     "build": "tsc -b tsconfig.json --force && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "pnpm --filter @rove/config build && pnpm build && electron .",
-    "dev:desktop": "pnpm --filter @rove/runtime... --filter @rove/companion... build && node --env-file-if-exists=../../.env node_modules/electron/cli.js . --rove-manage-services",
+    "dev:desktop": "pnpm --filter @rove/runtime... --filter @rove/companion... build && electron . --rove-manage-services",
     "package:prepare": "node ../../scripts/package-desktop.mjs --prepare-only",
     "package:dir": "node ../../scripts/package-desktop.mjs --dir",
     "package": "node ../../scripts/package-desktop.mjs"
