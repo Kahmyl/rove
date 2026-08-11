@@ -55,6 +55,13 @@ codex mcp remove rove
 
 Then run the `codex mcp add` command again.
 
+Registration is a hard prerequisite for the manual acceptance prompt. The
+Codex agent should see Rove MCP tools such as `session.start`,
+`browser.navigate`, `browser.inspect`, `control.request_human`, and
+`control.wait` as mounted tool calls. A healthy loopback MCP HTTP endpoint is
+not enough by itself; do not ask the agent to discover the endpoint from `.env`
+or call it with ad hoc shell scripts.
+
 ## 4. Start a fresh agent
 
 Keep the same terminal open so the exported token remains available:
@@ -68,8 +75,14 @@ codex
 Paste this prompt into the new Codex session:
 
 ```text
-Use only the Rove MCP tools for browser work. Do not use shell commands or any
-other browser integration.
+Use only mounted Rove MCP tool calls for browser work. Do not use shell
+commands, Node scripts, direct HTTP requests, Playwright, Chrome control,
+in-app browser tools, or any other browser integration.
+
+Before starting, confirm that Rove MCP tools are available in this session. If
+they are not mounted, stop and report: "Rove MCP is not connected in this Codex
+session." Do not inspect the repository, read `.env`, probe localhost ports, or
+construct an MCP client manually.
 
 1. Start a Companion Mode session at https://example.com.
 2. Inspect the page and take a viewport screenshot.

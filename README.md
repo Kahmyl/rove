@@ -39,6 +39,13 @@ This development command builds and starts the Companion plus the local Runtime.
 It does not start the MCP service; run `pnpm dev:mcp` separately when exercising
 the current development adapter.
 
+When testing from Codex, register the running MCP endpoint with Codex before
+starting the agent. A prompt that says "use the Rove MCP connector" does not
+mount tools by itself. If the Rove tools are not already exposed in the Codex
+session, the agent should stop and report that Rove MCP is not connected rather
+than probing `.env`, localhost ports, or calling the MCP HTTP endpoint from a
+shell script.
+
 ## Local Hub/control-plane development
 
 The production-shaped local path keeps the Runtime private and routes MCP calls
