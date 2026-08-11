@@ -96,6 +96,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function describeRuntimeExit(exit: RuntimeExit): string {
+  return [
+    exit.code === null ? undefined : `code ${exit.code}`,
+    exit.signal === null ? undefined : `signal ${exit.signal}`,
+    exit.error,
+  ]
+    .filter((value): value is string => value !== undefined)
+    .join(", ");
+}
+
 /**
  * Owns only the services that belong on the user's machine.
  *
@@ -194,15 +204,36 @@ export class DesktopHost {
     this.connection = connection;
     runtime.onExit((exit) => this.handleRuntimeExit(exit));
 
+    let stopWaitingForStartupExit: (() => void) | undefined;
+
     try {
-      runtime.start();
-      await this.dependencies.waitForRuntimeReady(runtimeBaseUrl, {
-        timeoutMs: this.options.startupTimeoutMs ?? 15_000,
+      const startupExit = new Promise<never>((_resolve, reject) => {
+        stopWaitingForStartupExit = runtime.onExit((exit) => {
+          const description = describeRuntimeExit(exit);
+
+          reject(
+            new Error(
+              `Rove Runtime exited before becoming ready${
+                description.length === 0 ? "." : `: ${description}`
+              }`,
+            ),
+          );
+        });
       });
+
+      runtime.start();
+      await Promise.race([
+        this.dependencies.waitForRuntimeReady(runtimeBaseUrl, {
+          timeoutMs: this.options.startupTimeoutMs ?? 15_000,
+        }),
+        startupExit,
+      ]);
+      stopWaitingForStartupExit?.();
       this.state = "ready";
       this.recoveryEnabled = true;
       return connection;
     } catch (error) {
+      stopWaitingForStartupExit?.();
       this.state = "failed";
       this.intentionalStop = true;
       this.recoveryEnabled = false;

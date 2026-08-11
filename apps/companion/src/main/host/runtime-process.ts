@@ -59,6 +59,12 @@ export interface RuntimeExit {
   error?: string;
 }
 
+function appendOutputTail(existing: string, chunk: Buffer): string {
+  const next = `${existing}${chunk.toString()}`;
+
+  return next.length > 4_000 ? next.slice(-4_000) : next;
+}
+
 export class RuntimeProcess {
   private child: ChildProcess | undefined;
 
@@ -88,11 +94,15 @@ export class RuntimeProcess {
 
     this.child = child;
 
+    let outputTail = "";
+
     child.stdout?.on("data", (chunk: Buffer) => {
+      outputTail = appendOutputTail(outputTail, chunk);
       process.stdout.write(`[runtime] ${chunk.toString()}`);
     });
 
     child.stderr?.on("data", (chunk: Buffer) => {
+      outputTail = appendOutputTail(outputTail, chunk);
       process.stderr.write(`[runtime] ${chunk.toString()}`);
     });
 
@@ -120,10 +130,24 @@ export class RuntimeProcess {
       }
 
       for (const listener of this.exitListeners) {
+        const output = outputTail.trim();
+        const exitError =
+          error?.message ??
+          (code === 0 && signal === null
+            ? undefined
+            : [
+                `Runtime process exited with ${code === null ? "no exit code" : `code ${code}`}${
+                  signal === null ? "" : ` and signal ${signal}`
+                }.`,
+                output.length === 0 ? undefined : output,
+              ]
+                .filter((value): value is string => value !== undefined)
+                .join("\n"));
+
         listener({
           code,
           signal,
-          ...(error === undefined ? {} : { error: error.message }),
+          ...(exitError === undefined ? {} : { error: exitError }),
         });
       }
     };

@@ -128,6 +128,22 @@ function runtimeClientOptions(baseUrl: string, token?: string) {
   };
 }
 
+function optionalPositiveIntegerEnv(name: string): number | undefined {
+  const value = process.env[name];
+
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
 function installApplicationMenu(surface: CompanionSurface): void {
   const surfaceItems: MenuItemConstructorOptions[] = [
     {
@@ -351,11 +367,18 @@ async function startDesktop(): Promise<void> {
         : { runtimeDirectory: process.env.ROVE_DESKTOP_RUNTIME_DIR }),
     });
 
+    const desktopStartupTimeoutMs = optionalPositiveIntegerEnv(
+      "ROVE_DESKTOP_STARTUP_TIMEOUT_MS",
+    );
+
     desktopHost = new DesktopHost({
       runtimeDirectory: serviceLayout.runtimeDirectory,
       home: config.home,
       browserHeadless: config.browser.headless,
       browser: config.browser.preferredBrowser,
+      ...(desktopStartupTimeoutMs === undefined
+        ? {}
+        : { startupTimeoutMs: desktopStartupTimeoutMs }),
       ...(config.browser.executablePath === undefined
         ? {}
         : {

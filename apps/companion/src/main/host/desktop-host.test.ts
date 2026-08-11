@@ -9,6 +9,7 @@ import {
 interface FakeExit {
   code: number | null;
   signal: NodeJS.Signals | null;
+  error?: string;
 }
 
 class FakeProcess {
@@ -59,6 +60,18 @@ class FakeProcess {
         code: 1,
         signal: null,
       });
+    }
+  }
+
+  exit(exit: FakeExit): void {
+    if (!this.running) {
+      return;
+    }
+
+    this.running = false;
+
+    for (const listener of this.listeners) {
+      listener(exit);
     }
   }
 }
@@ -188,5 +201,30 @@ describe("DesktopHost recovery", () => {
 
     expect(runtime.stopCount).toBe(1);
     expect(runtime.running).toBe(false);
+  });
+
+  it("fails startup with the Runtime exit reason when Runtime exits before health is ready", async () => {
+    const { host, runtime } = createHarness({
+      waitForRuntimeReady: () =>
+        new Promise(() => {
+          // Health never becomes ready; the child exit should win startup.
+        }),
+    });
+
+    const start = host.start();
+
+    await eventually(() => runtime.running);
+
+    runtime.exit({
+      code: 1,
+      signal: null,
+      error: "Cannot find package 'tsx'",
+    });
+
+    await expect(start).rejects.toThrow(
+      "Rove Runtime exited before becoming ready: code 1, Cannot find package 'tsx'",
+    );
+
+    expect(host.getState()).toBe("failed");
   });
 });
