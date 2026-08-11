@@ -188,6 +188,7 @@ export interface BrowserLaunchConfig {
   launchArgs?: string[];
   profileUserDataDir?: string;
   timeouts?: {
+    launchMs?: number;
     navigationMs?: number;
     actionMs?: number;
     inspectMs?: number;

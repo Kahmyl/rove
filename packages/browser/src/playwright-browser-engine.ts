@@ -19,6 +19,9 @@ function toLaunchError(error: unknown): RoveError {
   const roveError = new RoveError({
     code: "BROWSER_LAUNCH_FAILED",
     message: "The browser failed to launch.",
+    ...(error instanceof Error
+      ? { details: { cause: error.message } }
+      : {}),
   });
   if (error instanceof Error) roveError.cause = error;
   return roveError;
@@ -111,6 +114,9 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
   ): Promise<BrowserContext> {
     const base = {
       headless: config.headless,
+      ...(config.timeouts?.launchMs === undefined
+        ? {}
+        : { timeout: config.timeouts.launchMs }),
       viewport:
         config.viewport ?? {
           width: 1440,
@@ -169,6 +175,9 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
   private async launch(config: BrowserLaunchConfig): Promise<Browser> {
     const base: LaunchOptions = {
       headless: config.headless,
+      ...(config.timeouts?.launchMs === undefined
+        ? {}
+        : { timeout: config.timeouts.launchMs }),
       ignoreDefaultArgs: secureDefaultArgs(),
       ...(config.launchArgs === undefined ? {} : { args: config.launchArgs }),
     };

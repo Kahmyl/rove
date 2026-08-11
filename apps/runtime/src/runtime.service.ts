@@ -81,6 +81,7 @@ export class RuntimeService implements RoveRuntime {
             }
           : {}),
         timeouts: {
+          launchMs: this.config.timeouts.launchMs,
           navigationMs: this.config.timeouts.navigationMs,
           actionMs: this.config.timeouts.actionMs,
           inspectMs: this.config.timeouts.inspectMs,

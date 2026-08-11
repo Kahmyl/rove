@@ -40,6 +40,7 @@ export const roveConfigSchema = z.object({
     typingDelayMs: z.number().int().nonnegative(),
   }),
   timeouts: z.object({
+    launchMs: z.number().int().positive(),
     navigationMs: z.number().int().positive(),
     actionMs: z.number().int().positive(),
     inspectMs: z.number().int().positive(),
@@ -93,6 +94,7 @@ export function loadConfig(options: LoadConfigOptions = {}): RoveConfig {
         : { executablePath: env.ROVE_BROWSER_EXECUTABLE_PATH }),
     },
     timeouts: {
+      launchMs: nonnegativeInteger(env.ROVE_BROWSER_LAUNCH_TIMEOUT_MS, 20_000),
       navigationMs: 30_000,
       actionMs: 10_000,
       inspectMs: 5_000,

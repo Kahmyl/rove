@@ -9,15 +9,18 @@ describe("loadConfig", () => {
     expect(config.browser.headless).toBe(false);
     expect(config.browser.minimumActionIntervalMs).toBe(3_000);
     expect(config.browser.typingDelayMs).toBe(35);
+    expect(config.timeouts.launchMs).toBe(20_000);
   });
 
   it("loads conservative browser interaction settings", () => {
     const config = loadConfig({
       env: {
+        ROVE_BROWSER_LAUNCH_TIMEOUT_MS: "15000",
         ROVE_BROWSER_MIN_ACTION_INTERVAL_MS: "750",
         ROVE_BROWSER_TYPING_DELAY_MS: "50",
       },
     });
+    expect(config.timeouts.launchMs).toBe(15_000);
     expect(config.browser.minimumActionIntervalMs).toBe(750);
     expect(config.browser.typingDelayMs).toBe(50);
   });
