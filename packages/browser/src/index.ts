@@ -8,3 +8,4 @@ export * from "./targets/target-registry.js";
 export * from "./fixtures/fixture-server.js";
 export * from "./observation/browser-activity.js";
 export * from "./safety/page-state-classifier.js";
+export * from "./diagnostics/browser-doctor.js";

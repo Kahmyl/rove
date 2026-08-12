@@ -27,6 +27,7 @@
     "dev:companion": "pnpm --filter @rove/companion dev",
     "test:mcp": "pnpm --filter @rove/mcp test",
     "browser:demo": "pnpm --filter @rove/browser demo",
+    "browser:doctor": "pnpm --filter @rove/browser doctor",
     "browser:inspect": "pnpm --filter @rove/browser inspect-demo",
     "browser:actions": "pnpm --filter @rove/browser actions-demo",
     "runtime:demo": "pnpm build && ROVE_HOME=../../.rove-demo pnpm --filter @rove/runtime runtime-demo",
