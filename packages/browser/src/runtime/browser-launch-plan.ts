@@ -34,6 +34,7 @@ export interface ResolvedBrowserLaunchPlan {
   sandbox: boolean | "unknown";
   profile: ResolvedProfile;
   viewport: Viewport;
+  timeoutMs?: number;
   args: string[];
   argDiagnostics: BrowserLaunchArgumentDiagnostic[];
   diagnostics: BrowserLaunchPlanDiagnostic[];
@@ -96,6 +97,9 @@ export function resolveBrowserLaunchPlan(
     sandbox: false,
     profile,
     viewport: config.viewport ?? DEFAULT_VIEWPORT,
+    ...(config.timeouts?.launchMs === undefined
+      ? {}
+      : { timeoutMs: config.timeouts.launchMs }),
     args: [
       ...argDiagnostics.map((diagnostic) => diagnostic.arg),
     ],

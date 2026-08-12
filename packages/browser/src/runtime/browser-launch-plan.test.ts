@@ -73,6 +73,19 @@ describe("resolveBrowserLaunchPlan", () => {
     ]);
   });
 
+  it("carries launch timeout into the plan", () => {
+    expect(
+      resolveBrowserLaunchPlan({
+        ...config,
+        timeouts: {
+          launchMs: 12_345,
+        },
+      }),
+    ).toMatchObject({
+      timeoutMs: 12_345,
+    });
+  });
+
   it("reports existing profiles as unsupported", () => {
     expect(
       resolveBrowserLaunchPlan({
