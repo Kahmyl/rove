@@ -59,6 +59,37 @@ function target(inspection: PageInspection, name: string): TargetReference {
   return { pageId: inspection.pageId, revision: inspection.revision, ref: item.ref };
 }
 
+function readyBrowserSession(id: string): BrowserSession {
+  return {
+    id,
+    onActivity: () => () => undefined,
+    inspect: async () => ({
+      pageId: "page_01",
+      revision: 0,
+      url: "about:blank",
+      title: "",
+      metadata: {
+        pageState: {
+          kind: "ready",
+          confidence: "high",
+          signals: ["test:ready"],
+          recommendedAction: "continue",
+        },
+      },
+    }),
+    pages: async () => [
+      {
+        id: "page_01",
+        url: "about:blank",
+        title: "",
+        active: true,
+        revision: 0,
+      },
+    ],
+    close: async () => undefined,
+  } as unknown as BrowserSession;
+}
+
 async function waitForObservation(
   runtime: RuntimeService,
   sessionId: string,
@@ -172,6 +203,40 @@ describe("Milestone 4 runtime integration", () => {
     });
     expect(metadata.createdAt).toEqual(expect.any(String));
     expect(metadata.lastUsedAt).toEqual(expect.any(String));
+  });
+
+  it("rejects a second active persistent session using the same profile", async () => {
+    let starts = 0;
+    const engine: BrowserEngine = {
+      start: async () => {
+        starts += 1;
+        return readyBrowserSession(`browser_${starts}`);
+      },
+    };
+
+    const { runtime } = await harness(engine);
+    const first = await runtime.startSession({
+      mode: "agent",
+      profile: {
+        mode: "persistent",
+        name: "default",
+      },
+    });
+    active.push({ runtime, id: first.id });
+
+    await expect(
+      runtime.startSession({
+        mode: "agent",
+        profile: {
+          mode: "persistent",
+          name: "default",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "PROFILE_LOCKED",
+    });
+
+    expect(starts).toBe(1);
   });
 
   it("pauses for human review when a site explicitly restricts access", async () => {

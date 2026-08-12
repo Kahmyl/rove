@@ -29,7 +29,7 @@ import {
   requestHumanRequestSchema,
   controlWaitRequestSchema,
 } from "@rove/protocol";
-import { RoveProfileManager } from "@rove/browser";
+import { RoveProfileLock, RoveProfileManager } from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
@@ -46,6 +46,7 @@ export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues =
     new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
+  private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
 
   constructor(
@@ -61,6 +62,7 @@ export class RuntimeService implements RoveRuntime {
 
   async startSession(request: StartSessionRequest): Promise<Session> {
     let session = await this.sessions.start(request);
+    let profileLock: RoveProfileLock | undefined;
     try {
       const persistentProfile =
         await new RoveProfileManager(this.config.home)
@@ -68,6 +70,11 @@ export class RuntimeService implements RoveRuntime {
             session.profile,
             this.config.browser.preferredBrowser,
           );
+      if (persistentProfile !== undefined) {
+        profileLock = await RoveProfileLock.acquire(
+          persistentProfile.userDataDir,
+        );
+      }
 
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
@@ -91,6 +98,10 @@ export class RuntimeService implements RoveRuntime {
           typingDelayMs: this.config.browser.typingDelayMs,
         },
       });
+      if (profileLock !== undefined) {
+        this.profileLocks.set(session.id, profileLock);
+        profileLock = undefined;
+      }
 
       browser.onActivity((activity) => {
         this.enqueueHumanActivity(
@@ -128,6 +139,8 @@ export class RuntimeService implements RoveRuntime {
       return session;
     } catch (error) {
       await this.browser.close(session.id).catch(() => undefined);
+      await profileLock?.release().catch(() => undefined);
+      await this.releaseProfileLock(session.id);
       const now = new Date().toISOString();
       await this.sessions.update({ ...session, status: "failed", controller: null, endedAt: now, updatedAt: now });
       const observation = await this.observations.append(session.id, { actor: "system", type: "session_failed", data: {} });
@@ -172,6 +185,8 @@ export class RuntimeService implements RoveRuntime {
         await this.browser.close(sessionId);
       } catch (error) {
         closeError = error;
+      } finally {
+        await this.releaseProfileLock(sessionId);
       }
       const session = await this.sessions.end(sessionId);
       const observation = await this.observations.append(sessionId, { actor: "system", type: "session_completed", data: {} });
@@ -604,6 +619,13 @@ export class RuntimeService implements RoveRuntime {
     await this.humanActivityQueues.get(
       sessionId,
     );
+  }
+
+  private async releaseProfileLock(sessionId: string): Promise<void> {
+    const lock = this.profileLocks.get(sessionId);
+    if (lock === undefined) return;
+    this.profileLocks.delete(sessionId);
+    await lock.release();
   }
 
   private humanObservationType(
