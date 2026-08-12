@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import { Inject, Injectable } from "@nestjs/common";
 import type { RoveConfig } from "@rove/config";
 import {
@@ -30,6 +29,7 @@ import {
   requestHumanRequestSchema,
   controlWaitRequestSchema,
 } from "@rove/protocol";
+import { RoveProfileManager } from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
@@ -62,6 +62,13 @@ export class RuntimeService implements RoveRuntime {
   async startSession(request: StartSessionRequest): Promise<Session> {
     let session = await this.sessions.start(request);
     try {
+      const persistentProfile =
+        await new RoveProfileManager(this.config.home)
+          .resolvePersistentProfile(
+            session.profile,
+            this.config.browser.preferredBrowser,
+          );
+
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
         browser: this.config.browser.preferredBrowser,
@@ -71,15 +78,9 @@ export class RuntimeService implements RoveRuntime {
               executablePath: this.config.browser.executablePath,
             }),
         profile: session.profile,
-        ...(session.profile.mode === "persistent"
-          ? {
-              profileUserDataDir: resolve(
-                this.config.home,
-                "profiles",
-                session.profile.name,
-              ),
-            }
-          : {}),
+        ...(persistentProfile === undefined
+          ? {}
+          : { profileUserDataDir: persistentProfile.userDataDir }),
         timeouts: {
           launchMs: this.config.timeouts.launchMs,
           navigationMs: this.config.timeouts.navigationMs,

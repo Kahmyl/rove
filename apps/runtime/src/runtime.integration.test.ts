@@ -148,6 +148,32 @@ describe("Milestone 4 runtime integration", () => {
     expect((await runtime.getObservations(sessionId)).items.map((item) => item.type)).toEqual(["session_failed"]);
   });
 
+  it("creates Rove-managed persistent profile metadata before browser launch", async () => {
+    const { runtime, home } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      profile: {
+        mode: "persistent",
+        name: "default",
+      },
+    });
+    active.push({ runtime, id: session.id });
+
+    const metadata = JSON.parse(
+      await readFile(
+        join(home, ".rove", "profiles", "default", "profile.json"),
+        "utf8",
+      ),
+    );
+
+    expect(metadata).toMatchObject({
+      name: "default",
+      browserDistribution: "chromium",
+    });
+    expect(metadata.createdAt).toEqual(expect.any(String));
+    expect(metadata.lastUsedAt).toEqual(expect.any(String));
+  });
+
   it("pauses for human review when a site explicitly restricts access", async () => {
     const server = await fixture();
     const { runtime } = await harness();
