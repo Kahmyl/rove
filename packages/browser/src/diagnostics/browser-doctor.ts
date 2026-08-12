@@ -16,6 +16,7 @@ export interface BrowserDoctorOptions {
   headless: boolean;
   profile: ProfileRequest;
   profileDirectory?: string;
+  output: "text" | "json";
   viewport: {
     width: number;
     height: number;
@@ -80,6 +81,13 @@ interface DiagnosticFixture {
   close(): Promise<void>;
 }
 
+interface PersistentVerificationState {
+  cookie: boolean;
+  localStorage: boolean;
+  indexedDb: boolean;
+  serviceWorker: boolean;
+}
+
 const require = createRequire(import.meta.url);
 
 function withOptionalDirectory(
@@ -98,6 +106,7 @@ export function defaultBrowserDoctorOptions(): BrowserDoctorOptions {
     browser: "chromium",
     headless: true,
     profile: "temporary",
+    output: "text",
     viewport: {
       width: 1440,
       height: 900,
@@ -161,6 +170,11 @@ export function parseBrowserDoctorArgs(
       }
       options.launchArgs.push(value);
       index += 1;
+      continue;
+    }
+
+    if (arg === "--json") {
+      options.output = "json";
       continue;
     }
 
@@ -296,6 +310,96 @@ async function launchRuntime(
   };
 }
 
+async function writePersistentDoctorState(
+  context: BrowserContext,
+  fixture: DiagnosticFixture,
+): Promise<void> {
+  const page = await context.newPage();
+  await page.goto(fixture.url);
+  await page.evaluate(async () => {
+    document.cookie = "rove_browser_doctor_cookie=verified; Max-Age=3600; SameSite=Lax";
+    localStorage.setItem("rove-browser-doctor-local", "verified");
+
+    await new Promise<void>((resolveOpen, reject) => {
+      const request = indexedDB.open("rove-browser-doctor-db", 1);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore("values");
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed."));
+      request.onsuccess = () => {
+        const transaction = request.result.transaction("values", "readwrite");
+        transaction.objectStore("values").put("verified", "marker");
+        transaction.oncomplete = () => {
+          request.result.close();
+          resolveOpen();
+        };
+        transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
+      };
+    });
+
+    if ("serviceWorker" in navigator) {
+      await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    }
+  });
+}
+
+async function readPersistentDoctorState(
+  context: BrowserContext,
+  fixture: DiagnosticFixture,
+): Promise<PersistentVerificationState> {
+  const page = await context.newPage();
+  await page.goto(fixture.url);
+  return page.evaluate(async () => {
+    const indexedDbNames = await indexedDB.databases();
+    const registrations =
+      "serviceWorker" in navigator
+        ? await navigator.serviceWorker.getRegistrations()
+        : [];
+
+    return {
+      cookie: document.cookie.includes("rove_browser_doctor_cookie=verified"),
+      localStorage:
+        localStorage.getItem("rove-browser-doctor-local") === "verified",
+      indexedDb: indexedDbNames.some(
+        (database) => database.name === "rove-browser-doctor-db",
+      ),
+      serviceWorker:
+        navigator.serviceWorker.controller !== null || registrations.length > 0,
+    };
+  });
+}
+
+async function verifyPersistentRestart(
+  options: BrowserDoctorOptions,
+  runtime: LaunchedRuntime,
+  fixture: DiagnosticFixture,
+): Promise<boolean> {
+  if (runtime.profileDirectory === undefined) return false;
+
+  await writePersistentDoctorState(runtime.context, fixture);
+  await runtime.context.close();
+
+  const restarted = await launchRuntime({
+    ...options,
+    profile: "persistent",
+    profileDirectory: runtime.profileDirectory,
+  });
+
+  try {
+    const state = await readPersistentDoctorState(restarted.context, fixture);
+    return (
+      state.cookie &&
+      state.localStorage &&
+      state.indexedDb &&
+      state.serviceWorker
+    );
+  } finally {
+    await restarted.context.close().catch(() => undefined);
+    await restarted.browser?.close().catch(() => undefined);
+  }
+}
+
 async function verifyPageRuntime(
   runtime: LaunchedRuntime,
   options: BrowserDoctorOptions,
@@ -312,18 +416,14 @@ async function verifyPageRuntime(
       await registration.update();
       return registration.active !== null || registration.installing !== null || registration.waiting !== null;
     });
-    const persistentStorageVerified =
-      options.profile === "persistent"
-        ? await page.evaluate(async () => {
-            localStorage.setItem("rove-browser-doctor", "verified");
-            return localStorage.getItem("rove-browser-doctor") === "verified";
-          })
-        : false;
-
     const browserVersion =
       runtime.browser === undefined
         ? runtime.context.browser()?.version()
         : runtime.browser.version();
+    const persistentStorageVerified =
+      options.profile === "persistent"
+        ? await verifyPersistentRestart(options, runtime, fixture)
+        : false;
 
     return {
       resolved: {
@@ -505,7 +605,11 @@ export function formatBrowserDoctorReport(report: BrowserDoctorReport): string {
 async function main(): Promise<void> {
   const options = parseBrowserDoctorArgs(process.argv.slice(2));
   const report = await collectBrowserDoctorReport(options);
-  console.log(formatBrowserDoctorReport(report));
+  console.log(
+    options.output === "json"
+      ? JSON.stringify(report, null, 2)
+      : formatBrowserDoctorReport(report),
+  );
 
   if (report.verified.launch === "fail") {
     process.exitCode = 1;

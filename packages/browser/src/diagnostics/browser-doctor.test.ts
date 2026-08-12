@@ -17,11 +17,13 @@ describe("browser doctor diagnostics", () => {
         ".rove/profiles/default",
         "--arg",
         "--use-mock-keychain",
+        "--json",
       ]),
     ).toMatchObject({
       browser: "chrome",
       headless: false,
       profile: "persistent",
+      output: "json",
       launchArgs: ["--use-mock-keychain"],
     });
   });
