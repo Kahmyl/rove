@@ -183,6 +183,7 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
     <button id="confirm" onclick="document.body.dataset.confirmResult = String(confirm('fixture confirm'))">Confirm</button>
     <button id="prompt" onclick="document.body.dataset.promptResult = String(prompt('fixture prompt', 'secret'))">Prompt</button>
     <button id="beforeunload" onclick="window.onbeforeunload = () => 'fixture beforeunload'; document.body.dataset.beforeunloadSet = 'true'">Beforeunload</button>
+    <input id="file-input" type="file" />
   </body>
 </html>`);
   });
@@ -610,6 +611,89 @@ async function triggerDownload(page: Page, selector: string) {
   return downloadPromise;
 }
 
+async function verifyFileChooser(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.locator("#file-input").click();
+    const fileChooser = await fileChooserPromise;
+
+    if (fileChooser.isMultiple()) {
+      throw new Error("Expected single-file chooser for fixture input.");
+    }
+
+    return "File chooser opened from a user-like click without selecting a file.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyPermissionDefaults(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<CompatibilityCase> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    const states = await page.evaluate(`(async () => {
+      const permissionState = async (name) => {
+        if (!("permissions" in navigator)) return "unsupported";
+
+        try {
+          const status = await navigator.permissions.query({ name });
+          return status.state;
+        } catch {
+          return "unsupported";
+        }
+      };
+
+      return {
+        geolocation: await permissionState("geolocation"),
+        notifications:
+          typeof Notification === "undefined"
+            ? "unsupported"
+            : Notification.permission,
+        clipboardRead: await permissionState("clipboard-read"),
+        camera: await permissionState("camera"),
+        microphone: await permissionState("microphone"),
+      };
+    })()`) as Record<string, string>;
+
+    const silentlyGranted = Object.entries(states)
+      .filter(([, state]) => state === "granted")
+      .map(([name]) => name);
+
+    if (silentlyGranted.length > 0) {
+      return {
+        name: "permission defaults",
+        status: "FAIL_ROVE",
+        details: `Permissions were silently granted: ${silentlyGranted.join(", ")}.`,
+      };
+    }
+
+    const unsupported = Object.entries(states)
+      .filter(([, state]) => state === "unsupported")
+      .map(([name]) => name);
+
+    return {
+      name: "permission defaults",
+      status: unsupported.length === 0 ? "PASS" : "PASS_WITH_LIMITATION",
+      details:
+        unsupported.length === 0
+          ? "Geolocation, notifications, clipboard-read, camera, and microphone were not silently granted."
+          : `No supported permission was silently granted; unsupported probes: ${unsupported.join(", ")}.`,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
 function pathInside(root: string, target: string): boolean {
   const resolvedRoot = resolve(root);
   const resolvedTarget = resolve(target);
@@ -808,6 +892,12 @@ export async function collectBrowserCompatReport(
       ),
       await runCase("browser close during download", () =>
         verifyBrowserCloseDuringDownload(launched.browser, fixture),
+      ),
+      await runCase("file chooser", () =>
+        verifyFileChooser(launched.browser, fixture),
+      ),
+      await runObservedCase("permission defaults", () =>
+        verifyPermissionDefaults(launched.browser, fixture),
       ),
       await runCase("persistent profile restart", () =>
         verifyPersistentProfileRestart(options, fixture),
