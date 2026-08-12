@@ -148,4 +148,37 @@ describe("Milestone 3 browser actions", () => {
     expect(result.openedPages?.[0]).toMatchObject({ id: "page_02", active: true });
     expect(result.pageChanged).toBe(true);
   });
+
+  it("dismisses JavaScript dialogs without leaking dialog text", async () => {
+    const { session } = await setup();
+    const activities: unknown[] = [];
+    session.onActivity((activity) => activities.push(activity));
+
+    let inspection = await session.inspect();
+    await expect(session.click(target(inspection, "Show alert"))).resolves.toMatchObject({
+      ok: true,
+      action: "click",
+    });
+
+    inspection = await session.inspect();
+    await expect(session.click(target(inspection, "Show confirm"))).resolves.toMatchObject({
+      ok: true,
+      action: "click",
+    });
+    expect((await session.inspect()).metadata).toBeDefined();
+
+    inspection = await session.inspect();
+    await expect(session.click(target(inspection, "Show prompt"))).resolves.toMatchObject({
+      ok: true,
+      action: "click",
+    });
+
+    const serializedActivities = JSON.stringify(activities);
+    expect(serializedActivities).toContain("dialog_opened");
+    expect(serializedActivities).toContain('"defaultAction":"dismiss"');
+    expect(serializedActivities).not.toContain("fixture alert");
+    expect(serializedActivities).not.toContain("fixture confirm");
+    expect(serializedActivities).not.toContain("fixture prompt");
+    expect(serializedActivities).not.toContain("secret");
+  });
 });

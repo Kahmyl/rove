@@ -515,6 +515,26 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     page.on("domcontentloaded", observeTitle);
     page.on("load", observeTitle);
+    page.on("dialog", (dialog) => {
+      const state =
+        this.pageRegistry.has(pageId)
+          ? this.pageRegistry.stateFor(pageId)
+          : undefined;
+
+      this.emitActivity({
+        type: "dialog_opened",
+        pageId,
+        ...(state === undefined ? {} : { pageRevision: state.revision }),
+        timestamp:
+          new Date().toISOString(),
+        data: {
+          type: dialog.type(),
+          defaultAction: "dismiss",
+        },
+      });
+
+      void dialog.dismiss().catch(() => undefined);
+    });
     page.on("download", (download) => {
       if (this.downloadRuntime === undefined) {
         return;

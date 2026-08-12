@@ -180,6 +180,9 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
     <a id="slow-download" href="/slow-download.bin">Slow download</a>
     <button id="popup" onclick="window.open('/popup-target', '_blank')">Popup</button>
     <button id="alert" onclick="alert('fixture alert')">Alert</button>
+    <button id="confirm" onclick="document.body.dataset.confirmResult = String(confirm('fixture confirm'))">Confirm</button>
+    <button id="prompt" onclick="document.body.dataset.promptResult = String(prompt('fixture prompt', 'secret'))">Prompt</button>
+    <button id="beforeunload" onclick="window.onbeforeunload = () => 'fixture beforeunload'; document.body.dataset.beforeunloadSet = 'true'">Beforeunload</button>
   </body>
 </html>`);
   });
@@ -450,20 +453,43 @@ async function verifyDialog(
   try {
     const page = await context.newPage();
     await page.goto(fixture.url);
-    const dialogPromise = page.waitForEvent("dialog").then(async (dialog) => {
+    const alert = await clickAndDismissDialog(page, "#alert");
+    const confirm = await clickAndDismissDialog(page, "#confirm");
+    const prompt = await clickAndDismissDialog(page, "#prompt");
+
+    if (alert !== "alert" || confirm !== "confirm" || prompt !== "prompt") {
+      throw new Error(
+        `Unexpected dialog types: ${[alert, confirm, prompt].join(", ")}.`,
+      );
+    }
+
+    await page.locator("#beforeunload").click();
+    const beforeUnloadPromise = page.waitForEvent("dialog").then(async (dialog) => {
       const type = dialog.type();
       await dialog.dismiss();
       return type;
     });
-    await page.locator("#alert").click();
-    const type = await dialogPromise;
-    if (type !== "alert") {
-      throw new Error(`Expected alert dialog, received ${type}.`);
+    await page.close({ runBeforeUnload: true });
+    const beforeUnload = await beforeUnloadPromise;
+
+    if (beforeUnload !== "beforeunload") {
+      throw new Error(`Expected beforeunload dialog, received ${beforeUnload}.`);
     }
-    return "Alert dialog was observed and dismissed without deadlock.";
+
+    return "Alert, confirm, prompt, and beforeunload dialogs were dismissed without deadlock.";
   } finally {
     await context.close();
   }
+}
+
+async function clickAndDismissDialog(page: Page, selector: string): Promise<string> {
+  const dialogPromise = page.waitForEvent("dialog").then(async (dialog) => {
+    const type = dialog.type();
+    await dialog.dismiss();
+    return type;
+  });
+  await page.locator(selector).click();
+  return dialogPromise;
 }
 
 async function verifyDownload(

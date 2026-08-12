@@ -42,6 +42,10 @@ const ACTIONS_HTML = `<!doctype html>
       <button id="change-state">Change state</button>
       <button id="navigate" onclick="location.href='/result'">Navigate result</button>
       <button id="open-popup" onclick="window.open('/popup-target','_blank')">Open popup</button>
+      <button id="show-alert" onclick="alert('fixture alert')">Show alert</button>
+      <button id="show-confirm" onclick="document.body.dataset.confirmResult = String(confirm('fixture confirm'))">Show confirm</button>
+      <button id="show-prompt" onclick="document.body.dataset.promptResult = String(prompt('fixture prompt', 'secret'))">Show prompt</button>
+      <button id="set-beforeunload">Set beforeunload</button>
       <button id="disabled" disabled>Disabled action</button>
       <button id="hide-target">Hide target</button>
       <button id="becomes-hidden">Becomes hidden</button>
@@ -61,6 +65,10 @@ const ACTIONS_HTML = `<!doctype html>
       document.querySelector('#change-state').addEventListener('click', event => event.currentTarget.textContent = 'State changed');
       document.querySelector('#hide-target').addEventListener('click', () => document.querySelector('#becomes-hidden').style.display = 'none');
       document.querySelector('#mutate-unrelated').addEventListener('click', () => document.querySelector('#unrelated').textContent = 'changed');
+      document.querySelector('#set-beforeunload').addEventListener('click', () => {
+        window.onbeforeunload = () => 'fixture beforeunload';
+        document.body.dataset.beforeunloadSet = 'true';
+      });
       addEventListener('scroll', () => document.querySelector('#scroll-state').textContent = 'scrolled:' + Math.round(scrollY), { passive: true });
     </script>
   </body>
