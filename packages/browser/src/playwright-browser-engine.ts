@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   chromium,
   type Browser,
@@ -7,6 +8,7 @@ import {
 import { RoveError, type BrowserLaunchConfig } from "@rove/protocol";
 import type { BrowserEngine, BrowserSession } from "./engine.js";
 import { PlaywrightBrowserSession } from "./playwright-browser-session.js";
+import { resolveSessionDownloadRuntime } from "./downloads/download-runtime.js";
 import {
   resolveBrowserLaunchPlan,
   type ResolvedBrowserLaunchPlan,
@@ -46,12 +48,19 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
       return this.startPersistent(config, plan);
     }
 
+    const sessionId = `browser_${randomUUID()}`;
+    const downloadRuntime =
+      await resolveSessionDownloadRuntime(
+        sessionId,
+      );
     const browser = await this.launch(plan);
 
     try {
       return await PlaywrightBrowserSession.create(
         browser,
         config,
+        downloadRuntime,
+        sessionId,
       );
     } catch (error) {
       await browser
@@ -77,6 +86,20 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
       });
     }
 
+    if (config.profile.mode !== "persistent") {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message:
+          "Persistent browser profile mode was not resolved.",
+      });
+    }
+
+    const downloadRuntime =
+      await resolveSessionDownloadRuntime(
+        `profile_${config.profile.name}`,
+        userDataDir,
+      );
+
     let context: BrowserContext;
 
     try {
@@ -84,6 +107,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         await this.launchPersistent(
           userDataDir,
           plan,
+          downloadRuntime.directory,
         );
     } catch (error) {
       throw toLaunchError(error);
@@ -94,6 +118,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         .createPersistent(
           context,
           config,
+          downloadRuntime,
         );
     } catch (error) {
       await context
@@ -107,8 +132,11 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
   private async launchPersistent(
     userDataDir: string,
     plan: ResolvedBrowserLaunchPlan,
+    downloadsPath: string,
   ): Promise<BrowserContext> {
     const base = {
+      acceptDownloads: true,
+      downloadsPath,
       headless: plan.headless,
       ...(plan.timeoutMs === undefined
         ? {}

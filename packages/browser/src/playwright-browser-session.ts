@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { errors as playwrightErrors, type Browser, type BrowserContext, type CDPSession, type Page } from "playwright";
 import {
   RoveError,
@@ -34,6 +35,8 @@ import { readMaterialMutationVersion, installMutationTracker } from "./mutations
 import { resolveTarget, type ResolvedTarget } from "./targets/target-resolver.js";
 import { isSensitiveTarget } from "./targets/target-identity.js";
 import { classifyPageState, detectAccessRestriction } from "./safety/page-state-classifier.js";
+import type { ResolvedDownloadRuntime } from "./downloads/download-runtime.js";
+import { saveManagedDownload } from "./downloads/managed-downloads.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -46,8 +49,6 @@ function browserClosedError(): RoveError {
 }
 
 export class PlaywrightBrowserSession implements BrowserSession {
-  readonly id = `browser_${randomUUID()}`;
-
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
@@ -62,13 +63,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
     | undefined;
   private reconcilingActiveTab = false;
   private readonly mainDocumentStatuses = new Map<string, number>();
+  private downloadSaveQueue: Promise<void> = Promise.resolve();
 
   private constructor(
+    readonly id: string,
     private readonly browser: Browser,
     private readonly context: BrowserContext,
     private readonly actionTimeoutMs: number,
     private readonly navigationTimeoutMs: number,
     private readonly typingDelayMs: number,
+    private readonly downloadRuntime?: ResolvedDownloadRuntime,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -115,19 +119,34 @@ export class PlaywrightBrowserSession implements BrowserSession {
     );
   }
 
-  static async create(browser: Browser, config: BrowserLaunchConfig): Promise<PlaywrightBrowserSession> {
-    const context = await browser.newContext({ viewport: config.viewport ?? DEFAULT_VIEWPORT });
+  static async create(
+    browser: Browser,
+    config: BrowserLaunchConfig,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
+  ): Promise<PlaywrightBrowserSession> {
+    const context = await browser.newContext({
+      acceptDownloads: true,
+      ...(downloadRuntime === undefined
+        ? {}
+        : { downloadsPath: downloadRuntime.directory }),
+      viewport: config.viewport ?? DEFAULT_VIEWPORT,
+    });
     return this.createFromContext(
       browser,
       context,
       config,
       false,
+      downloadRuntime,
+      sessionId,
     );
   }
 
   static async createPersistent(
     context: BrowserContext,
     config: BrowserLaunchConfig,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const browser = context.browser();
 
@@ -144,6 +163,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
       context,
       config,
       true,
+      downloadRuntime,
+      sessionId,
     );
   }
 
@@ -152,13 +173,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     context: BrowserContext,
     config: BrowserLaunchConfig,
     preserveExistingPages: boolean,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
+      sessionId,
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
       config.interaction?.typingDelayMs ?? 0,
+      downloadRuntime,
     );
 
     await session.installDomActivityBridge();
@@ -490,6 +515,25 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     page.on("domcontentloaded", observeTitle);
     page.on("load", observeTitle);
+    page.on("download", (download) => {
+      if (this.downloadRuntime === undefined) {
+        return;
+      }
+
+      this.downloadSaveQueue =
+        this.downloadSaveQueue
+          .then(async () => {
+            if (this.downloadRuntime === undefined) {
+              return;
+            }
+
+            await saveManagedDownload(
+              download,
+              this.downloadRuntime.directory,
+            );
+          })
+          .catch(() => undefined);
+    });
     page.on("response", (response) => {
       if (
         response.request().resourceType() === "document" &&
@@ -1019,6 +1063,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
     this.pageRegistry.clear();
     this.inspector.clear();
+
+    if (this.downloadRuntime?.temporary === true) {
+      await rm(
+        this.downloadRuntime.root,
+        {
+          recursive: true,
+          force: true,
+        },
+      ).catch(() => undefined);
+    }
   }
 
   private toSummary(state: PageState): PageSummary {

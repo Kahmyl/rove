@@ -1,9 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { BrowserLaunchConfig } from "@rove/protocol";
+import type {
+  BrowserLaunchConfig,
+  PageInspection,
+  TargetReference,
+} from "@rove/protocol";
 
 import type { BrowserSession } from "./engine.js";
 import {
@@ -47,6 +51,35 @@ async function waitForPageCount(
   }
 
   throw new Error(`Timed out waiting for ${count} browser pages.`);
+}
+
+function target(inspection: PageInspection, name: string): TargetReference {
+  const found = inspection.targets?.find((candidate) => candidate.name === name);
+  if (!found) throw new Error(`Missing fixture target: ${name}`);
+  return { pageId: inspection.pageId, revision: inspection.revision, ref: found.ref };
+}
+
+async function waitForFile(path: string, timeoutMs = 3_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error(`Timed out waiting for file: ${path}`);
 }
 
 afterEach(async () => {
@@ -137,6 +170,63 @@ describe("PlaywrightBrowserEngine", () => {
     ).rejects.toMatchObject({
       code: "INVALID_CONFIGURATION",
     });
+  });
+
+  it("saves persistent session downloads through the managed directory policy", async () => {
+    const userDataDir =
+      await mkdtemp(
+        join(
+          tmpdir(),
+          "rove-profile-downloads-",
+        ),
+      );
+    const server = await startServer();
+
+    try {
+      const session =
+        await new PlaywrightBrowserEngine()
+          .start({
+            ...config,
+            profile: {
+              mode: "persistent",
+              name: "downloads-test",
+            },
+            profileUserDataDir:
+              userDataDir,
+          });
+
+      sessions.push(session);
+
+      await session.navigate(`${server.url}/download`);
+      const inspection = await session.inspect();
+      await session.click(target(inspection, "Download file"));
+      await session.click(target(inspection, "Download file"));
+
+      const downloadsDirectory = join(
+        userDataDir,
+        "downloads",
+        "profile_downloads-test",
+      );
+
+      await expect(
+        waitForFile(join(downloadsDirectory, "rove-session-download.txt")),
+      ).resolves.toBe("rove session download");
+      await expect(
+        waitForFile(join(downloadsDirectory, "rove-session-download (1).txt")),
+      ).resolves.toBe("rove session download");
+    } finally {
+      while (sessions.length > 0) {
+        await sessions.pop()?.close();
+      }
+
+      await rm(
+        userDataDir,
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+    }
   });
 
   it("keeps direct existing-profile attachment disabled", async () => {

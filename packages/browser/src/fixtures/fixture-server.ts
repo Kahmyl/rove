@@ -67,6 +67,7 @@ const ACTIONS_HTML = `<!doctype html>
 </html>`;
 
 const RESULT_HTML = `<!doctype html><html><head><title>Rove Result Fixture</title></head><body><h1>Result page</h1><a href="/actions">Back to actions</a></body></html>`;
+const DOWNLOAD_HTML = `<!doctype html><html><head><title>Download fixture</title></head><body><a id="download-file" href="/download.txt">Download file</a></body></html>`;
 const HISTORY_A_HTML = `<!doctype html><html><head><title>History A</title></head><body><h1>History A</h1><a href="/history-b">History B</a></body></html>`;
 const HISTORY_B_HTML = `<!doctype html><html><head><title>History B</title></head><body><h1>History B</h1></body></html>`;
 const POPUP_TARGET_HTML = `<!doctype html><html><head><title>Popup target</title></head><body><h1>Popup target</h1></body></html>`;
@@ -128,11 +129,21 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
   const server = createServer((request, response) => {
+    if (request.url === "/download.txt") {
+      response.writeHead(200, {
+        "content-disposition": 'attachment; filename="rove-session-download.txt"',
+        "content-type": "text/plain; charset=utf-8",
+      });
+      response.end("rove session download");
+      return;
+    }
+
     const fixture: string | { body: string; status: number } = {
       "/": inspectionHtml,
       "/popup": POPUP_HTML,
       "/actions": ACTIONS_HTML,
       "/result": RESULT_HTML,
+      "/download": DOWNLOAD_HTML,
       "/history-a": HISTORY_A_HTML,
       "/history-b": HISTORY_B_HTML,
       "/popup-target": POPUP_TARGET_HTML,
