@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -6,7 +6,7 @@ import process from "node:process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import {
   createManagedDownloadDirectory,
   saveManagedDownload,
@@ -61,6 +61,7 @@ interface BrowserCompatReport {
 }
 
 const require = createRequire(import.meta.url);
+const LARGE_DOWNLOAD_BYTES = 1024 * 1024;
 
 function playwrightVersion(): string {
   const packageJson = require("playwright/package.json") as { version?: string };
@@ -128,6 +129,37 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
       return;
     }
 
+    if (request.url === "/large-download.bin") {
+      response.writeHead(200, {
+        "content-disposition": 'attachment; filename="rove-large-download.bin"',
+        "content-length": String(LARGE_DOWNLOAD_BYTES),
+        "content-type": "application/octet-stream",
+      });
+      response.end(Buffer.alloc(LARGE_DOWNLOAD_BYTES, "x"));
+      return;
+    }
+
+    if (request.url === "/slow-download.bin") {
+      response.writeHead(200, {
+        "content-disposition": 'attachment; filename="rove-slow-download.bin"',
+        "content-type": "application/octet-stream",
+      });
+
+      let chunks = 0;
+      const interval = setInterval(() => {
+        chunks += 1;
+        response.write(Buffer.alloc(32 * 1024, "s"));
+
+        if (chunks >= 128) {
+          clearInterval(interval);
+          response.end();
+        }
+      }, 25);
+
+      response.on("close", () => clearInterval(interval));
+      return;
+    }
+
     if (request.url === "/popup-target") {
       response.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
@@ -144,6 +176,8 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
   <head><meta charset="utf-8" /><title>Rove Compatibility Fixture</title></head>
   <body>
     <a id="download" href="/download.txt">Download</a>
+    <a id="large-download" href="/large-download.bin">Large download</a>
+    <a id="slow-download" href="/slow-download.bin">Slow download</a>
     <button id="popup" onclick="window.open('/popup-target', '_blank')">Popup</button>
     <button id="alert" onclick="alert('fixture alert')">Alert</button>
   </body>
@@ -445,13 +479,9 @@ async function verifyDownload(
   try {
     const page = await context.newPage();
     await page.goto(fixture.url);
-    const downloadPromise = page.waitForEvent("download");
-    await page.locator("#download").click();
-    const download = await downloadPromise;
+    const download = await triggerDownload(page, "#download");
     const saved = await saveManagedDownload(download, managedDirectory);
-    const duplicatePromise = page.waitForEvent("download");
-    await page.locator("#download").click();
-    const duplicate = await duplicatePromise;
+    const duplicate = await triggerDownload(page, "#download");
     const duplicateSaved = await saveManagedDownload(duplicate, managedDirectory);
 
     if (saved.filename !== "rove-compat.txt") {
@@ -467,6 +497,91 @@ async function verifyDownload(
   } finally {
     await context.close();
   }
+}
+
+async function verifyDownloadCancellation(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext({ acceptDownloads: true });
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    const download = await triggerDownload(page, "#slow-download");
+
+    await download.cancel();
+
+    const failure = await download.failure();
+    if (failure === null || !/cancel/i.test(failure)) {
+      throw new Error(`Expected cancelled download failure, received ${failure ?? "none"}.`);
+    }
+
+    return "Download cancellation produced a deterministic cancelled state.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyLargeBoundedDownload(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+  downloadsRoot: string,
+): Promise<string> {
+  const managedDirectory = await createManagedDownloadDirectory(
+    downloadsRoot,
+    "compat_large",
+  );
+  const context = await browser.newContext({ acceptDownloads: true });
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    const download = await triggerDownload(page, "#large-download");
+    const saved = await saveManagedDownload(download, managedDirectory);
+    const contents = await readFile(saved.path);
+
+    if (saved.filename !== "rove-large-download.bin") {
+      throw new Error(`Unexpected large download filename: ${saved.filename}.`);
+    }
+    if (contents.byteLength !== LARGE_DOWNLOAD_BYTES) {
+      throw new Error(
+        `Unexpected large download size: ${contents.byteLength} bytes.`,
+      );
+    }
+    if (!pathInside(managedDirectory, saved.path)) {
+      throw new Error("Large download escaped the managed directory.");
+    }
+
+    return "A bounded large download saved with the expected filename and size.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyBrowserCloseDuringDownload(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext({ acceptDownloads: true });
+  const page = await context.newPage();
+  await page.goto(fixture.url);
+  const download = await triggerDownload(page, "#slow-download");
+
+  await context.close();
+
+  const failure = await download.failure().catch((error: unknown) =>
+    error instanceof Error ? error.message : "Unknown failure.",
+  );
+  if (failure === null) {
+    throw new Error("Download unexpectedly completed after browser context close.");
+  }
+
+  return "Browser context close interrupted the in-flight download without hanging.";
+}
+
+async function triggerDownload(page: Page, selector: string) {
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator(selector).click();
+  return downloadPromise;
 }
 
 function pathInside(root: string, target: string): boolean {
@@ -658,6 +773,15 @@ export async function collectBrowserCompatReport(
       await runCase("dialog handling", () => verifyDialog(launched.browser, fixture)),
       await runCase("download handling", () =>
         verifyDownload(launched.browser, fixture, downloadsPath),
+      ),
+      await runCase("download cancellation", () =>
+        verifyDownloadCancellation(launched.browser, fixture),
+      ),
+      await runCase("large bounded download", () =>
+        verifyLargeBoundedDownload(launched.browser, fixture, downloadsPath),
+      ),
+      await runCase("browser close during download", () =>
+        verifyBrowserCloseDuringDownload(launched.browser, fixture),
       ),
       await runCase("persistent profile restart", () =>
         verifyPersistentProfileRestart(options, fixture),

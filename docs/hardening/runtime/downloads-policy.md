@@ -21,6 +21,9 @@ Production browser sessions now enable download acceptance at context startup an
 - a normal download;
 - duplicate filename handling;
 - managed directory containment.
+- cancelled download behavior;
+- large bounded download behavior;
+- browser-close-during-download behavior.
 
 The real browser engine test suite verifies that persistent browser-session downloads are saved with sanitized, duplicate-preserving filenames inside the managed profile download directory.
 
@@ -29,8 +32,5 @@ The real browser engine test suite verifies that persistent browser-session down
 This is not the full final download implementation yet. Remaining work includes:
 
 - defining session/profile association for saved downloads;
-- cancelled download handling;
 - interrupted download handling;
-- browser-close-during-download behavior;
-- large bounded test download behavior;
 - cleanup policy for temporary downloads.
