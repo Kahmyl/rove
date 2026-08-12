@@ -1,12 +1,16 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { chromium, type Browser, type BrowserContext } from "playwright";
+import {
+  createManagedDownloadDirectory,
+  saveManagedDownload,
+} from "../downloads/managed-downloads.js";
 
 type BrowserRequest = "chrome" | "chromium";
 type CompatibilityStatus =
@@ -431,7 +435,12 @@ async function verifyDialog(
 async function verifyDownload(
   browser: Browser,
   fixture: CompatibilityFixture,
+  downloadsRoot: string,
 ): Promise<string> {
+  const managedDirectory = await createManagedDownloadDirectory(
+    downloadsRoot,
+    "compat",
+  );
   const context = await browser.newContext({ acceptDownloads: true });
   try {
     const page = await context.newPage();
@@ -439,17 +448,31 @@ async function verifyDownload(
     const downloadPromise = page.waitForEvent("download");
     await page.locator("#download").click();
     const download = await downloadPromise;
-    const path = await download.path();
-    if (path === null) {
-      throw new Error("Download did not resolve to a managed temporary path.");
+    const saved = await saveManagedDownload(download, managedDirectory);
+    const duplicatePromise = page.waitForEvent("download");
+    await page.locator("#download").click();
+    const duplicate = await duplicatePromise;
+    const duplicateSaved = await saveManagedDownload(duplicate, managedDirectory);
+
+    if (saved.filename !== "rove-compat.txt") {
+      throw new Error(`Unexpected download filename: ${saved.filename}.`);
     }
-    if (download.suggestedFilename() !== "rove-compat.txt") {
-      throw new Error(`Unexpected download filename: ${download.suggestedFilename()}.`);
+    if (duplicateSaved.filename !== "rove-compat (1).txt") {
+      throw new Error(`Unexpected duplicate download filename: ${duplicateSaved.filename}.`);
     }
-    return "Download completed in Playwright-managed temporary storage.";
+    if (!pathInside(managedDirectory, saved.path) || !pathInside(managedDirectory, duplicateSaved.path)) {
+      throw new Error("Download escaped the managed directory.");
+    }
+    return "Downloads were saved inside a managed directory with duplicate filenames preserved.";
   } finally {
     await context.close();
   }
+}
+
+function pathInside(root: string, target: string): boolean {
+  const resolvedRoot = resolve(root);
+  const resolvedTarget = resolve(target);
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${sep}`);
 }
 
 async function writePersistentState(
@@ -633,7 +656,9 @@ export async function collectBrowserCompatReport(
       ),
       await runCase("popup handling", () => verifyPopup(launched.browser, fixture)),
       await runCase("dialog handling", () => verifyDialog(launched.browser, fixture)),
-      await runCase("download handling", () => verifyDownload(launched.browser, fixture)),
+      await runCase("download handling", () =>
+        verifyDownload(launched.browser, fixture, downloadsPath),
+      ),
       await runCase("persistent profile restart", () =>
         verifyPersistentProfileRestart(options, fixture),
       ),
