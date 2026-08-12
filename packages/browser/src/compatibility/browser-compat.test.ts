@@ -28,7 +28,7 @@ describe("browser compatibility harness", () => {
         requested: {
           browser: "chromium",
           headless: true,
-          profile: "temporary",
+          profile: "temporary + persistent",
         },
         resolved: {
           browser: "Playwright Chromium",

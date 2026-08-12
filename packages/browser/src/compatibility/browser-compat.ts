@@ -6,7 +6,7 @@ import process from "node:process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 
 type BrowserRequest = "chrome" | "chromium";
 type CompatibilityStatus =
@@ -46,7 +46,7 @@ interface BrowserCompatReport {
   requested: {
     browser: BrowserRequest;
     headless: boolean;
-    profile: "temporary";
+    profile: "temporary + persistent";
   };
   resolved: {
     browser: "Google Chrome" | "Playwright Chromium" | "unknown";
@@ -203,6 +203,46 @@ async function launchBrowser(
   };
 }
 
+async function launchPersistentContext(
+  options: BrowserCompatOptions,
+  userDataDir: string,
+): Promise<{
+  context: BrowserContext;
+  resolvedBrowser: BrowserCompatReport["resolved"]["browser"];
+  fallbackUsed: boolean;
+}> {
+  const launchOptions = {
+    headless: options.headless,
+    viewport: {
+      width: 1440,
+      height: 900,
+    },
+  };
+
+  if (options.browser === "chrome") {
+    try {
+      const context = await chromium.launchPersistentContext(userDataDir, {
+        ...launchOptions,
+        channel: "chrome",
+      });
+
+      return {
+        context,
+        resolvedBrowser: "Google Chrome",
+        fallbackUsed: false,
+      };
+    } catch (error) {
+      if (!isChromeChannelUnavailable(error)) throw error;
+    }
+  }
+
+  return {
+    context: await chromium.launchPersistentContext(userDataDir, launchOptions),
+    resolvedBrowser: "Playwright Chromium",
+    fallbackUsed: options.browser === "chrome",
+  };
+}
+
 async function runCase(
   name: string,
   fn: () => Promise<string>,
@@ -213,6 +253,21 @@ async function runCase(
       status: "PASS",
       details: await fn(),
     };
+  } catch (error) {
+    return {
+      name,
+      status: "FAIL_ROVE",
+      details: error instanceof Error ? error.message : "Unknown compatibility failure.",
+    };
+  }
+}
+
+async function runObservedCase(
+  name: string,
+  fn: () => Promise<CompatibilityCase>,
+): Promise<CompatibilityCase> {
+  try {
+    return await fn();
   } catch (error) {
     return {
       name,
@@ -397,6 +452,158 @@ async function verifyDownload(
   }
 }
 
+async function writePersistentState(
+  context: BrowserContext,
+  fixture: CompatibilityFixture,
+): Promise<void> {
+  const page = await context.newPage();
+  await page.goto(fixture.url);
+  await page.evaluate(async () => {
+    document.cookie = "rove_persistent_cookie=present; Max-Age=3600; SameSite=Lax";
+    localStorage.setItem("rove_persistent_local", "present");
+
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("rove-persistent-db", 1);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore("values");
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed."));
+      request.onsuccess = () => {
+        const transaction = request.result.transaction("values", "readwrite");
+        transaction.objectStore("values").put("present", "marker");
+        transaction.oncomplete = () => {
+          request.result.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
+      };
+    });
+
+    if ("serviceWorker" in navigator) {
+      await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+    }
+  });
+}
+
+async function readPersistentState(
+  context: BrowserContext,
+  fixture: CompatibilityFixture,
+): Promise<{
+  cookie: string;
+  local: string | null;
+  indexedDbPresent: boolean;
+  serviceWorkerControlledOrRegistered: boolean;
+}> {
+  const page = await context.newPage();
+  await page.goto(fixture.url);
+  return page.evaluate(async () => {
+    const indexedDbNames = await indexedDB.databases();
+    const registrations =
+      "serviceWorker" in navigator
+        ? await navigator.serviceWorker.getRegistrations()
+        : [];
+
+    return {
+      cookie: document.cookie,
+      local: localStorage.getItem("rove_persistent_local"),
+      indexedDbPresent: indexedDbNames.some(
+        (database) => database.name === "rove-persistent-db",
+      ),
+      serviceWorkerControlledOrRegistered:
+        navigator.serviceWorker.controller !== null || registrations.length > 0,
+    };
+  });
+}
+
+async function verifyPersistentProfileRestart(
+  options: BrowserCompatOptions,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const profileDirectory = await mkdtemp(join(tmpdir(), "rove-browser-compat-profile-"));
+
+  try {
+    const first = await launchPersistentContext(options, profileDirectory);
+    try {
+      await writePersistentState(first.context, fixture);
+    } finally {
+      await first.context.close();
+    }
+
+    const second = await launchPersistentContext(options, profileDirectory);
+    try {
+      const state = await readPersistentState(second.context, fixture);
+
+      if (!state.cookie.includes("rove_persistent_cookie=present")) {
+        throw new Error("Persistent cookie was not retained across restart.");
+      }
+      if (state.local !== "present") {
+        throw new Error("Persistent localStorage was not retained across restart.");
+      }
+      if (!state.indexedDbPresent) {
+        throw new Error("Persistent IndexedDB was not retained across restart.");
+      }
+      if (!state.serviceWorkerControlledOrRegistered) {
+        throw new Error("Service-worker registration was not retained across restart.");
+      }
+
+      return "Cookie, localStorage, IndexedDB, and service-worker state survived persistent-profile restart.";
+    } finally {
+      await second.context.close();
+    }
+  } finally {
+    await rm(profileDirectory, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function verifyPersistentProfileConcurrentUse(
+  options: BrowserCompatOptions,
+): Promise<CompatibilityCase> {
+  const profileDirectory = await mkdtemp(join(tmpdir(), "rove-browser-compat-lock-"));
+
+  try {
+    const first = await launchPersistentContext(options, profileDirectory);
+
+    try {
+      const rejected = await persistentSecondLaunchIsRejected(options, profileDirectory);
+      return rejected
+        ? {
+            name: "persistent profile native lock behavior",
+            status: "PASS",
+            details:
+              "Browser rejected concurrent writable launch against the same persistent profile.",
+          }
+        : {
+            name: "persistent profile native lock behavior",
+            status: "PASS_WITH_LIMITATION",
+            details:
+              "Browser allowed concurrent writable launch; F4 must enforce Rove-level profile locking.",
+          };
+    } finally {
+      await first.context.close();
+    }
+  } finally {
+    await rm(profileDirectory, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function persistentSecondLaunchIsRejected(
+  options: BrowserCompatOptions,
+  profileDirectory: string,
+): Promise<boolean> {
+  let second: BrowserContext | undefined;
+
+  try {
+    second = (await launchPersistentContext(options, profileDirectory)).context;
+  } catch {
+    return true;
+  } finally {
+    await second?.close().catch(() => undefined);
+  }
+
+  return false;
+}
+
 export async function collectBrowserCompatReport(
   options: BrowserCompatOptions = defaultBrowserCompatOptions(),
 ): Promise<BrowserCompatReport> {
@@ -427,6 +634,12 @@ export async function collectBrowserCompatReport(
       await runCase("popup handling", () => verifyPopup(launched.browser, fixture)),
       await runCase("dialog handling", () => verifyDialog(launched.browser, fixture)),
       await runCase("download handling", () => verifyDownload(launched.browser, fixture)),
+      await runCase("persistent profile restart", () =>
+        verifyPersistentProfileRestart(options, fixture),
+      ),
+      await runObservedCase("persistent profile native lock behavior", () =>
+        verifyPersistentProfileConcurrentUse(options),
+      ),
     ];
 
     if (fallbackUsed) {
@@ -451,7 +664,7 @@ export async function collectBrowserCompatReport(
       requested: {
         browser: options.browser,
         headless: options.headless,
-        profile: "temporary",
+        profile: "temporary + persistent",
       },
       resolved: {
         browser: resolvedBrowser,
@@ -474,7 +687,7 @@ export async function collectBrowserCompatReport(
       requested: {
         browser: options.browser,
         headless: options.headless,
-        profile: "temporary",
+        profile: "temporary + persistent",
       },
       resolved: {
         browser: resolvedBrowser,
