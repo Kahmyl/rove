@@ -74,6 +74,11 @@ describe("browser doctor diagnostics", () => {
         ],
         diagnostics: [],
       },
+      sandbox: {
+        status: "unknown",
+        method: "chrome_sandbox_page",
+        details: "test",
+      },
       diagnostics: [],
     };
 
@@ -81,6 +86,7 @@ describe("browser doctor diagnostics", () => {
     expect(formatBrowserDoctorReport(report)).toContain("Resolved:");
     expect(formatBrowserDoctorReport(report)).toContain("Verified:");
     expect(formatBrowserDoctorReport(report)).toContain("Service workers: supported");
+    expect(formatBrowserDoctorReport(report)).toContain("Sandbox Verification:");
     expect(formatBrowserDoctorReport(report)).toContain("Launch Plan:");
   });
 });

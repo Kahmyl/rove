@@ -12,6 +12,10 @@ import {
   type BrowserLaunchArgumentDiagnostic,
   type BrowserLaunchPlanDiagnostic,
 } from "../runtime/browser-launch-plan.js";
+import {
+  verifyChromiumSandbox,
+  type BrowserSandboxVerification,
+} from "../runtime/browser-sandbox.js";
 
 type BrowserRequest = "chrome" | "chromium";
 type ProfileRequest = "temporary" | "persistent";
@@ -68,6 +72,7 @@ export interface BrowserDoctorReport {
     args: BrowserLaunchArgumentDiagnostic[];
     diagnostics: BrowserLaunchPlanDiagnostic[];
   };
+  sandbox: BrowserSandboxVerification;
   diagnostics: BrowserLaunchDiagnostic[];
 }
 
@@ -466,7 +471,7 @@ async function verifyPersistentRestart(
 async function verifyPageRuntime(
   runtime: LaunchedRuntime,
   options: BrowserDoctorOptions,
-): Promise<Pick<BrowserDoctorReport, "resolved" | "verified">> {
+): Promise<Pick<BrowserDoctorReport, "resolved" | "verified" | "sandbox">> {
   const fixture = await startDiagnosticFixture();
   const page = await runtime.context.newPage();
 
@@ -488,6 +493,7 @@ async function verifyPageRuntime(
       runtime.browser === undefined
         ? runtime.context.browser()?.version()
         : runtime.browser.version();
+    const sandbox = await verifyChromiumSandbox(runtime.context);
     const persistentStorageVerified =
       options.profile === "persistent"
         ? await verifyPersistentRestart(options, runtime, fixture)
@@ -513,8 +519,9 @@ async function verifyPageRuntime(
               : "not_run"
             : "not_requested",
         downloads: "not_run",
-        sandbox: "unknown",
+        sandbox: sandbox.status,
       },
+      sandbox,
     };
   } finally {
     await fixture.close().catch(() => undefined);
@@ -583,6 +590,7 @@ export async function collectBrowserDoctorReport(
         args: sanitizedArgDiagnostics(plan.argDiagnostics),
         diagnostics: plan.diagnostics,
       },
+      sandbox: measured.sandbox,
       diagnostics,
     };
   } catch (error) {
@@ -625,6 +633,12 @@ export async function collectBrowserDoctorReport(
         sandbox: plan.sandbox,
         args: sanitizedArgDiagnostics(plan.argDiagnostics),
         diagnostics: plan.diagnostics,
+      },
+      sandbox: {
+        status: "unknown",
+        method: "chrome_sandbox_page",
+        details:
+          "Sandbox verification did not run because browser launch or runtime verification failed.",
       },
       diagnostics,
     };
@@ -690,6 +704,11 @@ export function formatBrowserDoctorReport(report: BrowserDoctorReport): string {
     `  Service workers: ${report.verified.serviceWorkers}`,
     `  Persistent storage: ${report.verified.persistentStorage}`,
     `  Downloads: ${report.verified.downloads}`,
+    "",
+    "Sandbox Verification:",
+    `  Status: ${report.sandbox.status}`,
+    `  Method: ${report.sandbox.method}`,
+    `  Details: ${report.sandbox.details}`,
     "",
     "Launch Plan:",
     `  Sandbox policy: ${String(report.launchPlan.sandbox)}`,
