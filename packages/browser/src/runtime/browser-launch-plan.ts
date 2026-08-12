@@ -8,9 +8,13 @@ export type BrowserLaunchArgumentSource =
   | "required_by_current_runtime"
   | "required_by_platform"
   | "user_supplied";
+export type BrowserLaunchArgumentAction =
+  | "ignore_playwright_default"
+  | "pass_to_browser";
 
 export interface BrowserLaunchArgumentDiagnostic {
   arg: string;
+  action: BrowserLaunchArgumentAction;
   source: BrowserLaunchArgumentSource;
   reason: string;
 }
@@ -36,6 +40,7 @@ export interface ResolvedBrowserLaunchPlan {
   viewport: Viewport;
   timeoutMs?: number;
   args: string[];
+  ignoreDefaultArgs: string[];
   argDiagnostics: BrowserLaunchArgumentDiagnostic[];
   diagnostics: BrowserLaunchPlanDiagnostic[];
 }
@@ -49,7 +54,8 @@ export function resolveBrowserLaunchPlan(
   config: BrowserLaunchConfig,
 ): ResolvedBrowserLaunchPlan {
   const diagnostics: BrowserLaunchPlanDiagnostic[] = [];
-  const argDiagnostics = currentRuntimeArgumentDiagnostics();
+  const ignoredDefaultArgDiagnostics = currentRuntimeArgumentDiagnostics();
+  const passedArgDiagnostics: BrowserLaunchArgumentDiagnostic[] = [];
 
   if (config.launchArgs !== undefined && config.launchArgs.length > 0) {
     diagnostics.push({
@@ -58,9 +64,10 @@ export function resolveBrowserLaunchPlan(
       message:
         "Runtime modified by custom browser arguments; compatibility guarantees may not apply.",
     });
-    argDiagnostics.push(
+    passedArgDiagnostics.push(
       ...config.launchArgs.map((arg) => ({
         arg,
+        action: "pass_to_browser" as const,
         source: "user_supplied" as const,
         reason: "Caller supplied this advanced browser launch argument.",
       })),
@@ -94,16 +101,22 @@ export function resolveBrowserLaunchPlan(
       ? {}
       : { executablePath: config.executablePath }),
     headless: config.headless,
-    sandbox: false,
+    sandbox: "unknown",
     profile,
     viewport: config.viewport ?? DEFAULT_VIEWPORT,
     ...(config.timeouts?.launchMs === undefined
       ? {}
       : { timeoutMs: config.timeouts.launchMs }),
     args: [
-      ...argDiagnostics.map((diagnostic) => diagnostic.arg),
+      ...passedArgDiagnostics.map((diagnostic) => diagnostic.arg),
     ],
-    argDiagnostics,
+    ignoreDefaultArgs: [
+      ...ignoredDefaultArgDiagnostics.map((diagnostic) => diagnostic.arg),
+    ],
+    argDiagnostics: [
+      ...ignoredDefaultArgDiagnostics,
+      ...passedArgDiagnostics,
+    ],
     diagnostics,
   };
 }
@@ -127,26 +140,30 @@ function currentRuntimeArgumentDiagnostics(): BrowserLaunchArgumentDiagnostic[] 
   return [
     {
       arg: "--no-sandbox",
+      action: "ignore_playwright_default",
       source: "required_by_current_runtime",
       reason:
-        "Current pre-F4 Playwright launch behavior disables the Chromium sandbox; F4 must replace this with an explicit sandbox policy.",
+        "Current pre-F4 Playwright launch behavior removes Playwright's default Chromium no-sandbox argument; F4 must replace this with an explicit sandbox policy.",
     },
     {
       arg: "--disable-setuid-sandbox",
+      action: "ignore_playwright_default",
       source: "required_by_current_runtime",
       reason:
-        "Current pre-F4 Playwright launch behavior disables the Chromium setuid sandbox; F4 must replace this with an explicit sandbox policy.",
+        "Current pre-F4 Playwright launch behavior removes Playwright's default Chromium setuid-sandbox disablement; F4 must replace this with an explicit sandbox policy.",
     },
     ...(process.platform === "darwin"
       ? [
           {
             arg: "--use-mock-keychain",
+            action: "ignore_playwright_default" as const,
             source: "required_by_platform" as const,
             reason:
               "Current macOS launch behavior avoids interactive keychain prompts during automated browser startup.",
           },
           {
             arg: "--password-store=basic",
+            action: "ignore_playwright_default" as const,
             source: "required_by_platform" as const,
             reason:
               "Current macOS launch behavior avoids OS password-store prompts during automated browser startup.",

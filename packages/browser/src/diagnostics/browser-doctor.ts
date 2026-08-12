@@ -7,6 +7,11 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { chromium, type Browser, type BrowserContext } from "playwright";
+import {
+  resolveBrowserLaunchPlan,
+  type BrowserLaunchArgumentDiagnostic,
+  type BrowserLaunchPlanDiagnostic,
+} from "../runtime/browser-launch-plan.js";
 
 type BrowserRequest = "chrome" | "chromium";
 type ProfileRequest = "temporary" | "persistent";
@@ -58,6 +63,11 @@ export interface BrowserDoctorReport {
     downloads: "not_run";
     sandbox: "enabled" | "disabled" | "unknown";
   };
+  launchPlan: {
+    sandbox: boolean | "unknown";
+    args: BrowserLaunchArgumentDiagnostic[];
+    diagnostics: BrowserLaunchPlanDiagnostic[];
+  };
   diagnostics: BrowserLaunchDiagnostic[];
 }
 
@@ -65,6 +75,13 @@ export interface BrowserLaunchDiagnostic {
   level: "info" | "warning" | "error";
   code: string;
   message: string;
+}
+
+class BrowserDoctorTimeoutError extends Error {
+  constructor(operation: string, timeoutMs: number) {
+    super(`${operation} exceeded ${timeoutMs}ms.`);
+    this.name = "BrowserDoctorTimeoutError";
+  }
 }
 
 interface LaunchedRuntime {
@@ -99,6 +116,46 @@ function withOptionalDirectory(
 function playwrightVersion(): string {
   const packageJson = require("playwright/package.json") as { version?: string };
   return packageJson.version ?? "unknown";
+}
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  label: string,
+  timeoutMs: number,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new BrowserDoctorTimeoutError(label, timeoutMs)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function doctorLaunchPlan(options: BrowserDoctorOptions) {
+  return resolveBrowserLaunchPlan({
+    browser: options.browser,
+    headless: options.headless,
+    profile:
+      options.profile === "temporary"
+        ? { mode: "temporary" }
+        : { mode: "persistent", name: "browser-doctor" },
+    viewport: options.viewport,
+    launchArgs: options.launchArgs,
+    timeouts: {
+      launchMs: 10_000,
+    },
+    ...(options.profileDirectory === undefined
+      ? {}
+      : { profileUserDataDir: options.profileDirectory }),
+  });
 }
 
 export function defaultBrowserDoctorOptions(): BrowserDoctorOptions {
@@ -227,9 +284,12 @@ async function startDiagnosticFixture(): Promise<DiagnosticFixture> {
 async function launchRuntime(
   options: BrowserDoctorOptions,
 ): Promise<LaunchedRuntime> {
+  const plan = doctorLaunchPlan(options);
   const launchOptions = {
-    headless: options.headless,
-    args: options.launchArgs,
+    headless: plan.headless,
+    ...(plan.timeoutMs === undefined ? {} : { timeout: plan.timeoutMs }),
+    ignoreDefaultArgs: plan.ignoreDefaultArgs,
+    ...(plan.args.length === 0 ? {} : { args: plan.args }),
   };
 
   if (options.profile === "persistent") {
@@ -246,7 +306,7 @@ async function launchRuntime(
           {
             ...launchOptions,
             channel: "chrome",
-            viewport: options.viewport,
+            viewport: plan.viewport,
           },
         );
 
@@ -266,7 +326,7 @@ async function launchRuntime(
 
     const context = await chromium.launchPersistentContext(profileDirectory, {
       ...launchOptions,
-      viewport: options.viewport,
+      viewport: plan.viewport,
     });
 
     return {
@@ -286,7 +346,7 @@ async function launchRuntime(
         ...launchOptions,
         channel: "chrome",
       });
-      const context = await browser.newContext({ viewport: options.viewport });
+      const context = await browser.newContext({ viewport: plan.viewport });
 
       return {
         browser,
@@ -300,7 +360,7 @@ async function launchRuntime(
   }
 
   const browser = await chromium.launch(launchOptions);
-  const context = await browser.newContext({ viewport: options.viewport });
+  const context = await browser.newContext({ viewport: plan.viewport });
 
   return {
     browser,
@@ -315,7 +375,7 @@ async function writePersistentDoctorState(
   fixture: DiagnosticFixture,
 ): Promise<void> {
   const page = await context.newPage();
-  await page.goto(fixture.url);
+  await page.goto(fixture.url, { timeout: 10_000 });
   await page.evaluate(async () => {
     document.cookie = "rove_browser_doctor_cookie=verified; Max-Age=3600; SameSite=Lax";
     localStorage.setItem("rove-browser-doctor-local", "verified");
@@ -339,7 +399,10 @@ async function writePersistentDoctorState(
 
     if ("serviceWorker" in navigator) {
       await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((resolveReady) => setTimeout(resolveReady, 5_000)),
+      ]);
     }
   });
 }
@@ -349,7 +412,7 @@ async function readPersistentDoctorState(
   fixture: DiagnosticFixture,
 ): Promise<PersistentVerificationState> {
   const page = await context.newPage();
-  await page.goto(fixture.url);
+  await page.goto(fixture.url, { timeout: 10_000 });
   return page.evaluate(async () => {
     const indexedDbNames = await indexedDB.databases();
     const registrations =
@@ -408,14 +471,19 @@ async function verifyPageRuntime(
   const page = await runtime.context.newPage();
 
   try {
-    await page.goto(fixture.url);
+    await page.goto(fixture.url, { timeout: 10_000 });
 
-    const serviceWorkersSupported = await page.evaluate(async () => {
-      if (!("serviceWorker" in navigator)) return false;
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      await registration.update();
-      return registration.active !== null || registration.installing !== null || registration.waiting !== null;
-    });
+    const serviceWorkersSupported = await Promise.race([
+      page.evaluate(async () => {
+        if (!("serviceWorker" in navigator)) return false;
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        await registration.update();
+        return registration.active !== null || registration.installing !== null || registration.waiting !== null;
+      }),
+      new Promise<boolean>((resolveProbe) =>
+        setTimeout(() => resolveProbe(false), 5_000),
+      ),
+    ]);
     const browserVersion =
       runtime.browser === undefined
         ? runtime.context.browser()?.version()
@@ -457,6 +525,7 @@ export async function collectBrowserDoctorReport(
   options: BrowserDoctorOptions = defaultBrowserDoctorOptions(),
 ): Promise<BrowserDoctorReport> {
   const diagnostics: BrowserLaunchDiagnostic[] = [];
+  const plan = doctorLaunchPlan(options);
 
   if (options.launchArgs.length > 0) {
     diagnostics.push({
@@ -470,8 +539,16 @@ export async function collectBrowserDoctorReport(
   let runtime: LaunchedRuntime | undefined;
 
   try {
-    runtime = await launchRuntime(options);
-    const measured = await verifyPageRuntime(runtime, options);
+    runtime = await withTimeout(
+      launchRuntime(options),
+      "browser launch",
+      15_000,
+    );
+    const measured = await withTimeout(
+      verifyPageRuntime(runtime, options),
+      "browser runtime verification",
+      20_000,
+    );
 
     if (measured.resolved.fallbackUsed) {
       diagnostics.push({
@@ -501,6 +578,11 @@ export async function collectBrowserDoctorReport(
       },
       resolved: measured.resolved,
       verified: measured.verified,
+      launchPlan: {
+        sandbox: plan.sandbox,
+        args: sanitizedArgDiagnostics(plan.argDiagnostics),
+        diagnostics: plan.diagnostics,
+      },
       diagnostics,
     };
   } catch (error) {
@@ -539,6 +621,11 @@ export async function collectBrowserDoctorReport(
         downloads: "not_run",
         sandbox: "unknown",
       },
+      launchPlan: {
+        sandbox: plan.sandbox,
+        args: sanitizedArgDiagnostics(plan.argDiagnostics),
+        diagnostics: plan.diagnostics,
+      },
       diagnostics,
     };
   } finally {
@@ -553,6 +640,19 @@ export async function collectBrowserDoctorReport(
       }
     }
   }
+}
+
+function sanitizedArgDiagnostics(
+  diagnostics: BrowserLaunchArgumentDiagnostic[],
+): BrowserLaunchArgumentDiagnostic[] {
+  return diagnostics.map((diagnostic) =>
+    diagnostic.source === "user_supplied"
+      ? {
+          ...diagnostic,
+          arg: "[user-supplied argument redacted]",
+        }
+      : diagnostic,
+  );
 }
 
 function formatBool(value: boolean): string {
@@ -590,7 +690,22 @@ export function formatBrowserDoctorReport(report: BrowserDoctorReport): string {
     `  Service workers: ${report.verified.serviceWorkers}`,
     `  Persistent storage: ${report.verified.persistentStorage}`,
     `  Downloads: ${report.verified.downloads}`,
+    "",
+    "Launch Plan:",
+    `  Sandbox policy: ${String(report.launchPlan.sandbox)}`,
+    "  Arguments:",
+    ...report.launchPlan.args.map(
+      (item) =>
+        `    ${item.action}: ${item.arg} (${item.source})`,
+    ),
   ];
+
+  if (report.launchPlan.diagnostics.length > 0) {
+    lines.push("  Diagnostics:");
+    for (const diagnostic of report.launchPlan.diagnostics) {
+      lines.push(`    [${diagnostic.level}] ${diagnostic.code}: ${diagnostic.message}`);
+    }
+  }
 
   if (report.diagnostics.length > 0) {
     lines.push("", "Diagnostics:");
@@ -612,7 +727,7 @@ async function main(): Promise<void> {
   );
 
   if (report.verified.launch === "fail") {
-    process.exitCode = 1;
+    process.exit(1);
   }
 }
 

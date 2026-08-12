@@ -18,7 +18,7 @@ describe("resolveBrowserLaunchPlan", () => {
       browserFamily: "chromium",
       distribution: "chromium",
       headless: true,
-      sandbox: false,
+      sandbox: "unknown",
       profile: {
         mode: "temporary",
       },
@@ -26,7 +26,8 @@ describe("resolveBrowserLaunchPlan", () => {
         width: 1440,
         height: 900,
       },
-      args: expect.arrayContaining([
+      args: [],
+      ignoreDefaultArgs: expect.arrayContaining([
         "--no-sandbox",
         "--disable-setuid-sandbox",
       ]),
@@ -59,10 +60,12 @@ describe("resolveBrowserLaunchPlan", () => {
     });
 
     expect(plan.args).toContain("--proxy-server=http://127.0.0.1:8888");
+    expect(plan.ignoreDefaultArgs).toContain("--no-sandbox");
     expect(plan.argDiagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           arg: "--proxy-server=http://127.0.0.1:8888",
+          action: "pass_to_browser",
           source: "user_supplied",
         }),
       ]),

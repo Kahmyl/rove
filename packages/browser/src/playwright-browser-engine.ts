@@ -114,7 +114,8 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         ? {}
         : { timeout: plan.timeoutMs }),
       viewport: plan.viewport,
-      ignoreDefaultArgs: plan.args,
+      ignoreDefaultArgs: plan.ignoreDefaultArgs,
+      ...(plan.args.length === 0 ? {} : { args: plan.args }),
     };
 
     if (plan.executablePath !== undefined) {
@@ -167,7 +168,8 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
       ...(plan.timeoutMs === undefined
         ? {}
         : { timeout: plan.timeoutMs }),
-      ignoreDefaultArgs: plan.args,
+      ignoreDefaultArgs: plan.ignoreDefaultArgs,
+      ...(plan.args.length === 0 ? {} : { args: plan.args }),
     };
     try {
       // Rule 1: an explicit executable path skips browser discovery entirely.

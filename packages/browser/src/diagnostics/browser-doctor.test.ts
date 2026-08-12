@@ -62,6 +62,18 @@ describe("browser doctor diagnostics", () => {
         persistentStorage: "not_requested",
         downloads: "not_run",
       },
+      launchPlan: {
+        sandbox: "unknown",
+        args: [
+          {
+            arg: "--no-sandbox",
+            action: "ignore_playwright_default",
+            source: "required_by_current_runtime",
+            reason: "test",
+          },
+        ],
+        diagnostics: [],
+      },
       diagnostics: [],
     };
 
@@ -69,5 +81,6 @@ describe("browser doctor diagnostics", () => {
     expect(formatBrowserDoctorReport(report)).toContain("Resolved:");
     expect(formatBrowserDoctorReport(report)).toContain("Verified:");
     expect(formatBrowserDoctorReport(report)).toContain("Service workers: supported");
+    expect(formatBrowserDoctorReport(report)).toContain("Launch Plan:");
   });
 });
