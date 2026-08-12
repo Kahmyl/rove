@@ -28,14 +28,23 @@ The current-machine baseline passed the deterministic Chromium/headless checks t
 - persistent storage: `UNVERIFIED` in doctor because the default doctor run used a temporary profile;
 - downloads: `UNVERIFIED` in doctor.
 
-`browser:compat` reported:
+`browser:compat` now reports:
 
 - temporary launch and navigation: `PASS`;
 - temporary storage isolation: `PASS`;
 - service-worker registration: `PASS`;
 - popup handling: `PASS`;
 - dialog handling: `PASS`;
-- download handling: `PASS`;
+- download handling, cancellation, bounded large download, and browser-close-during-download: `PASS`;
+- file chooser: `PASS`;
+- permission defaults: `PASS`;
+- Cache Storage: `PASS`;
+- same-origin and cross-origin iframes: `PASS`;
+- WebSocket API availability: `PASS_WITH_LIMITATION`;
+- SPA history and long timer: `PASS`;
+- large page: `PASS`;
+- page crash observation: `PASS_WITH_LIMITATION` or `UNVERIFIED` depending on runtime reproducibility;
+- browser disconnect: `PASS`;
 - persistent profile restart: `PASS`;
 - persistent profile native lock behavior: `PASS_WITH_LIMITATION`.
 
@@ -60,7 +69,11 @@ Dialogs can be observed and dismissed by the harness without deadlocking the run
 
 Popups can open and load as independent browser pages.
 
-Downloads complete through Playwright-managed temporary storage.
+Downloads are saved through Rove-managed directories, including duplicate, cancellation, bounded large download, and context-close interruption coverage.
+
+Default permissions are not silently granted for geolocation, notifications, clipboard-read, camera, or microphone in the measured runtime.
+
+Cache Storage, iframes, SPA history, long timers, large pages, and browser disconnect behavior now have deterministic fixture coverage. WebSocket live-message exchange remains a harness limitation, but API availability is reported.
 
 ## Important Limitation
 
@@ -99,17 +112,12 @@ They must stay marked as `UNVERIFIED` until measured.
 The current baseline does not yet verify:
 
 - sandbox state;
-- browser crash behavior;
-- browser disconnect behavior;
-- long-running session behavior;
-- Rove-managed download directory policy;
-- duplicate, cancelled, interrupted, or browser-close-during-download cases;
-- permissions for geolocation, notifications, clipboard, camera, or microphone;
-- Cache Storage separately from service-worker registration;
 - headed/headless parity;
 - Chrome stable behavior;
 - Docker runtime behavior;
 - OS-specific macOS or Linux behavior.
+
+Page crash remains runtime-sensitive and may report `UNVERIFIED` where `chrome://crash` is not reproducible.
 
 ## Decision Pressure Created By This Baseline
 
@@ -120,4 +128,3 @@ This baseline supports the next F4 implementation priorities:
 3. Extend diagnostics so `browser:doctor` can run persistent-profile verification directly.
 4. Add sandbox verification rather than reporting sandbox state as unknown.
 5. Add structured compatibility output suitable for accumulating cross-platform baseline results.
-

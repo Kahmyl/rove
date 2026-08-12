@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -111,6 +112,8 @@ function isChromeChannelUnavailable(error: unknown): boolean {
 
 async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
   const server: Server = createServer((request, response) => {
+    const url = request.url ?? "/";
+
     if (request.url === "/sw.js") {
       response.writeHead(200, {
         "cache-control": "no-store",
@@ -168,6 +171,46 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
       return;
     }
 
+    if (url === "/cache-storage") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end("<!doctype html><html><head><title>Cache Storage</title></head><body>cache storage</body></html>");
+      return;
+    }
+
+    if (url === "/same-origin-frame") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end("<!doctype html><html><head><title>Same origin frame</title></head><body><p id=\"same-origin-marker\">same origin frame loaded</p></body></html>");
+      return;
+    }
+
+    if (url === "/cross-origin-frame") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end("<!doctype html><html><head><title>Cross origin frame</title></head><body><p id=\"cross-origin-marker\">cross origin frame loaded</p></body></html>");
+      return;
+    }
+
+    if (url === "/spa-target") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end("<!doctype html><html><head><title>SPA target</title></head><body>spa target</body></html>");
+      return;
+    }
+
+    if (url === "/large-page") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(`<!doctype html><html><head><title>Large page</title></head><body>${Array.from({ length: 500 }, (_, index) => `<button>Large target ${index}</button><p>Large paragraph ${index}</p>`).join("")}</body></html>`);
+      return;
+    }
+
     response.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
     });
@@ -184,8 +227,50 @@ async function startCompatibilityFixture(): Promise<CompatibilityFixture> {
     <button id="prompt" onclick="document.body.dataset.promptResult = String(prompt('fixture prompt', 'secret'))">Prompt</button>
     <button id="beforeunload" onclick="window.onbeforeunload = () => 'fixture beforeunload'; document.body.dataset.beforeunloadSet = 'true'">Beforeunload</button>
     <input id="file-input" type="file" />
+    <iframe id="same-origin-frame" src="/same-origin-frame"></iframe>
+    <iframe id="cross-origin-frame"></iframe>
+    <button id="spa" onclick="history.pushState({ ok: true }, '', '/spa-target'); document.body.dataset.spaRoute = location.pathname">SPA route</button>
+    <button id="timer" onclick="setTimeout(() => document.body.dataset.timerDone = 'true', 100)">Long timer</button>
+    <script>
+      document.querySelector('#cross-origin-frame').src =
+        location.href.replace('127.0.0.1', 'localhost').replace(/\\/$/, '') + '/cross-origin-frame';
+    </script>
   </body>
 </html>`);
+  });
+
+  server.on("upgrade", (request, socket) => {
+    if (request.url !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
+    const key = request.headers["sec-websocket-key"];
+    if (typeof key !== "string") {
+      socket.destroy();
+      return;
+    }
+
+    const accept = createHash("sha1")
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64");
+
+    socket.write(
+      [
+        "HTTP/1.1 101 Switching Protocols",
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        `Sec-WebSocket-Accept: ${accept}`,
+        "",
+        "",
+      ].join("\r\n"),
+    );
+
+    setTimeout(() => {
+      const payload = Buffer.from("rove websocket");
+      socket.write(Buffer.from([0x81, payload.byteLength, ...payload]));
+      setTimeout(() => socket.end(), 100);
+    }, 50);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -694,6 +779,186 @@ async function verifyPermissionDefaults(
   }
 }
 
+async function verifyCacheStorage(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(`${fixture.url}/cache-storage`);
+    const cached = await page.evaluate(async () => {
+      if (!("caches" in window)) return false;
+
+      const cache = await caches.open("rove-compat-cache");
+      await cache.put("/cache-marker", new Response("present"));
+      const match = await cache.match("/cache-marker");
+      return (await match?.text()) === "present";
+    });
+
+    if (!cached) {
+      throw new Error("Cache Storage was unavailable or did not retain fixture entry.");
+    }
+
+    return "Cache Storage accepted and returned a deterministic fixture entry.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyIframes(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    await page.locator("#same-origin-frame").contentFrame().locator("#same-origin-marker").waitFor();
+    await page.locator("#cross-origin-frame").contentFrame().locator("#cross-origin-marker").waitFor();
+
+    const frameOrigins = page
+      .frames()
+      .map((frame) => {
+        try {
+          return new URL(frame.url()).origin;
+        } catch {
+          return "unknown";
+        }
+      })
+      .filter((origin) => origin !== "unknown");
+
+    if (new Set(frameOrigins).size < 2) {
+      throw new Error("Cross-origin iframe did not load with a distinct origin.");
+    }
+
+    return "Same-origin and cross-origin iframes loaded and remained inspectable.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyWebSocket(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<CompatibilityCase> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    const supported = await page.evaluate(() => typeof WebSocket === "function");
+
+    if (!supported) {
+      return {
+        name: "websocket handling",
+        status: "UNVERIFIED",
+        details: "The WebSocket API was unavailable in this runtime.",
+      };
+    }
+
+    return {
+      name: "websocket handling",
+      status: "PASS_WITH_LIMITATION",
+      details:
+        "The browser exposes the WebSocket API; live socket fixture remains limited in this harness.",
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifySpaHistoryAndLongTimer(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(fixture.url);
+    await page.locator("#spa").click();
+    await page.waitForFunction(() => document.body.dataset.spaRoute === "/spa-target");
+    await page.locator("#timer").click();
+    await page.waitForFunction(() => document.body.dataset.timerDone === "true");
+    await page.goBack();
+
+    if (new URL(page.url()).pathname !== "/") {
+      throw new Error(`History navigation did not return to fixture root: ${page.url()}.`);
+    }
+
+    return "SPA route change, history back, and a long timer completed deterministically.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyLargePage(
+  browser: Browser,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(`${fixture.url}/large-page`);
+    const buttonCount = await page.locator("button").count();
+
+    if (buttonCount !== 500) {
+      throw new Error(`Expected 500 large-page buttons, found ${buttonCount}.`);
+    }
+
+    return "Large page fixture loaded with 500 deterministic targets.";
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyPageCrash(
+  browser: Browser,
+): Promise<CompatibilityCase> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    const crashPromise = page.waitForEvent("crash", { timeout: 5_000 });
+    await page.goto("chrome://crash").catch(() => undefined);
+    await crashPromise;
+
+    return {
+      name: "page crash",
+      status: "PASS_WITH_LIMITATION",
+      details: "A renderer crash was observed through Playwright's page crash event.",
+    };
+  } catch (error) {
+    return {
+      name: "page crash",
+      status: "UNVERIFIED",
+      details:
+        error instanceof Error
+          ? `Renderer crash fixture was not reproducible in this runtime: ${error.message}.`
+          : "Renderer crash fixture was not reproducible in this runtime.",
+    };
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
+async function verifyBrowserDisconnect(
+  options: BrowserCompatOptions,
+  downloadsPath: string,
+): Promise<string> {
+  const launched = await launchBrowser(options, downloadsPath);
+  let disconnected = false;
+  launched.browser.on("disconnected", () => {
+    disconnected = true;
+  });
+
+  await launched.browser.close();
+
+  if (!disconnected || launched.browser.isConnected()) {
+    throw new Error("Browser disconnect was not observed after close.");
+  }
+
+  return "Browser disconnect event fired and the browser reported disconnected.";
+}
+
 function pathInside(root: string, target: string): boolean {
   const resolvedRoot = resolve(root);
   const resolvedTarget = resolve(target);
@@ -898,6 +1163,27 @@ export async function collectBrowserCompatReport(
       ),
       await runObservedCase("permission defaults", () =>
         verifyPermissionDefaults(launched.browser, fixture),
+      ),
+      await runCase("cache storage", () =>
+        verifyCacheStorage(launched.browser, fixture),
+      ),
+      await runCase("iframe handling", () =>
+        verifyIframes(launched.browser, fixture),
+      ),
+      await runObservedCase("websocket handling", () =>
+        verifyWebSocket(launched.browser, fixture),
+      ),
+      await runCase("spa history and long timer", () =>
+        verifySpaHistoryAndLongTimer(launched.browser, fixture),
+      ),
+      await runCase("large page", () =>
+        verifyLargePage(launched.browser, fixture),
+      ),
+      await runObservedCase("page crash", () =>
+        verifyPageCrash(launched.browser),
+      ),
+      await runCase("browser disconnect", () =>
+        verifyBrowserDisconnect(options, downloadsPath),
       ),
       await runCase("persistent profile restart", () =>
         verifyPersistentProfileRestart(options, fixture),

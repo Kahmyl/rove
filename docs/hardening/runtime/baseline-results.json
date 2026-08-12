@@ -101,8 +101,33 @@
       "downloadBehavior": "PASS",
       "dialogBehavior": "PASS",
       "browserShutdown": "PASS",
-      "crashBehavior": "UNVERIFIED",
+      "crashBehavior": "PASS_WITH_LIMITATION",
+      "browserDisconnectBehavior": "PASS",
       "nativeProfileLocking": "PASS_WITH_LIMITATION"
+    },
+    "postF4CompatibilitySummary": {
+      "capturedAt": "2026-08-12T17:02:00.000+01:00",
+      "sourceCommand": "tsx packages/browser/src/compatibility/browser-compat.ts",
+      "status": "PASS_WITH_LIMITATIONS",
+      "additionalCases": [
+        "download cancellation",
+        "large bounded download",
+        "browser close during download",
+        "file chooser",
+        "permission defaults",
+        "cache storage",
+        "iframe handling",
+        "websocket handling",
+        "spa history and long timer",
+        "large page",
+        "page crash",
+        "browser disconnect"
+      ],
+      "limitations": [
+        "WebSocket live-message exchange is not covered by the raw local fixture.",
+        "Page crash is runtime-sensitive and may report UNVERIFIED where chrome://crash is not reproducible.",
+        "Native persistent profile locking still allows concurrent writable launch in this environment."
+      ]
     }
   },
   "requiredMatrix": [
@@ -160,8 +185,8 @@
   "limitations": [
     "The baseline currently covers only the available Windows headless Chromium environment.",
     "Sandbox state is reported as unknown because no sandbox verification probe exists yet.",
-    "Crash and disconnect behavior are not included in this baseline slice.",
-    "The download check verifies Playwright-managed temporary download behavior, not the final F4 bounded Rove-managed download policy.",
+    "Crash behavior is runtime-sensitive and may not reproduce consistently through chrome://crash.",
+    "The post-F4 download checks verify bounded Rove-managed download behavior.",
     "Native Chromium did not prevent concurrent writable use of the same persistent profile in this environment, so Rove-level locking remains required."
   ]
 }

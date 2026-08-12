@@ -281,6 +281,7 @@ async function startDiagnosticFixture(): Promise<DiagnosticFixture> {
     url: `http://127.0.0.1:${address.port}`,
     close: () =>
       new Promise<void>((resolveClose, reject) => {
+        server.closeAllConnections();
         server.close((error) => (error ? reject(error) : resolveClose()));
       }),
   };
@@ -293,7 +294,6 @@ async function launchRuntime(
   const launchOptions = {
     headless: plan.headless,
     ...(plan.timeoutMs === undefined ? {} : { timeout: plan.timeoutMs }),
-    ignoreDefaultArgs: plan.ignoreDefaultArgs,
     ...(plan.args.length === 0 ? {} : { args: plan.args }),
   };
 
@@ -472,31 +472,55 @@ async function verifyPageRuntime(
   runtime: LaunchedRuntime,
   options: BrowserDoctorOptions,
 ): Promise<Pick<BrowserDoctorReport, "resolved" | "verified" | "sandbox">> {
+  const page = await withTimeout(
+    runtime.context.newPage(),
+    "doctor page creation",
+    10_000,
+  );
   const fixture = await startDiagnosticFixture();
-  const page = await runtime.context.newPage();
 
   try {
-    await page.goto(fixture.url, { timeout: 10_000 });
+    await withTimeout(
+      page.goto(fixture.url, { timeout: 10_000 }),
+      "doctor fixture navigation",
+      12_000,
+    );
 
-    const serviceWorkersSupported = await Promise.race([
+    const serviceWorkersSupported = await withTimeout(
       page.evaluate(async () => {
         if (!("serviceWorker" in navigator)) return false;
         const registration = await navigator.serviceWorker.register("/sw.js");
         await registration.update();
         return registration.active !== null || registration.installing !== null || registration.waiting !== null;
       }),
-      new Promise<boolean>((resolveProbe) =>
-        setTimeout(() => resolveProbe(false), 5_000),
-      ),
-    ]);
+      "service-worker verification",
+      7_000,
+    ).catch(() => false);
     const browserVersion =
       runtime.browser === undefined
         ? runtime.context.browser()?.version()
         : runtime.browser.version();
-    const sandbox = await verifyChromiumSandbox(runtime.context);
+    const sandbox = await withTimeout(
+      verifyChromiumSandbox(runtime.context),
+      "sandbox verification",
+      7_000,
+    ).catch(
+      (error: unknown): BrowserSandboxVerification => ({
+        status: "unknown",
+        method: "chrome_sandbox_page",
+        details:
+          error instanceof Error
+            ? `Sandbox verification timed out or failed: ${error.message}`
+            : "Sandbox verification timed out or failed.",
+      }),
+    );
     const persistentStorageVerified =
       options.profile === "persistent"
-        ? await verifyPersistentRestart(options, runtime, fixture)
+        ? await withTimeout(
+            verifyPersistentRestart(options, runtime, fixture),
+            "persistent restart verification",
+            15_000,
+          ).catch(() => false)
         : false;
 
     return {
@@ -524,7 +548,8 @@ async function verifyPageRuntime(
       sandbox,
     };
   } finally {
-    await fixture.close().catch(() => undefined);
+    await withTimeout(page.close(), "doctor page close", 2_000).catch(() => undefined);
+    await withTimeout(fixture.close(), "doctor fixture close", 2_000).catch(() => undefined);
   }
 }
 
@@ -540,6 +565,15 @@ export async function collectBrowserDoctorReport(
       code: "CUSTOM_LAUNCH_ARGS",
       message:
         "Runtime modified by custom browser arguments; compatibility guarantees may not apply.",
+    });
+  }
+
+  if (plan.ignoreDefaultArgs.length > 0) {
+    diagnostics.push({
+      level: "warning",
+      code: "DOCTOR_STABLE_DEFAULT_ARGS",
+      message:
+        "Browser doctor keeps Playwright default launch arguments for diagnostic stability while reporting the F4 launch plan separately.",
     });
   }
 

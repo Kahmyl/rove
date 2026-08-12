@@ -175,9 +175,9 @@ Rove must not manually edit Chrome internal preference files unless an experimen
 
 ### Existing User Chrome Profile
 
-Status: `EXPERIMENTAL`
+Status: `UNSUPPORTED`
 
-The protocol contains an `existing` profile mode, but Rove does not claim ordinary user Chrome profile support in this contract.
+The protocol contains an `existing` profile mode, but ordinary user Chrome profiles are not supported for F4 production use.
 
 Rove must not:
 
@@ -187,13 +187,9 @@ Rove must not:
 - take over an already-running Chrome profile;
 - copy credential databases as an implementation shortcut.
 
-F4 must run an existing-profile research spike and record one of these outcomes:
+F4 records the current decision in `docs/hardening/runtime/existing-profile-decision.md`: ordinary user Chrome profiles are unsupported because they are not sufficiently safe or reliable to attach to, copy, mutate, or unlock implicitly.
 
-- supported safely;
-- supported only when the user explicitly selects or creates a dedicated Chrome profile directory;
-- unsupported because it is not sufficiently safe or reliable.
-
-Until that decision is recorded, ordinary existing Chrome profiles remain experimental and must not be advertised as supported.
+A future workflow may support a dedicated Chrome profile that the user explicitly creates or selects for Rove, but that would require a separate design and consent path.
 
 ## Browser Binary Policy
 
@@ -463,4 +459,3 @@ F4 is complete when:
 - `docs/adr/ADR-browser-runtime-v2.md` is approved;
 - lint, typecheck, test, and build pass;
 - F1-owned code is not coupled into the F4 implementation.
-
