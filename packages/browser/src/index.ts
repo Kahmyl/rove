@@ -12,3 +12,4 @@ export * from "./compatibility/browser-compat.js";
 export * from "./diagnostics/browser-doctor.js";
 export * from "./profiles/profile-lock.js";
 export * from "./profiles/profile-manager.js";
+export * from "./runtime/browser-launch-plan.js";
