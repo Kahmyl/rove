@@ -5,14 +5,25 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
-  "exports": { ".": { "types": "./src/index.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "demo": "tsx src/demo/browser-demo.ts",
     "inspect-demo": "tsx src/demo/inspect-demo.ts",
-    "actions-demo": "tsx src/demo/actions-demo.ts"
+    "actions-demo": "tsx src/demo/actions-demo.ts",
+    "perception:benchmark": "tsx src/perception/benchmark/current-classifier-cli.ts"
   },
-  "dependencies": { "@rove/protocol": "workspace:*", "playwright": "^1.54.2" },
-  "devDependencies": { "tsx": "^4.20.3" }
+  "dependencies": {
+    "@rove/protocol": "workspace:*",
+    "playwright": "^1.54.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3"
+  }
 }
