@@ -5,6 +5,8 @@ export type BrowserActivityType =
   | "page_title_changed"
   | "page_switched"
   | "dialog_opened"
+  | "download_completed"
+  | "download_failed"
   | "interaction_click"
   | "form_submitted"
   | "scroll_milestone"

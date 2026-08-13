@@ -14,6 +14,8 @@ The current F4 implementation provides a managed-download utility that:
 
 Production browser sessions now enable download acceptance at context startup and save page download events through the managed-download utility. Temporary sessions receive a private temporary download root that is removed on session close. Persistent sessions store managed downloads under the resolved Rove profile directory.
 
+Completed browser downloads are exposed to the runtime as `file` evidence. The evidence metadata includes the sanitized filename, original managed path, directory, size, suggested filename, and `source: "browser_download"` so MCP and desktop clients can report where Rove saved the download.
+
 ## Current Compatibility Coverage
 
 `browser:compat` verifies:

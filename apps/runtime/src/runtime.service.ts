@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { readFile } from "node:fs/promises";
 import type { RoveConfig } from "@rove/config";
 import {
   RoveError,
@@ -104,7 +105,18 @@ export class RuntimeService implements RoveRuntime {
       }
 
       browser.onActivity((activity) => {
-        this.enqueueHumanActivity(
+        if (
+          activity.type ===
+          "download_completed"
+        ) {
+          this.enqueueDownloadEvidence(
+            session.id,
+            activity,
+          );
+          return;
+        }
+
+        void this.persistBrowserActivity(
           session.id,
           activity,
         );
@@ -618,6 +630,146 @@ export class RuntimeService implements RoveRuntime {
   ): Promise<void> {
     await this.humanActivityQueues.get(
       sessionId,
+    );
+  }
+
+  private enqueueDownloadEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    const previous =
+      this.humanActivityQueues.get(sessionId) ??
+      Promise.resolve();
+
+    const next = previous
+      .then(() =>
+        this.persistDownloadEvidence(
+          sessionId,
+          activity,
+        ),
+      )
+      .catch(() => undefined)
+      .finally(() => {
+        if (
+          this.humanActivityQueues.get(sessionId) ===
+          next
+        ) {
+          this.humanActivityQueues.delete(sessionId);
+        }
+      });
+
+    this.humanActivityQueues.set(
+      sessionId,
+      next,
+    );
+  }
+
+  private async persistDownloadEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): Promise<void> {
+    const data =
+      activity.data as Record<string, unknown>;
+    const path =
+      typeof data.path === "string"
+        ? data.path
+        : undefined;
+    const filename =
+      typeof data.filename === "string"
+        ? data.filename
+        : "download";
+
+    if (path === undefined) {
+      await this.observations.append(sessionId, {
+        actor: "browser",
+        type: "download_failed",
+        data: {
+          reason:
+            "Managed download completed without a saved path.",
+          filename,
+        },
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : { pageRevision: activity.pageRevision }),
+      });
+      return;
+    }
+
+    const bytes = await readFile(path);
+    const item = await this.evidence.savePayload(
+      sessionId,
+      {
+        type: "file",
+        label: filename,
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : { pageRevision: activity.pageRevision }),
+        ...(typeof data.url === "string"
+          ? { url: data.url }
+          : {}),
+        metadata: {
+          filename,
+          managedPath: path,
+          directory: data.directory,
+          sizeBytes: data.sizeBytes,
+          suggestedFilename:
+            data.suggestedFilename,
+          source: "browser_download",
+        },
+      },
+      bytes,
+    );
+
+    const observation = await this.observations.append(sessionId, {
+      actor: "browser",
+      type: "download_completed",
+      data: {
+        evidenceId: item.id,
+        filename,
+        sizeBytes:
+          typeof data.sizeBytes === "number"
+            ? data.sizeBytes
+            : bytes.byteLength,
+        managedPath: path,
+      },
+      pageId: activity.pageId,
+      ...(activity.pageRevision === undefined
+        ? {}
+        : { pageRevision: activity.pageRevision }),
+    });
+    await this.controlWait.publish(
+      sessionId,
+      observation,
+    );
+  }
+
+  private async persistBrowserActivity(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): Promise<void> {
+    if (
+      activity.type === "download_failed"
+    ) {
+      await this.observations.append(sessionId, {
+        actor: "browser",
+        type: "download_failed",
+        data: activity.data,
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : {
+              pageRevision:
+                activity.pageRevision,
+            }),
+      });
+      return;
+    }
+
+    this.enqueueHumanActivity(
+      sessionId,
+      activity,
     );
   }
 

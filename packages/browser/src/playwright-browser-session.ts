@@ -547,12 +547,49 @@ export class PlaywrightBrowserSession implements BrowserSession {
               return;
             }
 
-            await saveManagedDownload(
+            const saved = await saveManagedDownload(
               download,
               this.downloadRuntime.directory,
             );
+            const state =
+              this.pageRegistry.has(pageId)
+                ? this.pageRegistry.stateFor(pageId)
+                : undefined;
+
+            this.emitActivity({
+              type: "download_completed",
+              pageId,
+              ...(state === undefined ? {} : { pageRevision: state.revision }),
+              timestamp:
+                new Date().toISOString(),
+              data: {
+                filename: saved.filename,
+                path: saved.path,
+                directory: saved.directory,
+                sizeBytes: saved.sizeBytes,
+                suggestedFilename:
+                  download.suggestedFilename(),
+                url: page.url(),
+              },
+            });
           })
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            this.emitActivity({
+              type: "download_failed",
+              pageId,
+              timestamp:
+                new Date().toISOString(),
+              data: {
+                reason:
+                  error instanceof Error
+                    ? error.message
+                    : "Unknown download failure.",
+                suggestedFilename:
+                  download.suggestedFilename(),
+                url: page.url(),
+              },
+            });
+          });
     });
     page.on("response", (response) => {
       if (
@@ -1081,6 +1118,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch {
       // Browser already closed; continue shutdown.
     }
+    await this.downloadSaveQueue.catch(
+      () => undefined,
+    );
     this.pageRegistry.clear();
     this.inspector.clear();
 

@@ -1,4 +1,4 @@
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, stat } from "node:fs/promises";
 import { basename, extname, resolve, sep } from "node:path";
 
 import type { Download } from "playwright";
@@ -8,6 +8,7 @@ export interface ManagedDownload {
   directory: string;
   filename: string;
   path: string;
+  sizeBytes: number;
 }
 
 const SAFE_SCOPE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
@@ -56,11 +57,13 @@ export async function saveManagedDownload(
   );
   const path = pathWithin(directory, filename);
   await download.saveAs(path);
+  const saved = await stat(path);
 
   return {
     directory,
     filename,
     path,
+    sizeBytes: saved.size,
   };
 }
 

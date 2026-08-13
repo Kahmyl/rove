@@ -344,6 +344,61 @@ describe("Milestone 4 runtime integration", () => {
     expect((await recreated.metadata(session.id, record.id)).id).toBe(record.id);
   });
 
+  it("exposes managed browser downloads as file evidence", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspection = await runtime.inspectBrowser(session.id);
+    await runtime.click(session.id, {
+      target: target(inspection, "Download file"),
+    });
+
+    const downloaded = await waitForObservation(
+      runtime,
+      session.id,
+      "download_completed",
+    );
+
+    expect(downloaded).toMatchObject({
+      actor: "browser",
+      type: "download_completed",
+      data: {
+        filename: "rove-session-download.txt",
+      },
+    });
+
+    const evidence = await runtime.listEvidence(session.id);
+    const file = evidence.find((item) => item.type === "file");
+
+    expect(file).toMatchObject({
+      sessionId: session.id,
+      type: "file",
+      label: "rove-session-download.txt",
+      metadata: {
+        filename: "rove-session-download.txt",
+        source: "browser_download",
+        sizeBytes: "rove session download".length,
+      },
+    });
+
+    expect(downloaded.data).toMatchObject({
+      evidenceId: file?.id,
+    });
+    await expect(runtime.readEvidence(session.id, file!.id))
+      .resolves.toMatchObject({
+        id: file!.id,
+        binary: {
+          available: true,
+          encoding: "external",
+        },
+      });
+  });
+
   it("serializes runtime mutations per session without blocking another session", async () => {
     const order: string[] = [];
     let releaseSlow!: () => void;
