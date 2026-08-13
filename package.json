@@ -39,7 +39,8 @@
     "package:desktop": "pnpm --filter @rove/companion package",
     "test:desktop:package": "node scripts/verify-desktop-package.mjs",
     "browser:perception-benchmark": "pnpm --filter @rove/browser perception:benchmark",
-    "browser:perception-baseline:inspect": "pnpm --filter @rove/browser perception:baseline:inspect"
+    "browser:perception-baseline:inspect": "pnpm --filter @rove/browser perception:baseline:inspect",
+    "browser:perception-research:gate4": "pnpm --filter @rove/browser perception:research:gate4"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

@@ -18,7 +18,8 @@
     "inspect-demo": "tsx src/demo/inspect-demo.ts",
     "actions-demo": "tsx src/demo/actions-demo.ts",
     "perception:benchmark": "tsx src/perception/benchmark/current-classifier-cli.ts",
-    "perception:baseline:inspect": "tsx src/perception/benchmark/browser-inspect-baseline-cli.ts"
+    "perception:baseline:inspect": "tsx src/perception/benchmark/browser-inspect-baseline-cli.ts",
+    "perception:research:gate4": "tsx src/perception/research/gate4-cli.ts"
   },
   "dependencies": {
     "@rove/protocol": "workspace:*",
