@@ -78,6 +78,29 @@ const RESULT_HTML = `<!doctype html><html><head><title>Rove Result Fixture</titl
 const DOWNLOAD_HTML = `<!doctype html><html><head><title>Download fixture</title></head><body><a id="download-file" href="/download.txt">Download file</a></body></html>`;
 const HISTORY_A_HTML = `<!doctype html><html><head><title>History A</title></head><body><h1>History A</h1><a href="/history-b">History B</a></body></html>`;
 const HISTORY_B_HTML = `<!doctype html><html><head><title>History B</title></head><body><h1>History B</h1></body></html>`;
+const IFRAME_HTML = `<!doctype html><html><head><title>Iframe fixture</title></head><body>
+  <h1>Iframe fixture</h1>
+  <button id="outer-button">Outer frame button</button>
+  <iframe title="Same origin frame" src="/same-origin-frame"></iframe>
+  <iframe id="cross-origin-frame" title="Cross origin frame"></iframe>
+  <script>
+    document.querySelector('#cross-origin-frame').src =
+      location.href.replace('127.0.0.1', 'localhost').replace('/iframes', '/cross-origin-frame');
+  </script>
+</body></html>`;
+const SAME_ORIGIN_FRAME_HTML = `<!doctype html><html><body>
+  <p>same origin frame loaded</p>
+  <button id="same-frame-button">Same frame button</button>
+  <script>
+    document.querySelector('#same-frame-button').addEventListener('click', event => {
+      event.currentTarget.textContent = 'Same frame clicked';
+    });
+  </script>
+</body></html>`;
+const CROSS_ORIGIN_FRAME_HTML = `<!doctype html><html><body>
+  <p>cross origin frame loaded</p>
+  <button id="cross-frame-button">Cross frame button</button>
+</body></html>`;
 const POPUP_TARGET_HTML = `<!doctype html><html><head><title>Popup target</title></head><body><h1>Popup target</h1></body></html>`;
 const HANDOFF_HTML = `<!doctype html><html><head><title>Human handoff</title></head><body>
   <p id="current">Current value: initial</p>
@@ -154,6 +177,9 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       "/download": DOWNLOAD_HTML,
       "/history-a": HISTORY_A_HTML,
       "/history-b": HISTORY_B_HTML,
+      "/iframes": IFRAME_HTML,
+      "/same-origin-frame": SAME_ORIGIN_FRAME_HTML,
+      "/cross-origin-frame": CROSS_ORIGIN_FRAME_HTML,
       "/popup-target": POPUP_TARGET_HTML,
       "/handoff": HANDOFF_HTML,
       "/access-restricted": ACCESS_RESTRICTED_HTML,

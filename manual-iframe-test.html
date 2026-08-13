@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rove Iframe Test</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 32px; }
+      iframe { width: 100%; height: 180px; border: 1px solid #999; margin: 12px 0; }
+      button { padding: 10px 14px; }
+    </style>
+  </head>
+  <body>
+    <h1>Rove Iframe Test</h1>
+
+    <h2>Same-origin srcdoc iframe</h2>
+    <iframe
+      title="Same origin frame"
+      srcdoc="<button id='sameButton'>Same frame button</button><script>document.getElementById('sameButton').addEventListener('click',()=>document.body.dataset.clicked='yes')</script>"
+    ></iframe>
+
+    <h2>Cross-origin iframe</h2>
+    <iframe title="Cross origin frame" src="https://example.com"></iframe>
+
+    <button id="outerButton">Outer page button</button>
+  </body>
+</html>

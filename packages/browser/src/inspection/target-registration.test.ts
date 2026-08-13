@@ -61,6 +61,18 @@ async function identifiedTargets() {
   return identifyTargetCandidates(classified);
 }
 
+function mainFrameTargets(
+  targets: Awaited<ReturnType<typeof identifiedTargets>>,
+) {
+  return targets.map((candidate) => ({
+    candidate,
+    frame: {
+      index: 0,
+      url: page.url(),
+    },
+  }));
+}
+
 describe("PageTargetRegistryStore", () => {
   it("creates one current registry per page", () => {
     const store = new PageTargetRegistryStore();
@@ -104,9 +116,8 @@ describe("target registration", () => {
     const registry = store.beginInspection("page_01", 1);
 
     const registered = registerIdentifiedTargets(
-      page,
       registry,
-      targets,
+      mainFrameTargets(targets),
     );
 
     expect(registered.length).toBeGreaterThan(0);
@@ -125,9 +136,8 @@ describe("target registration", () => {
     const registry = store.beginInspection("page_01", 7);
 
     const registered = registerIdentifiedTargets(
-      page,
       registry,
-      targets,
+      mainFrameTargets(targets),
     );
 
     for (const item of registered) {
@@ -145,9 +155,8 @@ describe("target registration", () => {
     const registry = store.beginInspection("page_01", 1);
 
     const registered = registerIdentifiedTargets(
-      page,
       registry,
-      targets,
+      mainFrameTargets(targets),
     );
 
     const submit = registered.find(
@@ -184,15 +193,13 @@ describe("target registration", () => {
     const page2Registry = store.beginInspection("page_02", 1);
 
     const [page1Target] = registerIdentifiedTargets(
-      page,
       page1Registry,
-      targets.slice(0, 1),
+      mainFrameTargets(targets.slice(0, 1)),
     );
 
     const [page2Target] = registerIdentifiedTargets(
-      page,
       page2Registry,
-      targets.slice(0, 1),
+      mainFrameTargets(targets.slice(0, 1)),
     );
 
     expect(page1Target?.registered.reference.ref).toBe("t1");
@@ -214,9 +221,8 @@ describe("target registration", () => {
     const registry = store.beginInspection("page_01", 5);
 
     const [target] = registerIdentifiedTargets(
-      page,
       registry,
-      targets.slice(0, 1),
+      mainFrameTargets(targets.slice(0, 1)),
     );
 
     expect(target).toBeDefined();

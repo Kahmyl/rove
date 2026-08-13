@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Frame, Page } from "playwright";
 
 import type { DomCandidate } from "./dom-types.js";
 
@@ -29,17 +29,15 @@ const IDENTITY_ATTRIBUTES = [
 export async function clearTargetMarkers(
   page: Page,
 ): Promise<void> {
-  await page.evaluate((markerAttribute) => {
-    document
-      .querySelectorAll(`[${markerAttribute}]`)
-      .forEach((element) =>
-        element.removeAttribute(markerAttribute),
-      );
-  }, TARGET_MARKER_ATTRIBUTE);
+  await Promise.all(
+    page.frames().map(async (frame) => {
+      await clearFrameTargetMarkers(frame).catch(() => undefined);
+    }),
+  );
 }
 
 export async function discoverTargetCandidates(
-  page: Page,
+  page: Frame | Page,
 ): Promise<DomCandidate[]> {
   return page.evaluate(
     ({
@@ -362,3 +360,15 @@ export {
   IDENTITY_ATTRIBUTES,
   TARGET_MARKER_ATTRIBUTE,
 };
+
+async function clearFrameTargetMarkers(
+  frame: Frame,
+): Promise<void> {
+  await frame.evaluate((markerAttribute) => {
+    document
+      .querySelectorAll(`[${markerAttribute}]`)
+      .forEach((element) =>
+        element.removeAttribute(markerAttribute),
+      );
+  }, TARGET_MARKER_ATTRIBUTE);
+}

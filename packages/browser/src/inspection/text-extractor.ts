@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Frame, Page } from "playwright";
 
 export interface TextExtractionResult {
   text: string;
@@ -16,7 +16,7 @@ export function normalizeVisibleText(rawText: string): string {
 }
 
 export async function extractVisibleText(
-  page: Page,
+  page: Frame | Page,
   maxTextChars: number,
 ): Promise<TextExtractionResult> {
   const rawText = await page.evaluate(() => document.body?.innerText ?? "");

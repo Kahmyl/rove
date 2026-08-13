@@ -1,5 +1,3 @@
-import type { Page } from "playwright";
-
 import {
   TargetRegistry,
   type RegisteredTarget,
@@ -8,11 +6,21 @@ import type { IdentifiedTargetCandidate } from "./target-identity-builder.js";
 
 export interface TargetHandle {
   marker: string;
+  frameIndex: number;
+  frameUrl: string;
 }
 
 export interface RegisteredInspectionTarget {
   candidate: IdentifiedTargetCandidate;
   registered: RegisteredTarget<TargetHandle>;
+}
+
+export interface FramedIdentifiedTargetCandidate {
+  candidate: IdentifiedTargetCandidate;
+  frame: {
+    index: number;
+    url: string;
+  };
 }
 
 export class PageTargetRegistryStore {
@@ -49,13 +57,14 @@ export class PageTargetRegistryStore {
 }
 
 export function registerIdentifiedTargets(
-  page: Page,
   registry: TargetRegistry<TargetHandle>,
-  candidates: IdentifiedTargetCandidate[],
+  candidates: FramedIdentifiedTargetCandidate[],
 ): RegisteredInspectionTarget[] {
-  return candidates.map((candidate) => {
+  return candidates.map(({ candidate, frame }) => {
     const registered = registry.register(candidate.identity, {
       marker: candidate.marker,
+      frameIndex: frame.index,
+      frameUrl: frame.url,
     });
 
     return {
