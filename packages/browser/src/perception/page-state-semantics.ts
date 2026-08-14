@@ -439,10 +439,16 @@ export async function collectPageStateSurfaceFacts(
         const autocomplete = normalize(
           element.getAttribute("autocomplete"),
         );
+        const semanticText = normalize(
+          controlSemanticText(element),
+        );
 
         return (
           type === "email" ||
-          autocomplete === "username"
+          autocomplete === "username" ||
+          /\\b(?:username|user name|user id|email(?: address)?)\\b/.test(
+            semanticText,
+          )
         );
       });
 

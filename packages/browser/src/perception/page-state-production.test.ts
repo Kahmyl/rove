@@ -392,4 +392,66 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(5);
   }, 30_000);
+  it("recognizes ordinary labeled username/password credential gates without autocomplete hints", async () => {
+    const definitions = [
+      {
+        id: "production-labeled-username-password-auth",
+        title: "The Internet",
+        body: `
+            <main>
+              <h2>Login Page</h2>
+              <p>
+                This is where you can log into the secure area.
+              </p>
+              <form>
+                <label for="username">Username</label>
+                <input id="username" type="text">
+
+                <label for="password">Password</label>
+                <input id="password" type="password">
+
+                <button type="submit">Login</button>
+              </form>
+            </main>
+          `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+          humanVerificationPresented: false,
+          accessRestricted: false,
+          errorPresented: false,
+        },
+      },
+      {
+        id: "production-profile-settings-labeled-credentials-not-auth",
+        title: "Profile settings",
+        body: `
+            <main>
+              <h1>Profile settings</h1>
+
+              <label for="profile-username">Username</label>
+              <input id="profile-username" type="text">
+
+              <label for="profile-password">Password</label>
+              <input id="profile-password" type="password">
+
+              <button>Save profile</button>
+            </main>
+          `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          humanVerificationPresented: false,
+          accessRestricted: false,
+          errorPresented: false,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+
+    expect(definitions).toHaveLength(2);
+  }, 30_000);
 });
