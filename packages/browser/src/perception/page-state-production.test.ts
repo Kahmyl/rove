@@ -1091,6 +1091,70 @@ describe("production page-state semantic conformance", () => {
         },
       },
       {
+        id: "production-provider-google-auth-control",
+        title: "Welcome",
+        body: `
+          <main>
+            <h1>Welcome</h1>
+            <p>
+              Choose how you would like to continue.
+            </p>
+
+            <button type="button">
+              Continue with Google
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+          humanVerificationPresented: false,
+        },
+      },
+      {
+        id: "production-provider-apple-auth-control",
+        title: "Welcome",
+        body: `
+          <main>
+            <h1>Welcome</h1>
+
+            <button type="button">
+              Sign in with Apple
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+          humanVerificationPresented: false,
+        },
+      },
+      {
+        id: "production-integration-connect-controls-remain-ready",
+        title: "Integrations",
+        body: `
+          <main>
+            <h1>Integrations</h1>
+            <p>
+              Connect services to your workspace.
+            </p>
+
+            <button type="button">
+              Connect Google
+            </button>
+
+            <button type="button">
+              Connect Slack
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
         id: "production-explicit-page-not-found-remains-error",
         title: "Page not found",
         body: `
@@ -1128,6 +1192,6 @@ describe("production page-state semantic conformance", () => {
       await checkDefinition(definition);
     }
 
-    expect(definitions).toHaveLength(10);
+    expect(definitions).toHaveLength(13);
   }, 30_000);
 });

@@ -29,6 +29,7 @@ export interface PageStateSemanticSurface {
   credentialGate: boolean;
   identityChooser: boolean;
   passkeyGate: boolean;
+  providerAuthGate: boolean;
 
   restrictionCue: boolean;
   errorCue: boolean;
@@ -802,6 +803,23 @@ export async function collectPageStateSurfaceFacts(
           passwordStepGate
         );
 
+      const providerAuthGate =
+        buttonTexts.some((text) => {
+          if (
+            /^(?:(?:sign|log) in with)\\s+\\S/.test(
+              text,
+            )
+          ) {
+            return true;
+          }
+
+          return (
+            /^continue with\\s+(?:google|apple|microsoft|github|facebook|linkedin|twitter|x|sso|okta|auth0)(?:\\s|$)/.test(
+              text,
+            )
+          );
+        });
+
       const passkeyGate =
         buttonTexts.some((text) =>
           /\\b(?:use|continue with|sign in with)\\b.{0,40}\\bpasskey\\b/.test(
@@ -863,6 +881,7 @@ export async function collectPageStateSurfaceFacts(
         credentialGate,
         identityChooser,
         passkeyGate,
+        providerAuthGate,
         restrictionCue:
           semanticMessages.some((message) =>
             restrictionCue(message),

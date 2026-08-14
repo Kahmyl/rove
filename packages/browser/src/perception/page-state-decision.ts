@@ -253,7 +253,10 @@ export function classifyObservedPageState(
     }
 
     const structuralAuth =
-      surface.credentialGate || surface.identityChooser || surface.passkeyGate;
+      surface.credentialGate ||
+      surface.identityChooser ||
+      surface.passkeyGate ||
+      surface.providerAuthGate;
 
     const lexicalAuth = surface.authenticationDirective;
 
@@ -344,6 +347,7 @@ export function classifyObservedPageState(
           surface.credentialGate ||
           surface.identityChooser ||
           surface.passkeyGate ||
+          surface.providerAuthGate ||
           surface.restrictionCue ||
           surface.errorCue
         ),
