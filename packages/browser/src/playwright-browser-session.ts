@@ -6,6 +6,7 @@ import {
   type ActionResult,
   type Artifact,
   type BrowserLaunchConfig,
+  type BrowserRuntimeCapabilities,
   type InspectOptions,
   type PageInspection,
   type PageSummary,
@@ -67,6 +68,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private constructor(
     readonly id: string,
+    readonly capabilities: BrowserRuntimeCapabilities,
     private readonly browser: Browser,
     private readonly context: BrowserContext,
     private readonly actionTimeoutMs: number,
@@ -178,6 +180,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
+      runtimeCapabilities(browser, config, downloadRuntime),
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
@@ -1144,4 +1147,65 @@ export class PlaywrightBrowserSession implements BrowserSession {
       ...(state.title === undefined ? {} : { title: state.title }),
     };
   }
+}
+
+function runtimeCapabilities(
+  browser: Browser,
+  config: BrowserLaunchConfig,
+  downloadRuntime?: ResolvedDownloadRuntime,
+): BrowserRuntimeCapabilities {
+  return {
+    browserFamily: "chromium",
+    distribution: config.browser,
+    browserVersion: browser.version(),
+    headless: config.headless,
+    profile:
+      config.profile.mode === "persistent"
+        ? {
+            mode: "persistent",
+            name: config.profile.name,
+          }
+        : { mode: "temporary" },
+    downloads: {
+      managed: downloadRuntime !== undefined,
+      evidence: downloadRuntime !== undefined,
+    },
+    storage: {
+      cookies: true,
+      localStorage: true,
+      indexedDb: true,
+      cacheStorage: true,
+      sessionStorage: "page_scoped",
+      serviceWorkers: true,
+    },
+    humanInteraction: {
+      available: !config.headless,
+    },
+    sandbox: {
+      requested: "unknown",
+      verified: "unknown",
+    },
+    diagnostics: [
+      ...(config.executablePath === undefined
+        ? []
+        : [
+            {
+              level: "warning" as const,
+              code: "CUSTOM_EXECUTABLE_PATH",
+              message:
+                "Runtime modified by a caller-supplied browser executable path.",
+            },
+          ]),
+      ...((config.launchArgs?.length ?? 0) === 0
+        ? []
+        : [
+            {
+              level: "warning" as const,
+              code: "CUSTOM_LAUNCH_ARGS",
+              message:
+                "Runtime modified by custom browser arguments; compatibility guarantees may not apply.",
+            },
+          ]),
+    ],
+  };
 }

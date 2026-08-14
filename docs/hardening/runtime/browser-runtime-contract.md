@@ -42,6 +42,7 @@ F4 owns:
 - browser diagnostics;
 - browser capability reporting;
 - deterministic browser compatibility testing.
+- browser-runtime frame plumbing needed for iframe compatibility, including frame enumeration, frame-visible text, frame target registration, and frame-aware target resolution.
 
 F4 does not own:
 
@@ -49,12 +50,15 @@ F4 does not own:
 - CAPTCHA detection;
 - interstitial interpretation;
 - browser-perception evidence fusion;
+- semantic target ranking, target labeling heuristics, or cross-source perception scoring;
 - automatic handoff decisions;
 - ownership fencing;
 - MCP reasoning;
 - agent planning.
 
 F4 exposes browser facts and runtime capabilities. Other tracks decide what those facts mean.
+
+Frame support boundary: F4 owns whether the browser runtime can see frames and route an already-inspected target back to the frame where it was discovered. F1 owns the quality and meaning of the semantic inspection results produced from those browser facts.
 
 ## Supported Runtime Classes
 

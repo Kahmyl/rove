@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "compat": "tsx src/compatibility/browser-compat.ts",
+    "soak": "tsx src/compatibility/browser-soak.ts",
     "demo": "tsx src/demo/browser-demo.ts",
     "doctor": "tsx src/diagnostics/browser-doctor.ts",
     "inspect-demo": "tsx src/demo/inspect-demo.ts",

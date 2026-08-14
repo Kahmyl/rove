@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PlaywrightBrowserEngine, type BrowserEngine, type BrowserSession } from "@rove/browser";
 import { loadConfig } from "@rove/config";
-import { RoveError, type PageInspection, type TargetReference } from "@rove/protocol";
+import { RoveError, type BrowserRuntimeCapabilities, type PageInspection, type TargetReference } from "@rove/protocol";
 import { FileEvidenceStore, FileObservationStore, FileSessionStore } from "@rove/storage";
 import { startFixtureServer, type FixtureServer } from "../../../../packages/browser/src/fixtures/fixture-server.js";
 import { BrowserService } from "../browser/browser.service.js";
@@ -19,6 +19,25 @@ import { ControlWaitService } from "./control-wait.service.js";
 const homes: string[] = [];
 const servers: FixtureServer[] = [];
 const active: { runtime: RuntimeService; id: string }[] = [];
+const testCapabilities: BrowserRuntimeCapabilities = {
+  browserFamily: "chromium",
+  distribution: "chromium",
+  browserVersion: "test",
+  headless: true,
+  profile: { mode: "temporary" },
+  downloads: { managed: true, evidence: true },
+  storage: {
+    cookies: true,
+    localStorage: true,
+    indexedDb: true,
+    cacheStorage: true,
+    sessionStorage: "page_scoped",
+    serviceWorkers: true,
+  },
+  humanInteraction: { available: false },
+  sandbox: { requested: "unknown", verified: "unknown" },
+  diagnostics: [],
+};
 
 async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()) {
   const home = await mkdtemp(join(tmpdir(), "rove-control-"));
@@ -128,6 +147,7 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
     const actionResult = (action: "navigate" | "click") => ({ ok: true, action, sessionId: "browser_race", pageId: "page_01", pageChanged: false, previousRevision: 0, currentRevision: invalidated ? 1 : 0, url: "about:blank" });
     const fake: BrowserSession = {
       id: "browser_race",
+      capabilities: testCapabilities,
       onActivity: () => () => undefined,
       pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: invalidated ? 1 : 0 }],
       inspect: async () => ({

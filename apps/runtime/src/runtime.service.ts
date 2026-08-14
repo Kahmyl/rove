@@ -134,6 +134,7 @@ export class RuntimeService implements RoveRuntime {
           ? {}
           : { handoff: { reason: handoff.reason, requestedAt: new Date().toISOString() } }),
         ...(activePageId === undefined ? {} : { activePageId }),
+        browserRuntime: browser.capabilities,
       });
       await this.observations.append(session.id, {
         actor: "system",

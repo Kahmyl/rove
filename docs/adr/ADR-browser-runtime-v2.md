@@ -17,16 +17,37 @@ Rove Browser Runtime V2 supports:
 - temporary Chromium-family sessions;
 - Rove-managed persistent profiles;
 - deliberate Chrome or bundled Chromium selection;
+- headed desktop sessions and headless automation sessions as separate runtime classes;
 - Rove-level persistent profile locking;
 - managed downloads;
 - default browser permission behavior;
+- service workers, cookies, localStorage, sessionStorage, IndexedDB, and Cache Storage according to the runtime contract;
+- browser-runtime frame fidelity, including iframe enumeration, iframe-visible text, iframe target plumbing, and frame-aware target resolution;
+- structured browser runtime capability reporting;
+- sandbox diagnostics that distinguish requested policy from verified runtime status;
 - deterministic compatibility reporting.
 
 Ordinary existing Chrome profiles remain unsupported for production use. Rove will not attach to, copy, mutate, or bypass locks for a user's normal Chrome profile. A future explicit-import or dedicated-profile workflow can be designed separately if product requirements justify it.
+
+F4 owns frame plumbing only where it is necessary to make browser runtime compatibility observable and actionable. F1 remains responsible for semantic inspection quality, target ranking, labeling heuristics, perception evidence fusion, and page-state interpretation.
+
+The production browser decision is:
+
+- Desktop interactive: prefer system Google Chrome when requested/configured, fall back to bundled Playwright Chromium only when Chrome is unavailable, and report fallback explicitly.
+- Local/CI automation: bundled Playwright Chromium is acceptable and expected.
+- Docker/container automation: Chromium headless is supported with limitations until container sandbox status is verified in that environment.
+- Headless and headed runs are not treated as equivalent; compatibility reports must record the mode.
+- Sandbox state is never inferred from launch args alone. It is `unknown` unless the runtime probe observes a recognized enabled or disabled signal.
+- Downloads are always managed by Rove and surfaced as runtime activity; Runtime persists completed downloads as `file` evidence.
+- Permissions use browser defaults unless a future explicit grant policy is introduced. Sensitive permissions must not be silently granted by F4.
+- Browser versions are reported, not hard-pinned. Newer compatible Chromium-family versions are allowed but must appear in diagnostics and acceptance reports.
+- Safe diagnostics may include browser family, distribution, version, headless/headed mode, profile mode/name, sandbox status, managed-download support, and storage capability status. Diagnostics must not include secrets, cookies, clipboard contents, or downloaded file contents.
 
 ## Consequences
 
 - `profile.mode: "existing"` continues to fail fast with a structured unsupported-path error.
 - Users who need persistence should use Rove-managed persistent profiles.
 - Compatibility reports can distinguish supported behavior from runtime limitations.
+- Session status can expose an immutable runtime capability snapshot for the running browser session.
+- Cross-frame inspection changes remain in F4 as browser-runtime fidelity work, with the ownership boundary recorded here.
 - Future work can add origin-scoped permission grants and richer crash recovery without changing this ownership boundary.

@@ -12,6 +12,12 @@ import {
   createManagedDownloadDirectory,
   saveManagedDownload,
 } from "../downloads/managed-downloads.js";
+import type {
+  BrowserActivity,
+} from "../observation/browser-activity.js";
+import { PlaywrightBrowserEngine } from "../playwright-browser-engine.js";
+import { RoveProfileLock } from "../profiles/profile-lock.js";
+import { RoveProfileManager } from "../profiles/profile-manager.js";
 
 type BrowserRequest = "chrome" | "chromium";
 type CompatibilityStatus =
@@ -959,6 +965,188 @@ async function verifyBrowserDisconnect(
   return "Browser disconnect event fired and the browser reported disconnected.";
 }
 
+async function verifyRoveRuntimeTemporarySession(
+  options: BrowserCompatOptions,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const session = await new PlaywrightBrowserEngine().start({
+    browser: options.browser,
+    headless: options.headless,
+    profile: { mode: "temporary" },
+  });
+
+  try {
+    await session.navigate(fixture.url);
+    const inspection = await session.inspect();
+
+    if (
+      inspection.title !== "Rove Compatibility Fixture" ||
+      !inspection.text?.includes("Download")
+    ) {
+      throw new Error("Rove runtime inspection did not include the compatibility fixture.");
+    }
+
+    if (session.capabilities.browserFamily !== "chromium") {
+      throw new Error("Rove runtime capabilities did not report Chromium family.");
+    }
+
+    if (!session.capabilities.downloads.managed) {
+      throw new Error("Rove runtime capabilities did not report managed downloads.");
+    }
+
+    return "Rove BrowserSession launched, navigated, inspected, and exposed runtime capabilities.";
+  } finally {
+    await session.close().catch(() => undefined);
+  }
+}
+
+async function verifyRoveRuntimeManagedDownload(
+  options: BrowserCompatOptions,
+  fixture: CompatibilityFixture,
+): Promise<string> {
+  const session = await new PlaywrightBrowserEngine().start({
+    browser: options.browser,
+    headless: options.headless,
+    profile: { mode: "temporary" },
+  });
+
+  try {
+    await session.navigate(fixture.url);
+    const inspection = await session.inspect();
+    const target = inspection.targets?.find(
+      (candidate) => candidate.name === "Download",
+    );
+
+    if (target === undefined) {
+      throw new Error("Download target was not exposed by Rove inspection.");
+    }
+
+    const activity = waitForBrowserActivity(
+      session,
+      "download_completed",
+    );
+
+    await session.click({
+      pageId: inspection.pageId,
+      revision: inspection.revision,
+      ref: target.ref,
+    });
+
+    const completed = await activity;
+    const data = completed.data as {
+      filename?: string;
+      path?: string;
+      sizeBytes?: number;
+    };
+
+    if (data.filename !== "rove-compat.txt" || data.path === undefined) {
+      throw new Error("Rove runtime download activity did not include the managed file path.");
+    }
+
+    if (data.sizeBytes !== "rove compatibility download".length) {
+      throw new Error("Rove runtime download activity reported an unexpected size.");
+    }
+
+    return "Rove BrowserSession emitted a managed download_completed activity with file metadata.";
+  } finally {
+    await session.close().catch(() => undefined);
+  }
+}
+
+async function verifyRoveRuntimePersistentProfilePath(
+  options: BrowserCompatOptions,
+): Promise<string> {
+  const home = await mkdtemp(join(tmpdir(), "rove-browser-compat-runtime-"));
+  const manager = new RoveProfileManager(home);
+
+  try {
+    const profile = await manager.resolvePersistentProfile(
+      { mode: "persistent", name: "compat" },
+      options.browser,
+    );
+
+    if (profile === undefined) {
+      throw new Error("Rove profile manager did not resolve the persistent profile.");
+    }
+
+    const lock = await RoveProfileLock.acquire(profile.userDataDir);
+    try {
+      await expectProfileLockRejection(profile.userDataDir);
+
+      const session = await new PlaywrightBrowserEngine().start({
+        browser: options.browser,
+        headless: options.headless,
+        profile: { mode: "persistent", name: "compat" },
+        profileUserDataDir: profile.userDataDir,
+      });
+
+      try {
+        if (session.capabilities.profile.mode !== "persistent") {
+          throw new Error("Rove runtime capabilities did not report persistent profile mode.");
+        }
+      } finally {
+        await session.close().catch(() => undefined);
+      }
+    } finally {
+      await lock.release().catch(() => undefined);
+    }
+
+    return "Rove profile manager, profile lock, persistent launch path, and capabilities were exercised.";
+  } finally {
+    await rm(home, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function expectProfileLockRejection(
+  userDataDir: string,
+): Promise<void> {
+  let second: RoveProfileLock | undefined;
+
+  try {
+    second = await RoveProfileLock.acquire(userDataDir);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code?: string }).code === "PROFILE_LOCKED"
+    ) {
+      return;
+    }
+
+    throw error;
+  } finally {
+    await second?.release().catch(() => undefined);
+  }
+
+  throw new Error("Rove profile lock allowed a second concurrent owner.");
+}
+
+function waitForBrowserActivity(
+  session: {
+    onActivity(listener: (activity: BrowserActivity) => void): () => void;
+  },
+  type: string,
+  timeoutMs = 5_000,
+): Promise<BrowserActivity> {
+  return new Promise((resolve, reject) => {
+    let unsubscribe = (): void => undefined;
+    const timer = setTimeout(() => {
+      unsubscribe();
+      reject(new Error(`Timed out waiting for browser activity: ${type}.`));
+    }, timeoutMs);
+
+    unsubscribe = session.onActivity((activity) => {
+      if (activity.type !== type) {
+        return;
+      }
+
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(activity);
+    });
+  });
+}
+
 function pathInside(root: string, target: string): boolean {
   const resolvedRoot = resolve(root);
   const resolvedTarget = resolve(target);
@@ -1184,6 +1372,15 @@ export async function collectBrowserCompatReport(
       ),
       await runCase("browser disconnect", () =>
         verifyBrowserDisconnect(options, downloadsPath),
+      ),
+      await runCase("rove runtime temporary session", () =>
+        verifyRoveRuntimeTemporarySession(options, fixture),
+      ),
+      await runCase("rove runtime managed download", () =>
+        verifyRoveRuntimeManagedDownload(options, fixture),
+      ),
+      await runCase("rove runtime persistent profile path", () =>
+        verifyRoveRuntimePersistentProfilePath(options),
       ),
       await runCase("persistent profile restart", () =>
         verifyPersistentProfileRestart(options, fixture),

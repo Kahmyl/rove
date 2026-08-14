@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { PlaywrightBrowserEngine, type BrowserEngine, type BrowserSession } from "@rove/browser";
 import { loadConfig } from "@rove/config";
-import { RoveError, type PageInspection, type TargetReference } from "@rove/protocol";
+import { RoveError, type BrowserRuntimeCapabilities, type PageInspection, type TargetReference } from "@rove/protocol";
 import { FileEvidenceStore, FileObservationStore, FileSessionStore } from "@rove/storage";
 import { startFixtureServer, type FixtureServer } from "../../../packages/browser/src/fixtures/fixture-server.js";
 import { BrowserService } from "./browser/browser.service.js";
@@ -27,6 +27,25 @@ interface Harness {
 const homes: string[] = [];
 const servers: FixtureServer[] = [];
 const active: { runtime: RuntimeService; id: string }[] = [];
+const testCapabilities: BrowserRuntimeCapabilities = {
+  browserFamily: "chromium",
+  distribution: "chromium",
+  browserVersion: "test",
+  headless: true,
+  profile: { mode: "temporary" },
+  downloads: { managed: true, evidence: true },
+  storage: {
+    cookies: true,
+    localStorage: true,
+    indexedDb: true,
+    cacheStorage: true,
+    sessionStorage: "page_scoped",
+    serviceWorkers: true,
+  },
+  humanInteraction: { available: false },
+  sandbox: { requested: "unknown", verified: "unknown" },
+  diagnostics: [],
+};
 
 async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()): Promise<Harness> {
   const home = await mkdtemp(join(tmpdir(), "rove-runtime-"));
@@ -62,6 +81,7 @@ function target(inspection: PageInspection, name: string): TargetReference {
 function readyBrowserSession(id: string): BrowserSession {
   return {
     id,
+    capabilities: testCapabilities,
     onActivity: () => () => undefined,
     inspect: async () => ({
       pageId: "page_01",
@@ -145,6 +165,14 @@ describe("Milestone 4 runtime integration", () => {
     const agent = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: agent.id });
     expect(agent).toMatchObject({ status: "active", controller: "agent", activePageId: "page_01" });
+    expect(agent.browserRuntime).toMatchObject({
+      browserFamily: "chromium",
+      distribution: "chromium",
+      headless: true,
+      profile: { mode: "temporary" },
+      downloads: { managed: true, evidence: true },
+      sandbox: { requested: "unknown", verified: "unknown" },
+    });
     expect(agent.id).toMatch(/^ses_/);
     expect(browser.has(agent.id)).toBe(true);
     expect(JSON.parse(await readFile(join(home, "sessions", agent.id, "session.json"), "utf8"))).toMatchObject({ status: "active" });
@@ -411,6 +439,7 @@ describe("Milestone 4 runtime integration", () => {
         const browserId = `browser_fake_${browserCounter++}`;
         return {
           id: browserId,
+          capabilities: testCapabilities,
           onActivity: () => () => undefined,
           pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: 0 }],
           inspect: async () => ({
