@@ -92,9 +92,29 @@ const HUMAN_VERIFICATION_HTML = `<!doctype html><html><head><title>Security chec
 const AUTHENTICATION_HTML = `<!doctype html><html><head><title>Sign in</title></head><body>
   <h1>Sign in to continue</h1><label>Email <input type="email" /></label>
 </body></html>`;
-const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html><html><head><title>Challenge</title></head><body>
-  <canvas data-rendered-content="${"x".repeat(300)}"></canvas>
-</body></html>`;
+const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Challenge</title>
+  </head>
+  <body>
+    <canvas
+      id="unknown-visual-surface"
+      width="640"
+      height="240"
+      aria-label="Intervening visual page"
+    ></canvas>
+    <script>
+      const canvas = document.querySelector("#unknown-visual-surface");
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#111";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#fff";
+      context.font = "24px sans-serif";
+      context.fillText("Continue in this browser window", 40, 120);
+    </script>
+  </body>
+</html>`;
 const SERVER_ERROR_HTML = `<!doctype html><html><head><title>Service unavailable</title></head><body>
   <h1>Service unavailable</h1>
 </body></html>`;

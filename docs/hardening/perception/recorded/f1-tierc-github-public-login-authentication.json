@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "f1-perception-replay/v1",
+  "source": {
+    "tier": "C",
+    "kind": "recorded"
+  },
+  "caseId": "tierc-github-public-login-authentication",
+  "capturedAt": "2026-08-14T17:05:29.321Z",
+  "description": "Recorded public authentication surface requiring user authentication.",
+  "criticality": "critical",
+  "tags": [
+    "tier-c",
+    "recorded",
+    "public",
+    "authentication"
+  ],
+  "expected": {
+    "propositions": {
+      "primaryContentAvailable": false,
+      "documentUnstable": false,
+      "authenticationRequired": true,
+      "humanVerificationPresented": false,
+      "accessRestricted": false,
+      "errorPresented": false,
+      "interstitialPresented": true
+    },
+    "primaryState": "authentication_required",
+    "disposition": "request_human"
+  },
+  "evidence": {
+    "captureMode": "read_only_external",
+    "sourceUrl": "https://github.com/authentication/",
+    "fingerprintStable": true,
+    "screenshotsPersisted": false,
+    "rawContentPersisted": false,
+    "privateValuesPersisted": false,
+    "pageIdentifierObserved": true
+  },
+  "assessment": {
+    "kind": "authentication_required",
+    "confidence": "high",
+    "signals": [
+      "document:stable",
+      "auth:primary_structural"
+    ],
+    "recommendedAction": "request_human"
+  }
+}

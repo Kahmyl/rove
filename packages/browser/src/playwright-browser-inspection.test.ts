@@ -1,13 +1,6 @@
-import {
-  afterEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import type {
-  BrowserLaunchConfig,
-} from "@rove/protocol";
+import type { BrowserLaunchConfig } from "@rove/protocol";
 
 import type { BrowserSession } from "./engine.js";
 import {
@@ -28,8 +21,7 @@ const sessions: BrowserSession[] = [];
 const servers: FixtureServer[] = [];
 
 async function startSession(): Promise<BrowserSession> {
-  const session =
-    await new PlaywrightBrowserEngine().start(config);
+  const session = await new PlaywrightBrowserEngine().start(config);
 
   sessions.push(session);
 
@@ -58,14 +50,10 @@ async function waitForPageCount(
       return pages;
     }
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 25),
-    );
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
 
-  throw new Error(
-    `Timed out waiting for ${count} browser pages.`,
-  );
+  throw new Error(`Timed out waiting for ${count} browser pages.`);
 }
 
 afterEach(async () => {
@@ -98,9 +86,7 @@ describe("PlaywrightBrowserSession inspection", () => {
       },
     });
 
-    expect(inspection.text).toContain(
-      "Visible fixture description",
-    );
+    expect(inspection.text).toContain("Visible fixture description");
 
     expect(inspection.targets?.[0]?.ref).toBe("t1");
   });
@@ -115,9 +101,7 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     const before = await session.pages();
 
-    expect(
-      before.find((page) => page.id === "page_02")?.active,
-    ).toBe(true);
+    expect(before.find((page) => page.id === "page_02")?.active).toBe(true);
 
     const inspection = await session.inspect({
       pageId: "page_01",
@@ -127,13 +111,9 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     const after = await session.pages();
 
-    expect(
-      after.find((page) => page.id === "page_02")?.active,
-    ).toBe(true);
+    expect(after.find((page) => page.id === "page_02")?.active).toBe(true);
 
-    expect(
-      after.find((page) => page.id === "page_01")?.active,
-    ).toBe(false);
+    expect(after.find((page) => page.id === "page_01")?.active).toBe(false);
   });
 
   it("rejects inspection of an unknown page", async () => {
@@ -158,13 +138,9 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     const before = await session.pages();
 
-    const page1Before = before.find(
-      (page) => page.id === "page_01",
-    );
+    const page1Before = before.find((page) => page.id === "page_01");
 
-    const page2Before = before.find(
-      (page) => page.id === "page_02",
-    );
+    const page2Before = before.find((page) => page.id === "page_02");
 
     expect(page2Before?.active).toBe(true);
 
@@ -172,21 +148,13 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     const after = await session.pages();
 
-    const page1After = after.find(
-      (page) => page.id === "page_01",
-    );
+    const page1After = after.find((page) => page.id === "page_01");
 
-    const page2After = after.find(
-      (page) => page.id === "page_02",
-    );
+    const page2After = after.find((page) => page.id === "page_02");
 
-    expect(page1After?.revision).toBe(
-      page1Before?.revision,
-    );
+    expect(page1After?.revision).toBe(page1Before?.revision);
 
-    expect(page2After?.revision).toBe(
-      (page2Before?.revision ?? 0) + 1,
-    );
+    expect(page2After?.revision).toBe((page2Before?.revision ?? 0) + 1);
   });
 
   it("returns fresh refs against the new revision after invalidation", async () => {
@@ -205,9 +173,7 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     const second = await session.inspect();
 
-    expect(second.revision).toBe(
-      firstRevision + 1,
-    );
+    expect(second.revision).toBe(firstRevision + 1);
 
     expect(second.targets?.[0]?.ref).toBe("t1");
   });
@@ -241,37 +207,25 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     expect(inspection.pageId).toBe("page_01");
     expect(inspection.revision).toBe(1);
-    expect(inspection.url).toBe(
-      new URL("/", server.url).href,
-    );
-    expect(inspection.title).toBe(
-      "Rove Inspection Fixture",
-    );
+    expect(inspection.url).toBe(new URL("/", server.url).href);
+    expect(inspection.title).toBe("Rove Inspection Fixture");
 
     expect(inspection.viewport).toEqual({
       width: 1440,
       height: 900,
     });
 
-    expect(inspection.text).toContain(
-      "Rove Inspection Fixture",
-    );
+    expect(inspection.text).toContain("Rove Inspection Fixture");
 
-    expect(inspection.text).toContain(
-      "Visible fixture description",
-    );
+    expect(inspection.text).toContain("Visible fixture description");
 
-    expect(inspection.text).not.toContain(
-      "Hidden fixture text",
-    );
+    expect(inspection.text).not.toContain("Hidden fixture text");
 
     const targets = inspection.targets ?? [];
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "link" &&
-          target.name === "View details",
+        (target) => target.kind === "link" && target.name === "View details",
       ),
     ).toMatchObject({
       visible: true,
@@ -280,9 +234,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "button" &&
-          target.name === "Submit",
+        (target) => target.kind === "button" && target.name === "Submit",
       ),
     ).toMatchObject({
       visible: true,
@@ -291,9 +243,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "input" &&
-          target.name === "Search jobs",
+        (target) => target.kind === "input" && target.name === "Search jobs",
       ),
     ).toMatchObject({
       visible: true,
@@ -302,17 +252,22 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "input" &&
-          target.sensitive === true,
+        (target) => target.kind === "input" && target.sensitive === true,
       ),
     ).toBeDefined();
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "checkbox" &&
-          target.name === "Remote only",
+        (target) => target.kind === "checkbox" && target.name === "Remote only",
+      ),
+    ).toMatchObject({
+      visible: true,
+      enabled: true,
+    });
+
+    expect(
+      targets.find(
+        (target) => target.kind === "select" && target.name === "Sort results",
       ),
     ).toMatchObject({
       visible: true,
@@ -322,37 +277,20 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     expect(
       targets.find(
         (target) =>
-          target.kind === "select" &&
-          target.name === "Sort results",
-      ),
-    ).toMatchObject({
-      visible: true,
-      enabled: true,
-    });
-
-    expect(
-      targets.find(
-        (target) =>
-          target.kind === "button" &&
-          target.name === "Disabled action",
+          target.kind === "button" && target.name === "Disabled action",
       ),
     ).toMatchObject({
       visible: true,
       enabled: false,
     });
 
-    expect(
-      targets.some(
-        (target) =>
-          target.name === "Hidden action",
-      ),
-    ).toBe(false);
+    expect(targets.some((target) => target.name === "Hidden action")).toBe(
+      false,
+    );
 
     expect(
       targets.find(
-        (target) =>
-          target.kind === "button" &&
-          target.name === "Custom action",
+        (target) => target.kind === "button" && target.name === "Custom action",
       ),
     ).toMatchObject({
       visible: true,
@@ -362,8 +300,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     expect(
       targets.some(
         (target) =>
-          target.role === "heading" ||
-          target.name === "Structural role",
+          target.role === "heading" || target.name === "Structural role",
       ),
     ).toBe(false);
   });
@@ -376,16 +313,11 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     const inspection = await session.inspect();
 
-    const refs =
-      inspection.targets?.map(
-        (target) => target.ref,
-      ) ?? [];
+    const refs = inspection.targets?.map((target) => target.ref) ?? [];
 
     expect(refs.length).toBeGreaterThan(0);
 
-    expect(
-      new Set(refs).size,
-    ).toBe(refs.length);
+    expect(new Set(refs).size).toBe(refs.length);
 
     for (const ref of refs) {
       expect(ref).toMatch(/^t\d+$/);
@@ -404,9 +336,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       maxTextChars: 50,
     });
 
-    expect(inspection.text?.length).toBeLessThanOrEqual(
-      50,
-    );
+    expect(inspection.text?.length).toBeLessThanOrEqual(50);
 
     expect(inspection.metadata).toMatchObject({
       textTruncated: true,
@@ -425,11 +355,10 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     expect(inspection.targets).toHaveLength(2);
 
-    expect(
-      inspection.targets?.map(
-        (target) => target.ref,
-      ),
-    ).toEqual(["t1", "t2"]);
+    expect(inspection.targets?.map((target) => target.ref)).toEqual([
+      "t1",
+      "t2",
+    ]);
 
     expect(inspection.metadata).toMatchObject({
       targetsTruncated: true,
@@ -446,33 +375,23 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       targetKinds: ["button"],
     });
 
-    expect(
-      inspection.targets?.length,
-    ).toBeGreaterThan(0);
+    expect(inspection.targets?.length).toBeGreaterThan(0);
 
     expect(
-      inspection.targets?.every(
-        (target) => target.kind === "button",
-      ),
+      inspection.targets?.every((target) => target.kind === "button"),
     ).toBe(true);
 
-    expect(
-      inspection.targets?.some(
-        (target) => target.kind === "link",
-      ),
-    ).toBe(false);
+    expect(inspection.targets?.some((target) => target.kind === "link")).toBe(
+      false,
+    );
 
-    expect(
-      inspection.targets?.some(
-        (target) => target.kind === "input",
-      ),
-    ).toBe(false);
+    expect(inspection.targets?.some((target) => target.kind === "input")).toBe(
+      false,
+    );
 
-    expect(
-      inspection.targets?.some(
-        (target) => target.kind === "select",
-      ),
-    ).toBe(false);
+    expect(inspection.targets?.some((target) => target.kind === "select")).toBe(
+      false,
+    );
   });
 
   it("omits unrequested inspection sections entirely", async () => {
@@ -525,9 +444,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     const second = await session.inspect();
 
-    expect(second.revision).toBe(
-      first.revision + 1,
-    );
+    expect(second.revision).toBe(first.revision + 1);
 
     expect(second.targets?.[0]?.ref).toBe("t1");
   });
@@ -540,23 +457,49 @@ describe("Milestone 2 semantic inspection acceptance", () => {
 
     const inspection = await session.inspect();
 
-    expect(
-      Object.keys(inspection.metadata ?? {}).sort(),
-    ).toEqual([
+    expect(Object.keys(inspection.metadata ?? {}).sort()).toEqual([
       "pageState",
+      "pageStateFingerprint",
+      "pageStatePropositions",
       "targetsTruncated",
       "textTruncated",
     ]);
 
-    expect(inspection.metadata).toEqual({
+    expect(inspection.metadata).toMatchObject({
       pageState: {
         kind: "ready",
         confidence: "high",
-        signals: ["dom:content_available"],
         recommendedAction: "continue",
+      },
+      pageStatePropositions: {
+        primaryContentAvailable: true,
+        documentUnstable: false,
+        authenticationRequired: false,
+        humanVerificationPresented: false,
+        accessRestricted: false,
+        errorPresented: false,
+        interstitialPresented: false,
       },
       textTruncated: false,
       targetsTruncated: false,
     });
+
+    expect(
+      (
+        inspection.metadata as {
+          pageState?: {
+            signals?: unknown;
+          };
+        }
+      ).pageState?.signals,
+    ).toEqual(expect.any(Array));
+
+    expect(
+      (
+        inspection.metadata as {
+          pageStateFingerprint?: unknown;
+        }
+      ).pageStateFingerprint,
+    ).toMatch(/^[a-f0-9]{64}$/);
   });
 });

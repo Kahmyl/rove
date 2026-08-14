@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "f1-perception-replay/v1",
+  "source": {
+    "tier": "C",
+    "kind": "recorded"
+  },
+  "caseId": "tierc-http-status-server-error",
+  "capturedAt": "2026-08-14T17:05:30.527Z",
+  "description": "Recorded public HTTP terminal-error response.",
+  "criticality": "critical",
+  "tags": [
+    "tier-c",
+    "recorded",
+    "public",
+    "http-status",
+    "error"
+  ],
+  "expected": {
+    "propositions": {
+      "primaryContentAvailable": false,
+      "documentUnstable": false,
+      "authenticationRequired": false,
+      "humanVerificationPresented": false,
+      "accessRestricted": false,
+      "errorPresented": true,
+      "interstitialPresented": true
+    },
+    "primaryState": "error",
+    "disposition": "stop"
+  },
+  "evidence": {
+    "captureMode": "read_only_external",
+    "sourceUrl": "https://httpbin.org/status-class/",
+    "fingerprintStable": true,
+    "screenshotsPersisted": false,
+    "rawContentPersisted": false,
+    "privateValuesPersisted": false,
+    "pageIdentifierObserved": true
+  },
+  "assessment": {
+    "kind": "error",
+    "confidence": "high",
+    "signals": [
+      "document:stable",
+      "error:http_status"
+    ],
+    "recommendedAction": "stop"
+  }
+}
