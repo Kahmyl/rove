@@ -643,4 +643,227 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(6);
   }, 30_000);
+  it("scopes busy instability to the active workflow and distinguishes native modal dialogs", async () => {
+    const definitions = [
+      {
+        id: "production-hidden-supplementary-busy-remains-ready",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <p>The active workflow is available.</p>
+            <button>Save document</button>
+          </main>
+
+          <aside
+            aria-busy="true"
+            style="display: none"
+          >
+            Background recommendations are refreshing.
+          </aside>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          documentUnstable: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-offscreen-busy-remains-ready",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <button>Save document</button>
+          </main>
+
+          <div
+            aria-busy="true"
+            style="
+              position: absolute;
+              left: -10000px;
+              top: 0;
+              width: 100px;
+              height: 100px;
+            "
+          >
+            Background refresh.
+          </div>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          documentUnstable: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-visible-supplementary-busy-remains-ready",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <button>Save document</button>
+          </main>
+
+          <aside aria-busy="true">
+            <h2>Recommendations</h2>
+            <p>Refreshing suggestions.</p>
+          </aside>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          documentUnstable: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-primary-wrapper-busy-remains-loading",
+        title: "Workspace",
+        body: `
+          <div aria-busy="true">
+            <main>
+              <h1>Loading workspace</h1>
+              <p>Please wait while the workspace refreshes.</p>
+            </main>
+          </div>
+        `,
+        expectedPrimaryState: "loading",
+        expectedPropositions: {
+          documentUnstable: true,
+        },
+      },
+      {
+        id: "production-visible-primary-busy-remains-loading",
+        title: "Workspace",
+        body: `
+          <main aria-busy="true">
+            <h1>Loading workspace</h1>
+            <p>Please wait while the workspace refreshes.</p>
+          </main>
+        `,
+        expectedPrimaryState: "loading",
+        expectedPropositions: {
+          documentUnstable: true,
+        },
+      },
+      {
+        id: "production-small-nonmodal-dialog-remains-ready",
+        title: "Editor",
+        body: `
+          <main>
+            <h1>Editor</h1>
+            <p>The document remains editable.</p>
+            <button>Save document</button>
+          </main>
+
+          <dialog
+            open
+            style="
+              width: 240px;
+              height: 120px;
+              padding: 12px;
+            "
+          >
+            <p>Formatting help</p>
+            <button>Got it</button>
+          </dialog>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-large-nonmodal-dialog-remains-blocking",
+        title: "Editor",
+        body: `
+          <main>
+            <h1>Editor</h1>
+            <button>Save document</button>
+          </main>
+
+          <dialog
+            open
+            style="
+              width: 900px;
+              height: 500px;
+              padding: 12px;
+            "
+          >
+            <p>Review this large intervening surface.</p>
+            <button>Continue</button>
+          </dialog>
+        `,
+        expectedPrimaryState: "unknown_interstitial",
+        expectedPropositions: {
+          interstitialPresented: true,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+
+    const page = await context.newPage();
+
+    try {
+      await page.setContent(
+        `
+          <!doctype html>
+          <html>
+            <head>
+              <title>Native modal dialog</title>
+            </head>
+            <body>
+              <main>
+                <h1>Editor</h1>
+                <button>Save document</button>
+              </main>
+
+              <dialog
+                id="production-native-modal"
+                style="
+                  width: 240px;
+                  height: 120px;
+                  padding: 12px;
+                "
+              >
+                <p>
+                  Review this dialog before continuing.
+                </p>
+                <button>Continue</button>
+              </dialog>
+            </body>
+          </html>
+        `,
+        {
+          waitUntil: "load",
+        },
+      );
+
+      await page.evaluate(() => {
+        const dialog = document.getElementById(
+          "production-native-modal",
+        ) as HTMLDialogElement | null;
+
+        if (dialog === null) {
+          throw new Error("production native modal dialog missing");
+        }
+
+        dialog.showModal();
+      });
+
+      const observation = await observeStablePageState(page, 200);
+
+      expect(observation.assessment.kind).toBe("unknown_interstitial");
+
+      expect(observation.propositions.interstitialPresented).toBe(true);
+    } finally {
+      await page.close();
+    }
+
+    expect(definitions).toHaveLength(7);
+  }, 30_000);
 });

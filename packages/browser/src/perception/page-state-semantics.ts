@@ -734,24 +734,31 @@ export async function collectPageStateSurfaceFacts(
       '[role="dialog"],dialog[open],[aria-modal="true"]',
     );
 
-    dialogs.forEach((dialog, index) => {
-      const rect = dialog.getBoundingClientRect();
-      const blocking =
-        dialog.getAttribute("aria-modal") === "true" ||
-        dialog.matches("dialog[open]") ||
-        rect.width * rect.height >=
-          innerWidth * innerHeight * 0.25;
+    const blockingDialogs = dialogs.filter(
+      (dialog) => {
+        const rect = dialog.getBoundingClientRect();
+        const nativeModal =
+          dialog instanceof HTMLDialogElement &&
+          dialog.matches(":modal");
 
-      if (blocking) {
-        surfaces.push(
-          makeSurface(
-            dialog,
-            "dialog:" + index,
-            "blocking_dialog",
-            true,
-          ),
+        return (
+          dialog.getAttribute("aria-modal") === "true" ||
+          nativeModal ||
+          rect.width * rect.height >=
+            innerWidth * innerHeight * 0.25
         );
-      }
+      },
+    );
+
+    blockingDialogs.forEach((dialog, index) => {
+      surfaces.push(
+        makeSurface(
+          dialog,
+          "dialog:" + index,
+          "blocking_dialog",
+          true,
+        ),
+      );
     });
 
     const supplemental = visibleElements(
@@ -856,10 +863,31 @@ export async function collectPageStateSurfaceFacts(
       (surface) => surface.kind === "primary",
     );
 
+    const relevantAriaBusyCount = visibleElements(
+      '[aria-busy="true"]',
+    ).filter((element) => {
+      if (
+        primary instanceof Element &&
+        (
+          belongsToSurface(
+            element,
+            primary,
+            "primary",
+          ) ||
+          element.contains(primary)
+        )
+      ) {
+        return true;
+      }
+
+      return blockingDialogs.some((dialog) =>
+        dialog.contains(element),
+      );
+    }).length;
+
     return {
       available: true,
-      ariaBusyCount:
-        document.querySelectorAll('[aria-busy="true"]').length,
+      ariaBusyCount: relevantAriaBusyCount,
       iframeCount:
         document.querySelectorAll("iframe").length,
       primaryVisibleChars:
