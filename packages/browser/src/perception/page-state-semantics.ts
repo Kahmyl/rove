@@ -174,8 +174,9 @@ export async function collectPageStateSurfaceFacts(
       const text = normalize(value);
 
       return (
-        /\\b(?:access|requests?|connection|network|resource|workspace)\\b.{0,120}\\b(?:restricted|limited|denied|blocked|suspended|cannot be served)\\b/.test(text) ||
-        /\\b(?:restricted|limited|denied|blocked|suspended|forbidden)\\b.{0,120}\\b(?:access|requests?|connection|network|resource|workspace)\\b/.test(text) ||
+        /\\b(?:access|requests?|connection|network|resource|workspace)(?:\\s+access)?\\s+(?:(?:is|are|has been|have been|was|were)\\s+)?(?:(?:temporarily|currently)\\s+)?(?:restricted|limited|denied|blocked|suspended|forbidden)\\b/.test(text) ||
+        /\\b(?:restricted|limited|denied|blocked|suspended|forbidden)\\s+(?:(?:your|this|our|the)\\s+)?(?:access|requests?|connection|network|resource|workspace)\\b/.test(text) ||
+        /\\baccess\\s+cannot be served\\b/.test(text) ||
         /\\bunusual (?:activity|traffic)\\b/.test(text) ||
         /\\btoo many requests\\b/.test(text) ||
         /\\bunavailable for legal reasons\\b/.test(text)
@@ -189,7 +190,6 @@ export async function collectPageStateSurfaceFacts(
         /\\bsomething went wrong\\b/.test(text) ||
         /\\bunexpected error\\b/.test(text) ||
         /\\bpage not found\\b/.test(text) ||
-        /\\bnot found\\b/.test(text) ||
         /\\bbad gateway\\b/.test(text) ||
         /\\bservice unavailable\\b/.test(text) ||
         /\\bapplication unavailable\\b/.test(text) ||
@@ -436,6 +436,63 @@ export async function collectPageStateSurfaceFacts(
       return "";
     };
 
+    const semanticMessagesFor = (root, kind) => {
+      const elements = visibleElements(
+        "h1,h2,h3,p,[role=alert]",
+        root,
+      ).filter((element) =>
+        belongsToSurface(element, root, kind),
+      );
+
+      const messages = [];
+
+      for (const element of elements) {
+        const text = renderedText(element).trim();
+
+        if (text.length > 0) {
+          messages.push(text);
+        }
+
+        if (
+          element.matches("h1,h2,h3") &&
+          element.nextElementSibling instanceof Element &&
+          element.nextElementSibling.matches(
+            "p,[role=alert]",
+          ) &&
+          visible(element.nextElementSibling) &&
+          belongsToSurface(
+            element.nextElementSibling,
+            root,
+            kind,
+          )
+        ) {
+          const followingText = renderedText(
+            element.nextElementSibling,
+          ).trim();
+
+          if (
+            text.length > 0 &&
+            followingText.length > 0
+          ) {
+            messages.push(
+              text + " " + followingText,
+            );
+          }
+        }
+      }
+
+      if (messages.length > 0) {
+        return messages;
+      }
+
+      const fallback =
+        semanticTextFor(root, kind).trim();
+
+      return fallback.length > 0
+        ? [fallback]
+        : [];
+    };
+
     const headingsFor = (root, kind) =>
       visibleElements("h1,h2,h3", root)
         .filter((element) =>
@@ -468,6 +525,8 @@ export async function collectPageStateSurfaceFacts(
       blocking,
     ) => {
       const semanticText = semanticTextFor(root, kind);
+      const semanticMessages =
+        semanticMessagesFor(root, kind);
       const headingText = headingsFor(root, kind);
       const controls = interactiveFor(root, kind);
       const frameOrdinals = iframeOrdinalsFor(root, kind);
@@ -630,6 +689,102 @@ export async function collectPageStateSurfaceFacts(
           credentialInputs.length === 0
         );
 
+      const authenticationStepAction =
+        buttonTexts.some((text) =>
+          [
+            "continue",
+            "next",
+            "sign in",
+            "log in",
+          ].some(
+            (action) =>
+              text === action ||
+              text.startsWith(action + " "),
+          ),
+        );
+
+      const explicitUsernameAutocomplete =
+        usernameLikeInputs.some(
+          (element) =>
+            normalize(
+              element.getAttribute("autocomplete"),
+            ) === "username",
+        );
+
+      const welcomeBackStep =
+        semanticMessages.some((value) => {
+          const text = normalize(value);
+
+          return (
+            text === "welcome back" ||
+            text.startsWith("welcome back ")
+          );
+        });
+
+      const identifierContinuationStep =
+        semanticMessages.some((value) => {
+          const text = normalize(value);
+
+          const identifierPrompt =
+            text.startsWith("enter your email") ||
+            text.startsWith("enter email") ||
+            text.startsWith("enter your username") ||
+            text.startsWith("enter username") ||
+            text.startsWith("enter your user id") ||
+            text.startsWith("enter user id");
+
+          return (
+            identifierPrompt &&
+            text.includes("continue")
+          );
+        });
+
+      const passwordContinuationStep =
+        semanticMessages.some((value) => {
+          const text = normalize(value);
+
+          return (
+            text === "enter your password" ||
+            text === "enter password" ||
+            text.startsWith(
+              "enter your password ",
+            ) ||
+            text.startsWith(
+              "enter password ",
+            ) ||
+            text === "type your password" ||
+            text.startsWith(
+              "type your password ",
+            )
+          );
+        });
+
+      const identifierStepGate =
+        newPasswordInputs.length === 0 &&
+        passwordInputs.length === 0 &&
+        usernameLikeInputs.length > 0 &&
+        authenticationStepAction &&
+        (
+          (
+            explicitUsernameAutocomplete &&
+            (
+              welcomeBackStep ||
+              identifierContinuationStep
+            )
+          ) ||
+          (
+            welcomeBackStep &&
+            identifierContinuationStep
+          )
+        );
+
+      const passwordStepGate =
+        newPasswordInputs.length === 0 &&
+        passwordInputs.length > 0 &&
+        usernameLikeInputs.length === 0 &&
+        authenticationStepAction &&
+        passwordContinuationStep;
+
       const credentialGate =
         newPasswordInputs.length === 0 &&
         (
@@ -642,7 +797,9 @@ export async function collectPageStateSurfaceFacts(
             authenticationCue(
               headingText + " " + semanticText,
             )
-          )
+          ) ||
+          identifierStepGate ||
+          passwordStepGate
         );
 
       const passkeyGate =
@@ -707,9 +864,13 @@ export async function collectPageStateSurfaceFacts(
         identityChooser,
         passkeyGate,
         restrictionCue:
-          restrictionCue(semanticText),
+          semanticMessages.some((message) =>
+            restrictionCue(message),
+          ),
         errorCue:
-          errorCue(semanticText),
+          semanticMessages.some((message) =>
+            errorCue(message),
+          ),
       };
     };
 

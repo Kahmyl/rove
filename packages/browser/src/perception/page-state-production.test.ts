@@ -866,4 +866,268 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(7);
   }, 30_000);
+  it("keeps lexical blockers message-local and recognizes multi-step authentication", async () => {
+    const definitions = [
+      {
+        id: "production-inline-user-not-found-remains-ready",
+        title: "User management",
+        body: `
+          <main>
+            <h1>User management</h1>
+            <p>
+              Search for a user and update their
+              workspace membership.
+            </p>
+
+            <label for="user-search">
+              User email
+            </label>
+            <input
+              id="user-search"
+              type="email"
+            >
+
+            <button>Search users</button>
+
+            <p>User not found</p>
+
+            <button>Edit search</button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          errorPresented: false,
+          accessRestricted: false,
+          authenticationRequired: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-unrelated-restriction-labels-remain-ready",
+        title: "Admin dashboard",
+        body: `
+          <main>
+            <h1>Admin dashboard</h1>
+
+            <h2>Blocked users</h2>
+            <p>
+              Review accounts blocked by administrators.
+            </p>
+            <button>Review blocked users</button>
+
+            <h2>Workspace access</h2>
+            <p>
+              Manage workspace roles and permissions.
+            </p>
+            <button>Manage workspace access</button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          accessRestricted: false,
+          errorPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-identifier-only-auth-step",
+        title: "Authentication",
+        body: `
+          <main>
+            <form>
+              <h1>Welcome back</h1>
+              <p>Enter your email to continue.</p>
+
+              <label for="step-email">
+                Email
+              </label>
+              <input
+                id="step-email"
+                type="email"
+                autocomplete="username"
+              >
+
+              <button type="submit">
+                Continue
+              </button>
+            </form>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+          humanVerificationPresented: false,
+        },
+      },
+      {
+        id: "production-password-only-auth-step",
+        title: "Authentication",
+        body: `
+          <main>
+            <form>
+              <h1>Enter your password</h1>
+              <p>
+                Use the password for your account
+                to continue.
+              </p>
+
+              <label for="step-password">
+                Password
+              </label>
+              <input
+                id="step-password"
+                type="password"
+                autocomplete="current-password"
+              >
+
+              <button type="submit">
+                Continue
+              </button>
+            </form>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+          humanVerificationPresented: false,
+        },
+      },
+      {
+        id: "production-newsletter-email-remains-ready",
+        title: "Product updates",
+        body: `
+          <main>
+            <h1>Product updates</h1>
+            <p>
+              Subscribe to our newsletter.
+            </p>
+
+            <label for="newsletter-email">
+              Email
+            </label>
+            <input
+              id="newsletter-email"
+              type="email"
+            >
+
+            <button type="submit">
+              Subscribe
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          errorPresented: false,
+          accessRestricted: false,
+        },
+      },
+      {
+        id: "production-same-message-dashboard-copy-not-restriction",
+        title: "Admin dashboard",
+        body: `
+          <main>
+            <h1>Admin dashboard</h1>
+            <p>
+              Blocked users can be reviewed from
+              Workspace access settings.
+            </p>
+            <button>
+              Manage workspace
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          accessRestricted: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-split-explicit-restriction-remains-blocking",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace access</h1>
+            <p>
+              Restricted by administrator policy.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "access_restricted",
+        expectedPropositions: {
+          accessRestricted: true,
+        },
+      },
+      {
+        id: "production-welcome-back-email-flow-not-auth-without-corroboration",
+        title: "Welcome",
+        body: `
+          <main>
+            <form>
+              <h1>Welcome back</h1>
+              <p>
+                Subscribe for product updates.
+              </p>
+
+              <label for="returning-email">
+                Email
+              </label>
+              <input
+                id="returning-email"
+                type="email"
+              >
+
+              <button type="submit">
+                Continue
+              </button>
+            </form>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-explicit-page-not-found-remains-error",
+        title: "Page not found",
+        body: `
+          <main>
+            <h1>Page not found</h1>
+            <p>
+              The page you requested does not exist.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "error",
+        expectedPropositions: {
+          errorPresented: true,
+        },
+      },
+      {
+        id: "production-explicit-access-restriction-remains-blocking",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Access restricted</h1>
+            <p>
+              Workspace access has been restricted.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "access_restricted",
+        expectedPropositions: {
+          accessRestricted: true,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+
+    expect(definitions).toHaveLength(10);
+  }, 30_000);
 });
