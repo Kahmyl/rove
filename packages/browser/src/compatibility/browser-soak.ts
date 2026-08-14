@@ -42,6 +42,10 @@ function optionsFromArgs(args: string[]): SoakOptions {
   let headless = true;
 
   for (const arg of args) {
+    if (arg === "--") {
+      continue;
+    }
+
     if (arg.startsWith("--duration-ms=")) {
       durationMs = Number(arg.slice("--duration-ms=".length));
       continue;
