@@ -454,4 +454,193 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(2);
   }, 30_000);
+  it("keeps generic workflow sections eligible for blockers and requires explicit settings workflow evidence", async () => {
+    const definitions = [
+      {
+        id: "production-section-wrapped-structural-auth",
+        title: "Sign in",
+        body: `
+          <main>
+            <section>
+              <h1>Sign in to continue</h1>
+
+              <label for="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                autocomplete="username"
+              >
+
+              <label for="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+              >
+
+              <button type="submit">Sign in</button>
+            </section>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-section-wrapped-restriction",
+        title: "Workspace",
+        body: `
+          <main>
+            <section>
+              <h1>Access restricted</h1>
+              <p>
+                Workspace access has been restricted.
+              </p>
+            </section>
+          </main>
+        `,
+        expectedPrimaryState: "access_restricted",
+        expectedPropositions: {
+          accessRestricted: true,
+        },
+      },
+      {
+        id: "production-billing-purpose-login-is-auth",
+        title: "Billing",
+        body: `
+          <main>
+            <h1>Sign in to manage billing</h1>
+
+            <label for="billing-email">
+              Email
+            </label>
+            <input
+              id="billing-email"
+              type="email"
+              autocomplete="username"
+            >
+
+            <label for="billing-password">
+              Password
+            </label>
+            <input
+              id="billing-password"
+              type="password"
+              autocomplete="current-password"
+            >
+
+            <button type="submit">Sign in</button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-profile-purpose-login-is-auth",
+        title: "Profile",
+        body: `
+          <main>
+            <h1>Log in to view your profile</h1>
+
+            <label for="profile-login-username">
+              Username
+            </label>
+            <input
+              id="profile-login-username"
+              type="text"
+            >
+
+            <label for="profile-login-password">
+              Password
+            </label>
+            <input
+              id="profile-login-password"
+              type="password"
+            >
+
+            <button type="submit">Log in</button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-preferences-purpose-login-is-auth",
+        title: "Preferences",
+        body: `
+          <main>
+            <h1>Sign in to manage preferences</h1>
+
+            <label for="preferences-email">
+              Email
+            </label>
+            <input
+              id="preferences-email"
+              type="email"
+              autocomplete="username"
+            >
+
+            <label for="preferences-password">
+              Password
+            </label>
+            <input
+              id="preferences-password"
+              type="password"
+              autocomplete="current-password"
+            >
+
+            <button type="submit">Sign in</button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-profile-settings-remains-ready",
+        title: "Profile settings",
+        body: `
+          <main>
+            <h1>Profile settings</h1>
+
+            <label for="profile-settings-username">
+              Username
+            </label>
+            <input
+              id="profile-settings-username"
+              type="text"
+            >
+
+            <label for="profile-settings-password">
+              Password
+            </label>
+            <input
+              id="profile-settings-password"
+              type="password"
+            >
+
+            <button type="submit">
+              Save profile
+            </button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+
+    expect(definitions).toHaveLength(6);
+  }, 30_000);
 });

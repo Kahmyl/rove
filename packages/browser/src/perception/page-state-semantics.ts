@@ -302,7 +302,76 @@ export async function collectPageStateSurfaceFacts(
     };
 
     const boundarySelector =
-      '[role="dialog"],dialog[open],[aria-modal="true"],aside,footer,nav,section,[role="alert"]';
+      '[role="dialog"],dialog[open],[aria-modal="true"],aside,footer,nav,[role="alert"]';
+
+    const interactiveSelector =
+      'a[href],button,input:not([type="hidden"]),textarea,select,[role="button"],[contenteditable="true"],[tabindex]';
+
+    const sectionActsAsSupplementary = (section) => {
+      if (
+        !(section instanceof Element) ||
+        section.tagName !== "SECTION"
+      ) {
+        return false;
+      }
+
+      if (section.closest(boundarySelector) !== null) {
+        return false;
+      }
+
+      const primaryOwner = section.closest("main");
+
+      if (!(primaryOwner instanceof Element)) {
+        return true;
+      }
+
+      const independentControls = visibleElements(
+        interactiveSelector,
+        primaryOwner,
+      ).filter(
+        (control) =>
+          !section.contains(control) &&
+          control.closest(boundarySelector) === null &&
+          control.closest("section") === null,
+      );
+
+      return independentControls.length >= 1;
+    };
+
+    const supplementarySectionBoundaryFor = (node) => {
+      let section = node.closest("section");
+
+      while (section instanceof Element) {
+        if (sectionActsAsSupplementary(section)) {
+          return section;
+        }
+
+        section =
+          section.parentElement?.closest("section") ??
+          null;
+      }
+
+      return null;
+    };
+
+    const nearestSurfaceBoundary = (node) => {
+      const explicitBoundary =
+        node.closest(boundarySelector);
+      const sectionBoundary =
+        supplementarySectionBoundaryFor(node);
+
+      if (explicitBoundary === null) {
+        return sectionBoundary;
+      }
+
+      if (sectionBoundary === null) {
+        return explicitBoundary;
+      }
+
+      return explicitBoundary.contains(sectionBoundary)
+        ? sectionBoundary
+        : explicitBoundary;
+    };
 
     const belongsToSurface = (node, root, kind) => {
       if (!(node instanceof Element)) {
@@ -313,7 +382,8 @@ export async function collectPageStateSurfaceFacts(
         return root.contains(node);
       }
 
-      const boundary = node.closest(boundarySelector);
+      const boundary =
+        nearestSurfaceBoundary(node);
 
       if (boundary === null) {
         return root.contains(node);
@@ -376,7 +446,7 @@ export async function collectPageStateSurfaceFacts(
 
     const interactiveFor = (root, kind) =>
       visibleElements(
-        'a[href],button,input:not([type="hidden"]),textarea,select,[role="button"],[contenteditable="true"],[tabindex]',
+        interactiveSelector,
         root,
       ).filter((element) =>
         belongsToSurface(element, root, kind),
@@ -585,6 +655,30 @@ export async function collectPageStateSurfaceFacts(
           normalize(headingText + " " + semanticText),
         );
 
+      const settingsWorkflowAction = buttonTexts.some((text) =>
+        /\\b(?:save|update|change|edit|manage)\\b/.test(text),
+      );
+
+      const normalizedHeadingText =
+        normalize(headingText);
+
+      const explicitSettingsHeading =
+        /\\bsettings\\b/.test(normalizedHeadingText) ||
+        /^(?:change|update) password\\b/.test(
+          normalizedHeadingText,
+        );
+
+      const settingsContext =
+        kind === "primary" &&
+        !authenticationDirectivePresent &&
+        (
+          explicitSettingsHeading ||
+          (
+            settingsCue(headingText) &&
+            settingsWorkflowAction
+          )
+        );
+
       return {
         id,
         kind,
@@ -598,7 +692,7 @@ export async function collectPageStateSurfaceFacts(
               metaCue(headingText)
             : metaCue(headingText),
         documentRoleContext,
-        settingsContext: settingsCue(headingText),
+        settingsContext,
         workflowUnavailable:
           kind === "primary" &&
           workflowUnavailableCue(headingText + " " + semanticText),
@@ -665,6 +759,10 @@ export async function collectPageStateSurfaceFacts(
     ).filter(
       (element) =>
         element !== primary &&
+        (
+          element.tagName !== "SECTION" ||
+          sectionActsAsSupplementary(element)
+        ) &&
         !dialogs.some((dialog) =>
           dialog.contains(element),
         ),
