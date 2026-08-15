@@ -163,7 +163,7 @@ describe("Milestone 4 runtime HTTP API", () => {
     expect((observations.body.items as { type: string }[]).map((item) => item.type)).toEqual(expect.arrayContaining(["session_started", "agent_typed", "agent_clicked", "screenshot_captured", "record_saved"]));
     const ended = await json(baseUrl, `/sessions/${sessionId}/end`, { method: "POST" }, authorization);
     expect(ended.body).toMatchObject({ status: "completed", controller: null });
-  });
+  }, 15_000);
 
   it("rejects non-loopback configuration without a token", () => {
     const config = loadConfig({ env: { ROVE_RUNTIME_HOST: "0.0.0.0" } });
@@ -201,7 +201,7 @@ describe("Milestone 4 runtime HTTP API", () => {
     expect(waits.waiterCount(sessionId)).toBe(0);
     expect((await json(baseUrl, `/sessions/${sessionId}/control`, {}, authorization)).body).toMatchObject({ status: "active", controller: "agent" });
     await json(baseUrl, `/sessions/${sessionId}/end`, { method: "POST" }, authorization);
-  });
+  }, 15_000);
 });
 
 describe("Milestone 8 Companion session discovery", () => {

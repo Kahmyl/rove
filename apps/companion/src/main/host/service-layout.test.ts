@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { resolveDesktopServiceLayout } from "./service-layout.js";
@@ -12,13 +13,18 @@ describe("resolveDesktopServiceLayout", () => {
         electronExecutable: "/Applications/Rove.app/Contents/MacOS/Rove",
       }),
     ).toEqual({
-      runtimeDirectory:
-        "/Applications/Rove.app/Contents/Resources/services/runtime",
+      runtimeDirectory: join(
+        "/Applications/Rove.app/Contents/Resources",
+        "services",
+        "runtime",
+      ),
       runtimeEntrypoint: "dist/main.js",
       nodeExecutable: "/Applications/Rove.app/Contents/MacOS/Rove",
       electronRunAsNode: true,
-      playwrightBrowsersPath:
-        "/Applications/Rove.app/Contents/Resources/browsers",
+      playwrightBrowsersPath: join(
+        "/Applications/Rove.app/Contents/Resources",
+        "browsers",
+      ),
     });
   });
 

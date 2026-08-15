@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import {
   errors as playwrightErrors,
   type Browser,
@@ -11,6 +12,7 @@ import {
   type ActionResult,
   type Artifact,
   type BrowserLaunchConfig,
+  type BrowserRuntimeCapabilities,
   type InspectOptions,
   type PageInspection,
   type PageStateIdentity,
@@ -46,6 +48,16 @@ import {
   type ResolvedTarget,
 } from "./targets/target-resolver.js";
 import { isSensitiveTarget } from "./targets/target-identity.js";
+import type { ResolvedDownloadRuntime } from "./downloads/download-runtime.js";
+import { saveManagedDownload } from "./downloads/managed-downloads.js";
+import {
+  verifyChromiumSandbox,
+  type BrowserSandboxVerification,
+} from "./runtime/browser-sandbox.js";
+import type {
+  BrowserDistribution,
+  BrowserLaunchPlanDiagnostic,
+} from "./runtime/browser-launch-plan.js";
 import {
   collectPageStateIdentity,
   observeStablePageState,
@@ -68,8 +80,6 @@ function browserClosedError(): RoveError {
 }
 
 export class PlaywrightBrowserSession implements BrowserSession {
-  readonly id = `browser_${randomUUID()}`;
-
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
@@ -79,13 +89,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private activeTabTimer: ReturnType<typeof setInterval> | undefined;
   private reconcilingActiveTab = false;
   private readonly mainDocumentStatuses = new Map<string, number>();
+  private downloadSaveQueue: Promise<void> = Promise.resolve();
 
   private constructor(
+    readonly id: string,
+    readonly capabilities: BrowserRuntimeCapabilities,
     private readonly browser: Browser,
     private readonly context: BrowserContext,
     private readonly actionTimeoutMs: number,
     private readonly navigationTimeoutMs: number,
     private readonly typingDelayMs: number,
+    private readonly headless: boolean,
+    private readonly downloadRuntime?: ResolvedDownloadRuntime,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -126,16 +141,36 @@ export class PlaywrightBrowserSession implements BrowserSession {
   static async create(
     browser: Browser,
     config: BrowserLaunchConfig,
+    runtime: BrowserRuntimeSnapshot,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const context = await browser.newContext({
+      acceptDownloads: true,
+      ...(downloadRuntime === undefined
+        ? {}
+        : { downloadsPath: downloadRuntime.directory }),
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
     });
-    return this.createFromContext(browser, context, config, false);
+    const sandbox = await verifyChromiumSandbox(context);
+    return this.createFromContext(
+      browser,
+      context,
+      config,
+      false,
+      runtime,
+      sandbox,
+      downloadRuntime,
+      sessionId,
+    );
   }
 
   static async createPersistent(
     context: BrowserContext,
     config: BrowserLaunchConfig,
+    runtime: BrowserRuntimeSnapshot,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const browser = context.browser();
 
@@ -146,7 +181,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
       });
     }
 
-    return this.createFromContext(browser, context, config, true);
+    const sandbox = await verifyChromiumSandbox(context);
+
+    return this.createFromContext(
+      browser,
+      context,
+      config,
+      true,
+      runtime,
+      sandbox,
+      downloadRuntime,
+      sessionId,
+    );
   }
 
   private static async createFromContext(
@@ -154,13 +200,21 @@ export class PlaywrightBrowserSession implements BrowserSession {
     context: BrowserContext,
     config: BrowserLaunchConfig,
     preserveExistingPages: boolean,
+    runtime: BrowserRuntimeSnapshot,
+    sandbox: BrowserSandboxVerification,
+    downloadRuntime?: ResolvedDownloadRuntime,
+    sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
+      sessionId,
+      runtimeCapabilities(browser, config, runtime, sandbox, downloadRuntime),
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
       config.interaction?.typingDelayMs ?? 0,
+      config.headless,
+      downloadRuntime,
     );
 
     await session.installDomActivityBridge();
@@ -198,7 +252,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
       return;
     }
 
-    this.browserCdp = await this.browser.newBrowserCDPSession();
+    if (this.headless) {
+      return;
+    }
+
+    this.browserCdp =
+      await this.browser.newBrowserCDPSession();
 
     await this.reconcileActiveTab();
 
@@ -419,6 +478,82 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     page.on("domcontentloaded", observeTitle);
     page.on("load", observeTitle);
+    page.on("dialog", (dialog) => {
+      const state =
+        this.pageRegistry.has(pageId)
+          ? this.pageRegistry.stateFor(pageId)
+          : undefined;
+
+      this.emitActivity({
+        type: "dialog_opened",
+        pageId,
+        ...(state === undefined ? {} : { pageRevision: state.revision }),
+        timestamp:
+          new Date().toISOString(),
+        data: {
+          type: dialog.type(),
+          defaultAction: "dismiss",
+        },
+      });
+
+      void dialog.dismiss().catch(() => undefined);
+    });
+    page.on("download", (download) => {
+      if (this.downloadRuntime === undefined) {
+        return;
+      }
+
+      this.downloadSaveQueue =
+        this.downloadSaveQueue
+          .then(async () => {
+            if (this.downloadRuntime === undefined) {
+              return;
+            }
+
+            const saved = await saveManagedDownload(
+              download,
+              this.downloadRuntime.directory,
+            );
+            const state =
+              this.pageRegistry.has(pageId)
+                ? this.pageRegistry.stateFor(pageId)
+                : undefined;
+
+            this.emitActivity({
+              type: "download_completed",
+              pageId,
+              ...(state === undefined ? {} : { pageRevision: state.revision }),
+              timestamp:
+                new Date().toISOString(),
+              data: {
+                filename: saved.filename,
+                path: saved.path,
+                directory: saved.directory,
+                sizeBytes: saved.sizeBytes,
+                suggestedFilename:
+                  download.suggestedFilename(),
+                url: page.url(),
+              },
+            });
+          })
+          .catch((error: unknown) => {
+            this.emitActivity({
+              type: "download_failed",
+              pageId,
+              timestamp:
+                new Date().toISOString(),
+              data: {
+                reason:
+                  error instanceof Error
+                    ? error.message
+                    : "Unknown download failure.",
+                suggestedFilename:
+                  download.suggestedFilename(),
+                url: page.url(),
+              },
+            });
+          });
+    });
     page.on("response", (response) => {
       if (
         response.request().resourceType() === "document" &&
@@ -1038,8 +1173,21 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch {
       // Browser already closed; continue shutdown.
     }
+    await this.downloadSaveQueue.catch(
+      () => undefined,
+    );
     this.pageRegistry.clear();
     this.inspector.clear();
+
+    if (this.downloadRuntime?.temporary === true) {
+      await rm(
+        this.downloadRuntime.root,
+        {
+          recursive: true,
+          force: true,
+        },
+      ).catch(() => undefined);
+    }
   }
 
   private toSummary(state: PageState): PageSummary {
@@ -1051,4 +1199,54 @@ export class PlaywrightBrowserSession implements BrowserSession {
       ...(state.title === undefined ? {} : { title: state.title }),
     };
   }
+}
+
+function runtimeCapabilities(
+  browser: Browser,
+  config: BrowserLaunchConfig,
+  runtime: BrowserRuntimeSnapshot,
+  sandbox: BrowserSandboxVerification,
+  downloadRuntime?: ResolvedDownloadRuntime,
+): BrowserRuntimeCapabilities {
+  return {
+    browserFamily: "chromium",
+    distribution: runtime.distribution,
+    browserVersion: browser.version(),
+    headless: config.headless,
+    profile:
+      config.profile.mode === "persistent"
+        ? {
+            mode: "persistent",
+            name: config.profile.name,
+          }
+        : { mode: "temporary" },
+    downloads: {
+      managed: downloadRuntime !== undefined,
+      evidence: downloadRuntime !== undefined,
+    },
+    storage: {
+      cookies: true,
+      localStorage: true,
+      indexedDb: true,
+      cacheStorage: true,
+      sessionStorage: "page_scoped",
+      serviceWorkers: true,
+    },
+    humanInteraction: {
+      available: !config.headless,
+    },
+    sandbox: {
+      requested: runtime.sandbox,
+      verified: sandbox.status,
+      verificationMethod: sandbox.method,
+      diagnostic: sandbox.details,
+    },
+    diagnostics: runtime.diagnostics,
+  };
+}
+
+export interface BrowserRuntimeSnapshot {
+  distribution: BrowserDistribution;
+  sandbox: boolean;
+  diagnostics: BrowserLaunchPlanDiagnostic[];
 }

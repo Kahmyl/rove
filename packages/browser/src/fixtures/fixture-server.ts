@@ -47,6 +47,10 @@ const ACTIONS_HTML = `<!doctype html>
       <button id="change-state">Change state</button>
       <button id="navigate" onclick="location.href='/result'">Navigate result</button>
       <button id="open-popup" onclick="window.open('/popup-target','_blank')">Open popup</button>
+      <button id="show-alert" onclick="alert('fixture alert')">Show alert</button>
+      <button id="show-confirm" onclick="document.body.dataset.confirmResult = String(confirm('fixture confirm'))">Show confirm</button>
+      <button id="show-prompt" onclick="document.body.dataset.promptResult = String(prompt('fixture prompt', 'secret'))">Show prompt</button>
+      <button id="set-beforeunload">Set beforeunload</button>
       <button id="disabled" disabled>Disabled action</button>
       <button id="hide-target">Hide target</button>
       <button id="becomes-hidden">Becomes hidden</button>
@@ -66,14 +70,42 @@ const ACTIONS_HTML = `<!doctype html>
       document.querySelector('#change-state').addEventListener('click', event => event.currentTarget.textContent = 'State changed');
       document.querySelector('#hide-target').addEventListener('click', () => document.querySelector('#becomes-hidden').style.display = 'none');
       document.querySelector('#mutate-unrelated').addEventListener('click', () => document.querySelector('#unrelated').textContent = 'changed');
+      document.querySelector('#set-beforeunload').addEventListener('click', () => {
+        window.onbeforeunload = () => 'fixture beforeunload';
+        document.body.dataset.beforeunloadSet = 'true';
+      });
       addEventListener('scroll', () => document.querySelector('#scroll-state').textContent = 'scrolled:' + Math.round(scrollY), { passive: true });
     </script>
   </body>
 </html>`;
 
 const RESULT_HTML = `<!doctype html><html><head><title>Rove Result Fixture</title></head><body><h1>Result page</h1><a href="/actions">Back to actions</a></body></html>`;
+const DOWNLOAD_HTML = `<!doctype html><html><head><title>Download fixture</title></head><body><a id="download-file" href="/download.txt">Download file</a></body></html>`;
 const HISTORY_A_HTML = `<!doctype html><html><head><title>History A</title></head><body><h1>History A</h1><a href="/history-b">History B</a></body></html>`;
 const HISTORY_B_HTML = `<!doctype html><html><head><title>History B</title></head><body><h1>History B</h1></body></html>`;
+const IFRAME_HTML = `<!doctype html><html><head><title>Iframe fixture</title></head><body>
+  <h1>Iframe fixture</h1>
+  <button id="outer-button">Outer frame button</button>
+  <iframe title="Same origin frame" src="/same-origin-frame"></iframe>
+  <iframe id="cross-origin-frame" title="Cross origin frame"></iframe>
+  <script>
+    document.querySelector('#cross-origin-frame').src =
+      location.href.replace('127.0.0.1', 'localhost').replace('/iframes', '/cross-origin-frame');
+  </script>
+</body></html>`;
+const SAME_ORIGIN_FRAME_HTML = `<!doctype html><html><body>
+  <p>same origin frame loaded</p>
+  <button id="same-frame-button">Same frame button</button>
+  <script>
+    document.querySelector('#same-frame-button').addEventListener('click', event => {
+      event.currentTarget.textContent = 'Same frame clicked';
+    });
+  </script>
+</body></html>`;
+const CROSS_ORIGIN_FRAME_HTML = `<!doctype html><html><body>
+  <p>cross origin frame loaded</p>
+  <button id="cross-frame-button">Cross frame button</button>
+</body></html>`;
 const POPUP_TARGET_HTML = `<!doctype html><html><head><title>Popup target</title></head><body><h1>Popup target</h1></body></html>`;
 const HANDOFF_HTML = `<!doctype html><html><head><title>Human handoff</title></head><body>
   <p id="current">Current value: initial</p>
@@ -153,14 +185,27 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
   const server = createServer((request, response) => {
+    if (request.url === "/download.txt") {
+      response.writeHead(200, {
+        "content-disposition": 'attachment; filename="rove-session-download.txt"',
+        "content-type": "text/plain; charset=utf-8",
+      });
+      response.end("rove session download");
+      return;
+    }
+
     const fixture: string | { body: string; status: number } =
       {
         "/": inspectionHtml,
         "/popup": POPUP_HTML,
         "/actions": ACTIONS_HTML,
         "/result": RESULT_HTML,
+        "/download": DOWNLOAD_HTML,
         "/history-a": HISTORY_A_HTML,
         "/history-b": HISTORY_B_HTML,
+        "/iframes": IFRAME_HTML,
+        "/same-origin-frame": SAME_ORIGIN_FRAME_HTML,
+        "/cross-origin-frame": CROSS_ORIGIN_FRAME_HTML,
         "/popup-target": POPUP_TARGET_HTML,
         "/handoff": HANDOFF_HTML,
         "/access-restricted": ACCESS_RESTRICTED_HTML,

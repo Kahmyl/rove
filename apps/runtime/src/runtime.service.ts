@@ -1,5 +1,5 @@
-import { resolve } from "node:path";
 import { Inject, Injectable } from "@nestjs/common";
+import { readFile } from "node:fs/promises";
 import type { RoveConfig } from "@rove/config";
 import {
   RoveError,
@@ -30,6 +30,7 @@ import {
   requestHumanRequestSchema,
   controlWaitRequestSchema,
 } from "@rove/protocol";
+import { RoveProfileLock, RoveProfileManager } from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
@@ -45,6 +46,7 @@ import { ROVE_CONFIG } from "./tokens.js";
 export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
+  private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
 
   constructor(
@@ -63,7 +65,20 @@ export class RuntimeService implements RoveRuntime {
 
   async startSession(request: StartSessionRequest): Promise<Session> {
     let session = await this.sessions.start(request);
+    let profileLock: RoveProfileLock | undefined;
     try {
+      const persistentProfile =
+        await new RoveProfileManager(this.config.home)
+          .resolvePersistentProfile(
+            session.profile,
+            this.config.browser.preferredBrowser,
+          );
+      if (persistentProfile !== undefined) {
+        profileLock = await RoveProfileLock.acquire(
+          persistentProfile.userDataDir,
+        );
+      }
+
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
         browser: this.config.browser.preferredBrowser,
@@ -73,15 +88,9 @@ export class RuntimeService implements RoveRuntime {
               executablePath: this.config.browser.executablePath,
             }),
         profile: session.profile,
-        ...(session.profile.mode === "persistent"
-          ? {
-              profileUserDataDir: resolve(
-                this.config.home,
-                "profiles",
-                session.profile.name,
-              ),
-            }
-          : {}),
+        ...(persistentProfile === undefined
+          ? {}
+          : { profileUserDataDir: persistentProfile.userDataDir }),
         timeouts: {
           launchMs: this.config.timeouts.launchMs,
           navigationMs: this.config.timeouts.navigationMs,
@@ -92,9 +101,13 @@ export class RuntimeService implements RoveRuntime {
           typingDelayMs: this.config.browser.typingDelayMs,
         },
       });
+      if (profileLock !== undefined) {
+        this.profileLocks.set(session.id, profileLock);
+        profileLock = undefined;
+      }
 
       browser.onActivity((activity) => {
-        this.enqueueHumanActivity(session.id, activity);
+        this.persistBrowserActivity(session.id, activity);
       });
 
       if (request.startUrl !== undefined)
@@ -117,6 +130,7 @@ export class RuntimeService implements RoveRuntime {
               },
             }),
         ...(activePageId === undefined ? {} : { activePageId }),
+        browserRuntime: browser.capabilities,
       });
       await this.observations.append(session.id, {
         actor: "system",
@@ -134,6 +148,8 @@ export class RuntimeService implements RoveRuntime {
       return session;
     } catch (error) {
       await this.browser.close(session.id).catch(() => undefined);
+      await profileLock?.release().catch(() => undefined);
+      await this.releaseProfileLock(session.id);
       const now = new Date().toISOString();
       await this.sessions.update({
         ...session,
@@ -188,6 +204,8 @@ export class RuntimeService implements RoveRuntime {
         await this.browser.close(sessionId);
       } catch (error) {
         closeError = error;
+      } finally {
+        await this.releaseProfileLock(sessionId);
       }
       const session = await this.sessions.end(sessionId);
       const observation = await this.observations.append(sessionId, {
@@ -729,6 +747,153 @@ export class RuntimeService implements RoveRuntime {
 
   private async flushHumanActivity(sessionId: string): Promise<void> {
     await this.humanActivityQueues.get(sessionId);
+  }
+
+  private enqueueDownloadEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    const previous =
+      this.humanActivityQueues.get(sessionId) ??
+      Promise.resolve();
+
+    const next = previous
+      .then(() =>
+        this.persistDownloadEvidence(
+          sessionId,
+          activity,
+        ),
+      )
+      .catch(() => undefined)
+      .finally(() => {
+        if (
+          this.humanActivityQueues.get(sessionId) ===
+          next
+        ) {
+          this.humanActivityQueues.delete(sessionId);
+        }
+      });
+
+    this.humanActivityQueues.set(
+      sessionId,
+      next,
+    );
+  }
+
+  private async persistDownloadEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): Promise<void> {
+    const data =
+      activity.data as Record<string, unknown>;
+    const path =
+      typeof data.path === "string"
+        ? data.path
+        : undefined;
+    const filename =
+      typeof data.filename === "string"
+        ? data.filename
+        : "download";
+
+    if (path === undefined) {
+      await this.observations.append(sessionId, {
+        actor: "browser",
+        type: "download_failed",
+        data: {
+          reason:
+            "Managed download completed without a saved path.",
+          filename,
+        },
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : { pageRevision: activity.pageRevision }),
+      });
+      return;
+    }
+
+    const bytes = await readFile(path);
+    const item = await this.evidence.savePayload(
+      sessionId,
+      {
+        type: "file",
+        label: filename,
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : { pageRevision: activity.pageRevision }),
+        ...(typeof data.url === "string"
+          ? { url: data.url }
+          : {}),
+        metadata: {
+          filename,
+          managedPath: path,
+          directory: data.directory,
+          sizeBytes: data.sizeBytes,
+          suggestedFilename:
+            data.suggestedFilename,
+          source: "browser_download",
+        },
+      },
+      bytes,
+    );
+
+    const observation = await this.observations.append(sessionId, {
+      actor: "browser",
+      type: "download_completed",
+      data: {
+        evidenceId: item.id,
+        filename,
+        sizeBytes:
+          typeof data.sizeBytes === "number"
+            ? data.sizeBytes
+            : bytes.byteLength,
+        managedPath: path,
+      },
+      pageId: activity.pageId,
+      ...(activity.pageRevision === undefined
+        ? {}
+        : { pageRevision: activity.pageRevision }),
+    });
+    await this.controlWait.publish(
+      sessionId,
+      observation,
+    );
+  }
+
+  private persistBrowserActivity(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    if (activity.type === "download_completed") {
+      this.enqueueDownloadEvidence(sessionId, activity);
+      return;
+    }
+
+    if (activity.type === "download_failed") {
+      void this.observations.append(sessionId, {
+        actor: "browser",
+        type: "download_failed",
+        data: activity.data,
+        pageId: activity.pageId,
+        ...(activity.pageRevision === undefined
+          ? {}
+          : {
+              pageRevision:
+                activity.pageRevision,
+            }),
+      });
+      return;
+    }
+
+    this.enqueueHumanActivity(sessionId, activity);
+  }
+
+  private async releaseProfileLock(sessionId: string): Promise<void> {
+    const lock = this.profileLocks.get(sessionId);
+    if (lock === undefined) return;
+    this.profileLocks.delete(sessionId);
+    await lock.release();
   }
 
   private humanObservationType(type: BrowserActivity["type"]): string {

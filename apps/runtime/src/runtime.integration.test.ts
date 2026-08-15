@@ -11,6 +11,7 @@ import {
 import { loadConfig } from "@rove/config";
 import {
   RoveError,
+  type BrowserRuntimeCapabilities,
   type PageInspection,
   type TargetReference,
 } from "@rove/protocol";
@@ -42,6 +43,25 @@ interface Harness {
 const homes: string[] = [];
 const servers: FixtureServer[] = [];
 const active: { runtime: RuntimeService; id: string }[] = [];
+const testCapabilities: BrowserRuntimeCapabilities = {
+  browserFamily: "chromium",
+  distribution: "chromium",
+  browserVersion: "test",
+  headless: true,
+  profile: { mode: "temporary" },
+  downloads: { managed: true, evidence: true },
+  storage: {
+    cookies: true,
+    localStorage: true,
+    indexedDb: true,
+    cacheStorage: true,
+    sessionStorage: "page_scoped",
+    serviceWorkers: true,
+  },
+  humanInteraction: { available: false },
+  sandbox: { requested: true, verified: "unknown" },
+  diagnostics: [],
+};
 
 async function harness(
   engine: BrowserEngine = new PlaywrightBrowserEngine(),
@@ -104,6 +124,38 @@ function target(inspection: PageInspection, name: string): TargetReference {
   };
 }
 
+function readyBrowserSession(id: string): BrowserSession {
+  return {
+    id,
+    capabilities: testCapabilities,
+    onActivity: () => () => undefined,
+    inspect: async () => ({
+      pageId: "page_01",
+      revision: 0,
+      url: "about:blank",
+      title: "",
+      metadata: {
+        pageState: {
+          kind: "ready",
+          confidence: "high",
+          signals: ["test:ready"],
+          recommendedAction: "continue",
+        },
+      },
+    }),
+    pages: async () => [
+      {
+        id: "page_01",
+        url: "about:blank",
+        title: "",
+        active: true,
+        revision: 0,
+      },
+    ],
+    close: async () => undefined,
+  } as unknown as BrowserSession;
+}
+
 async function waitForObservation(
   runtime: RuntimeService,
   sessionId: string,
@@ -156,6 +208,21 @@ describe("Milestone 4 runtime integration", () => {
       controller: "agent",
       activePageId: "page_01",
     });
+    expect(agent.browserRuntime).toMatchObject({
+      browserFamily: "chromium",
+      distribution: "chromium",
+      headless: true,
+      profile: { mode: "temporary" },
+      downloads: { managed: true, evidence: true },
+    });
+    expect(["enabled", "disabled", "unknown"]).toContain(
+      agent.browserRuntime?.sandbox.verified,
+    );
+    expect(agent.browserRuntime?.sandbox.requested).toBe(process.platform !== "win32");
+    expect(agent.browserRuntime?.sandbox.verificationMethod).toBe(
+      "chrome_sandbox_page",
+    );
+    expect(agent.browserRuntime?.sandbox.diagnostic?.length).toBeGreaterThan(0);
     expect(agent.id).toMatch(/^ses_/);
     expect(browser.has(agent.id)).toBe(true);
     expect(
@@ -206,6 +273,66 @@ describe("Milestone 4 runtime integration", () => {
     expect(
       (await runtime.getObservations(sessionId)).items.map((item) => item.type),
     ).toEqual(["session_failed"]);
+  });
+
+  it("creates Rove-managed persistent profile metadata before browser launch", async () => {
+    const { runtime, home } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      profile: {
+        mode: "persistent",
+        name: "default",
+      },
+    });
+    active.push({ runtime, id: session.id });
+
+    const metadata = JSON.parse(
+      await readFile(
+        join(home, ".rove", "profiles", "default", "profile.json"),
+        "utf8",
+      ),
+    );
+
+    expect(metadata).toMatchObject({
+      name: "default",
+      browserDistribution: "chromium",
+    });
+    expect(metadata.createdAt).toEqual(expect.any(String));
+    expect(metadata.lastUsedAt).toEqual(expect.any(String));
+  });
+
+  it("rejects a second active persistent session using the same profile", async () => {
+    let starts = 0;
+    const engine: BrowserEngine = {
+      start: async () => {
+        starts += 1;
+        return readyBrowserSession(`browser_${starts}`);
+      },
+    };
+
+    const { runtime } = await harness(engine);
+    const first = await runtime.startSession({
+      mode: "agent",
+      profile: {
+        mode: "persistent",
+        name: "default",
+      },
+    });
+    active.push({ runtime, id: first.id });
+
+    await expect(
+      runtime.startSession({
+        mode: "agent",
+        profile: {
+          mode: "persistent",
+          name: "default",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "PROFILE_LOCKED",
+    });
+
+    expect(starts).toBe(1);
   });
 
   it("pauses for human review when a site explicitly restricts access", async () => {
@@ -429,6 +556,61 @@ describe("Milestone 4 runtime integration", () => {
     );
   });
 
+  it("exposes managed browser downloads as file evidence", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspection = await runtime.inspectBrowser(session.id);
+    await runtime.click(session.id, {
+      target: target(inspection, "Download file"),
+    });
+
+    const downloaded = await waitForObservation(
+      runtime,
+      session.id,
+      "download_completed",
+    );
+
+    expect(downloaded).toMatchObject({
+      actor: "browser",
+      type: "download_completed",
+      data: {
+        filename: "rove-session-download.txt",
+      },
+    });
+
+    const evidence = await runtime.listEvidence(session.id);
+    const file = evidence.find((item) => item.type === "file");
+
+    expect(file).toMatchObject({
+      sessionId: session.id,
+      type: "file",
+      label: "rove-session-download.txt",
+      metadata: {
+        filename: "rove-session-download.txt",
+        source: "browser_download",
+        sizeBytes: "rove session download".length,
+      },
+    });
+
+    expect(downloaded.data).toMatchObject({
+      evidenceId: file?.id,
+    });
+    await expect(runtime.readEvidence(session.id, file!.id))
+      .resolves.toMatchObject({
+        id: file!.id,
+        binary: {
+          available: true,
+          encoding: "external",
+        },
+      });
+  });
+
   it("serializes runtime mutations per session without blocking another session", async () => {
     const order: string[] = [];
     let releaseSlow!: () => void;
@@ -445,6 +627,7 @@ describe("Milestone 4 runtime integration", () => {
         const browserId = `browser_fake_${browserCounter++}`;
         return {
           id: browserId,
+          capabilities: testCapabilities,
           onActivity: () => () => undefined,
           pages: async () => [
             { id: "page_01", url: "about:blank", active: true, revision: 0 },

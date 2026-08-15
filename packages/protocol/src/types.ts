@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type {
   actorSchema,
   browserProfileSchema,
+  browserRuntimeCapabilitiesSchema,
   clickRequestSchema,
   controllerSchema,
   evidenceReadResultSchema,
@@ -35,6 +36,9 @@ export type Controller = z.infer<typeof controllerSchema>;
 export type HumanHandoff = z.infer<typeof humanHandoffSchema>;
 export type Actor = z.infer<typeof actorSchema>;
 export type BrowserProfileConfig = z.infer<typeof browserProfileSchema>;
+export type BrowserRuntimeCapabilities = z.infer<
+  typeof browserRuntimeCapabilitiesSchema
+>;
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionSnapshot = Session;
 export type StartSessionRequest = z.input<typeof startSessionRequestSchema>;

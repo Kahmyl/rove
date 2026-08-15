@@ -1,9 +1,14 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { chromium, type Browser } from "playwright";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { BrowserLaunchConfig } from "@rove/protocol";
+import type {
+  BrowserLaunchConfig,
+  PageInspection,
+  TargetReference,
+} from "@rove/protocol";
 
 import type { BrowserSession } from "./engine.js";
 import {
@@ -11,6 +16,7 @@ import {
   type FixtureServer,
 } from "./fixtures/fixture-server.js";
 import { PlaywrightBrowserEngine } from "./playwright-browser-engine.js";
+import { resolveBrowserLaunchPlan } from "./runtime/browser-launch-plan.js";
 
 const config: BrowserLaunchConfig = {
   headless: true,
@@ -49,6 +55,35 @@ async function waitForPageCount(
   throw new Error(`Timed out waiting for ${count} browser pages.`);
 }
 
+function target(inspection: PageInspection, name: string): TargetReference {
+  const found = inspection.targets?.find((candidate) => candidate.name === name);
+  if (!found) throw new Error(`Missing fixture target: ${name}`);
+  return { pageId: inspection.pageId, revision: inspection.revision, ref: found.ref };
+}
+
+async function waitForFile(path: string, timeoutMs = 3_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error(`Timed out waiting for file: ${path}`);
+}
+
 afterEach(async () => {
   while (sessions.length > 0) {
     await sessions.pop()?.close();
@@ -60,10 +95,55 @@ afterEach(async () => {
 });
 
 describe("PlaywrightBrowserEngine", () => {
+  it("reports Chromium when requested Chrome falls back to bundled Chromium", async () => {
+    const fallbackBrowser = {} as Browser;
+    const launch = vi.spyOn(chromium, "launch")
+      .mockRejectedValueOnce(new Error("Executable doesn't exist"))
+      .mockResolvedValueOnce(fallbackBrowser);
+
+    try {
+      const engine = new PlaywrightBrowserEngine() as unknown as {
+        launch(plan: ReturnType<typeof resolveBrowserLaunchPlan>): Promise<{
+          browser: Browser;
+          distribution: "chrome" | "chromium";
+        }>;
+      };
+
+      const launched = await engine.launch(
+        resolveBrowserLaunchPlan({
+          ...config,
+          browser: "chrome",
+        }),
+      );
+
+      expect(launched.browser).toBe(fallbackBrowser);
+      expect(launched.distribution).toBe("chromium");
+    } finally {
+      launch.mockRestore();
+    }
+  });
+
   it("starts a real temporary Chromium session with page_01", async () => {
     const session = await startSession();
 
     expect(session.id).toMatch(/^browser_/);
+    expect(session.capabilities).toMatchObject({
+      browserFamily: "chromium",
+      distribution: "chromium",
+      headless: true,
+      profile: { mode: "temporary" },
+      downloads: { managed: true, evidence: true },
+      humanInteraction: { available: false },
+    });
+    expect(session.capabilities.browserVersion.length).toBeGreaterThan(0);
+    expect(["enabled", "disabled", "unknown"]).toContain(
+      session.capabilities.sandbox.verified,
+    );
+    expect(session.capabilities.sandbox.requested).toBe(process.platform !== "win32");
+    expect(session.capabilities.sandbox.verificationMethod).toBe(
+      "chrome_sandbox_page",
+    );
+    expect(session.capabilities.sandbox.diagnostic?.length).toBeGreaterThan(0);
 
     const pages = await session.pages();
 
@@ -99,6 +179,10 @@ describe("PlaywrightBrowserEngine", () => {
           });
 
       sessions.push(session);
+      expect(session.capabilities.profile).toMatchObject({
+        mode: "persistent",
+        name: "test-profile",
+      });
 
       const pages =
         await session.pages();
@@ -138,6 +222,63 @@ describe("PlaywrightBrowserEngine", () => {
       code: "INVALID_CONFIGURATION",
     });
   });
+
+  it("saves persistent session downloads through the managed directory policy", async () => {
+    const userDataDir =
+      await mkdtemp(
+        join(
+          tmpdir(),
+          "rove-profile-downloads-",
+        ),
+      );
+    const server = await startServer();
+
+    try {
+      const session =
+        await new PlaywrightBrowserEngine()
+          .start({
+            ...config,
+            profile: {
+              mode: "persistent",
+              name: "downloads-test",
+            },
+            profileUserDataDir:
+              userDataDir,
+          });
+
+      sessions.push(session);
+
+      await session.navigate(`${server.url}/download`);
+      const inspection = await session.inspect();
+      await session.click(target(inspection, "Download file"));
+      await session.click(target(inspection, "Download file"));
+
+      const downloadsDirectory = join(
+        userDataDir,
+        "downloads",
+        "profile_downloads-test",
+      );
+
+      await expect(
+        waitForFile(join(downloadsDirectory, "rove-session-download.txt")),
+      ).resolves.toBe("rove session download");
+      await expect(
+        waitForFile(join(downloadsDirectory, "rove-session-download (1).txt")),
+      ).resolves.toBe("rove session download");
+    } finally {
+      while (sessions.length > 0) {
+        await sessions.pop()?.close();
+      }
+
+      await rm(
+        userDataDir,
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+    }
+  }, 15_000);
 
   it("keeps direct existing-profile attachment disabled", async () => {
     await expect(

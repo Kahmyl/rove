@@ -1,5 +1,5 @@
 import { RoveError, type TargetReference } from "@rove/protocol";
-import type { Locator, Page } from "playwright";
+import type { Frame, Locator, Page } from "playwright";
 
 import type { PageState } from "../pages/page-state.js";
 import type { TargetHandle } from "../inspection/target-registration.js";
@@ -29,7 +29,8 @@ export async function resolveTarget(options: {
     throw new RoveError({ code: "TARGET_NOT_FOUND", message: "Target was not found." });
   }
   const registered = registry.resolve(reference);
-  const locator = page.locator(`[data-rove-target="${registered.handle.marker}"]`);
+  const frame = resolveFrame(page, registered.handle);
+  const locator = frame.locator(`[data-rove-target="${registered.handle.marker}"]`);
   const count = await locator.count();
   if (count === 0) {
     await options.onStale();
@@ -47,4 +48,30 @@ export async function resolveTarget(options: {
   if (!state.enabled) throw new RoveError({ code: "TARGET_DISABLED", message: "The target is disabled." });
   if (!state.interactive) throw new RoveError({ code: "TARGET_NOT_INTERACTIVE", message: "The target is not interactive." });
   return { locator, state };
+}
+
+function resolveFrame(
+  page: Page,
+  handle: TargetHandle,
+): Frame {
+  const frames = page.frames();
+  const indexed = frames[handle.frameIndex];
+
+  if (indexed?.url() === handle.frameUrl) {
+    return indexed;
+  }
+
+  const matchingUrl = frames.find(
+    (frame) => frame.url() === handle.frameUrl,
+  );
+
+  if (matchingUrl !== undefined) {
+    return matchingUrl;
+  }
+
+  throw new RoveError({
+    code: "TARGET_STALE",
+    message: "The inspected target frame is no longer present.",
+    retryable: true,
+  });
 }

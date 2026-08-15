@@ -32,6 +32,47 @@ export const browserProfileSchema = z.discriminatedUnion("mode", [
   existingProfileSchema,
 ]);
 
+export const browserRuntimeCapabilitiesSchema = z.object({
+  browserFamily: z.literal("chromium"),
+  distribution: z.enum(["chrome", "chromium"]),
+  browserVersion: z.string().min(1),
+  headless: z.boolean(),
+  profile: z.object({
+    mode: z.enum(["temporary", "persistent"]),
+    name: z.string().optional(),
+  }),
+  downloads: z.object({
+    managed: z.boolean(),
+    evidence: z.boolean(),
+  }),
+  storage: z.object({
+    cookies: z.boolean(),
+    localStorage: z.boolean(),
+    indexedDb: z.boolean(),
+    cacheStorage: z.boolean(),
+    sessionStorage: z.enum(["isolated_per_context", "page_scoped"]),
+    serviceWorkers: z.boolean(),
+  }),
+  humanInteraction: z.object({
+    available: z.boolean(),
+  }),
+  sandbox: z.object({
+    requested: z.union([z.boolean(), z.literal("unknown")]),
+    verified: z.union([
+      z.literal("enabled"),
+      z.literal("disabled"),
+      z.literal("unknown"),
+    ]),
+    verificationMethod: z.string().optional(),
+    diagnostic: z.string().optional(),
+  }),
+  diagnostics: z.array(z.object({
+    level: z.enum(["info", "warning"]),
+    code: z.string(),
+    message: z.string(),
+  })),
+});
+
 export const sessionSchema = z.object({
   id: z.string().startsWith("ses_"),
   mode: sessionModeSchema,
@@ -40,6 +81,7 @@ export const sessionSchema = z.object({
   activePageId: z.string().optional(),
   handoff: humanHandoffSchema.optional(),
   profile: browserProfileSchema,
+  browserRuntime: browserRuntimeCapabilitiesSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   endedAt: z.string().datetime().optional(),

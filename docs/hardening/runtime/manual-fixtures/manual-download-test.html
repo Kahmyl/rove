@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rove Download Test</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        margin: 40px;
+        max-width: 720px;
+        color: #17202a;
+      }
+
+      main {
+        display: grid;
+        gap: 16px;
+      }
+
+      a,
+      button {
+        width: fit-content;
+        border: 1px solid #2d6cdf;
+        background: #2d6cdf;
+        color: #fff;
+        border-radius: 6px;
+        padding: 10px 14px;
+        font: inherit;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      button.secondary,
+      a.secondary {
+        background: #fff;
+        color: #2d6cdf;
+      }
+
+      code {
+        background: #f3f5f7;
+        padding: 2px 4px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Rove Download Test</h1>
+      <p>
+        Use these controls to trigger predictable browser downloads. After each
+        click, Rove should expose a file evidence item or download metadata.
+      </p>
+
+      <a
+        download="rove-f4-download-anchor.txt"
+        href="data:text/plain;charset=utf-8,Rove%20F4%20anchor%20download%20test%0A"
+      >
+        Download text file
+      </a>
+
+      <button id="blobDownload" type="button" class="secondary">
+        Download generated blob
+      </button>
+
+      <a
+        class="secondary"
+        download="rove-f4-pixel.png"
+        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+      >
+        Download PNG
+      </a>
+
+      <p>
+        Expected filenames:
+        <code>rove-f4-download-anchor.txt</code>,
+        <code>rove-f4-generated-blob.txt</code>,
+        <code>rove-f4-pixel.png</code>.
+      </p>
+    </main>
+
+    <script>
+      document.getElementById("blobDownload").addEventListener("click", () => {
+        const blob = new Blob(["Rove F4 generated blob download test\n"], {
+          type: "text/plain",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = "rove-f4-generated-blob.txt";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      });
+    </script>
+  </body>
+</html>

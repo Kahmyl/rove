@@ -56,6 +56,30 @@ async function waitForPageCount(
   throw new Error(`Timed out waiting for ${count} browser pages.`);
 }
 
+async function waitForInspectionText(
+  session: BrowserSession,
+  text: string,
+  timeoutMs = 3_000,
+) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const inspection = await session.inspect();
+
+    if (inspection.text?.includes(text)) {
+      return inspection;
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 25),
+    );
+  }
+
+  throw new Error(
+    `Timed out waiting for inspection text: ${text}`,
+  );
+}
+
 afterEach(async () => {
   while (sessions.length > 0) {
     await sessions.pop()?.close();
@@ -190,9 +214,63 @@ describe("PlaywrightBrowserSession inspection", () => {
       session.click({
         pageId: inspection.pageId,
         revision: inspection.revision,
-        ref: inspection.targets![0]!.ref,
+      ref: inspection.targets![0]!.ref,
       }),
     ).resolves.toMatchObject({ ok: true, action: "click" });
+  });
+
+  it("inspects and clicks targets inside iframes", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(`${server.url}/iframes`);
+
+    const inspection = await waitForInspectionText(
+      session,
+      "cross origin frame loaded",
+    );
+
+    expect(inspection.text).toContain(
+      "same origin frame loaded",
+    );
+    expect(inspection.text).toContain(
+      "cross origin frame loaded",
+    );
+    expect(inspection.metadata).toMatchObject({
+      frames: expect.arrayContaining([
+        expect.objectContaining({
+          index: 0,
+          main: true,
+        }),
+        expect.objectContaining({
+          index: 1,
+          main: false,
+        }),
+        expect.objectContaining({
+          index: 2,
+          main: false,
+        }),
+      ]),
+    });
+
+    const target = inspection.targets?.find(
+      (candidate) =>
+        candidate.name === "Same frame button",
+    );
+
+    expect(target).toBeDefined();
+
+    await expect(
+      session.click({
+        pageId: inspection.pageId,
+        revision: inspection.revision,
+        ref: target!.ref,
+      }),
+    ).resolves.toMatchObject({ ok: true, action: "click" });
+
+    expect(
+      (await session.inspect()).text,
+    ).toContain("Same frame clicked");
   });
 });
 

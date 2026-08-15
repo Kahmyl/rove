@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "track": "F4 browser runtime fidelity and compatibility",
+  "capturedAt": "2026-08-12T00:00:00.000Z",
+  "captureType": "current-machine-baseline-before-launch-policy-refactor",
+  "sourceCommands": [
+    {
+      "command": "tsx packages/browser/src/diagnostics/browser-doctor.ts",
+      "purpose": "Report requested, resolved, and verified browser runtime facts."
+    },
+    {
+      "command": "tsx packages/browser/src/compatibility/browser-compat.ts",
+      "purpose": "Run deterministic browser compatibility fixtures for the current machine."
+    }
+  ],
+  "currentMachine": {
+    "platform": {
+      "os": "win32",
+      "arch": "x64",
+      "runtime": "node v24.13.0"
+    },
+    "playwright": {
+      "version": "1.62.1"
+    },
+    "requested": {
+      "browser": "chromium",
+      "headless": true,
+      "profiles": [
+        "temporary",
+        "persistent"
+      ],
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "customLaunchArgs": false
+    },
+    "resolved": {
+      "browser": "Playwright Chromium",
+      "browserVersion": "151.0.7922.34",
+      "fallbackUsed": false
+    },
+    "doctor": {
+      "launch": "PASS",
+      "pageCreation": "PASS",
+      "sandbox": "UNVERIFIED",
+      "serviceWorkers": "PASS",
+      "persistentStorage": "UNVERIFIED",
+      "downloads": "UNVERIFIED"
+    },
+    "compatibilityCases": [
+      {
+        "name": "temporary launch and navigation",
+        "status": "PASS",
+        "details": "Launched a temporary context and navigated to the local fixture."
+      },
+      {
+        "name": "temporary storage isolation",
+        "status": "PASS",
+        "details": "Cookies, localStorage, and IndexedDB were isolated across temporary contexts."
+      },
+      {
+        "name": "service worker registration",
+        "status": "PASS",
+        "details": "Service-worker registration and readiness completed."
+      },
+      {
+        "name": "popup handling",
+        "status": "PASS",
+        "details": "Popup opened and loaded as a tracked browser page."
+      },
+      {
+        "name": "dialog handling",
+        "status": "PASS",
+        "details": "Alert dialog was observed and dismissed without deadlock."
+      },
+      {
+        "name": "download handling",
+        "status": "PASS",
+        "details": "Download completed in Playwright-managed temporary storage."
+      },
+      {
+        "name": "persistent profile restart",
+        "status": "PASS",
+        "details": "Cookie, localStorage, IndexedDB, and service-worker state survived persistent-profile restart."
+      },
+      {
+        "name": "persistent profile native lock behavior",
+        "status": "PASS_WITH_LIMITATION",
+        "details": "Browser allowed concurrent writable launch; F4 must enforce Rove-level profile locking."
+      }
+    ],
+    "recordedBehavior": {
+      "launchSuccess": "PASS",
+      "sandboxState": "UNVERIFIED",
+      "browserVersion": "151.0.7922.34",
+      "temporaryProfileStorageIsolation": "PASS",
+      "persistentProfileStorageRestart": "PASS",
+      "serviceWorkerBehavior": "PASS",
+      "popupBehavior": "PASS",
+      "downloadBehavior": "PASS",
+      "dialogBehavior": "PASS",
+      "browserShutdown": "PASS",
+      "crashBehavior": "PASS_WITH_LIMITATION",
+      "browserDisconnectBehavior": "PASS",
+      "nativeProfileLocking": "PASS_WITH_LIMITATION"
+    },
+    "postF4CompatibilitySummary": {
+      "capturedAt": "2026-08-12T17:02:00.000+01:00",
+      "sourceCommand": "tsx packages/browser/src/compatibility/browser-compat.ts",
+      "status": "PASS_WITH_LIMITATIONS",
+      "additionalCases": [
+        "download cancellation",
+        "large bounded download",
+        "browser close during download",
+        "file chooser",
+        "permission defaults",
+        "cache storage",
+        "iframe handling",
+        "websocket handling",
+        "spa history and long timer",
+        "large page",
+        "page crash",
+        "browser disconnect"
+      ],
+      "limitations": [
+        "WebSocket live-message exchange is not covered by the raw local fixture.",
+        "Page crash is runtime-sensitive and may report UNVERIFIED where chrome://crash is not reproducible.",
+        "Native persistent profile locking still allows concurrent writable launch in this environment."
+      ]
+    }
+  },
+  "requiredMatrix": [
+    {
+      "environment": "macOS + Chrome + headed + temporary",
+      "status": "UNVERIFIED",
+      "reason": "No macOS validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "macOS + Chrome + headed + persistent",
+      "status": "UNVERIFIED",
+      "reason": "No macOS validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "macOS + Chromium + headed + temporary",
+      "status": "UNVERIFIED",
+      "reason": "No macOS validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "macOS + Chromium + headless + temporary",
+      "status": "UNVERIFIED",
+      "reason": "No macOS validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "Linux + Chromium + headed",
+      "status": "UNVERIFIED",
+      "reason": "No Linux headed validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "Linux + Chromium + headless",
+      "status": "UNVERIFIED",
+      "reason": "No Linux validation environment was available during this baseline capture."
+    },
+    {
+      "environment": "Docker + Chromium + headless",
+      "status": "UNVERIFIED",
+      "reason": "Container runtime compatibility has not been captured yet."
+    },
+    {
+      "environment": "Windows + Chromium + headless + temporary",
+      "status": "PASS",
+      "reason": "Captured on the current machine."
+    },
+    {
+      "environment": "Windows + Chromium + headless + persistent",
+      "status": "PASS_WITH_LIMITATION",
+      "reason": "Persistent restart passed, but native browser locking allowed concurrent writable profile launch."
+    },
+    {
+      "environment": "Windows + Chrome + headed",
+      "status": "UNVERIFIED",
+      "reason": "Headed Chrome validation was not run during this baseline capture."
+    }
+  ],
+  "limitations": [
+    "The baseline currently covers only the available Windows headless Chromium environment.",
+    "Sandbox state is reported as unknown because no sandbox verification probe exists yet.",
+    "Crash behavior is runtime-sensitive and may not reproduce consistently through chrome://crash.",
+    "The post-F4 download checks verify bounded Rove-managed download behavior.",
+    "Native Chromium did not prevent concurrent writable use of the same persistent profile in this environment, so Rove-level locking remains required."
+  ]
+}

@@ -4,6 +4,7 @@ import type {
 } from "@rove/browser";
 import type {
   BrowserLaunchConfig,
+  BrowserRuntimeCapabilities,
 } from "@rove/protocol";
 import {
   describe,
@@ -15,6 +16,26 @@ import {
 import {
   BrowserService,
 } from "./browser.service.js";
+
+const testCapabilities: BrowserRuntimeCapabilities = {
+  browserFamily: "chromium",
+  distribution: "chromium",
+  browserVersion: "test",
+  headless: true,
+  profile: { mode: "temporary" },
+  downloads: { managed: true, evidence: true },
+  storage: {
+    cookies: true,
+    localStorage: true,
+    indexedDb: true,
+    cacheStorage: true,
+    sessionStorage: "page_scoped",
+    serviceWorkers: true,
+  },
+  humanInteraction: { available: false },
+  sandbox: { requested: true, verified: "unknown" },
+  diagnostics: [],
+};
 
 describe("BrowserService shutdown", () => {
   it("closes every attached browser session during module destruction", async () => {
@@ -93,6 +114,7 @@ function fakeSession(
 ): BrowserSession {
   return {
     id,
+    capabilities: testCapabilities,
     close,
   } as unknown as BrowserSession;
 }

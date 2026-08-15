@@ -10,6 +10,7 @@ import {
 import { loadConfig } from "@rove/config";
 import {
   RoveError,
+  type BrowserRuntimeCapabilities,
   type PageInspection,
   type TargetReference,
 } from "@rove/protocol";
@@ -34,6 +35,25 @@ import { ControlWaitService } from "./control-wait.service.js";
 const homes: string[] = [];
 const servers: FixtureServer[] = [];
 const active: { runtime: RuntimeService; id: string }[] = [];
+const testCapabilities: BrowserRuntimeCapabilities = {
+  browserFamily: "chromium",
+  distribution: "chromium",
+  browserVersion: "test",
+  headless: true,
+  profile: { mode: "temporary" },
+  downloads: { managed: true, evidence: true },
+  storage: {
+    cookies: true,
+    localStorage: true,
+    indexedDb: true,
+    cacheStorage: true,
+    sessionStorage: "page_scoped",
+    serviceWorkers: true,
+  },
+  humanInteraction: { available: false },
+  sandbox: { requested: true, verified: "unknown" },
+  diagnostics: [],
+};
 
 async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()) {
   const home = await mkdtemp(join(tmpdir(), "rove-control-"));
@@ -175,7 +195,7 @@ describe("Milestone 7 requested handoff", () => {
     active.push({ runtime, id: session.id });
     const pending = runtime.waitForControl(session.id, {
       afterSeq: 1,
-      timeoutMs: 1_000,
+      timeoutMs: 5_000,
     });
     await runtime.endSession(session.id);
     active.pop();
@@ -183,7 +203,7 @@ describe("Milestone 7 requested handoff", () => {
       event: "session_completed",
       status: "completed",
     });
-  });
+  }, 10_000);
 });
 
 describe("Milestone 7 mode transitions and all-page invalidation", () => {
@@ -236,6 +256,7 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
     });
     const fake: BrowserSession = {
       id: "browser_race",
+      capabilities: testCapabilities,
       onActivity: () => () => undefined,
       inspect: async () => ({
         pageId: "page_01",

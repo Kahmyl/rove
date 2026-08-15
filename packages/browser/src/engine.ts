@@ -2,6 +2,7 @@ import type {
   ActionResult,
   Artifact,
   BrowserLaunchConfig,
+  BrowserRuntimeCapabilities,
   InspectOptions,
   PageInspection,
   PageStateIdentity,
@@ -14,6 +15,7 @@ import type { BrowserActivityListener } from "./observation/browser-activity.js"
 
 export interface BrowserSession {
   readonly id: string;
+  readonly capabilities: BrowserRuntimeCapabilities;
   onActivity(listener: BrowserActivityListener): () => void;
   inspect(options?: InspectOptions): Promise<PageInspection>;
   pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
