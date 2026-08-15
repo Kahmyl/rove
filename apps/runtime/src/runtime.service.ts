@@ -38,7 +38,10 @@ import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
-import { InteractionPolicy } from "./policy/interaction-policy.js";
+import {
+  InteractionPolicy,
+  type PageInspectionPolicyRecord,
+} from "./policy/interaction-policy.js";
 import { SessionService } from "./session/session.service.js";
 import { ROVE_CONFIG } from "./tokens.js";
 
@@ -115,7 +118,8 @@ export class RuntimeService implements RoveRuntime {
       const activePageId = (await browser.pages()).find(
         (page) => page.active,
       )?.id;
-      const pageState = await this.assessBrowser(session.id, browser);
+      const assessment = await this.assessBrowser(session.id, browser);
+      const pageState = assessment.pageState;
       const handoff = this.handoffForPageState(pageState);
       session = await this.sessions.update({
         ...session,
@@ -224,17 +228,20 @@ export class RuntimeService implements RoveRuntime {
     options?: InspectOptions,
   ): Promise<PageInspection> {
     await this.requireActive(sessionId);
+
     const inspection = await this.browser.get(sessionId).inspect(options);
-    const pageState = this.interactionPolicy.recordInspection(
+    const assessment = this.interactionPolicy.recordInspection(
       sessionId,
       inspection,
     );
-    if (this.handoffForPageState(pageState) !== undefined) {
-      await this.coordinator.execute(sessionId, () =>
-        this.pauseForPageState(sessionId, pageState),
-      );
-    }
-    return inspection;
+
+    return {
+      ...inspection,
+      metadata: {
+        ...(inspection.metadata ?? {}),
+        pagePolicy: assessment.policyDecision,
+      },
+    };
   }
 
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult> {
@@ -622,24 +629,28 @@ export class RuntimeService implements RoveRuntime {
   private async assessBrowser(
     sessionId: string,
     browser: { inspect(options?: InspectOptions): Promise<PageInspection> },
-  ): Promise<PagePerceptionAssessment> {
+  ): Promise<PageInspectionPolicyRecord> {
     const inspection = await browser.inspect({
       includeText: false,
       includeTargets: false,
     });
+
     return this.interactionPolicy.recordInspection(sessionId, inspection);
   }
 
   private async assessAndPause(
     sessionId: string,
   ): Promise<PagePerceptionAssessment> {
-    const pageState = await this.assessBrowser(
+    const assessment = await this.assessBrowser(
       sessionId,
       this.browser.get(sessionId),
     );
+    const pageState = assessment.pageState;
+
     if (this.handoffForPageState(pageState) !== undefined) {
       await this.pauseForPageState(sessionId, pageState);
     }
+
     return pageState;
   }
 

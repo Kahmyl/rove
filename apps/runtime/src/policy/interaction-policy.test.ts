@@ -56,7 +56,7 @@ const ready: PageStateAssessment = {
 };
 
 describe("InteractionPolicy", () => {
-  it("accepts production page-state metadata without legacy recommendedAction", () => {
+  it("records perception and its authoritative policy decision", () => {
     const policy = new InteractionPolicy();
 
     const result = policy.recordInspection(
@@ -68,12 +68,22 @@ describe("InteractionPolicy", () => {
       }),
     );
 
-    expect(result).toEqual({
-      kind: "ready",
-      confidence: "high",
-      signals: ["document:stable"],
+    expect(result).toMatchObject({
+      pageState: {
+        kind: "ready",
+        confidence: "high",
+        signals: ["document:stable"],
+      },
+      propositions,
+      policyDecision: {
+        disposition: "continue",
+        reason: "page_ready",
+        mutationAllowed: true,
+        retryable: false,
+      },
     });
-    expect(result).not.toHaveProperty("recommendedAction");
+
+    expect(result.pageState).not.toHaveProperty("recommendedAction");
   });
 
   it("requires an inspection before mutation", () => {

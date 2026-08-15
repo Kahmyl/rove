@@ -2,22 +2,28 @@ import {
   RoveError,
   type PageInspection,
   type PagePerceptionAssessment,
+  type PagePolicyDecision,
   type PageStateIdentity,
   type PageStatePropositions,
   type PageStateTruth,
-  type RoveErrorCode,
 } from "@rove/protocol";
+
+import { PageStatePolicy } from "./page-state-policy.js";
 
 interface ActionRecord {
   at: number;
   signature: string;
 }
 
-interface RecordedInspection {
-  pageId: string;
-  revision: number;
+export interface PageInspectionPolicyRecord {
   pageState: PagePerceptionAssessment;
   propositions?: PageStatePropositions;
+  policyDecision: PagePolicyDecision;
+}
+
+interface RecordedInspection extends PageInspectionPolicyRecord {
+  pageId: string;
+  revision: number;
   fingerprint?: string;
 }
 
@@ -30,53 +36,6 @@ const ACTION_WINDOW_MS = 60_000;
 const REPEAT_WINDOW_MS = 30_000;
 const MAX_ACTIONS_PER_WINDOW = 30;
 const MAX_REPEATED_ACTIONS = 4;
-
-const BLOCKED_PAGE_STATES: Partial<
-  Record<
-    PagePerceptionAssessment["kind"],
-    {
-      code: RoveErrorCode;
-      message: string;
-      retryable: boolean;
-    }
-  >
-> = {
-  loading: {
-    code: "PAGE_NOT_READY",
-    message:
-      "The page is still loading. Wait, then inspect it again before mutating it.",
-    retryable: true,
-  },
-  authentication_required: {
-    code: "AUTHENTICATION_REQUIRED",
-    message:
-      "The page requires human authentication. Request human control and stop browser mutations.",
-    retryable: false,
-  },
-  human_verification: {
-    code: "HUMAN_VERIFICATION_REQUIRED",
-    message:
-      "The page requires human verification. Request human control; do not attempt to solve it automatically.",
-    retryable: false,
-  },
-  access_restricted: {
-    code: "SITE_ACCESS_RESTRICTED",
-    message:
-      "The site has restricted access. Stop browser mutations and request human review.",
-    retryable: false,
-  },
-  unknown_interstitial: {
-    code: "UNKNOWN_INTERSTITIAL",
-    message:
-      "The page is an unrecognized interstitial. Request human review instead of guessing its controls.",
-    retryable: false,
-  },
-  error: {
-    code: "PAGE_NOT_READY",
-    message: "The page is in an error state and cannot be mutated safely.",
-    retryable: false,
-  },
-};
 
 const PROPOSITION_KEYS = [
   "primaryContentAvailable",
@@ -146,35 +105,22 @@ function fingerprintFromInspection(
     : undefined;
 }
 
-function unresolvedOrBlocking(
-  propositions: PageStatePropositions | undefined,
-): boolean {
-  if (propositions === undefined) {
-    return true;
-  }
-
-  return [
-    propositions.documentUnstable,
-    propositions.authenticationRequired,
-    propositions.humanVerificationPresented,
-    propositions.accessRestricted,
-    propositions.errorPresented,
-    propositions.interstitialPresented,
-  ].some((value) => value !== false);
-}
-
 export class InteractionPolicy {
   private readonly sessions = new Map<string, SessionPolicyState>();
+  private readonly pageStatePolicy = new PageStatePolicy();
 
   recordInspection(
     sessionId: string,
     inspection: PageInspection,
-  ): PagePerceptionAssessment {
+  ): PageInspectionPolicyRecord {
     const state = this.state(sessionId);
     const pageState = pageStateFromInspection(inspection);
-
     const propositions = pageStatePropositionsFromInspection(inspection);
     const fingerprint = fingerprintFromInspection(inspection);
+    const policyDecision = this.pageStatePolicy.evaluate(
+      pageState,
+      propositions,
+    );
 
     state.inspection = {
       pageId: inspection.pageId,
@@ -182,9 +128,14 @@ export class InteractionPolicy {
       pageState,
       ...(propositions === undefined ? {} : { propositions }),
       ...(fingerprint === undefined ? {} : { fingerprint }),
+      policyDecision,
     };
 
-    return pageState;
+    return {
+      pageState,
+      ...(propositions === undefined ? {} : { propositions }),
+      policyDecision,
+    };
   }
 
   requireInspection(sessionId: string): void {
@@ -244,43 +195,19 @@ export class InteractionPolicy {
       });
     }
 
-    const blocked = BLOCKED_PAGE_STATES[inspection.pageState.kind];
+    const pagePolicy = inspection.policyDecision;
 
-    if (blocked !== undefined) {
+    if (!pagePolicy.mutationAllowed) {
       throw new RoveError({
-        code: blocked.code,
-        message: blocked.message,
-        retryable: blocked.retryable,
+        code: pagePolicy.errorCode ?? "PAGE_NOT_READY",
+        message: pagePolicy.message,
+        retryable: pagePolicy.retryable,
         details: {
           pageState: inspection.pageState,
-        },
-      });
-    }
-
-    if (
-      inspection.pageState.kind !== "ready" ||
-      inspection.pageState.confidence !== "high"
-    ) {
-      throw new RoveError({
-        code: "PAGE_NOT_READY",
-        message:
-          "A high-confidence ready inspection is required before mutating the page.",
-        retryable: true,
-        details: {
-          pageState: inspection.pageState,
-        },
-      });
-    }
-
-    if (unresolvedOrBlocking(inspection.propositions)) {
-      throw new RoveError({
-        code: "PAGE_NOT_READY",
-        message:
-          "The inspection has unresolved or blocking page-state propositions. Inspect again before mutating.",
-        retryable: true,
-        details: {
-          pageState: inspection.pageState,
-          propositions: inspection.propositions,
+          ...(inspection.propositions === undefined
+            ? {}
+            : { propositions: inspection.propositions }),
+          pagePolicy,
         },
       });
     }

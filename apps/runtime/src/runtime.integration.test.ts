@@ -218,7 +218,9 @@ describe("Milestone 4 runtime integration", () => {
     expect(["enabled", "disabled", "unknown"]).toContain(
       agent.browserRuntime?.sandbox.verified,
     );
-    expect(agent.browserRuntime?.sandbox.requested).toBe(process.platform !== "win32");
+    expect(agent.browserRuntime?.sandbox.requested).toBe(
+      process.platform !== "win32",
+    );
     expect(agent.browserRuntime?.sandbox.verificationMethod).toBe(
       "chrome_sandbox_page",
     );
@@ -333,6 +335,61 @@ describe("Milestone 4 runtime integration", () => {
     });
 
     expect(starts).toBe(1);
+  });
+
+  it("keeps repeated direct inspection observational while returning page policy", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+
+    const session = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+    expect(session.handoff).toBeUndefined();
+
+    // Deliberately move the browser to authentication outside a runtime
+    // orchestration boundary. Inspection must observe it, not seize control.
+    await browser.get(session.id).navigate(`${server.url}/authentication`);
+
+    const rawInspection = await browser.get(session.id).inspect();
+
+    expect(rawInspection.metadata?.pageState).toMatchObject({
+      kind: "authentication_required",
+    });
+    expect(rawInspection.metadata?.pagePolicy).toBeUndefined();
+
+    for (let index = 0; index < 3; index += 1) {
+      const inspection = await runtime.inspectBrowser(session.id);
+
+      expect(inspection.metadata?.pageState).toMatchObject({
+        kind: "authentication_required",
+      });
+
+      expect(inspection.metadata?.pagePolicy).toMatchObject({
+        disposition: "request_human",
+        reason: "authentication_required",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "AUTHENTICATION_REQUIRED",
+      });
+
+      const current = await runtime.getSession(session.id);
+
+      expect(current).toMatchObject({
+        status: "active",
+        controller: "agent",
+      });
+      expect(current.handoff).toBeUndefined();
+    }
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started"]);
   });
 
   it("pauses for human review when a site explicitly restricts access", async () => {
@@ -601,14 +658,15 @@ describe("Milestone 4 runtime integration", () => {
     expect(downloaded.data).toMatchObject({
       evidenceId: file?.id,
     });
-    await expect(runtime.readEvidence(session.id, file!.id))
-      .resolves.toMatchObject({
-        id: file!.id,
-        binary: {
-          available: true,
-          encoding: "external",
-        },
-      });
+    await expect(
+      runtime.readEvidence(session.id, file!.id),
+    ).resolves.toMatchObject({
+      id: file!.id,
+      binary: {
+        available: true,
+        encoding: "external",
+      },
+    });
   });
 
   it("serializes runtime mutations per session without blocking another session", async () => {
