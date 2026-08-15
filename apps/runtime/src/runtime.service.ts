@@ -38,6 +38,7 @@ import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
+import { PagePolicyOrchestrator } from "./orchestration/page-policy-orchestrator.js";
 import {
   InteractionPolicy,
   type PageInspectionPolicyRecord,
@@ -51,6 +52,7 @@ export class RuntimeService implements RoveRuntime {
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
+  private readonly pagePolicyOrchestrator: PagePolicyOrchestrator;
 
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
@@ -64,7 +66,13 @@ export class RuntimeService implements RoveRuntime {
     private readonly observations: ObservationService,
     @Inject(EvidenceService) private readonly evidence: EvidenceService,
     @Inject(ROVE_CONFIG) private readonly config: RoveConfig,
-  ) {}
+  ) {
+    this.pagePolicyOrchestrator = new PagePolicyOrchestrator(
+      this.sessions,
+      this.observations,
+      this.controlWait,
+    );
+  }
 
   async startSession(request: StartSessionRequest): Promise<Session> {
     let session = await this.sessions.start(request);
@@ -119,37 +127,28 @@ export class RuntimeService implements RoveRuntime {
         (page) => page.active,
       )?.id;
       const assessment = await this.assessBrowser(session.id, browser);
-      const pageState = assessment.pageState;
-      const handoff = this.handoffForPageState(pageState);
+
       session = await this.sessions.update({
         ...session,
-        status: handoff === undefined ? "active" : "awaiting_human",
-        controller: handoff === undefined ? session.controller : null,
-        ...(handoff === undefined
-          ? {}
-          : {
-              handoff: {
-                reason: handoff.reason,
-                requestedAt: new Date().toISOString(),
-              },
-            }),
+        status: "active",
         ...(activePageId === undefined ? {} : { activePageId }),
         browserRuntime: browser.capabilities,
       });
+
       await this.observations.append(session.id, {
         actor: "system",
         type: "session_started",
         data: { mode: session.mode, controller: session.controller },
       });
-      if (handoff !== undefined) {
-        const observation = await this.observations.append(session.id, {
-          actor: "system",
-          type: handoff.observationType,
-          data: pageState,
-        });
-        await this.controlWait.publish(session.id, observation);
-      }
-      return session;
+
+      await this.pagePolicyOrchestrator.orchestrate(
+        session.id,
+        assessment.policyDecision,
+        assessment.pageState,
+        "session_start",
+      );
+
+      return this.sessions.get(session.id);
     } catch (error) {
       await this.browser.close(session.id).catch(() => undefined);
       await profileLock?.release().catch(() => undefined);
@@ -645,67 +644,15 @@ export class RuntimeService implements RoveRuntime {
       sessionId,
       this.browser.get(sessionId),
     );
-    const pageState = assessment.pageState;
 
-    if (this.handoffForPageState(pageState) !== undefined) {
-      await this.pauseForPageState(sessionId, pageState);
-    }
+    await this.pagePolicyOrchestrator.orchestrate(
+      sessionId,
+      assessment.policyDecision,
+      assessment.pageState,
+      "post_action",
+    );
 
-    return pageState;
-  }
-
-  private handoffForPageState(
-    pageState: PagePerceptionAssessment,
-  ): { reason: string; observationType: string } | undefined {
-    switch (pageState.kind) {
-      case "authentication_required":
-        return {
-          reason:
-            "The page requires authentication that must be completed by a human.",
-          observationType: "authentication_required",
-        };
-      case "human_verification":
-        return {
-          reason: "The site requires a human verification step.",
-          observationType: "human_verification_required",
-        };
-      case "access_restricted":
-        return {
-          reason: "The site has restricted access and requires human review.",
-          observationType: "site_access_restricted",
-        };
-      case "unknown_interstitial":
-        return {
-          reason:
-            "The page is an unrecognized interstitial and requires human review.",
-          observationType: "unknown_interstitial",
-        };
-      default:
-        return undefined;
-    }
-  }
-
-  private async pauseForPageState(
-    sessionId: string,
-    pageState: PagePerceptionAssessment,
-  ): Promise<void> {
-    const handoff = this.handoffForPageState(pageState);
-    if (handoff === undefined) return;
-    const session = await this.sessions.get(sessionId);
-    if (session.status === "awaiting_human") return;
-    const requestedAt = new Date().toISOString();
-    await this.sessions.update({
-      ...session,
-      status: "awaiting_human",
-      controller: null,
-      handoff: { reason: handoff.reason, requestedAt },
-    });
-    const observation = await this.observations.append(sessionId, {
-      actor: "system",
-      type: handoff.observationType,
-      data: pageState,
-    });
-    await this.controlWait.publish(sessionId, observation);
+    return assessment.pageState;
   }
 
   private enqueueHumanActivity(

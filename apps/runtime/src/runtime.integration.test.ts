@@ -392,9 +392,53 @@ describe("Milestone 4 runtime integration", () => {
     ).toEqual(["session_started"]);
   });
 
-  it("pauses for human review when a site explicitly restricts access", async () => {
+  it("orchestrates authentication only after a successful action boundary", async () => {
     const server = await fixture();
     const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspection = await runtime.inspectBrowser(session.id);
+
+    expect(inspection.metadata?.pagePolicy).toMatchObject({
+      disposition: "continue",
+      mutationAllowed: true,
+    });
+
+    const result = await runtime.navigate(session.id, {
+      url: `${server.url}/authentication`,
+    });
+
+    expect(result.url).toBe(`${server.url}/authentication`);
+
+    expect(await runtime.getSession(session.id)).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      handoff: {
+        reason:
+          "The page requires authentication that must be completed by a human.",
+      },
+    });
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual([
+      "session_started",
+      "browser_navigated",
+      "authentication_required",
+    ]);
+  });
+
+  it("keeps agent ownership when a site explicitly restricts access", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+
     const session = await runtime.startSession({
       mode: "agent",
       startUrl: `${server.url}/access-restricted`,
@@ -402,21 +446,22 @@ describe("Milestone 4 runtime integration", () => {
     active.push({ runtime, id: session.id });
 
     expect(session).toMatchObject({
-      status: "awaiting_human",
-      controller: null,
-      handoff: {
-        reason: "The site has restricted access and requires human review.",
-      },
+      status: "active",
+      controller: "agent",
     });
+    expect(session.handoff).toBeUndefined();
+
     expect(
       (await runtime.getObservations(session.id)).items.map(
         (item) => item.type,
       ),
-    ).toEqual(["session_started", "site_access_restricted"]);
+    ).toEqual(["session_started"]);
+
     await expect(
       runtime.navigate(session.id, { url: server.url }),
     ).rejects.toMatchObject({
-      code: "CONTROL_NOT_OWNED",
+      code: "SITE_ACCESS_RESTRICTED",
+      retryable: false,
     });
   });
 
@@ -427,13 +472,8 @@ describe("Milestone 4 runtime integration", () => {
       "human verification step",
     ],
     ["authentication", "authentication_required", "requires authentication"],
-    [
-      "unknown-interstitial",
-      "unknown_interstitial",
-      "unrecognized interstitial",
-    ],
   ])(
-    "classifies %s as a distinct human-only page state",
+    "automatically requests human control for %s",
     async (route, eventType, reason) => {
       const server = await fixture();
       const { runtime } = await harness();
@@ -455,6 +495,36 @@ describe("Milestone 4 runtime integration", () => {
       ).toEqual(["session_started", eventType]);
     },
   );
+
+  it("stops on an unknown interstitial without automatic handoff", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/unknown-interstitial`,
+    });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+    expect(session.handoff).toBeUndefined();
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started"]);
+
+    await expect(
+      runtime.navigate(session.id, { url: server.url }),
+    ).rejects.toMatchObject({
+      code: "UNKNOWN_INTERSTITIAL",
+      retryable: false,
+    });
+  });
 
   it("requires a fresh inspection after human control returns", async () => {
     const server = await fixture();
