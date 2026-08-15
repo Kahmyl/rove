@@ -154,6 +154,36 @@ async function checkRoutedDefinition(definition: {
 }
 
 describe("production page-state semantic conformance", () => {
+  it("keeps production PageStateAssessment observational", async () => {
+    const page = await context.newPage();
+
+    try {
+      await page.setContent(`
+        <!doctype html>
+        <html>
+          <head><title>Workspace</title></head>
+          <body>
+            <main>
+              <h1>Workspace</h1>
+              <button>Continue</button>
+            </main>
+          </body>
+        </html>
+      `);
+
+      const observation = await observeStablePageState(page);
+
+      expect(observation.assessment).toMatchObject({
+        kind: "ready",
+        confidence: "high",
+        signals: expect.any(Array),
+      });
+      expect(observation.assessment).not.toHaveProperty("recommendedAction");
+    } finally {
+      await page.close();
+    }
+  });
+
   it("matches all 166 frozen, remedial, and independent deterministic cases", async () => {
     let count = 0;
 

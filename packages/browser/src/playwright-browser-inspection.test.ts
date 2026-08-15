@@ -70,14 +70,10 @@ async function waitForInspectionText(
       return inspection;
     }
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 25),
-    );
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
 
-  throw new Error(
-    `Timed out waiting for inspection text: ${text}`,
-  );
+  throw new Error(`Timed out waiting for inspection text: ${text}`);
 }
 
 afterEach(async () => {
@@ -214,7 +210,7 @@ describe("PlaywrightBrowserSession inspection", () => {
       session.click({
         pageId: inspection.pageId,
         revision: inspection.revision,
-      ref: inspection.targets![0]!.ref,
+        ref: inspection.targets![0]!.ref,
       }),
     ).resolves.toMatchObject({ ok: true, action: "click" });
   });
@@ -230,12 +226,8 @@ describe("PlaywrightBrowserSession inspection", () => {
       "cross origin frame loaded",
     );
 
-    expect(inspection.text).toContain(
-      "same origin frame loaded",
-    );
-    expect(inspection.text).toContain(
-      "cross origin frame loaded",
-    );
+    expect(inspection.text).toContain("same origin frame loaded");
+    expect(inspection.text).toContain("cross origin frame loaded");
     expect(inspection.metadata).toMatchObject({
       frames: expect.arrayContaining([
         expect.objectContaining({
@@ -254,8 +246,7 @@ describe("PlaywrightBrowserSession inspection", () => {
     });
 
     const target = inspection.targets?.find(
-      (candidate) =>
-        candidate.name === "Same frame button",
+      (candidate) => candidate.name === "Same frame button",
     );
 
     expect(target).toBeDefined();
@@ -268,9 +259,7 @@ describe("PlaywrightBrowserSession inspection", () => {
       }),
     ).resolves.toMatchObject({ ok: true, action: "click" });
 
-    expect(
-      (await session.inspect()).text,
-    ).toContain("Same frame clicked");
+    expect((await session.inspect()).text).toContain("Same frame clicked");
   });
 });
 
@@ -547,7 +536,6 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       pageState: {
         kind: "ready",
         confidence: "high",
-        recommendedAction: "continue",
       },
       pageStatePropositions: {
         primaryContentAvailable: true,
@@ -571,6 +559,14 @@ describe("Milestone 2 semantic inspection acceptance", () => {
         }
       ).pageState?.signals,
     ).toEqual(expect.any(Array));
+
+    expect(
+      (
+        inspection.metadata as {
+          pageState?: Record<string, unknown>;
+        }
+      ).pageState,
+    ).not.toHaveProperty("recommendedAction");
 
     expect(
       (

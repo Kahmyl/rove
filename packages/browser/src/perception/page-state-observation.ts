@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
 import type {
-  PageStateAssessment,
+  PagePerceptionAssessment,
   PageStateIdentity,
   PageStatePropositions,
 } from "@rove/protocol";
@@ -57,11 +57,10 @@ function unavailableResult(signal: string): PageStateClassificationResult {
     interstitialPresented: "indeterminate",
   };
 
-  const assessment: PageStateAssessment = {
+  const assessment: PagePerceptionAssessment = {
     kind: "loading",
     confidence: "medium",
     signals: ["document:unstable", signal],
-    recommendedAction: "wait_and_inspect",
   };
 
   return {
@@ -167,7 +166,7 @@ export async function observeStablePageState(
 
     if (elapsedMs >= MAX_OBSERVATION_MS) {
       if (stillUnstable) {
-        const assessment: PageStateAssessment = {
+        const assessment: PagePerceptionAssessment = {
           ...last.assessment,
           kind: "loading",
           confidence: "medium",
@@ -177,7 +176,6 @@ export async function observeStablePageState(
               "stabilization:bounded_timeout",
             ]),
           ],
-          recommendedAction: "wait_and_inspect",
         };
 
         const timedOutResult: PageStateClassificationResult = {

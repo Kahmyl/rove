@@ -125,10 +125,26 @@ export type PageStateRecommendedAction =
   "continue" | "wait_and_inspect" | "request_human" | "stop";
 
 /** Deterministic assessment attached to every browser inspection. */
-export interface PageStateAssessment {
+/**
+ * Production page-state perception.
+ *
+ * This contract answers only what F1 believes is happening in the browser.
+ * Operational decisions belong to PagePolicyDecision.
+ */
+export interface PagePerceptionAssessment {
   kind: PageStateKind;
   confidence: "high" | "medium" | "low";
   signals: string[];
+}
+
+/**
+ * @deprecated Frozen F1 research compatibility contract.
+ *
+ * Historical research artifacts still use recommendedAction and must remain
+ * byte-for-byte unchanged. Production perception must use
+ * PagePerceptionAssessment instead.
+ */
+export interface PageStateAssessment extends PagePerceptionAssessment {
   recommendedAction: PageStateRecommendedAction;
 }
 

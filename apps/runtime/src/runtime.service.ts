@@ -15,7 +15,7 @@ import {
   type ObservationPage,
   type ObservationQuery,
   type PageInspection,
-  type PageStateAssessment,
+  type PagePerceptionAssessment,
   type PageSummary,
   type PressRequest,
   type RoveRuntime,
@@ -67,12 +67,12 @@ export class RuntimeService implements RoveRuntime {
     let session = await this.sessions.start(request);
     let profileLock: RoveProfileLock | undefined;
     try {
-      const persistentProfile =
-        await new RoveProfileManager(this.config.home)
-          .resolvePersistentProfile(
-            session.profile,
-            this.config.browser.preferredBrowser,
-          );
+      const persistentProfile = await new RoveProfileManager(
+        this.config.home,
+      ).resolvePersistentProfile(
+        session.profile,
+        this.config.browser.preferredBrowser,
+      );
       if (persistentProfile !== undefined) {
         profileLock = await RoveProfileLock.acquire(
           persistentProfile.userDataDir,
@@ -622,7 +622,7 @@ export class RuntimeService implements RoveRuntime {
   private async assessBrowser(
     sessionId: string,
     browser: { inspect(options?: InspectOptions): Promise<PageInspection> },
-  ): Promise<PageStateAssessment> {
+  ): Promise<PagePerceptionAssessment> {
     const inspection = await browser.inspect({
       includeText: false,
       includeTargets: false,
@@ -632,7 +632,7 @@ export class RuntimeService implements RoveRuntime {
 
   private async assessAndPause(
     sessionId: string,
-  ): Promise<PageStateAssessment> {
+  ): Promise<PagePerceptionAssessment> {
     const pageState = await this.assessBrowser(
       sessionId,
       this.browser.get(sessionId),
@@ -644,7 +644,7 @@ export class RuntimeService implements RoveRuntime {
   }
 
   private handoffForPageState(
-    pageState: PageStateAssessment,
+    pageState: PagePerceptionAssessment,
   ): { reason: string; observationType: string } | undefined {
     switch (pageState.kind) {
       case "authentication_required":
@@ -676,7 +676,7 @@ export class RuntimeService implements RoveRuntime {
 
   private async pauseForPageState(
     sessionId: string,
-    pageState: PageStateAssessment,
+    pageState: PagePerceptionAssessment,
   ): Promise<void> {
     const handoff = this.handoffForPageState(pageState);
     if (handoff === undefined) return;
@@ -754,54 +754,35 @@ export class RuntimeService implements RoveRuntime {
     activity: BrowserActivity,
   ): void {
     const previous =
-      this.humanActivityQueues.get(sessionId) ??
-      Promise.resolve();
+      this.humanActivityQueues.get(sessionId) ?? Promise.resolve();
 
     const next = previous
-      .then(() =>
-        this.persistDownloadEvidence(
-          sessionId,
-          activity,
-        ),
-      )
+      .then(() => this.persistDownloadEvidence(sessionId, activity))
       .catch(() => undefined)
       .finally(() => {
-        if (
-          this.humanActivityQueues.get(sessionId) ===
-          next
-        ) {
+        if (this.humanActivityQueues.get(sessionId) === next) {
           this.humanActivityQueues.delete(sessionId);
         }
       });
 
-    this.humanActivityQueues.set(
-      sessionId,
-      next,
-    );
+    this.humanActivityQueues.set(sessionId, next);
   }
 
   private async persistDownloadEvidence(
     sessionId: string,
     activity: BrowserActivity,
   ): Promise<void> {
-    const data =
-      activity.data as Record<string, unknown>;
-    const path =
-      typeof data.path === "string"
-        ? data.path
-        : undefined;
+    const data = activity.data as Record<string, unknown>;
+    const path = typeof data.path === "string" ? data.path : undefined;
     const filename =
-      typeof data.filename === "string"
-        ? data.filename
-        : "download";
+      typeof data.filename === "string" ? data.filename : "download";
 
     if (path === undefined) {
       await this.observations.append(sessionId, {
         actor: "browser",
         type: "download_failed",
         data: {
-          reason:
-            "Managed download completed without a saved path.",
+          reason: "Managed download completed without a saved path.",
           filename,
         },
         pageId: activity.pageId,
@@ -822,16 +803,13 @@ export class RuntimeService implements RoveRuntime {
         ...(activity.pageRevision === undefined
           ? {}
           : { pageRevision: activity.pageRevision }),
-        ...(typeof data.url === "string"
-          ? { url: data.url }
-          : {}),
+        ...(typeof data.url === "string" ? { url: data.url } : {}),
         metadata: {
           filename,
           managedPath: path,
           directory: data.directory,
           sizeBytes: data.sizeBytes,
-          suggestedFilename:
-            data.suggestedFilename,
+          suggestedFilename: data.suggestedFilename,
           source: "browser_download",
         },
       },
@@ -855,10 +833,7 @@ export class RuntimeService implements RoveRuntime {
         ? {}
         : { pageRevision: activity.pageRevision }),
     });
-    await this.controlWait.publish(
-      sessionId,
-      observation,
-    );
+    await this.controlWait.publish(sessionId, observation);
   }
 
   private persistBrowserActivity(
@@ -879,8 +854,7 @@ export class RuntimeService implements RoveRuntime {
         ...(activity.pageRevision === undefined
           ? {}
           : {
-              pageRevision:
-                activity.pageRevision,
+              pageRevision: activity.pageRevision,
             }),
       });
       return;

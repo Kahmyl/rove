@@ -1,7 +1,7 @@
 import {
   RoveError,
   type PageInspection,
-  type PageStateAssessment,
+  type PagePerceptionAssessment,
   type PageStateIdentity,
   type PageStatePropositions,
   type PageStateTruth,
@@ -16,7 +16,7 @@ interface ActionRecord {
 interface RecordedInspection {
   pageId: string;
   revision: number;
-  pageState: PageStateAssessment;
+  pageState: PagePerceptionAssessment;
   propositions?: PageStatePropositions;
   fingerprint?: string;
 }
@@ -33,7 +33,7 @@ const MAX_REPEATED_ACTIONS = 4;
 
 const BLOCKED_PAGE_STATES: Partial<
   Record<
-    PageStateAssessment["kind"],
+    PagePerceptionAssessment["kind"],
     {
       code: RoveErrorCode;
       message: string;
@@ -94,7 +94,7 @@ function truth(value: unknown): value is PageStateTruth {
 
 export function pageStateFromInspection(
   inspection: PageInspection,
-): PageStateAssessment {
+): PagePerceptionAssessment {
   const value = inspection.metadata?.pageState;
 
   if (typeof value === "object" && value !== null) {
@@ -103,10 +103,9 @@ export function pageStateFromInspection(
     if (
       typeof record.kind === "string" &&
       typeof record.confidence === "string" &&
-      Array.isArray(record.signals) &&
-      typeof record.recommendedAction === "string"
+      Array.isArray(record.signals)
     ) {
-      return value as PageStateAssessment;
+      return value as PagePerceptionAssessment;
     }
   }
 
@@ -116,7 +115,6 @@ export function pageStateFromInspection(
     kind: "ready",
     confidence: "low",
     signals: ["adapter:page_state_unavailable"],
-    recommendedAction: "continue",
   };
 }
 
@@ -171,7 +169,7 @@ export class InteractionPolicy {
   recordInspection(
     sessionId: string,
     inspection: PageInspection,
-  ): PageStateAssessment {
+  ): PagePerceptionAssessment {
     const state = this.state(sessionId);
     const pageState = pageStateFromInspection(inspection);
 

@@ -1,6 +1,6 @@
 import type {
   PagePolicyDecision,
-  PageStateAssessment,
+  PagePerceptionAssessment,
   PageStateKind,
   PageStatePropositions,
 } from "@rove/protocol";
@@ -120,7 +120,7 @@ function hasIndeterminateDecisionState(
 
 export class PageStatePolicy {
   evaluate(
-    pageState: PageStateAssessment,
+    pageState: PagePerceptionAssessment,
     propositions?: PageStatePropositions,
   ): PagePolicyDecision {
     if (propositions !== undefined) {

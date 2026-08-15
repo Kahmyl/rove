@@ -135,8 +135,8 @@ describe("production decision-relevant page-state stabilization", () => {
       expect(observation.assessment).toMatchObject({
         kind: "loading",
         confidence: "medium",
-        recommendedAction: "wait_and_inspect",
       });
+      expect(observation.assessment).not.toHaveProperty("recommendedAction");
 
       expect(observation.assessment.signals).toContain(
         "stabilization:bounded_timeout",

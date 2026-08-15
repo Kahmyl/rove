@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   PageInspection,
+  PagePerceptionAssessment,
   PageStateAssessment,
   PageStateIdentity,
   PageStatePropositions,
@@ -27,7 +28,7 @@ const identity: PageStateIdentity = {
 };
 
 function inspection(
-  pageState: PageStateAssessment,
+  pageState: PagePerceptionAssessment | PageStateAssessment,
   overrides: {
     propositions?: PageStatePropositions;
     fingerprint?: string;
@@ -55,6 +56,26 @@ const ready: PageStateAssessment = {
 };
 
 describe("InteractionPolicy", () => {
+  it("accepts production page-state metadata without legacy recommendedAction", () => {
+    const policy = new InteractionPolicy();
+
+    const result = policy.recordInspection(
+      "ses_observational",
+      inspection({
+        kind: "ready",
+        confidence: "high",
+        signals: ["document:stable"],
+      }),
+    );
+
+    expect(result).toEqual({
+      kind: "ready",
+      confidence: "high",
+      signals: ["document:stable"],
+    });
+    expect(result).not.toHaveProperty("recommendedAction");
+  });
+
   it("requires an inspection before mutation", () => {
     const policy = new InteractionPolicy();
 
