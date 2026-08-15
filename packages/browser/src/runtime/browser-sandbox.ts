@@ -11,6 +11,15 @@ export interface BrowserSandboxVerification {
 export async function verifyChromiumSandbox(
   context: BrowserContext,
 ): Promise<BrowserSandboxVerification> {
+  if (process.platform === "win32") {
+    return {
+      status: "unknown",
+      method: "chrome_sandbox_page",
+      details:
+        "chrome://sandbox is not inspectable in this Windows Chromium runtime.",
+    };
+  }
+
   const page = await context.newPage();
 
   try {

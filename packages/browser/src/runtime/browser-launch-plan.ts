@@ -35,7 +35,7 @@ export interface ResolvedBrowserLaunchPlan {
   distribution: BrowserDistribution;
   executablePath?: string;
   headless: boolean;
-  sandbox: boolean | "unknown";
+  sandbox: boolean;
   profile: ResolvedProfile;
   viewport: Viewport;
   timeoutMs?: number;
@@ -74,6 +74,17 @@ export function resolveBrowserLaunchPlan(
     );
   }
 
+  const sandbox = requestedSandboxPolicy(config.launchArgs ?? []);
+
+  if (!sandbox) {
+    diagnostics.push({
+      level: "warning",
+      code: "SANDBOX_DISABLED_BY_LAUNCH_ARGS",
+      message:
+        "Caller-supplied launch arguments request disabled Chromium sandboxing.",
+    });
+  }
+
   if (config.executablePath !== undefined) {
     diagnostics.push({
       level: "warning",
@@ -101,7 +112,7 @@ export function resolveBrowserLaunchPlan(
       ? {}
       : { executablePath: config.executablePath }),
     headless: config.headless,
-    sandbox: "unknown",
+    sandbox,
     profile,
     viewport: config.viewport ?? DEFAULT_VIEWPORT,
     ...(config.timeouts?.launchMs === undefined
@@ -143,14 +154,14 @@ function currentRuntimeArgumentDiagnostics(): BrowserLaunchArgumentDiagnostic[] 
       action: "ignore_playwright_default",
       source: "required_by_current_runtime",
       reason:
-        "Current pre-F4 Playwright launch behavior removes Playwright's default Chromium no-sandbox argument; F4 must replace this with an explicit sandbox policy.",
+        "Rove requests normal Chromium sandboxing by removing Playwright's default sandbox-disabling argument.",
     },
     {
       arg: "--disable-setuid-sandbox",
       action: "ignore_playwright_default",
       source: "required_by_current_runtime",
       reason:
-        "Current pre-F4 Playwright launch behavior removes Playwright's default Chromium setuid-sandbox disablement; F4 must replace this with an explicit sandbox policy.",
+        "Rove requests normal Chromium sandboxing by removing Playwright's default setuid-sandbox disabling argument.",
     },
     ...(process.platform === "darwin"
       ? [
@@ -171,4 +182,12 @@ function currentRuntimeArgumentDiagnostics(): BrowserLaunchArgumentDiagnostic[] 
         ]
       : []),
   ];
+}
+
+function requestedSandboxPolicy(launchArgs: string[]): boolean {
+  return !launchArgs.some(
+    (arg) =>
+      arg === "--no-sandbox" ||
+      arg === "--disable-setuid-sandbox",
+  );
 }

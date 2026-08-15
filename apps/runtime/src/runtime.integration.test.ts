@@ -43,7 +43,7 @@ const testCapabilities: BrowserRuntimeCapabilities = {
     serviceWorkers: true,
   },
   humanInteraction: { available: false },
-  sandbox: { requested: "unknown", verified: "unknown" },
+  sandbox: { requested: true, verified: "unknown" },
   diagnostics: [],
 };
 
@@ -175,6 +175,7 @@ describe("Milestone 4 runtime integration", () => {
     expect(["enabled", "disabled", "unknown"]).toContain(
       agent.browserRuntime?.sandbox.verified,
     );
+    expect(agent.browserRuntime?.sandbox.requested).toBe(process.platform !== "win32");
     expect(agent.browserRuntime?.sandbox.verificationMethod).toBe(
       "chrome_sandbox_page",
     );

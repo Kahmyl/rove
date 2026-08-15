@@ -35,7 +35,7 @@ const testCapabilities: BrowserRuntimeCapabilities = {
     serviceWorkers: true,
   },
   humanInteraction: { available: false },
-  sandbox: { requested: "unknown", verified: "unknown" },
+  sandbox: { requested: true, verified: "unknown" },
   diagnostics: [],
 };
 

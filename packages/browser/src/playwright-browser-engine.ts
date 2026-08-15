@@ -10,6 +10,8 @@ import type { BrowserEngine, BrowserSession } from "./engine.js";
 import { PlaywrightBrowserSession } from "./playwright-browser-session.js";
 import { resolveSessionDownloadRuntime } from "./downloads/download-runtime.js";
 import {
+  type BrowserDistribution,
+  type BrowserLaunchPlanDiagnostic,
   resolveBrowserLaunchPlan,
   type ResolvedBrowserLaunchPlan,
 } from "./runtime/browser-launch-plan.js";
@@ -29,6 +31,20 @@ function toLaunchError(error: unknown): RoveError {
   });
   if (error instanceof Error) roveError.cause = error;
   return roveError;
+}
+
+interface LaunchedBrowser {
+  browser: Browser;
+  distribution: BrowserDistribution;
+  sandbox: boolean;
+  diagnostics: BrowserLaunchPlanDiagnostic[];
+}
+
+interface LaunchedPersistentContext {
+  context: BrowserContext;
+  distribution: BrowserDistribution;
+  sandbox: boolean;
+  diagnostics: BrowserLaunchPlanDiagnostic[];
 }
 
 export class PlaywrightBrowserEngine implements BrowserEngine {
@@ -53,17 +69,25 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
       await resolveSessionDownloadRuntime(
         sessionId,
       );
-    const browser = await this.launch(plan);
+    const launched = await this.launch(plan);
 
     try {
       return await PlaywrightBrowserSession.create(
-        browser,
+        launched.browser,
         config,
+        {
+          distribution: launched.distribution,
+          sandbox: launched.sandbox,
+          diagnostics: [
+            ...plan.diagnostics,
+            ...launched.diagnostics,
+          ],
+        },
         downloadRuntime,
         sessionId,
       );
     } catch (error) {
-      await browser
+      await launched.browser
         .close()
         .catch(() => undefined);
 
@@ -100,10 +124,10 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         userDataDir,
       );
 
-    let context: BrowserContext;
+    let launched: LaunchedPersistentContext;
 
     try {
-      context =
+      launched =
         await this.launchPersistent(
           userDataDir,
           plan,
@@ -116,12 +140,20 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
     try {
       return await PlaywrightBrowserSession
         .createPersistent(
-          context,
+          launched.context,
           config,
+          {
+            distribution: launched.distribution,
+            sandbox: launched.sandbox,
+            diagnostics: [
+              ...plan.diagnostics,
+              ...launched.diagnostics,
+            ],
+          },
           downloadRuntime,
         );
     } catch (error) {
-      await context
+      await launched.context
         .close()
         .catch(() => undefined);
 
@@ -133,7 +165,8 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
     userDataDir: string,
     plan: ResolvedBrowserLaunchPlan,
     downloadsPath: string,
-  ): Promise<BrowserContext> {
+  ): Promise<LaunchedPersistentContext> {
+    const runtimeLaunch = runtimeLaunchOptions(plan);
     const base = {
       acceptDownloads: true,
       downloadsPath,
@@ -142,31 +175,41 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         ? {}
         : { timeout: plan.timeoutMs }),
       viewport: plan.viewport,
-      ignoreDefaultArgs: plan.ignoreDefaultArgs,
+      ignoreDefaultArgs: runtimeLaunch.ignoreDefaultArgs,
       ...(plan.args.length === 0 ? {} : { args: plan.args }),
     };
 
     if (plan.executablePath !== undefined) {
-      return chromium.launchPersistentContext(
-        userDataDir,
-        {
-          ...base,
-          executablePath:
-            plan.executablePath,
-        },
-      );
+      return {
+        context: await chromium.launchPersistentContext(
+          userDataDir,
+          {
+            ...base,
+            executablePath:
+              plan.executablePath,
+          },
+        ),
+        distribution: plan.distribution,
+        sandbox: runtimeLaunch.sandbox,
+        diagnostics: runtimeLaunch.diagnostics,
+      };
     }
 
     if (plan.distribution === "chrome") {
       try {
-        return await chromium
-          .launchPersistentContext(
-            userDataDir,
-            {
-              ...base,
-              channel: "chrome",
-            },
-          );
+        return {
+          context: await chromium
+            .launchPersistentContext(
+              userDataDir,
+              {
+                ...base,
+                channel: "chrome",
+              },
+          ),
+          distribution: "chrome",
+          sandbox: runtimeLaunch.sandbox,
+          diagnostics: runtimeLaunch.diagnostics,
+        };
       } catch (error) {
         if (
           !isChromeChannelUnavailable(error)
@@ -174,49 +217,128 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
           throw error;
         }
 
-        return chromium
-          .launchPersistentContext(
-            userDataDir,
-            base,
-          );
+        return {
+          context: await chromium
+            .launchPersistentContext(
+              userDataDir,
+              base,
+          ),
+          distribution: "chromium",
+          sandbox: runtimeLaunch.sandbox,
+          diagnostics: [
+            ...runtimeLaunch.diagnostics,
+            browserFallbackDiagnostic(),
+          ],
+        };
       }
     }
 
-    return chromium.launchPersistentContext(
-      userDataDir,
-      base,
-    );
+    return {
+      context: await chromium.launchPersistentContext(
+        userDataDir,
+        base,
+      ),
+      distribution: "chromium",
+      sandbox: runtimeLaunch.sandbox,
+      diagnostics: runtimeLaunch.diagnostics,
+    };
   }
 
   private async launch(
     plan: ResolvedBrowserLaunchPlan,
-  ): Promise<Browser> {
+  ): Promise<LaunchedBrowser> {
+    const runtimeLaunch = runtimeLaunchOptions(plan);
     const base: LaunchOptions = {
       headless: plan.headless,
       ...(plan.timeoutMs === undefined
         ? {}
         : { timeout: plan.timeoutMs }),
-      ignoreDefaultArgs: plan.ignoreDefaultArgs,
+      ignoreDefaultArgs: runtimeLaunch.ignoreDefaultArgs,
       ...(plan.args.length === 0 ? {} : { args: plan.args }),
     };
     try {
       // Rule 1: an explicit executable path skips browser discovery entirely.
       if (plan.executablePath !== undefined) {
-        return await chromium.launch({ ...base, executablePath: plan.executablePath });
+        return {
+          browser: await chromium.launch({ ...base, executablePath: plan.executablePath }),
+          distribution: plan.distribution,
+          sandbox: runtimeLaunch.sandbox,
+          diagnostics: runtimeLaunch.diagnostics,
+        };
       }
       // Rule 3: prefer system Google Chrome, falling back once to bundled Chromium.
       if (plan.distribution === "chrome") {
         try {
-          return await chromium.launch({ ...base, channel: "chrome" });
+          return {
+            browser: await chromium.launch({ ...base, channel: "chrome" }),
+            distribution: "chrome",
+            sandbox: runtimeLaunch.sandbox,
+            diagnostics: runtimeLaunch.diagnostics,
+          };
         } catch (error) {
           if (!isChromeChannelUnavailable(error)) throw error;
-          return await chromium.launch(base);
+          return {
+            browser: await chromium.launch(base),
+            distribution: "chromium",
+            sandbox: runtimeLaunch.sandbox,
+            diagnostics: [
+              ...runtimeLaunch.diagnostics,
+              browserFallbackDiagnostic(),
+            ],
+          };
         }
       }
       // Rule 2: bundled Chromium without Chrome probing.
-      return await chromium.launch(base);
+      return {
+        browser: await chromium.launch(base),
+        distribution: "chromium",
+        sandbox: runtimeLaunch.sandbox,
+        diagnostics: runtimeLaunch.diagnostics,
+      };
     } catch (error) {
       throw toLaunchError(error);
     }
   }
+}
+
+function browserFallbackDiagnostic(): BrowserLaunchPlanDiagnostic {
+  return {
+    level: "warning",
+    code: "BROWSER_DISTRIBUTION_FALLBACK",
+    message:
+      "Requested Google Chrome was unavailable, so bundled Playwright Chromium was launched.",
+  };
+}
+
+function runtimeLaunchOptions(
+  plan: ResolvedBrowserLaunchPlan,
+): {
+  ignoreDefaultArgs: string[];
+  sandbox: boolean;
+  diagnostics: BrowserLaunchPlanDiagnostic[];
+} {
+  if (plan.sandbox && process.platform === "win32") {
+    return {
+      ignoreDefaultArgs: plan.ignoreDefaultArgs.filter(
+        (arg) =>
+          arg !== "--no-sandbox" &&
+          arg !== "--disable-setuid-sandbox",
+      ),
+      sandbox: false,
+      diagnostics: [
+        {
+          level: "warning",
+          code: "SANDBOX_LAUNCH_FALLBACK",
+          message:
+            "Requested sandbox launch is not usable in this Windows Playwright Chromium runtime, so Rove used Playwright's stable sandbox defaults.",
+        },
+      ],
+    };
+  }
+
+  return {
+    ignoreDefaultArgs: plan.ignoreDefaultArgs,
+    sandbox: plan.sandbox,
+    diagnostics: [],
+  };
 }

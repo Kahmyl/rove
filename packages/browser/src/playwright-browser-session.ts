@@ -42,6 +42,10 @@ import {
   verifyChromiumSandbox,
   type BrowserSandboxVerification,
 } from "./runtime/browser-sandbox.js";
+import type {
+  BrowserDistribution,
+  BrowserLaunchPlanDiagnostic,
+} from "./runtime/browser-launch-plan.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -78,6 +82,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     private readonly actionTimeoutMs: number,
     private readonly navigationTimeoutMs: number,
     private readonly typingDelayMs: number,
+    private readonly headless: boolean,
     private readonly downloadRuntime?: ResolvedDownloadRuntime,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
@@ -128,6 +133,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   static async create(
     browser: Browser,
     config: BrowserLaunchConfig,
+    runtime: BrowserRuntimeSnapshot,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
@@ -144,6 +150,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       context,
       config,
       false,
+      runtime,
       sandbox,
       downloadRuntime,
       sessionId,
@@ -153,6 +160,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   static async createPersistent(
     context: BrowserContext,
     config: BrowserLaunchConfig,
+    runtime: BrowserRuntimeSnapshot,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
@@ -173,6 +181,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       context,
       config,
       true,
+      runtime,
       sandbox,
       downloadRuntime,
       sessionId,
@@ -184,18 +193,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
     context: BrowserContext,
     config: BrowserLaunchConfig,
     preserveExistingPages: boolean,
+    runtime: BrowserRuntimeSnapshot,
     sandbox: BrowserSandboxVerification,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
-      runtimeCapabilities(browser, config, sandbox, downloadRuntime),
+      runtimeCapabilities(browser, config, runtime, sandbox, downloadRuntime),
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
       config.interaction?.typingDelayMs ?? 0,
+      config.headless,
       downloadRuntime,
     );
 
@@ -239,6 +250,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private async startActiveTabObservation(): Promise<void> {
     if (this.browserCdp !== undefined) {
+      return;
+    }
+
+    if (this.headless) {
       return;
     }
 
@@ -1162,12 +1177,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
 function runtimeCapabilities(
   browser: Browser,
   config: BrowserLaunchConfig,
+  runtime: BrowserRuntimeSnapshot,
   sandbox: BrowserSandboxVerification,
   downloadRuntime?: ResolvedDownloadRuntime,
 ): BrowserRuntimeCapabilities {
   return {
     browserFamily: "chromium",
-    distribution: config.browser,
+    distribution: runtime.distribution,
     browserVersion: browser.version(),
     headless: config.headless,
     profile:
@@ -1193,32 +1209,17 @@ function runtimeCapabilities(
       available: !config.headless,
     },
     sandbox: {
-      requested: "unknown",
+      requested: runtime.sandbox,
       verified: sandbox.status,
       verificationMethod: sandbox.method,
       diagnostic: sandbox.details,
     },
-    diagnostics: [
-      ...(config.executablePath === undefined
-        ? []
-        : [
-            {
-              level: "warning" as const,
-              code: "CUSTOM_EXECUTABLE_PATH",
-              message:
-                "Runtime modified by a caller-supplied browser executable path.",
-            },
-          ]),
-      ...((config.launchArgs?.length ?? 0) === 0
-        ? []
-        : [
-            {
-              level: "warning" as const,
-              code: "CUSTOM_LAUNCH_ARGS",
-              message:
-                "Runtime modified by custom browser arguments; compatibility guarantees may not apply.",
-            },
-          ]),
-    ],
+    diagnostics: runtime.diagnostics,
   };
+}
+
+export interface BrowserRuntimeSnapshot {
+  distribution: BrowserDistribution;
+  sandbox: boolean;
+  diagnostics: BrowserLaunchPlanDiagnostic[];
 }

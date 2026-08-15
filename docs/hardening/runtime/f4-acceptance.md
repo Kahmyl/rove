@@ -15,7 +15,8 @@ F4 Engineering Complete; additional environment certifications pending.
 | Field | Value |
 | --- | --- |
 | Branch | `feat/browser-runtime-fidelity-and-compatibility` |
-| Commit | `28fd407e0a700ccf4e52ba2673c017aa247c98c0` |
+| Validated source revision | `abbe019537aa7e66d85f60140cd58614f0df6c4c` |
+| Acceptance report revision | generated after validation |
 | Date | 2026-08-15 |
 | OS / arch | Windows x64 |
 | Node | v24.13.0 |
@@ -24,7 +25,7 @@ F4 Engineering Complete; additional environment certifications pending.
 | Browser version | 151.0.7922.34 |
 | Mode | headless |
 | Profile modes tested | temporary, Rove-managed persistent |
-| Sandbox result | runtime-probed; `enabled`, `disabled`, or `unknown` depending on `chrome://sandbox` signal |
+| Sandbox result | launch policy reported separately from runtime probe; Windows Playwright Chromium resolves to fallback launch policy with `SANDBOX_LAUNCH_FALLBACK`, verified status `unknown` |
 
 ## Acceptance Table
 
@@ -47,8 +48,8 @@ F4 Engineering Complete; additional environment certifications pending.
 | Tabs/popups | PASS | compatibility fixture |
 | Dialog behavior | PASS | compatibility fixture |
 | Frame plumbing | PASS | iframe inspection/runtime test |
-| Sandbox status | PASS_WITH_LIMITATION | runtime probe reports `enabled`, `disabled`, or `unknown`; never inferred from launch args alone |
-| 30-minute soak | PASS | 354 iterations, bounded memory |
+| Sandbox status | PASS_WITH_LIMITATION | launch plan requests sandboxing; Windows Playwright Chromium runtime falls back with diagnostic and reports verified status as `unknown`; never inferred from launch args alone |
+| 30-minute soak | PASS | 355 iterations, bounded memory |
 | Resource cleanup | PASS | soak cleanup: session and fixture closed |
 | F1/F4 boundary | PASS | ADR and runtime contract |
 | Repository quality gates | PASS | lint, typecheck, test, build, doctor, compat, soak, diff-check |
@@ -64,13 +65,13 @@ F4 Engineering Complete; additional environment certifications pending.
 ```text
 command: pnpm browser:soak
 duration: 30 minutes
-iterations: 354
-memory: bounded; start RSS 150,454,272; end RSS 134,086,656; max RSS 165,666,816
+iterations: 355
+memory: bounded; start RSS 163,782,656; end RSS 151,994,368; max RSS 176,713,728
 session cleanup: passed
 fixture cleanup: passed
 ```
 
-This soak remains valid unless browser launch, shutdown, profile locking, download lifecycle, context shutdown, or cleanup behavior changes.
+This soak was rerun after launch-result plumbing and Windows sandbox fallback changes.
 
 ## Environment Certification
 

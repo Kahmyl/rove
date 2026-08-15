@@ -68,7 +68,7 @@ export interface BrowserDoctorReport {
     sandbox: "enabled" | "disabled" | "unknown";
   };
   launchPlan: {
-    sandbox: boolean | "unknown";
+    sandbox: boolean;
     args: BrowserLaunchArgumentDiagnostic[];
     diagnostics: BrowserLaunchPlanDiagnostic[];
   };

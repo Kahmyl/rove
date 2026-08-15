@@ -18,7 +18,7 @@ describe("resolveBrowserLaunchPlan", () => {
       browserFamily: "chromium",
       distribution: "chromium",
       headless: true,
-      sandbox: "unknown",
+      sandbox: true,
       profile: {
         mode: "temporary",
       },
@@ -74,6 +74,27 @@ describe("resolveBrowserLaunchPlan", () => {
       "CUSTOM_LAUNCH_ARGS",
       "CUSTOM_EXECUTABLE_PATH",
     ]);
+    expect(
+      plan.argDiagnostics
+        .map((item) => item.reason)
+        .join("\n"),
+    ).not.toMatch(/pre-F4|F4 must replace/i);
+  });
+
+  it("reports disabled requested sandbox policy from explicit launch args", () => {
+    const plan = resolveBrowserLaunchPlan({
+      ...config,
+      launchArgs: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    expect(plan.sandbox).toBe(false);
+    expect(plan.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "SANDBOX_DISABLED_BY_LAUNCH_ARGS",
+        }),
+      ]),
+    );
   });
 
   it("carries launch timeout into the plan", () => {

@@ -63,7 +63,7 @@ describe("browser doctor diagnostics", () => {
         downloads: "not_run",
       },
       launchPlan: {
-        sandbox: "unknown",
+        sandbox: true,
         args: [
           {
             arg: "--no-sandbox",

@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { chromium, type Browser } from "playwright";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   BrowserLaunchConfig,
@@ -15,6 +16,7 @@ import {
   type FixtureServer,
 } from "./fixtures/fixture-server.js";
 import { PlaywrightBrowserEngine } from "./playwright-browser-engine.js";
+import { resolveBrowserLaunchPlan } from "./runtime/browser-launch-plan.js";
 
 const config: BrowserLaunchConfig = {
   headless: true,
@@ -93,6 +95,34 @@ afterEach(async () => {
 });
 
 describe("PlaywrightBrowserEngine", () => {
+  it("reports Chromium when requested Chrome falls back to bundled Chromium", async () => {
+    const fallbackBrowser = {} as Browser;
+    const launch = vi.spyOn(chromium, "launch")
+      .mockRejectedValueOnce(new Error("Executable doesn't exist"))
+      .mockResolvedValueOnce(fallbackBrowser);
+
+    try {
+      const engine = new PlaywrightBrowserEngine() as unknown as {
+        launch(plan: ReturnType<typeof resolveBrowserLaunchPlan>): Promise<{
+          browser: Browser;
+          distribution: "chrome" | "chromium";
+        }>;
+      };
+
+      const launched = await engine.launch(
+        resolveBrowserLaunchPlan({
+          ...config,
+          browser: "chrome",
+        }),
+      );
+
+      expect(launched.browser).toBe(fallbackBrowser);
+      expect(launched.distribution).toBe("chromium");
+    } finally {
+      launch.mockRestore();
+    }
+  });
+
   it("starts a real temporary Chromium session with page_01", async () => {
     const session = await startSession();
 
@@ -109,6 +139,7 @@ describe("PlaywrightBrowserEngine", () => {
     expect(["enabled", "disabled", "unknown"]).toContain(
       session.capabilities.sandbox.verified,
     );
+    expect(session.capabilities.sandbox.requested).toBe(process.platform !== "win32");
     expect(session.capabilities.sandbox.verificationMethod).toBe(
       "chrome_sandbox_page",
     );
