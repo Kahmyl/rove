@@ -91,6 +91,34 @@ function framePresentation(
   return false;
 }
 
+function verificationIdentityFramePresentation(
+  evidence: PageStateEvidence | undefined,
+  domOrdinals: ReadonlySet<number>,
+): Truth {
+  if (domOrdinals.size === 0) return false;
+  if (evidence === undefined) return "indeterminate";
+
+  let unavailable = false;
+  for (const frame of evidence.frames) {
+    if (
+      frame.domOrdinal === null ||
+      !domOrdinals.has(frame.domOrdinal) ||
+      !frame.verificationIdentity
+    )
+      continue;
+    if (frame.elementAcquisition === "unavailable") {
+      unavailable = true;
+    } else if (
+      frame.elementAcquisition === "available" &&
+      frame.element !== null &&
+      presented(frame.element)
+    ) {
+      return true;
+    }
+  }
+  return unavailable ? "indeterminate" : false;
+}
+
 function statusRestriction(status: number | undefined): boolean {
   return status === 403 || status === 429 || status === 451;
 }
@@ -181,6 +209,7 @@ export function classifyObservedPageState(
   let authTrue = false;
   let restrictionTrue = false;
   let errorTrue = false;
+  let abnormalTrue = false;
 
   const signals: string[] = [];
 
@@ -213,12 +242,18 @@ export function classifyObservedPageState(
       facts?.iframeCount ?? 0,
     );
 
+    const identifiedVerificationFrame = verificationIdentityFramePresentation(
+      input.evidence,
+      new Set(surface.frameOrdinals),
+    );
+
     if (!suppressLexical) {
       if (
         surface.verificationDirective ||
         surface.verificationControl ||
         semanticFrame === true ||
-        localFrame === true
+        localFrame === true ||
+        (surface.verificationCue && identifiedVerificationFrame === true)
       ) {
         verificationTrue = true;
         signals.push(
@@ -228,7 +263,9 @@ export function classifyObservedPageState(
         );
       } else if (
         semanticFrame === "indeterminate" ||
-        localFrame === "indeterminate"
+        localFrame === "indeterminate" ||
+        (surface.verificationCue &&
+          identifiedVerificationFrame === "indeterminate")
       ) {
         verificationIndeterminate = true;
       }
@@ -248,6 +285,22 @@ export function classifyObservedPageState(
           surface.kind === "blocking_dialog"
             ? "error:blocking_surface"
             : "error:primary_surface",
+        );
+      }
+
+      if (surface.terminalFailureCue) {
+        errorTrue = true;
+        signals.push(
+          surface.kind === "blocking_dialog"
+            ? "terminal_failure:blocking_surface"
+            : "terminal_failure:primary_surface",
+        );
+      } else if (surface.abnormalStateCue) {
+        abnormalTrue = true;
+        signals.push(
+          surface.kind === "blocking_dialog"
+            ? "abnormal:blocking_surface"
+            : "abnormal:primary_surface",
         );
       }
     }
@@ -316,15 +369,15 @@ export function classifyObservedPageState(
     statusError(input.signals.httpStatus) || errorTrue;
 
   if (statusAuthentication(input.signals.httpStatus)) {
-    signals.push("auth:http_status");
+    signals.push(`auth:http_status:${input.signals.httpStatus}`);
   }
 
   if (statusRestriction(input.signals.httpStatus)) {
-    signals.push("restriction:http_status");
+    signals.push(`restriction:http_status:${input.signals.httpStatus}`);
   }
 
   if (statusError(input.signals.httpStatus)) {
-    signals.push("error:http_status");
+    signals.push(`error:http_status:${input.signals.httpStatus}`);
   }
 
   const knownBlockers = [
@@ -351,7 +404,9 @@ export function classifyObservedPageState(
           surface.restrictionCue ||
           surface.errorCue
         ),
-    ) || facts?.interstitialCanvasPresented === true;
+    ) ||
+    facts?.interstitialCanvasPresented === true ||
+    abnormalTrue;
 
   let interstitialPresented: Truth;
 
@@ -392,7 +447,11 @@ export function classifyObservedPageState(
     interstitialPresented,
   };
 
-  const kind = derivePrimaryState(propositions);
+  const derivedKind = derivePrimaryState(propositions);
+  const kind =
+    derivedKind === "ready" && facts?.available !== true
+      ? "unknown_interstitial"
+      : derivedKind;
 
   const unresolvedBlocker = anyIndeterminate([
     humanVerificationPresented,
@@ -426,6 +485,21 @@ export function classifyObservedPageState(
         : []),
       ...(blockingUnknownSurface && !knownBlockerTrue
         ? ["interstitial:blocking_unknown_surface"]
+        : []),
+      ...(facts?.available !== true ? ["evidence:surface_unavailable"] : []),
+      ...(kind === "ready" && ordinaryPrimarySurface
+        ? ["ready:primary_content"]
+        : []),
+      ...(kind === "ready" &&
+      !ordinaryPrimarySurface &&
+      facts?.available === true
+        ? ["ready:observed_empty_document"]
+        : []),
+      ...(kind === "ready" &&
+      input.signals.httpStatus !== undefined &&
+      input.signals.httpStatus >= 200 &&
+      input.signals.httpStatus < 400
+        ? [`ready:http_status:${input.signals.httpStatus}`]
         : []),
     ],
     recommendedAction: disposition(kind),

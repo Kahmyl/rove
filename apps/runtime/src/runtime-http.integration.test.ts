@@ -157,7 +157,11 @@ describe("Milestone 4 runtime HTTP API", () => {
     }, authorization);
     expect(record.body).toMatchObject({ type: "record", sessionId });
     const evidence = await json(baseUrl, `/sessions/${sessionId}/evidence`, {}, authorization);
-    expect((evidence.body as unknown as unknown[])).toHaveLength(2);
+    expect(
+      (evidence.body as { label?: string }[]).filter(
+        (item) => item.label !== "browser_evidence",
+      ),
+    ).toHaveLength(2);
     expect((await json(baseUrl, `/sessions/${sessionId}/evidence/${String(record.body.id)}`, {}, authorization)).body).toMatchObject({ id: record.body.id });
     const observations = await json(baseUrl, `/sessions/${sessionId}/observations?afterSeq=0&limit=100`, {}, authorization);
     expect((observations.body.items as { type: string }[]).map((item) => item.type)).toEqual(expect.arrayContaining(["session_started", "agent_typed", "agent_clicked", "screenshot_captured", "record_saved"]));

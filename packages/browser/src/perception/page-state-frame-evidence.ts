@@ -13,6 +13,8 @@ export interface PageStateFrameElementEvidence {
 export interface PageStateFrameEvidence {
   depth: number;
   domOrdinal: number | null;
+  source: string | null;
+  verificationIdentity: boolean;
   element: PageStateFrameElementEvidence | null;
   elementAcquisition: "available" | "not_applicable" | "unavailable";
 }
@@ -171,9 +173,41 @@ async function collectFrameElement(
       };
     });
 
+    const identity = await handle.evaluate((node) => {
+      const frame = node as HTMLIFrameElement;
+      const semanticName = [
+        frame.title,
+        frame.getAttribute("aria-label"),
+        frame.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      let source: string | null = null;
+      try {
+        const url = new URL(frame.src, document.baseURI);
+        url.username = "";
+        url.password = "";
+        url.search = "";
+        url.hash = "";
+        source = url.toString();
+      } catch {
+        source = null;
+      }
+      return {
+        source,
+        verificationIdentity:
+          /(?:captcha|challenge|turnstile|human.?verification|security.?check)/i.test(
+            `${semanticName} ${source ?? ""}`,
+          ),
+      };
+    });
+
     return {
       depth: 1,
       domOrdinal,
+      source: identity.source,
+      verificationIdentity: identity.verificationIdentity,
       element,
       elementAcquisition: "available",
     };
@@ -181,6 +215,8 @@ async function collectFrameElement(
     return {
       depth: 1,
       domOrdinal,
+      source: null,
+      verificationIdentity: false,
       element: null,
       elementAcquisition: "unavailable",
     };

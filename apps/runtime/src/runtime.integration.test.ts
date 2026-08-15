@@ -218,7 +218,9 @@ describe("Milestone 4 runtime integration", () => {
     expect(["enabled", "disabled", "unknown"]).toContain(
       agent.browserRuntime?.sandbox.verified,
     );
-    expect(agent.browserRuntime?.sandbox.requested).toBe(process.platform !== "win32");
+    expect(agent.browserRuntime?.sandbox.requested).toBe(
+      process.platform !== "win32",
+    );
     expect(agent.browserRuntime?.sandbox.verificationMethod).toBe(
       "chrome_sandbox_page",
     );
@@ -361,6 +363,43 @@ describe("Milestone 4 runtime integration", () => {
     ).rejects.toMatchObject({
       code: "CONTROL_NOT_OWNED",
     });
+  });
+
+  it("persists sanitized browser evidence records independently of inspection", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/evidence-redirect`,
+    });
+    active.push({ runtime, id: session.id });
+
+    let records = await runtime.listEvidence(session.id);
+    const deadline = Date.now() + 3_000;
+    while (records.length < 4 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      records = await runtime.listEvidence(session.id);
+    }
+
+    expect(records.every((item) => item.label === "browser_evidence")).toBe(
+      true,
+    );
+    expect(records.some((item) => item.metadata?.kind === "navigation")).toBe(
+      true,
+    );
+    expect(
+      records.some((item) => item.metadata?.kind === "request_failure"),
+    ).toBe(true);
+
+    const payloads = await Promise.all(
+      records.map((item) => runtime.readEvidence(session.id, item.id)),
+    );
+    const serialized = JSON.stringify(payloads);
+    expect(serialized).toContain('"status":451');
+    expect(serialized).not.toContain("redirect-secret");
+    expect(serialized).not.toContain("console-secret");
+    expect(serialized).not.toContain("page-secret");
+    expect(serialized).not.toContain("request-secret");
   });
 
   it.each([
@@ -548,7 +587,11 @@ describe("Milestone 4 runtime integration", () => {
     expect((await runtime.getObservations(session.id)).items.at(-1)?.type).toBe(
       "session_completed",
     );
-    expect((await runtime.listEvidence(session.id)).length).toBe(2);
+    expect(
+      (await runtime.listEvidence(session.id)).filter(
+        (item) => item.label !== "browser_evidence",
+      ),
+    ).toHaveLength(2);
 
     const recreated = new EvidenceService(new FileEvidenceStore(home));
     expect((await recreated.metadata(session.id, record.id)).id).toBe(
@@ -601,14 +644,15 @@ describe("Milestone 4 runtime integration", () => {
     expect(downloaded.data).toMatchObject({
       evidenceId: file?.id,
     });
-    await expect(runtime.readEvidence(session.id, file!.id))
-      .resolves.toMatchObject({
-        id: file!.id,
-        binary: {
-          available: true,
-          encoding: "external",
-        },
-      });
+    await expect(
+      runtime.readEvidence(session.id, file!.id),
+    ).resolves.toMatchObject({
+      id: file!.id,
+      binary: {
+        available: true,
+        encoding: "external",
+      },
+    });
   });
 
   it("serializes runtime mutations per session without blocking another session", async () => {

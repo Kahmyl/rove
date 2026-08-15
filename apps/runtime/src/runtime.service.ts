@@ -45,6 +45,7 @@ import { ROVE_CONFIG } from "./tokens.js";
 @Injectable()
 export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
+  private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
@@ -67,12 +68,12 @@ export class RuntimeService implements RoveRuntime {
     let session = await this.sessions.start(request);
     let profileLock: RoveProfileLock | undefined;
     try {
-      const persistentProfile =
-        await new RoveProfileManager(this.config.home)
-          .resolvePersistentProfile(
-            session.profile,
-            this.config.browser.preferredBrowser,
-          );
+      const persistentProfile = await new RoveProfileManager(
+        this.config.home,
+      ).resolvePersistentProfile(
+        session.profile,
+        this.config.browser.preferredBrowser,
+      );
       if (persistentProfile !== undefined) {
         profileLock = await RoveProfileLock.acquire(
           persistentProfile.userDataDir,
@@ -196,6 +197,7 @@ export class RuntimeService implements RoveRuntime {
         });
       }
       await this.flushHumanActivity(sessionId);
+      await this.flushBrowserEvidence(sessionId);
       this.lastAgentActionAt.delete(sessionId);
       this.interactionPolicy.clear(sessionId);
 
@@ -754,54 +756,35 @@ export class RuntimeService implements RoveRuntime {
     activity: BrowserActivity,
   ): void {
     const previous =
-      this.humanActivityQueues.get(sessionId) ??
-      Promise.resolve();
+      this.humanActivityQueues.get(sessionId) ?? Promise.resolve();
 
     const next = previous
-      .then(() =>
-        this.persistDownloadEvidence(
-          sessionId,
-          activity,
-        ),
-      )
+      .then(() => this.persistDownloadEvidence(sessionId, activity))
       .catch(() => undefined)
       .finally(() => {
-        if (
-          this.humanActivityQueues.get(sessionId) ===
-          next
-        ) {
+        if (this.humanActivityQueues.get(sessionId) === next) {
           this.humanActivityQueues.delete(sessionId);
         }
       });
 
-    this.humanActivityQueues.set(
-      sessionId,
-      next,
-    );
+    this.humanActivityQueues.set(sessionId, next);
   }
 
   private async persistDownloadEvidence(
     sessionId: string,
     activity: BrowserActivity,
   ): Promise<void> {
-    const data =
-      activity.data as Record<string, unknown>;
-    const path =
-      typeof data.path === "string"
-        ? data.path
-        : undefined;
+    const data = activity.data as Record<string, unknown>;
+    const path = typeof data.path === "string" ? data.path : undefined;
     const filename =
-      typeof data.filename === "string"
-        ? data.filename
-        : "download";
+      typeof data.filename === "string" ? data.filename : "download";
 
     if (path === undefined) {
       await this.observations.append(sessionId, {
         actor: "browser",
         type: "download_failed",
         data: {
-          reason:
-            "Managed download completed without a saved path.",
+          reason: "Managed download completed without a saved path.",
           filename,
         },
         pageId: activity.pageId,
@@ -822,16 +805,13 @@ export class RuntimeService implements RoveRuntime {
         ...(activity.pageRevision === undefined
           ? {}
           : { pageRevision: activity.pageRevision }),
-        ...(typeof data.url === "string"
-          ? { url: data.url }
-          : {}),
+        ...(typeof data.url === "string" ? { url: data.url } : {}),
         metadata: {
           filename,
           managedPath: path,
           directory: data.directory,
           sizeBytes: data.sizeBytes,
-          suggestedFilename:
-            data.suggestedFilename,
+          suggestedFilename: data.suggestedFilename,
           source: "browser_download",
         },
       },
@@ -855,16 +835,18 @@ export class RuntimeService implements RoveRuntime {
         ? {}
         : { pageRevision: activity.pageRevision }),
     });
-    await this.controlWait.publish(
-      sessionId,
-      observation,
-    );
+    await this.controlWait.publish(sessionId, observation);
   }
 
   private persistBrowserActivity(
     sessionId: string,
     activity: BrowserActivity,
   ): void {
+    if (activity.type === "browser_evidence") {
+      this.enqueueBrowserEvidence(sessionId, activity);
+      return;
+    }
+
     if (activity.type === "download_completed") {
       this.enqueueDownloadEvidence(sessionId, activity);
       return;
@@ -879,14 +861,61 @@ export class RuntimeService implements RoveRuntime {
         ...(activity.pageRevision === undefined
           ? {}
           : {
-              pageRevision:
-                activity.pageRevision,
+              pageRevision: activity.pageRevision,
             }),
       });
       return;
     }
 
     this.enqueueHumanActivity(sessionId, activity);
+  }
+
+  private enqueueBrowserEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    const previous =
+      this.browserEvidenceQueues.get(sessionId) ?? Promise.resolve();
+    const evidence = activity.data.evidence as Record<string, unknown>;
+    const next = previous
+      .then(() =>
+        this.evidence.savePayload(
+          sessionId,
+          {
+            type: "record",
+            label: "browser_evidence",
+            pageId: activity.pageId,
+            ...(activity.pageRevision === undefined
+              ? {}
+              : { pageRevision: activity.pageRevision }),
+            ...(typeof evidence.destinationUrl === "string"
+              ? { url: evidence.destinationUrl }
+              : typeof evidence.url === "string"
+                ? { url: evidence.url }
+                : {}),
+            metadata: {
+              source: "browser_evidence",
+              kind:
+                typeof evidence.kind === "string"
+                  ? evidence.kind
+                  : "navigation",
+            },
+          },
+          activity.data,
+        ),
+      )
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.browserEvidenceQueues.get(sessionId) === next) {
+          this.browserEvidenceQueues.delete(sessionId);
+        }
+      });
+    this.browserEvidenceQueues.set(sessionId, next);
+  }
+
+  private async flushBrowserEvidence(sessionId: string): Promise<void> {
+    await this.browserEvidenceQueues.get(sessionId);
   }
 
   private async releaseProfileLock(sessionId: string): Promise<void> {
