@@ -38,6 +38,10 @@ import { isSensitiveTarget } from "./targets/target-identity.js";
 import { classifyPageState, detectAccessRestriction } from "./safety/page-state-classifier.js";
 import type { ResolvedDownloadRuntime } from "./downloads/download-runtime.js";
 import { saveManagedDownload } from "./downloads/managed-downloads.js";
+import {
+  verifyChromiumSandbox,
+  type BrowserSandboxVerification,
+} from "./runtime/browser-sandbox.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -134,11 +138,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
         : { downloadsPath: downloadRuntime.directory }),
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
     });
+    const sandbox = await verifyChromiumSandbox(context);
     return this.createFromContext(
       browser,
       context,
       config,
       false,
+      sandbox,
       downloadRuntime,
       sessionId,
     );
@@ -160,11 +166,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
       });
     }
 
+    const sandbox = await verifyChromiumSandbox(context);
+
     return this.createFromContext(
       browser,
       context,
       config,
       true,
+      sandbox,
       downloadRuntime,
       sessionId,
     );
@@ -175,12 +184,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
     context: BrowserContext,
     config: BrowserLaunchConfig,
     preserveExistingPages: boolean,
+    sandbox: BrowserSandboxVerification,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
-      runtimeCapabilities(browser, config, downloadRuntime),
+      runtimeCapabilities(browser, config, sandbox, downloadRuntime),
       browser,
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
@@ -1152,6 +1162,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 function runtimeCapabilities(
   browser: Browser,
   config: BrowserLaunchConfig,
+  sandbox: BrowserSandboxVerification,
   downloadRuntime?: ResolvedDownloadRuntime,
 ): BrowserRuntimeCapabilities {
   return {
@@ -1183,7 +1194,9 @@ function runtimeCapabilities(
     },
     sandbox: {
       requested: "unknown",
-      verified: "unknown",
+      verified: sandbox.status,
+      verificationMethod: sandbox.method,
+      diagnostic: sandbox.details,
     },
     diagnostics: [
       ...(config.executablePath === undefined

@@ -63,6 +63,8 @@ export const browserRuntimeCapabilitiesSchema = z.object({
       z.literal("disabled"),
       z.literal("unknown"),
     ]),
+    verificationMethod: z.string().optional(),
+    diagnostic: z.string().optional(),
   }),
   diagnostics: z.array(z.object({
     level: z.enum(["info", "warning"]),

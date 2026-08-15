@@ -28,7 +28,7 @@
     "test:mcp": "pnpm --filter @rove/mcp test",
     "browser:demo": "pnpm --filter @rove/browser demo",
     "browser:compat": "pnpm --filter @rove/browser compat",
-    "browser:doctor": "pnpm --filter @rove/browser doctor",
+    "browser:doctor": "pnpm --filter @rove/browser run doctor",
     "browser:soak": "pnpm --filter @rove/browser soak",
     "browser:inspect": "pnpm --filter @rove/browser inspect-demo",
     "browser:actions": "pnpm --filter @rove/browser actions-demo",

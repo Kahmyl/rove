@@ -171,8 +171,14 @@ describe("Milestone 4 runtime integration", () => {
       headless: true,
       profile: { mode: "temporary" },
       downloads: { managed: true, evidence: true },
-      sandbox: { requested: "unknown", verified: "unknown" },
     });
+    expect(["enabled", "disabled", "unknown"]).toContain(
+      agent.browserRuntime?.sandbox.verified,
+    );
+    expect(agent.browserRuntime?.sandbox.verificationMethod).toBe(
+      "chrome_sandbox_page",
+    );
+    expect(agent.browserRuntime?.sandbox.diagnostic?.length).toBeGreaterThan(0);
     expect(agent.id).toMatch(/^ses_/);
     expect(browser.has(agent.id)).toBe(true);
     expect(JSON.parse(await readFile(join(home, "sessions", agent.id, "session.json"), "utf8"))).toMatchObject({ status: "active" });

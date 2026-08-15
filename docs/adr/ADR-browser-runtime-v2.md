@@ -29,7 +29,7 @@ Rove Browser Runtime V2 supports:
 
 Ordinary existing Chrome profiles remain unsupported for production use. Rove will not attach to, copy, mutate, or bypass locks for a user's normal Chrome profile. A future explicit-import or dedicated-profile workflow can be designed separately if product requirements justify it.
 
-F4 owns frame plumbing only where it is necessary to make browser runtime compatibility observable and actionable. F1 remains responsible for semantic inspection quality, target ranking, labeling heuristics, perception evidence fusion, and page-state interpretation.
+F4 owns frame plumbing only where it is necessary to make browser runtime compatibility observable and actionable. F1 remains responsible for semantic inspection quality, target ranking, labeling heuristics, perception evidence fusion, and page-state interpretation. In short: F4 provides frame capability and execution plumbing; F1 decides what frames mean.
 
 The production browser decision is:
 
@@ -42,6 +42,7 @@ The production browser decision is:
 - Permissions use browser defaults unless a future explicit grant policy is introduced. Sensitive permissions must not be silently granted by F4.
 - Browser versions are reported, not hard-pinned. Newer compatible Chromium-family versions are allowed but must appear in diagnostics and acceptance reports.
 - Safe diagnostics may include browser family, distribution, version, headless/headed mode, profile mode/name, sandbox status, managed-download support, and storage capability status. Diagnostics must not include secrets, cookies, clipboard contents, or downloaded file contents.
+- Operating-system and browser matrix entries are `VERIFIED` only after an actual run in that environment. Missing environments remain `UNVERIFIED`, not PASS or FAIL.
 
 ## Consequences
 

@@ -994,7 +994,7 @@ async function verifyRoveRuntimeTemporarySession(
       throw new Error("Rove runtime capabilities did not report managed downloads.");
     }
 
-    return "Rove BrowserSession launched, navigated, inspected, and exposed runtime capabilities.";
+    return `Rove BrowserSession launched, navigated, inspected, and exposed runtime capabilities; sandbox ${session.capabilities.sandbox.verified} via ${session.capabilities.sandbox.verificationMethod ?? "unknown"}.`;
   } finally {
     await session.close().catch(() => undefined);
   }
@@ -1463,6 +1463,12 @@ export async function collectBrowserCompatReport(
 }
 
 export function formatBrowserCompatReport(report: BrowserCompatReport): string {
+  const platformCases = report.cases.filter(
+    (testCase) => !testCase.name.startsWith("rove runtime"),
+  );
+  const runtimeCases = report.cases.filter(
+    (testCase) => testCase.name.startsWith("rove runtime"),
+  );
   const lines = [
     report.title,
     "",
@@ -1483,10 +1489,16 @@ export function formatBrowserCompatReport(report: BrowserCompatReport): string {
     `  Browser version: ${report.resolved.browserVersion ?? "unknown"}`,
     `  Fallback used: ${report.resolved.fallbackUsed ? "true" : "false"}`,
     "",
-    "Cases:",
+    "Platform/browser capability tests:",
   ];
 
-  for (const testCase of report.cases) {
+  for (const testCase of platformCases) {
+    lines.push(`  [${testCase.status}] ${testCase.name}: ${testCase.details}`);
+  }
+
+  lines.push("", "Rove runtime integration tests:");
+
+  for (const testCase of runtimeCases) {
     lines.push(`  [${testCase.status}] ${testCase.name}: ${testCase.details}`);
   }
 

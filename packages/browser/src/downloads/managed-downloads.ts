@@ -12,7 +12,7 @@ export interface ManagedDownload {
 }
 
 const SAFE_SCOPE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
-const RESERVED_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
+const RESERVED_CHARS = /[<>:"/\\|?*]/g;
 
 export async function createManagedDownloadDirectory(
   root: string,
@@ -33,7 +33,7 @@ export async function createManagedDownloadDirectory(
 }
 
 export function sanitizeDownloadFilename(filename: string): string {
-  const safeBasename = basename(filename)
+  const safeBasename = replaceControlCharacters(basename(filename))
     .replace(RESERVED_CHARS, "_")
     .replace(/\s+/g, " ")
     .trim()
@@ -41,6 +41,12 @@ export function sanitizeDownloadFilename(filename: string): string {
     .replace(/[. ]+$/, "");
 
   return safeBasename === "" ? "download" : safeBasename.slice(0, 180);
+}
+
+function replaceControlCharacters(value: string): string {
+  return Array.from(value, (char) =>
+    char.charCodeAt(0) < 32 ? "_" : char,
+  ).join("");
 }
 
 export async function saveManagedDownload(

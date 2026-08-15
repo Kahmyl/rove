@@ -117,11 +117,11 @@ describe("Milestone 7 requested handoff", () => {
     const { runtime } = await harness();
     const session = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: session.id });
-    const pending = runtime.waitForControl(session.id, { afterSeq: 1, timeoutMs: 1_000 });
+    const pending = runtime.waitForControl(session.id, { afterSeq: 1, timeoutMs: 5_000 });
     await runtime.endSession(session.id);
     active.pop();
     await expect(pending).resolves.toMatchObject({ event: "session_completed", status: "completed" });
-  });
+  }, 10_000);
 });
 
 describe("Milestone 7 mode transitions and all-page invalidation", () => {

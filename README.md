@@ -101,7 +101,7 @@ Command Prompt without shell-specific environment syntax.
 
 ## Browser verification
 
-Rove supports real headed Playwright browser sessions with managed persistent or explicitly requested temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive restarts.
+Rove supports real headed Playwright browser sessions with Rove-managed persistent or explicitly requested temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive restarts. Ordinary/default Chrome profiles are intentionally unsupported.
 
 ### Responsible browsing boundary
 
@@ -109,11 +109,14 @@ Rove is designed as a user-directed assistant, not an anti-detection system. In 
 
 These safeguards reduce accidental rapid automation and disposable-session behavior, but they do not guarantee access to any site. Rove does not spoof browser fingerprints, hide automation or developer tooling, rotate proxies, solve CAPTCHAs, or bypass a site's access controls. A site's restriction remains authoritative and must be handled by the user or site operator.
 
-Local pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS` and `ROVE_BROWSER_TYPING_DELAY_MS`. Setting either to `0` disables that delay; headed development defaults to `3000` ms between actions and `35` ms between key events. Rove also removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults so normal operating-system browser sandboxing remains enabled.
+Local pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS` and `ROVE_BROWSER_TYPING_DELAY_MS`. Setting either to `0` disables that delay; headed development defaults to `3000` ms between actions and `35` ms between key events. Rove removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults, then reports observed sandbox status from runtime evidence as `enabled`, `disabled`, or `unknown`.
 
 Manual verification commands:
 
 ```bash
+pnpm browser:doctor
+pnpm browser:compat
+pnpm browser:soak
 pnpm browser:demo
 pnpm browser:inspect
 pnpm browser:actions
@@ -121,7 +124,7 @@ pnpm runtime:demo
 pnpm control:demo
 ```
 
-`browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
+`browser:doctor` reports requested browser settings, resolved launch configuration, and observed runtime state. `browser:compat` runs deterministic browser-platform and Rove-runtime compatibility checks. `browser:soak` runs the long browser stability check. `browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
 
 `control:demo` exercises requested Agent handoff and voluntary Companion takeover without Electron. It verifies exclusive ownership, wait notifications, mutation blocking, human-to-agent return, and stale target references after handback. Set `ROVE_CONTROL_DEMO_WAIT=1` to pause both flows for manual interaction in the headed browser.
 

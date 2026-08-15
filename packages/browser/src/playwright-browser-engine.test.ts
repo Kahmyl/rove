@@ -97,6 +97,22 @@ describe("PlaywrightBrowserEngine", () => {
     const session = await startSession();
 
     expect(session.id).toMatch(/^browser_/);
+    expect(session.capabilities).toMatchObject({
+      browserFamily: "chromium",
+      distribution: "chromium",
+      headless: true,
+      profile: { mode: "temporary" },
+      downloads: { managed: true, evidence: true },
+      humanInteraction: { available: false },
+    });
+    expect(session.capabilities.browserVersion.length).toBeGreaterThan(0);
+    expect(["enabled", "disabled", "unknown"]).toContain(
+      session.capabilities.sandbox.verified,
+    );
+    expect(session.capabilities.sandbox.verificationMethod).toBe(
+      "chrome_sandbox_page",
+    );
+    expect(session.capabilities.sandbox.diagnostic?.length).toBeGreaterThan(0);
 
     const pages = await session.pages();
 
@@ -132,6 +148,10 @@ describe("PlaywrightBrowserEngine", () => {
           });
 
       sessions.push(session);
+      expect(session.capabilities.profile).toMatchObject({
+        mode: "persistent",
+        name: "test-profile",
+      });
 
       const pages =
         await session.pages();
@@ -227,7 +247,7 @@ describe("PlaywrightBrowserEngine", () => {
         },
       );
     }
-  });
+  }, 15_000);
 
   it("keeps direct existing-profile attachment disabled", async () => {
     await expect(
