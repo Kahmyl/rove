@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
+import { LOCAL_PERCEPTION_FIXTURES } from "../perception/corpus/local-corpus.js";
+
 export interface FixtureServer {
   readonly port: number;
   readonly url: string;
@@ -9,7 +11,10 @@ export interface FixtureServer {
 
 // Resolve through src so the deterministic asset is also available when this
 // module is loaded from the compiled dist directory.
-const INSPECTION_HTML_URL = new URL("../../src/fixtures/pages/inspection.html", import.meta.url);
+const INSPECTION_HTML_URL = new URL(
+  "../../src/fixtures/pages/inspection.html",
+  import.meta.url,
+);
 
 const POPUP_HTML = `<!doctype html>
 <html lang="en">
@@ -87,9 +92,29 @@ const HUMAN_VERIFICATION_HTML = `<!doctype html><html><head><title>Security chec
 const AUTHENTICATION_HTML = `<!doctype html><html><head><title>Sign in</title></head><body>
   <h1>Sign in to continue</h1><label>Email <input type="email" /></label>
 </body></html>`;
-const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html><html><head><title>Challenge</title></head><body>
-  <canvas data-rendered-content="${"x".repeat(300)}"></canvas>
-</body></html>`;
+const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Challenge</title>
+  </head>
+  <body>
+    <canvas
+      id="unknown-visual-surface"
+      width="640"
+      height="240"
+      aria-label="Intervening visual page"
+    ></canvas>
+    <script>
+      const canvas = document.querySelector("#unknown-visual-surface");
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#111";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#fff";
+      context.font = "24px sans-serif";
+      context.fillText("Continue in this browser window", 40, 120);
+    </script>
+  </body>
+</html>`;
 const SERVER_ERROR_HTML = `<!doctype html><html><head><title>Service unavailable</title></head><body>
   <h1>Service unavailable</h1>
 </body></html>`;
@@ -128,24 +153,28 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
   const server = createServer((request, response) => {
-    const fixture: string | { body: string; status: number } = {
-      "/": inspectionHtml,
-      "/popup": POPUP_HTML,
-      "/actions": ACTIONS_HTML,
-      "/result": RESULT_HTML,
-      "/history-a": HISTORY_A_HTML,
-      "/history-b": HISTORY_B_HTML,
-      "/popup-target": POPUP_TARGET_HTML,
-      "/handoff": HANDOFF_HTML,
-      "/access-restricted": ACCESS_RESTRICTED_HTML,
-      "/human-verification": HUMAN_VERIFICATION_HTML,
-      "/captcha-frame": "<!doctype html><html><body>hCaptcha</body></html>",
-      "/authentication": AUTHENTICATION_HTML,
-      "/unknown-interstitial": UNKNOWN_INTERSTITIAL_HTML,
-      "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
-      "/dynamic-target": DYNAMIC_TARGET_HTML,
-    }[request.url ?? "/"] ?? inspectionHtml;
-    response.writeHead(typeof fixture === "string" ? 200 : fixture.status, { "content-type": "text/html; charset=utf-8" });
+    const fixture: string | { body: string; status: number } =
+      {
+        "/": inspectionHtml,
+        "/popup": POPUP_HTML,
+        "/actions": ACTIONS_HTML,
+        "/result": RESULT_HTML,
+        "/history-a": HISTORY_A_HTML,
+        "/history-b": HISTORY_B_HTML,
+        "/popup-target": POPUP_TARGET_HTML,
+        "/handoff": HANDOFF_HTML,
+        "/access-restricted": ACCESS_RESTRICTED_HTML,
+        "/human-verification": HUMAN_VERIFICATION_HTML,
+        "/captcha-frame": "<!doctype html><html><body>hCaptcha</body></html>",
+        "/authentication": AUTHENTICATION_HTML,
+        "/unknown-interstitial": UNKNOWN_INTERSTITIAL_HTML,
+        "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
+        "/dynamic-target": DYNAMIC_TARGET_HTML,
+        ...LOCAL_PERCEPTION_FIXTURES,
+      }[request.url ?? "/"] ?? inspectionHtml;
+    response.writeHead(typeof fixture === "string" ? 200 : fixture.status, {
+      "content-type": "text/html; charset=utf-8",
+    });
     response.end(typeof fixture === "string" ? fixture : fixture.body);
   });
   await new Promise<void>((resolve, reject) => {

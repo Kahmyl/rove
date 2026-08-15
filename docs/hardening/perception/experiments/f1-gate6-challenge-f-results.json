@@ -1,0 +1,1243 @@
+{
+  "schemaVersion": 1,
+  "experiment": "f1-gate6-independent-confirmatory-challenge-f",
+  "generatedAt": "2026-08-14T11:36:44.366Z",
+  "metadata": {
+    "sourceRevision": "f1fad0f4cb426123d735388d50e70ed12a94cee2",
+    "nodeVersion": "v22.22.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "chromiumVersion": "151.0.7922.34",
+    "hashes": {
+      "candidateV5": "d0a849e2f400a739282e2230b69d63d8e97bbd1b9eefab0cc4e832571ca92efc",
+      "semanticsV5": "7f4ade47351b2e107b5e74f58aad238b80f6b928d48d8a057062957cde56f4a9",
+      "challengeF": "f78ce8fbb32afc9dad4003eecee0aae30b754d349c6a77bb0d9694a62192b1d9",
+      "riskModel": "901db0f76e44dba6dcbcf4abff0e13649a4d36053e4bf9f1161623232ba14a4b"
+    }
+  },
+  "challengeF": {
+    "schemaVersion": 1,
+    "corpusVersion": 6006,
+    "strategy": "gate6-s4r5-surface-ownership-title-role",
+    "riskModelVersion": 1,
+    "metrics": {
+      "caseCount": 20,
+      "primaryStateAccuracy": 0.65,
+      "dispositionAccuracy": 0.65,
+      "dispositionErrorCount": 7,
+      "perState": [
+        {
+          "state": "ready",
+          "actualSupport": 10,
+          "predictedSupport": 15,
+          "truePositive": 9,
+          "falsePositive": 6,
+          "falseNegative": 1,
+          "precision": 0.6,
+          "recall": 0.9,
+          "f1": 0.7200000000000001
+        },
+        {
+          "state": "loading",
+          "actualSupport": 0,
+          "predictedSupport": 0,
+          "truePositive": 0,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null
+        },
+        {
+          "state": "authentication_required",
+          "actualSupport": 7,
+          "predictedSupport": 1,
+          "truePositive": 1,
+          "falsePositive": 0,
+          "falseNegative": 6,
+          "precision": 1,
+          "recall": 0.14285714285714285,
+          "f1": 0.25
+        },
+        {
+          "state": "human_verification",
+          "actualSupport": 2,
+          "predictedSupport": 2,
+          "truePositive": 2,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        {
+          "state": "access_restricted",
+          "actualSupport": 1,
+          "predictedSupport": 2,
+          "truePositive": 1,
+          "falsePositive": 1,
+          "falseNegative": 0,
+          "precision": 0.5,
+          "recall": 1,
+          "f1": 0.6666666666666666
+        },
+        {
+          "state": "unknown_interstitial",
+          "actualSupport": 0,
+          "predictedSupport": 0,
+          "truePositive": 0,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null
+        },
+        {
+          "state": "error",
+          "actualSupport": 0,
+          "predictedSupport": 0,
+          "truePositive": 0,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null
+        }
+      ],
+      "macroF1": 0.6591666666666667,
+      "confusionMatrix": {
+        "ready": {
+          "ready": 9,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 1,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "loading": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "authentication_required": {
+          "ready": 6,
+          "loading": 0,
+          "authentication_required": 1,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "human_verification": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 2,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "access_restricted": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 1,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "unknown_interstitial": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "error": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        }
+      },
+      "propositions": [
+        {
+          "proposition": "primaryContentAvailable",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 13,
+          "coverage": 1,
+          "accuracy": 0.65
+        },
+        {
+          "proposition": "documentUnstable",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 20,
+          "coverage": 1,
+          "accuracy": 1
+        },
+        {
+          "proposition": "authenticationRequired",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 14,
+          "coverage": 1,
+          "accuracy": 0.7
+        },
+        {
+          "proposition": "humanVerificationPresented",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 20,
+          "coverage": 1,
+          "accuracy": 1
+        },
+        {
+          "proposition": "accessRestricted",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 19,
+          "coverage": 1,
+          "accuracy": 0.95
+        },
+        {
+          "proposition": "errorPresented",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 20,
+          "coverage": 1,
+          "accuracy": 1
+        },
+        {
+          "proposition": "interstitialPresented",
+          "eligible": 20,
+          "assessed": 20,
+          "correct": 13,
+          "coverage": 1,
+          "accuracy": 0.65
+        }
+      ],
+      "propositionAggregate": {
+        "eligible": 140,
+        "assessed": 140,
+        "correct": 119,
+        "coverage": 1,
+        "accuracy": 0.85
+      },
+      "totalRiskWeightedLoss": 997.5,
+      "riskWeightedLoss": 49.875,
+      "highConfidencePredictionCount": 20,
+      "highConfidenceErrorCount": 7,
+      "highConfidenceErrorRate": 0.35,
+      "criticalInvariantViolationCount": 7,
+      "unknownCount": 0,
+      "unknownRate": 0,
+      "timing": {
+        "acquisitionMs": {
+          "sampleCount": 20,
+          "mean": 14.283645899999982,
+          "median": 13.345979000000057,
+          "p95": 14.082374999999956,
+          "max": 32.24562500000002
+        },
+        "inferenceMs": {
+          "sampleCount": 20,
+          "mean": 0.007464549999986048,
+          "median": 0.0032294999998612184,
+          "p95": 0.01833400000009533,
+          "max": 0.07291699999996126
+        },
+        "totalMs": {
+          "sampleCount": 20,
+          "mean": 14.291110449999968,
+          "median": 13.347562000000039,
+          "p95": 14.08787499999994,
+          "max": 32.31854199999998
+        }
+      },
+      "payload": {
+        "evidenceBytes": {
+          "sampleCount": 20,
+          "mean": 1190.85,
+          "median": 1191,
+          "p95": 1193,
+          "max": 1193
+        },
+        "persistedArtifactBytes": {
+          "sampleCount": 20,
+          "mean": 355.5,
+          "median": 350,
+          "p95": 378,
+          "max": 399
+        }
+      }
+    },
+    "results": [
+      {
+        "id": "confirmf-reference-brand-auth",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 32.24562500000002,
+          "inferenceMs": 0.07291699999996126,
+          "totalMs": 32.31854199999998
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-reference-document",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.793916999999965,
+          "inferenceMs": 0.007542000000057669,
+          "totalMs": 13.801459000000023
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-docs-brand-auth",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 14.01033300000006,
+          "inferenceMs": 0.004583000000138782,
+          "totalMs": 14.014916000000198
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-docs-document",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.258624999999938,
+          "inferenceMs": 0.00483299999996234,
+          "totalMs": 13.2634579999999
+        },
+        "payload": {
+          "evidenceBytes": 1192,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-tutorial-brand-auth",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.507583999999952,
+          "inferenceMs": 0.00433300000008785,
+          "totalMs": 13.51191700000004
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-tutorial-document",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.838624999999979,
+          "inferenceMs": 0.003666999999950349,
+          "totalMs": 12.84229199999993
+        },
+        "payload": {
+          "evidenceBytes": 1192,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-handbook-brand-auth",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.030957999999941,
+          "inferenceMs": 0.0034589999997933774,
+          "totalMs": 13.034416999999735
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-handbook-document",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.4543749999998,
+          "inferenceMs": 0.01833400000009533,
+          "totalMs": 12.472708999999895
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-chapter-brand-auth",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.795416999999816,
+          "inferenceMs": 0.004290999999966516,
+          "totalMs": 13.799707999999782
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-chapter-document",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "title-role",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.262707999999975,
+          "inferenceMs": 0.002916000000141139,
+          "totalMs": 13.265624000000116
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-readonly-local-restriction-alert",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "alert-ownership",
+          "read-only"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "access_restricted",
+          "confidence": "high",
+          "signals": ["document:stable", "restriction:primary_surface"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 14.082374999999956,
+          "inferenceMs": 0.005499999999983629,
+          "totalMs": 14.08787499999994
+        },
+        "payload": {
+          "evidenceBytes": 1193,
+          "persistedArtifactBytes": 375
+        }
+      },
+      {
+        "id": "confirmf-blocking-restriction-alert",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "alert-ownership",
+          "blocking"
+        ],
+        "expectedPrimaryState": "access_restricted",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "access_restricted",
+          "confidence": "high",
+          "signals": ["document:stable", "restriction:primary_surface"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.576667000000043,
+          "inferenceMs": 0.0029999999999290594,
+          "totalMs": 13.579666999999972
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 375
+        }
+      },
+      {
+        "id": "confirmf-small-nonmodal-auth-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory-f", "metamorphic", "dialog", "nonmodal"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.61570800000004,
+          "inferenceMs": 0.002416999999923064,
+          "totalMs": 13.618124999999964
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirmf-small-modal-auth-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory-f", "metamorphic", "dialog", "modal"],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "authentication_required",
+          "confidence": "high",
+          "signals": ["document:stable", "auth:blocking_surface"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.96829200000002,
+          "inferenceMs": 0.0028750000001309672,
+          "totalMs": 13.97116700000015
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 375
+        }
+      },
+      {
+        "id": "confirmf-offscreen-verification-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory-f", "metamorphic", "presentation", "offscreen"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.90316699999994,
+          "inferenceMs": 0.001207999999905951,
+          "totalMs": 12.904374999999845
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirmf-onscreen-verification-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory-f", "metamorphic", "presentation", "onscreen"],
+        "expectedPrimaryState": "human_verification",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "human_verification",
+          "confidence": "high",
+          "signals": ["document:stable", "verification:blocking_surface"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.41170800000009,
+          "inferenceMs": 0.0016659999998864805,
+          "totalMs": 13.413373999999976
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 378
+        }
+      },
+      {
+        "id": "confirmf-doc-title-no-blocker",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "documentation",
+          "no-overlay"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.703292000000147,
+          "inferenceMs": 0.001125000000001819,
+          "totalMs": 12.704417000000149
+        },
+        "payload": {
+          "evidenceBytes": 1189,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-doc-title-verification-overlay",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "documentation",
+          "blocking-overlay"
+        ],
+        "expectedPrimaryState": "human_verification",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "human_verification",
+          "confidence": "high",
+          "signals": [
+            "document:stable",
+            "scope:primary_meta",
+            "verification:blocking_surface"
+          ],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 13.280250000000024,
+          "inferenceMs": 0.0015000000000782165,
+          "totalMs": 13.281750000000102
+        },
+        "payload": {
+          "evidenceBytes": 1193,
+          "persistedArtifactBytes": 399
+        }
+      },
+      {
+        "id": "confirmf-root-auth-with-brand-token",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "root-primary",
+          "authentication"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.164374999999836,
+          "inferenceMs": 0.0015409999998610147,
+          "totalMs": 13.165915999999697
+        },
+        "payload": {
+          "evidenceBytes": 1191,
+          "persistedArtifactBytes": 350
+        }
+      },
+      {
+        "id": "confirmf-root-doc-with-doc-token",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": [
+          "confirmatory-f",
+          "metamorphic",
+          "root-primary",
+          "documentation"
+        ],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable", "scope:primary_meta"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.768917000000101,
+          "inferenceMs": 0.001583999999866137,
+          "totalMs": 12.770500999999967
+        },
+        "payload": {
+          "evidenceBytes": 1190,
+          "persistedArtifactBytes": 350
+        }
+      }
+    ]
+  },
+  "acquisition": {
+    "sampleCount": 20,
+    "mean": 14.283645899999982,
+    "median": 13.280250000000024,
+    "p95": 14.082374999999956,
+    "max": 32.24562500000002
+  },
+  "candidateUnchanged": true,
+  "challengeUnchanged": true,
+  "confirmatoryPassed": false
+}

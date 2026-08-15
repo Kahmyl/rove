@@ -1,3 +1,4 @@
+export { classifyObservedPageState } from "../perception/page-state-decision.js";
 import type { PageStateAssessment } from "@rove/protocol";
 
 export interface PageSignals {
@@ -60,7 +61,8 @@ function assessment(
  * deliberately not guessed as CAPTCHA or restriction pages.
  */
 export function classifyPageState(input: PageSignals): PageStateAssessment {
-  const visibleContent = `${input.title ?? ""}\n${input.text ?? ""}`.toLowerCase();
+  const visibleContent =
+    `${input.title ?? ""}\n${input.text ?? ""}`.toLowerCase();
   const rawHtml = (input.rawHtml ?? "").toLowerCase();
   const frameContent = (input.frameUrls ?? []).join("\n").toLowerCase();
   const content = `${visibleContent}\n${rawHtml}\n${frameContent}`;
@@ -78,16 +80,27 @@ export function classifyPageState(input: PageSignals): PageStateAssessment {
     return assessment("access_restricted", "high", signals, "request_human");
   }
 
-  const explicitVisibleVerification = matching(visibleContent, EXPLICIT_VERIFICATION_SIGNALS);
+  const explicitVisibleVerification = matching(
+    visibleContent,
+    EXPLICIT_VERIFICATION_SIGNALS,
+  );
   const providerVisibleVerification = hasRichDom
     ? []
     : matching(visibleContent, VERIFICATION_PROVIDER_SIGNALS);
-  const frameVerification = matching(frameContent, VERIFICATION_PROVIDER_SIGNALS);
-  const embeddedChallenge = /<(?:iframe|script)[^>]+(?:hcaptcha|recaptcha|turnstile|cf-chl-)/i.test(rawHtml);
+  const frameVerification = matching(
+    frameContent,
+    VERIFICATION_PROVIDER_SIGNALS,
+  );
+  const embeddedChallenge =
+    /<(?:iframe|script)[^>]+(?:hcaptcha|recaptcha|turnstile|cf-chl-)/i.test(
+      rawHtml,
+    );
   const verification = [
     ...explicitVisibleVerification.map((value) => `visible:${value}`),
     ...providerVisibleVerification.map((value) => `visible:${value}`),
-    ...(!hasUsefulDom ? frameVerification.map((value) => `frame:${value}`) : []),
+    ...(!hasUsefulDom
+      ? frameVerification.map((value) => `frame:${value}`)
+      : []),
     ...(!hasUsefulDom && embeddedChallenge ? ["html:embedded_challenge"] : []),
   ];
   if (verification.length > 0) {
@@ -100,15 +113,21 @@ export function classifyPageState(input: PageSignals): PageStateAssessment {
   }
 
   const authentication = matching(visibleContent, AUTHENTICATION_SIGNALS);
-  const urlLooksLikeLogin = /\/(?:login|sign-in|signin)(?:[/?#]|$)/i.test(input.url ?? "");
-  const titleLooksLikeLogin = /^(?:log|sign) in(?:\s|$)/i.test((input.title ?? "").trim());
+  const urlLooksLikeLogin = /\/(?:login|sign-in|signin)(?:[/?#]|$)/i.test(
+    input.url ?? "",
+  );
+  const titleLooksLikeLogin = /^(?:log|sign) in(?:\s|$)/i.test(
+    (input.title ?? "").trim(),
+  );
   if (authentication.length > 0 || (urlLooksLikeLogin && titleLooksLikeLogin)) {
     return assessment(
       "authentication_required",
       "high",
       [
         ...authentication.map((value) => `text:${value}`),
-        ...(urlLooksLikeLogin && titleLooksLikeLogin ? ["url_and_title:login"] : []),
+        ...(urlLooksLikeLogin && titleLooksLikeLogin
+          ? ["url_and_title:login"]
+          : []),
       ],
       "request_human",
     );
@@ -119,12 +138,22 @@ export function classifyPageState(input: PageSignals): PageStateAssessment {
   }
 
   if (input.readyState === "loading" || input.readyState === "interactive") {
-    return assessment("loading", "high", [`document_ready_state:${input.readyState}`], "wait_and_inspect");
+    return assessment(
+      "loading",
+      "high",
+      [`document_ready_state:${input.readyState}`],
+      "wait_and_inspect",
+    );
   }
 
   const trimmedRawHtml = (input.rawHtml ?? "").trim();
   const isHttpPage = /^https?:/i.test(input.url ?? "");
-  if (isHttpPage && input.readyState === "complete" && !hasUsefulDom && trimmedRawHtml.length > 200) {
+  if (
+    isHttpPage &&
+    input.readyState === "complete" &&
+    !hasUsefulDom &&
+    trimmedRawHtml.length > 200
+  ) {
     return assessment(
       "unknown_interstitial",
       "medium",
@@ -142,8 +171,15 @@ export function classifyPageState(input: PageSignals): PageStateAssessment {
 }
 
 /** Backward-compatible shape for callers that only care about handoff pages. */
-export function detectAccessRestriction(input: Pick<PageSignals, "title" | "text">):
-  { kind: "access_restricted" | "human_verification"; reason: string; signals: string[] } | undefined {
+export function detectAccessRestriction(
+  input: Pick<PageSignals, "title" | "text">,
+):
+  | {
+      kind: "access_restricted" | "human_verification";
+      reason: string;
+      signals: string[];
+    }
+  | undefined {
   const result = classifyPageState(input);
   if (result.kind === "access_restricted") {
     return {

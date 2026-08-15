@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "f1-perception-replay/v1",
+  "source": {
+    "tier": "C",
+    "kind": "recorded"
+  },
+  "caseId": "tierc-http-status-access-restricted",
+  "capturedAt": "2026-08-14T17:05:31.311Z",
+  "description": "Recorded public HTTP restriction response.",
+  "criticality": "critical",
+  "tags": [
+    "tier-c",
+    "recorded",
+    "public",
+    "http-status",
+    "access-restricted"
+  ],
+  "expected": {
+    "propositions": {
+      "primaryContentAvailable": false,
+      "documentUnstable": false,
+      "authenticationRequired": false,
+      "humanVerificationPresented": false,
+      "accessRestricted": true,
+      "errorPresented": false,
+      "interstitialPresented": true
+    },
+    "primaryState": "access_restricted",
+    "disposition": "request_human"
+  },
+  "evidence": {
+    "captureMode": "read_only_external",
+    "sourceUrl": "https://httpbin.org/status-class/",
+    "fingerprintStable": true,
+    "screenshotsPersisted": false,
+    "rawContentPersisted": false,
+    "privateValuesPersisted": false,
+    "pageIdentifierObserved": true
+  },
+  "assessment": {
+    "kind": "access_restricted",
+    "confidence": "high",
+    "signals": [
+      "document:stable",
+      "restriction:http_status"
+    ],
+    "recommendedAction": "request_human"
+  }
+}

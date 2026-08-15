@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { errors as playwrightErrors, type Browser, type BrowserContext, type CDPSession, type Page } from "playwright";
+import {
+  errors as playwrightErrors,
+  type Browser,
+  type BrowserContext,
+  type CDPSession,
+  type Page,
+} from "playwright";
 import {
   RoveError,
   type ActionResult,
@@ -7,6 +13,7 @@ import {
   type BrowserLaunchConfig,
   type InspectOptions,
   type PageInspection,
+  type PageStateIdentity,
   type PageSummary,
   type ScreenshotOptions,
   type ScrollOptions,
@@ -30,19 +37,34 @@ import {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
   POPUP_GRACE_MS,
 } from "./actions/action-runner.js";
-import { readMaterialMutationVersion, installMutationTracker } from "./mutations/mutation-tracker.js";
-import { resolveTarget, type ResolvedTarget } from "./targets/target-resolver.js";
+import {
+  readMaterialMutationVersion,
+  installMutationTracker,
+} from "./mutations/mutation-tracker.js";
+import {
+  resolveTarget,
+  type ResolvedTarget,
+} from "./targets/target-resolver.js";
 import { isSensitiveTarget } from "./targets/target-identity.js";
-import { classifyPageState, detectAccessRestriction } from "./safety/page-state-classifier.js";
+import {
+  collectPageStateIdentity,
+  observeStablePageState,
+} from "./perception/page-state-observation.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
 function isBrowserClosedError(error: unknown): boolean {
-  return error instanceof Error && /has been closed|is closed|browser.*disconnected/i.test(error.message);
+  return (
+    error instanceof Error &&
+    /has been closed|is closed|browser.*disconnected/i.test(error.message)
+  );
 }
 
 function browserClosedError(): RoveError {
-  return new RoveError({ code: "BROWSER_CLOSED", message: "The browser session is closed." });
+  return new RoveError({
+    code: "BROWSER_CLOSED",
+    message: "The browser session is closed.",
+  });
 }
 
 export class PlaywrightBrowserSession implements BrowserSession {
@@ -51,15 +73,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
-  private readonly activityListeners =
-    new Set<BrowserActivityListener>();
+  private readonly activityListeners = new Set<BrowserActivityListener>();
   private recovering: Promise<void> | null = null;
-  private browserCdp:
-    | CDPSession
-    | undefined;
-  private activeTabTimer:
-    | ReturnType<typeof setInterval>
-    | undefined;
+  private browserCdp: CDPSession | undefined;
+  private activeTabTimer: ReturnType<typeof setInterval> | undefined;
   private reconcilingActiveTab = false;
   private readonly mainDocumentStatuses = new Map<string, number>();
 
@@ -79,21 +96,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
     });
 
     this.pageRegistry.setOnPageNavigated(
-      ({
-        pageId,
-        previousUrl,
-        url,
-        revision,
-      }) => {
-        if (
-          previousUrl !== url
-        ) {
+      ({ pageId, previousUrl, url, revision }) => {
+        if (previousUrl !== url) {
           this.emitActivity({
             type: "url_changed",
             pageId,
             pageRevision: revision,
-            timestamp:
-              new Date().toISOString(),
+            timestamp: new Date().toISOString(),
             data: {
               previousUrl,
               url,
@@ -105,8 +114,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
           type: "navigation_completed",
           pageId,
           pageRevision: revision,
-          timestamp:
-            new Date().toISOString(),
+          timestamp: new Date().toISOString(),
           data: {
             url,
           },
@@ -115,14 +123,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
     );
   }
 
-  static async create(browser: Browser, config: BrowserLaunchConfig): Promise<PlaywrightBrowserSession> {
-    const context = await browser.newContext({ viewport: config.viewport ?? DEFAULT_VIEWPORT });
-    return this.createFromContext(
-      browser,
-      context,
-      config,
-      false,
-    );
+  static async create(
+    browser: Browser,
+    config: BrowserLaunchConfig,
+  ): Promise<PlaywrightBrowserSession> {
+    const context = await browser.newContext({
+      viewport: config.viewport ?? DEFAULT_VIEWPORT,
+    });
+    return this.createFromContext(browser, context, config, false);
   }
 
   static async createPersistent(
@@ -134,17 +142,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
     if (browser === null) {
       throw new RoveError({
         code: "BROWSER_LAUNCH_FAILED",
-        message:
-          "Persistent browser context has no owning browser.",
+        message: "Persistent browser context has no owning browser.",
       });
     }
 
-    return this.createFromContext(
-      browser,
-      context,
-      config,
-      true,
-    );
+    return this.createFromContext(browser, context, config, true);
   }
 
   private static async createFromContext(
@@ -163,10 +165,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     await session.installDomActivityBridge();
 
-    context.on(
-      "page",
-      (page) => session.registerNewPage(page),
-    );
+    context.on("page", (page) => session.registerNewPage(page));
 
     if (preserveExistingPages) {
       for (const page of context.pages()) {
@@ -187,16 +186,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
     await this.context.exposeBinding(
       "__roveReportActivity",
       ({ page }, payload: unknown) => {
-        this.handleDomActivity(
-          page,
-          payload,
-        );
+        this.handleDomActivity(page, payload);
       },
     );
 
-    await this.context.addInitScript(
-      installDomActivityListeners,
-    );
+    await this.context.addInitScript(installDomActivityListeners);
   }
 
   private async startActiveTabObservation(): Promise<void> {
@@ -204,18 +198,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
       return;
     }
 
-    this.browserCdp =
-      await this.browser.newBrowserCDPSession();
+    this.browserCdp = await this.browser.newBrowserCDPSession();
 
     await this.reconcileActiveTab();
 
-    this.activeTabTimer =
-      setInterval(
-        () => {
-          void this.reconcileActiveTab();
-        },
-        250,
-      );
+    this.activeTabTimer = setInterval(() => {
+      void this.reconcileActiveTab();
+    }, 250);
   }
 
   private async reconcileActiveTab(): Promise<void> {
@@ -230,68 +219,50 @@ export class PlaywrightBrowserSession implements BrowserSession {
     this.reconcilingActiveTab = true;
 
     try {
-      const result =
-        await this.browserCdp.send(
-          "Target.getTargets",
+      const result = (await this.browserCdp.send("Target.getTargets", {
+        filter: [
           {
-            filter: [
-              {
-                type: "tab",
-                exclude: false,
-              },
-              {
-                exclude: true,
-              },
-            ],
+            type: "tab",
+            exclude: false,
           },
-        ) as {
-          targetInfos: Array<{
-            type: string;
-            title: string;
-            url: string;
-            embedderData?: {
-              tabActive?: boolean;
-              tabStripIndex?: number;
-            };
-          }>;
-        };
+          {
+            exclude: true,
+          },
+        ],
+      })) as {
+        targetInfos: Array<{
+          type: string;
+          title: string;
+          url: string;
+          embedderData?: {
+            tabActive?: boolean;
+            tabStripIndex?: number;
+          };
+        }>;
+      };
 
-      const activeTarget =
-        result.targetInfos.find(
-          target =>
-            target.type === "tab" &&
-            target.embedderData?.tabActive ===
-              true,
-        );
+      const activeTarget = result.targetInfos.find(
+        (target) =>
+          target.type === "tab" && target.embedderData?.tabActive === true,
+      );
 
       if (activeTarget === undefined) {
         return;
       }
 
-      const pageId =
-        this.resolveTabTargetPageId(
-          activeTarget,
-        );
+      const pageId = this.resolveTabTargetPageId(activeTarget);
 
-      if (
-        pageId === undefined ||
-        this.pageRegistry.activeId() ===
-          pageId
-      ) {
+      if (pageId === undefined || this.pageRegistry.activeId() === pageId) {
         return;
       }
 
-      const state =
-        this.pageRegistry.activate(
-          pageId,
-        );
+      const state = this.pageRegistry.activate(pageId);
 
       this.emitActivity({
         type: "page_switched",
         pageId,
         pageRevision: state.revision,
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         data: {
           url: state.url,
         },
@@ -303,42 +274,32 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
   }
 
-  private resolveTabTargetPageId(
-    target: {
-      title: string;
-      url: string;
-      embedderData?: {
-        tabStripIndex?: number;
-      };
-    },
-  ): string | undefined {
-    const summaries =
-      this.pageRegistry.summaries();
+  private resolveTabTargetPageId(target: {
+    title: string;
+    url: string;
+    embedderData?: {
+      tabStripIndex?: number;
+    };
+  }): string | undefined {
+    const summaries = this.pageRegistry.summaries();
 
-    const exact =
-      summaries.filter(
-        summary =>
-          summary.url === target.url &&
-          summary.title === target.title,
-      );
+    const exact = summaries.filter(
+      (summary) => summary.url === target.url && summary.title === target.title,
+    );
 
     if (exact.length === 1) {
       return exact[0]?.id;
     }
 
-    const matchingUrl =
-      summaries.filter(
-        summary =>
-          summary.url === target.url,
-      );
+    const matchingUrl = summaries.filter(
+      (summary) => summary.url === target.url,
+    );
 
     if (matchingUrl.length === 1) {
       return matchingUrl[0]?.id;
     }
 
-    const tabStripIndex =
-      target.embedderData
-        ?.tabStripIndex;
+    const tabStripIndex = target.embedderData?.tabStripIndex;
 
     if (
       typeof tabStripIndex !== "number" ||
@@ -348,73 +309,53 @@ export class PlaywrightBrowserSession implements BrowserSession {
       return undefined;
     }
 
-    const page =
-      this.context.pages()[
-        tabStripIndex
-      ];
+    const page = this.context.pages()[tabStripIndex];
 
     if (page === undefined) {
       return undefined;
     }
 
-    return this.pageRegistry.pageIdFor(
-      page,
-    );
+    return this.pageRegistry.pageIdFor(page);
   }
 
-  private handleDomActivity(
-    page: Page,
-    payload: unknown,
-  ): void {
+  private handleDomActivity(page: Page, payload: unknown): void {
     if (this.closed) {
       return;
     }
 
-    const pageId =
-      this.pageRegistry.pageIdFor(page);
+    const pageId = this.pageRegistry.pageIdFor(page);
 
-    if (
-      pageId === undefined ||
-      !this.pageRegistry.has(pageId)
-    ) {
+    if (pageId === undefined || !this.pageRegistry.has(pageId)) {
       return;
     }
 
-    const activity =
-      normalizeDomActivityPayload(payload);
+    const activity = normalizeDomActivityPayload(payload);
 
     if (activity === null) {
       return;
     }
 
-    if (
-      this.pageRegistry.activeId() !==
-      pageId
-    ) {
-      const state =
-        this.pageRegistry.activate(pageId);
+    if (this.pageRegistry.activeId() !== pageId) {
+      const state = this.pageRegistry.activate(pageId);
 
       this.emitActivity({
         type: "page_switched",
         pageId,
         pageRevision: state.revision,
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         data: {
           url: page.url(),
         },
       });
     }
 
-    const state =
-      this.pageRegistry.stateFor(pageId);
+    const state = this.pageRegistry.stateFor(pageId);
 
     this.emitActivity({
       type: activity.type,
       pageId,
       pageRevision: state.revision,
-      timestamp:
-        new Date().toISOString(),
+      timestamp: new Date().toISOString(),
       data: activity.data,
     });
   }
@@ -435,9 +376,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     });
   }
 
-  onActivity(
-    listener: BrowserActivityListener,
-  ): () => void {
+  onActivity(listener: BrowserActivityListener): () => void {
     this.activityListeners.add(listener);
 
     return () => {
@@ -445,34 +384,24 @@ export class PlaywrightBrowserSession implements BrowserSession {
     };
   }
 
-  private observePage(
-    page: Page,
-    pageId: string,
-  ): void {
+  private observePage(page: Page, pageId: string): void {
     let previousTitle: string | undefined;
 
     const observeTitle = () => {
-      if (
-        page.isClosed() ||
-        !this.pageRegistry.has(pageId)
-      ) {
+      if (page.isClosed() || !this.pageRegistry.has(pageId)) {
         return;
       }
 
       void page
         .title()
         .then((title) => {
-          if (
-            title === previousTitle ||
-            !this.pageRegistry.has(pageId)
-          ) {
+          if (title === previousTitle || !this.pageRegistry.has(pageId)) {
             return;
           }
 
           previousTitle = title;
 
-          const state =
-            this.pageRegistry.stateFor(pageId);
+          const state = this.pageRegistry.stateFor(pageId);
 
           this.emitActivity({
             type: "page_title_changed",
@@ -500,9 +429,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     });
   }
 
-  private emitActivity(
-    activity: BrowserActivity,
-  ): void {
+  private emitActivity(activity: BrowserActivity): void {
     for (const listener of this.activityListeners) {
       try {
         listener(activity);
@@ -519,7 +446,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private requireActivePageId(): string {
     const pageId = this.pageRegistry.activeId();
     if (pageId === undefined) {
-      throw new RoveError({ code: "PAGE_NOT_FOUND", message: "The browser session has no active page." });
+      throw new RoveError({
+        code: "PAGE_NOT_FOUND",
+        message: "The browser session has no active page.",
+      });
     }
     return pageId;
   }
@@ -548,7 +478,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const page = this.pageRegistry.pageFor(pageId);
     const previousRevision = this.pageRegistry.stateFor(pageId).revision;
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: this.navigationTimeoutMs });
+      await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: this.navigationTimeoutMs,
+      });
     } catch (error) {
       if (error instanceof playwrightErrors.TimeoutError) {
         throw new RoveError({
@@ -558,7 +491,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
         });
       }
       if (isBrowserClosedError(error)) throw browserClosedError();
-      throw new RoveError({ code: "NAVIGATION_FAILED", message: `Navigation to ${url} failed.` });
+      throw new RoveError({
+        code: "NAVIGATION_FAILED",
+        message: `Navigation to ${url} failed.`,
+      });
     }
     try {
       await this.pageRegistry.syncMetadata(pageId);
@@ -568,11 +504,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
     const state = this.pageRegistry.stateFor(pageId);
 
-    await this.inspector.invalidatePage(
-      page,
-      pageId,
-      state.revision,
-    );
+    await this.inspector.invalidatePage(page, pageId, state.revision);
 
     return {
       ok: true,
@@ -603,11 +535,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async switchPage(pageId: string): Promise<PageSummary> {
     this.ensureOpen();
 
-    const previousActivePageId =
-      this.pageRegistry.activeId();
+    const previousActivePageId = this.pageRegistry.activeId();
 
-    const page =
-      this.pageRegistry.pageFor(pageId);
+    const page = this.pageRegistry.pageFor(pageId);
 
     this.pageRegistry.activate(pageId);
 
@@ -621,20 +551,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
       throw error;
     }
 
-    const state =
-      await this.pageRegistry.syncMetadata(
-        pageId,
-      );
+    const state = await this.pageRegistry.syncMetadata(pageId);
 
-    if (
-      previousActivePageId !== pageId
-    ) {
+    if (previousActivePageId !== pageId) {
       this.emitActivity({
         type: "page_switched",
         pageId,
         pageRevision: state.revision,
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         data: {
           url: state.url,
         },
@@ -654,8 +578,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async inspect(options: InspectOptions = {}): Promise<PageInspection> {
     this.ensureOpen();
 
-    const pageId =
-      options.pageId ?? this.requireActivePageId();
+    const pageId = options.pageId ?? this.requireActivePageId();
 
     const page = this.pageRegistry.pageFor(pageId);
 
@@ -676,41 +599,57 @@ export class PlaywrightBrowserSession implements BrowserSession {
       mutationVersion: await readMaterialMutationVersion(page),
     });
 
-    const inspection = await this.inspector.inspect(
-      page,
-      state,
-      options,
-    );
-    const [bodyText, rawHtml, readyState, targetCount] = await Promise.all([
-      inspection.text ?? page.locator("body").innerText({ timeout: this.actionTimeoutMs }).catch(() => ""),
-      page.content().catch(() => ""),
-      page.evaluate(() => document.readyState).catch(() => "unknown"),
-      inspection.targets?.length ?? page.locator("a,button,input,textarea,select,[role]").count().catch(() => 0),
-    ]);
     const httpStatus = this.mainDocumentStatuses.get(pageId);
-    const pageState = classifyPageState({
-      url: inspection.url,
-      title: inspection.title,
-      text: bodyText,
-      rawHtml,
-      readyState,
-      ...(httpStatus === undefined ? {} : { httpStatus }),
-      frameUrls: page.frames().map((frame) => frame.url()),
-      targetCount,
+
+    const pageStateObservation = await observeStablePageState(page, httpStatus);
+
+    state = this.pageRegistry.update(pageId, {
+      mutationVersion: await readMaterialMutationVersion(page),
     });
-    const restrictionText = bodyText.trim().length > 0 ? bodyText : rawHtml;
-    const accessRestriction = detectAccessRestriction({
-      title: inspection.title,
-      text: restrictionText,
-    });
+
+    const inspection = await this.inspector.inspect(page, state, options);
+
+    const pageState = pageStateObservation.assessment;
+
+    const accessRestriction =
+      pageState.kind === "access_restricted"
+        ? {
+            kind: "access_restricted" as const,
+            reason: "The site has restricted access and requires human review.",
+            signals: pageState.signals,
+          }
+        : pageState.kind === "human_verification"
+          ? {
+              kind: "human_verification" as const,
+              reason: "The site requires a human verification step.",
+              signals: pageState.signals,
+            }
+          : undefined;
+
     return {
       ...inspection,
       metadata: {
         ...inspection.metadata,
         pageState,
+        pageStatePropositions: pageStateObservation.propositions,
+        pageStateFingerprint: pageStateObservation.fingerprint,
         ...(accessRestriction === undefined ? {} : { accessRestriction }),
       },
     };
+  }
+
+  async pageStateIdentity(
+    pageId = this.requireActivePageId(),
+  ): Promise<PageStateIdentity> {
+    this.ensureOpen();
+
+    const page = this.pageRegistry.pageFor(pageId);
+
+    return collectPageStateIdentity(
+      page,
+      pageId,
+      this.mainDocumentStatuses.get(pageId),
+    );
   }
 
   async invalidateTargets(): Promise<void> {
@@ -722,16 +661,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const current = this.pageRegistry.stateFor(pageId);
     const next = recordMutation(current, true);
 
-    const state = this.pageRegistry.update(
-      pageId,
-      next,
-    );
+    const state = this.pageRegistry.update(pageId, next);
 
-    await this.inspector.invalidatePage(
-      page,
-      pageId,
-      state.revision,
-    );
+    await this.inspector.invalidatePage(page, pageId, state.revision);
   }
 
   async invalidateAllTargets(): Promise<number> {
@@ -741,7 +673,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
       if (!this.pageRegistry.has(summary.id)) continue;
       const page = this.pageRegistry.pageFor(summary.id);
       const current = this.pageRegistry.stateFor(summary.id);
-      const next = this.pageRegistry.update(summary.id, recordMutation(current, true));
+      const next = this.pageRegistry.update(
+        summary.id,
+        recordMutation(current, true),
+      );
       await this.inspector.invalidatePage(page, summary.id, next.revision);
       invalidated += 1;
     }
@@ -753,14 +688,22 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const beforePages = this.pageRegistry.summaries();
     const resolved = await this.resolveActionTarget(target);
     const previous = this.pageRegistry.stateFor(target.pageId);
-    const popup = this.context.waitForEvent("page", { timeout: POPUP_GRACE_MS }).catch(() => null);
+    const popup = this.context
+      .waitForEvent("page", { timeout: POPUP_GRACE_MS })
+      .catch(() => null);
     try {
       await resolved.locator.click({ timeout: this.actionTimeoutMs });
-      if (this.pageRegistry.summaries().length === beforePages.length) await popup;
+      if (this.pageRegistry.summaries().length === beforePages.length)
+        await popup;
     } catch (error) {
       throw actionError(error, "Click");
     }
-    return this.synchronizeAfterAction("click", target.pageId, previous, beforePages);
+    return this.synchronizeAfterAction(
+      "click",
+      target.pageId,
+      previous,
+      beforePages,
+    );
   }
 
   async type(target: TargetReference, value: string): Promise<ActionResult> {
@@ -768,7 +711,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const beforePages = this.pageRegistry.summaries();
     const resolved = await this.resolveActionTarget(target);
     if (!resolved.state.editable) {
-      throw new RoveError({ code: "TARGET_NOT_INTERACTIVE", message: "The target does not accept text." });
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The target does not accept text.",
+      });
     }
     void isSensitiveTarget(resolved.state.identity);
     const previous = this.pageRegistry.stateFor(target.pageId);
@@ -785,10 +731,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch (error) {
       throw actionError(error, "Type");
     }
-    return this.synchronizeAfterAction("type", target.pageId, previous, beforePages);
+    return this.synchronizeAfterAction(
+      "type",
+      target.pageId,
+      previous,
+      beforePages,
+    );
   }
 
-  async press(target: TargetReference | null, key: string): Promise<ActionResult> {
+  async press(
+    target: TargetReference | null,
+    key: string,
+  ): Promise<ActionResult> {
     this.ensureOpen();
     const pageId = target?.pageId ?? this.requireActivePageId();
     const beforePages = this.pageRegistry.summaries();
@@ -810,13 +764,19 @@ export class PlaywrightBrowserSession implements BrowserSession {
     this.ensureOpen();
     const amount = options.amount ?? 600;
     if (!Number.isFinite(amount) || amount <= 0) {
-      throw new RoveError({ code: "INVALID_CONFIGURATION", message: "Scroll amount must be positive." });
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Scroll amount must be positive.",
+      });
     }
     const pageId = this.requireActivePageId();
     const page = this.pageRegistry.pageFor(pageId);
     const previous = this.pageRegistry.stateFor(pageId);
     const beforePages = this.pageRegistry.summaries();
-    const deltas: Record<ScrollOptions["direction"], readonly [number, number]> = {
+    const deltas: Record<
+      ScrollOptions["direction"],
+      readonly [number, number]
+    > = {
       up: [0, -amount],
       down: [0, amount],
       left: [-amount, 0],
@@ -849,20 +809,37 @@ export class PlaywrightBrowserSession implements BrowserSession {
     let target: ResolvedTarget | undefined;
     if (mode === "target") {
       if (options.target === undefined) {
-        throw new RoveError({ code: "TARGET_NOT_FOUND", message: "Target screenshot requires a TargetReference." });
+        throw new RoveError({
+          code: "TARGET_NOT_FOUND",
+          message: "Target screenshot requires a TargetReference.",
+        });
       }
       target = await this.resolveActionTarget(options.target);
     }
     await this.applySensitiveMask(page);
     try {
-      const bytes = mode === "target"
-        ? await target!.locator.screenshot({ type: "png", timeout: this.actionTimeoutMs })
-        : await page.screenshot({ type: "png", fullPage: mode === "full-page", timeout: this.actionTimeoutMs });
+      const bytes =
+        mode === "target"
+          ? await target!.locator.screenshot({
+              type: "png",
+              timeout: this.actionTimeoutMs,
+            })
+          : await page.screenshot({
+              type: "png",
+              fullPage: mode === "full-page",
+              timeout: this.actionTimeoutMs,
+            });
       const state = await this.pageRegistry.syncMetadata(pageId);
       return {
         mimeType: "image/png",
         bytes,
-        metadata: { pageId, revision: state.revision, url: state.url, mode, timestamp: new Date().toISOString() },
+        metadata: {
+          pageId,
+          revision: state.revision,
+          url: state.url,
+          mode,
+          timestamp: new Date().toISOString(),
+        },
       };
     } catch (error) {
       throw actionError(error, "Screenshot");
@@ -871,13 +848,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
   }
 
-  private async resolveActionTarget(target: TargetReference): Promise<ResolvedTarget> {
+  private async resolveActionTarget(
+    target: TargetReference,
+  ): Promise<ResolvedTarget> {
     const page = this.pageRegistry.pageFor(target.pageId);
     await installMutationTracker(page);
     let state = this.pageRegistry.stateFor(target.pageId);
     const browserMutationVersion = await readMaterialMutationVersion(page);
     if (browserMutationVersion !== state.mutationVersion) {
-      state = this.pageRegistry.update(target.pageId, { mutationVersion: browserMutationVersion });
+      state = this.pageRegistry.update(target.pageId, {
+        mutationVersion: browserMutationVersion,
+      });
     }
     return resolveTarget({
       page,
@@ -907,7 +888,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const page = this.pageRegistry.pageFor(pageId);
     let current = await this.pageRegistry.syncMetadata(pageId);
     const mutationVersion = await readMaterialMutationVersion(page);
-    if (current.revision === previous.revision && mutationVersion !== previous.mutationVersion) {
+    if (
+      current.revision === previous.revision &&
+      mutationVersion !== previous.mutationVersion
+    ) {
       current = this.pageRegistry.update(pageId, {
         mutationVersion,
         revision: current.revision + 1,
@@ -920,9 +904,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
     const afterPages = this.pageRegistry.summaries();
     const beforeIds = new Set(beforePages.map((summary) => summary.id));
-    const openedPages = afterPages.filter((summary) => !beforeIds.has(summary.id));
-    const activeChanged = beforePages.find((summary) => summary.active)?.id !== afterPages.find((summary) => summary.active)?.id;
-    const pageChanged = current.url !== previous.url || current.revision !== previous.revision || openedPages.length > 0 || activeChanged;
+    const openedPages = afterPages.filter(
+      (summary) => !beforeIds.has(summary.id),
+    );
+    const activeChanged =
+      beforePages.find((summary) => summary.active)?.id !==
+      afterPages.find((summary) => summary.active)?.id;
+    const pageChanged =
+      current.url !== previous.url ||
+      current.revision !== previous.revision ||
+      openedPages.length > 0 ||
+      activeChanged;
     return {
       ok: true,
       action,
@@ -936,25 +928,50 @@ export class PlaywrightBrowserSession implements BrowserSession {
     };
   }
 
-  private async historyAction(action: "back" | "forward"): Promise<ActionResult> {
+  private async historyAction(
+    action: "back" | "forward",
+  ): Promise<ActionResult> {
     const pageId = this.requireActivePageId();
     const page = this.pageRegistry.pageFor(pageId);
     const previous = this.pageRegistry.stateFor(pageId);
     const beforePages = this.pageRegistry.summaries();
     try {
-      const response = action === "back"
-        ? await page.goBack({ waitUntil: "domcontentloaded", timeout: this.navigationTimeoutMs })
-        : await page.goForward({ waitUntil: "domcontentloaded", timeout: this.navigationTimeoutMs });
+      const response =
+        action === "back"
+          ? await page.goBack({
+              waitUntil: "domcontentloaded",
+              timeout: this.navigationTimeoutMs,
+            })
+          : await page.goForward({
+              waitUntil: "domcontentloaded",
+              timeout: this.navigationTimeoutMs,
+            });
       if (response === null) {
-        return { ok: true, action, sessionId: this.id, pageId, pageChanged: false, previousRevision: previous.revision, currentRevision: previous.revision, url: previous.url };
+        return {
+          ok: true,
+          action,
+          sessionId: this.id,
+          pageId,
+          pageChanged: false,
+          previousRevision: previous.revision,
+          currentRevision: previous.revision,
+          url: previous.url,
+        };
       }
       return this.synchronizeAfterAction(action, pageId, previous, beforePages);
     } catch (error) {
       if (error instanceof playwrightErrors.TimeoutError) {
-        throw new RoveError({ code: "ACTION_TIMEOUT", message: `Browser ${action} timed out.`, retryable: true });
+        throw new RoveError({
+          code: "ACTION_TIMEOUT",
+          message: `Browser ${action} timed out.`,
+          retryable: true,
+        });
       }
       if (isBrowserClosedError(error)) throw browserClosedError();
-      throw new RoveError({ code: "NAVIGATION_FAILED", message: `Browser ${action} failed.` });
+      throw new RoveError({
+        code: "NAVIGATION_FAILED",
+        message: `Browser ${action} failed.`,
+      });
     }
   }
 
@@ -963,12 +980,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
       if (!document.querySelector("style[data-rove-sensitive-style]")) {
         const style = document.createElement("style");
         style.setAttribute("data-rove-sensitive-style", "");
-        style.textContent = "[data-rove-sensitive-mask]{-webkit-text-security:disc!important;color:transparent!important;text-shadow:0 0 0 currentColor!important}";
+        style.textContent =
+          "[data-rove-sensitive-mask]{-webkit-text-security:disc!important;color:transparent!important;text-shadow:0 0 0 currentColor!important}";
         document.head.append(style);
       }
-      for (const element of Array.from(document.querySelectorAll<HTMLInputElement>("input"))) {
-        const semantic = `${element.type} ${element.autocomplete} ${element.name} ${element.id} ${element.getAttribute("aria-label") ?? ""}`.toLowerCase();
-        if (element.type === "password" || element.autocomplete === "one-time-code" || /password|passcode|otp|one.?time|secret|token/.test(semantic)) {
+      for (const element of Array.from(
+        document.querySelectorAll<HTMLInputElement>("input"),
+      )) {
+        const semantic =
+          `${element.type} ${element.autocomplete} ${element.name} ${element.id} ${element.getAttribute("aria-label") ?? ""}`.toLowerCase();
+        if (
+          element.type === "password" ||
+          element.autocomplete === "one-time-code" ||
+          /password|passcode|otp|one.?time|secret|token/.test(semantic)
+        ) {
           element.setAttribute("data-rove-sensitive-mask", "");
         }
       }
@@ -977,7 +1002,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private async removeSensitiveMask(page: Page): Promise<void> {
     await page.evaluate(() => {
-      document.querySelectorAll("[data-rove-sensitive-mask]").forEach((element) => element.removeAttribute("data-rove-sensitive-mask"));
+      document
+        .querySelectorAll("[data-rove-sensitive-mask]")
+        .forEach((element) =>
+          element.removeAttribute("data-rove-sensitive-mask"),
+        );
     });
   }
 
@@ -985,25 +1014,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     if (this.closed) return;
     this.closed = true;
 
-    if (
-      this.activeTabTimer !== undefined
-    ) {
-      clearInterval(
-        this.activeTabTimer,
-      );
-      this.activeTabTimer =
-        undefined;
+    if (this.activeTabTimer !== undefined) {
+      clearInterval(this.activeTabTimer);
+      this.activeTabTimer = undefined;
     }
 
-    const browserCdp =
-      this.browserCdp;
+    const browserCdp = this.browserCdp;
 
     this.browserCdp = undefined;
 
     if (browserCdp !== undefined) {
-      await browserCdp
-        .detach()
-        .catch(() => undefined);
+      await browserCdp.detach().catch(() => undefined);
     }
 
     this.activityListeners.clear();

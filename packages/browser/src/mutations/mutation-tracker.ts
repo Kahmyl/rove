@@ -12,6 +12,12 @@ export async function installMutationTracker(page: Page): Promise<void> {
       const state = window as unknown as Record<string, unknown>;
       if (state[observerKey] !== undefined) return;
 
+      const root = document.documentElement;
+
+      if (!(root instanceof Node)) {
+        return;
+      }
+
       state[versionKey] = 0;
       const markerSelector = "[data-rove-target]";
       const interactiveSelector = [
@@ -27,22 +33,35 @@ export async function installMutationTracker(page: Page): Promise<void> {
 
       const containsInteractive = (node: Node): boolean => {
         if (!(node instanceof Element)) return false;
-        return node.matches(interactiveSelector) || node.querySelector(interactiveSelector) !== null;
+        return (
+          node.matches(interactiveSelector) ||
+          node.querySelector(interactiveSelector) !== null
+        );
       };
 
       const isMaterial = (mutation: MutationRecord): boolean => {
         if (mutation.type === "attributes") {
-          return mutation.target instanceof Element && mutation.target.matches(markerSelector);
+          return (
+            mutation.target instanceof Element &&
+            mutation.target.matches(markerSelector)
+          );
         }
 
-        const parent = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+        const parent =
+          mutation.target instanceof Element
+            ? mutation.target
+            : mutation.target.parentElement;
         if (parent?.closest(markerSelector) !== null) return true;
 
-        return [...Array.from(mutation.addedNodes), ...Array.from(mutation.removedNodes)].some(
+        return [
+          ...Array.from(mutation.addedNodes),
+          ...Array.from(mutation.removedNodes),
+        ].some(
           (node) =>
             containsInteractive(node) ||
             (node instanceof Element &&
-              (node.matches(markerSelector) || node.querySelector(markerSelector) !== null)),
+              (node.matches(markerSelector) ||
+                node.querySelector(markerSelector) !== null)),
         );
       };
 
@@ -52,7 +71,7 @@ export async function installMutationTracker(page: Page): Promise<void> {
         }
       });
 
-      observer.observe(document.documentElement, {
+      observer.observe(root, {
         subtree: true,
         childList: true,
         attributes: true,
@@ -84,7 +103,8 @@ export async function installMutationTracker(page: Page): Promise<void> {
 export async function readMaterialMutationVersion(page: Page): Promise<number> {
   await installMutationTracker(page);
   return page.evaluate(
-    (versionKey) => Number((window as unknown as Record<string, unknown>)[versionKey] ?? 0),
+    (versionKey) =>
+      Number((window as unknown as Record<string, unknown>)[versionKey] ?? 0),
     MUTATION_VERSION_KEY,
   );
 }

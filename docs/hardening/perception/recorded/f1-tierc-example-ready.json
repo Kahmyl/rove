@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "f1-perception-replay/v1",
+  "source": {
+    "tier": "C",
+    "kind": "recorded"
+  },
+  "caseId": "tierc-example-ready",
+  "capturedAt": "2026-08-14T17:05:28.146Z",
+  "description": "Recorded public ready-page observation with no blocker established.",
+  "criticality": "standard",
+  "tags": [
+    "tier-c",
+    "recorded",
+    "public",
+    "ready"
+  ],
+  "expected": {
+    "propositions": {
+      "primaryContentAvailable": true,
+      "documentUnstable": false,
+      "authenticationRequired": false,
+      "humanVerificationPresented": false,
+      "accessRestricted": false,
+      "errorPresented": false,
+      "interstitialPresented": false
+    },
+    "primaryState": "ready",
+    "disposition": "continue"
+  },
+  "evidence": {
+    "captureMode": "read_only_external",
+    "sourceUrl": "https://example.com/",
+    "fingerprintStable": true,
+    "screenshotsPersisted": false,
+    "rawContentPersisted": false,
+    "privateValuesPersisted": false,
+    "pageIdentifierObserved": true
+  },
+  "assessment": {
+    "kind": "ready",
+    "confidence": "high",
+    "signals": [
+      "document:stable"
+    ],
+    "recommendedAction": "continue"
+  }
+}
