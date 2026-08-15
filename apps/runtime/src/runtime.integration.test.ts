@@ -297,6 +297,51 @@ describe("Milestone 4 runtime integration", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
+  it("requires a fresh inspection after out-of-band navigation changes the page revision", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/history-a`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspected = await runtime.inspectBrowser(session.id, {
+      includeText: false,
+      includeTargets: false,
+    });
+
+    await browser.get(session.id).navigate(`${server.url}/history-b`);
+
+    const activePage = (await browser.get(session.id).pages()).find(
+      (page) => page.active,
+    );
+
+    expect(activePage?.revision).toBeGreaterThan(inspected.revision);
+
+    await expect(
+      runtime.scroll(session.id, {
+        direction: "down",
+        amount: 100,
+      }),
+    ).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+      retryable: true,
+    });
+
+    await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.scroll(session.id, {
+        direction: "down",
+        amount: 100,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      action: "scroll",
+    });
+  });
+
   it("orchestrates real actions, persistence, evidence, and historical reads without persisting typed values", async () => {
     const server = await fixture();
     const { runtime, browser, home } = await harness();

@@ -565,7 +565,18 @@ export class RuntimeService implements RoveRuntime {
     signature: string,
   ): Promise<void> {
     try {
-      const identity = await this.browser.get(sessionId).pageStateIdentity();
+      const browser = this.browser.get(sessionId);
+      const identity = await browser.pageStateIdentity();
+      const pages = await browser.pages();
+      const activePage = pages.find((page) => page.active);
+      const currentRevision =
+        activePage?.id === identity.pageId ? activePage.revision : undefined;
+
+      this.interactionPolicy.requireFreshInspectionRevision(
+        sessionId,
+        identity.pageId,
+        currentRevision,
+      );
 
       this.interactionPolicy.authorizeMutation(
         sessionId,

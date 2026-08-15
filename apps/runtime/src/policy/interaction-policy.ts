@@ -15,6 +15,7 @@ interface ActionRecord {
 
 interface RecordedInspection {
   pageId: string;
+  revision: number;
   pageState: PageStateAssessment;
   propositions?: PageStatePropositions;
   fingerprint?: string;
@@ -179,6 +180,7 @@ export class InteractionPolicy {
 
     state.inspection = {
       pageId: inspection.pageId,
+      revision: inspection.revision,
       pageState,
       ...(propositions === undefined ? {} : { propositions }),
       ...(fingerprint === undefined ? {} : { fingerprint }),
@@ -193,6 +195,37 @@ export class InteractionPolicy {
 
   clear(sessionId: string): void {
     this.sessions.delete(sessionId);
+  }
+
+  requireFreshInspectionRevision(
+    sessionId: string,
+    pageId: string,
+    currentRevision: number | undefined,
+  ): void {
+    const state = this.state(sessionId);
+    const inspection = state.inspection;
+
+    if (
+      inspection === undefined ||
+      currentRevision === undefined ||
+      inspection.pageId !== pageId ||
+      inspection.revision !== currentRevision
+    ) {
+      delete state.inspection;
+
+      throw new RoveError({
+        code: "INSPECTION_REQUIRED",
+        message:
+          "The page revision changed after the last inspection. Inspect the active page again before mutating it.",
+        retryable: true,
+        details: {
+          inspectedPageId: inspection?.pageId,
+          currentPageId: pageId,
+          inspectedRevision: inspection?.revision,
+          currentRevision,
+        },
+      });
+    }
   }
 
   authorizeMutation(

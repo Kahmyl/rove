@@ -132,7 +132,14 @@ export async function collectPageStateSurfaceFacts(
       const text = normalize(value);
 
       return (
-        verificationCue(text) ||
+        verificationDirective(text) ||
+        /\\b(?:captcha|human verification|human check|security check|security challenge)\\b/.test(
+          text,
+        ) ||
+        /\\b(?:robot|human)\\b.{0,70}\\b(?:check|challenge|prove|confirm)\\b/.test(
+          text,
+        ) ||
+        /\\b(?:prove|confirm)\\b.{0,70}\\b(?:human|robot)\\b/.test(text) ||
         /\\bi am (?:a )?human\\b/.test(text) ||
         /\\bi am not a robot\\b/.test(text)
       );
@@ -552,6 +559,56 @@ export async function collectPageStateSurfaceFacts(
         docsLikePath &&
         (documentHeadingCount >= 3 || documentCodeCount >= 3);
 
+      const documentaryStructureContext =
+        kind === "primary" &&
+        (
+          documentRoleContext ||
+          documentHeadingCount >= 2 ||
+          documentCodeCount >= 1
+        );
+
+      const explicitMetaText = normalize(
+        document.title + " " + headingText,
+      );
+
+      const explicitMetaContext =
+        kind === "primary" &&
+        (
+          /\\b(?:troubleshoot|troubleshooting)\\b/.test(
+            explicitMetaText,
+          ) ||
+          /\\bunderstanding\\b.{0,80}\\b(?:error|failure|challenge|verification|restriction)\\b/.test(
+            explicitMetaText,
+          ) ||
+          /\\b(?:example|demo|sample)\\b.{0,80}\\b(?:widget|integration|configuration|flow|code|copy|markup|provider)\\b/.test(
+            explicitMetaText,
+          ) ||
+          /\\b(?:widget|integration|configuration|flow|code|copy|markup|provider)\\b.{0,80}\\b(?:example|demo|sample)\\b/.test(
+            explicitMetaText,
+          )
+        );
+
+      const titleMetaText = normalize(document.title);
+
+      const titleMetaWordCount = titleMetaText
+        .split(" ")
+        .filter(Boolean).length;
+
+      const titleBlockerContext =
+        verificationDirective(titleMetaText) ||
+        authenticationDirective(titleMetaText) ||
+        restrictionCue(titleMetaText) ||
+        errorCue(titleMetaText);
+
+      const titleMetaContext =
+        kind === "primary" &&
+        titleMetaCue(document.title) &&
+        !titleBlockerContext &&
+        (
+          documentaryStructureContext ||
+          titleMetaWordCount >= 2
+        );
+
       const inputs = controls.filter(
         (element) => element.tagName === "INPUT",
       );
@@ -675,7 +732,11 @@ export async function collectPageStateSurfaceFacts(
           );
 
       const identityChooser =
-        emailLikeChoices >= 2 ||
+        (
+          emailLikeChoices >= 2 &&
+          authenticationDirectivePresent &&
+          credentialInputs.length === 0
+        ) ||
         (
           visibleElements("h1,h2,h3", root)
             .filter((element) =>
@@ -863,8 +924,10 @@ export async function collectPageStateSurfaceFacts(
         semanticChars: semanticText.trim().length,
         metaContext:
           kind === "primary"
-            ? titleMetaCue(document.title) ||
-              metaCue(headingText)
+            ? explicitMetaContext ||
+              titleMetaContext ||
+              (documentaryStructureContext &&
+                metaCue(headingText))
             : metaCue(headingText),
         documentRoleContext,
         settingsContext,
@@ -930,11 +993,158 @@ export async function collectPageStateSurfaceFacts(
       },
     );
 
+
+    const pageOwningSiblingCandidates = (() => {
+      if (!(primary instanceof Element)) {
+        return [];
+      }
+
+      const candidates = new Set();
+
+      let current = primary;
+
+      while (
+        current instanceof Element &&
+        current !== document.body
+      ) {
+        const parent = current.parentElement;
+
+        if (!(parent instanceof Element)) {
+          break;
+        }
+
+        for (const sibling of Array.from(parent.children)) {
+          if (sibling !== current) {
+            candidates.add(sibling);
+          }
+        }
+
+        current = parent;
+      }
+
+      return Array.from(candidates).filter(
+        (element) =>
+          element instanceof Element &&
+          visible(element),
+      );
+    })();
+
+    const pageOwningSiblings =
+      pageOwningSiblingCandidates.filter((element) => {
+        if (
+          dialogs.some(
+            (dialog) =>
+              dialog === element ||
+              dialog.contains(element) ||
+              element.contains(dialog),
+          )
+        ) {
+          return false;
+        }
+
+        const style = getComputedStyle(element);
+
+        if (
+          style.position !== "fixed" &&
+          style.position !== "absolute"
+        ) {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const viewportArea = innerWidth * innerHeight;
+
+        if (viewportArea <= 0) {
+          return false;
+        }
+
+        const centerX = innerWidth / 2;
+        const centerY = innerHeight / 2;
+
+        const coversViewportCenter =
+          rect.left <= centerX &&
+          rect.right >= centerX &&
+          rect.top <= centerY &&
+          rect.bottom >= centerY;
+
+        if (!coversViewportCenter) {
+          return false;
+        }
+
+        const primaryRect = primary.getBoundingClientRect();
+
+        const primaryIntersectionLeft = Math.max(
+          0,
+          primaryRect.left,
+        );
+        const primaryIntersectionRight = Math.min(
+          innerWidth,
+          primaryRect.right,
+        );
+        const primaryIntersectionTop = Math.max(
+          0,
+          primaryRect.top,
+        );
+        const primaryIntersectionBottom = Math.min(
+          innerHeight,
+          primaryRect.bottom,
+        );
+
+        if (
+          primaryIntersectionRight <= primaryIntersectionLeft ||
+          primaryIntersectionBottom <= primaryIntersectionTop
+        ) {
+          return false;
+        }
+
+        const primaryProbeX =
+          (primaryIntersectionLeft + primaryIntersectionRight) / 2;
+        const primaryProbeY =
+          (primaryIntersectionTop + primaryIntersectionBottom) / 2;
+
+        const overlayCoversPrimaryProbe =
+          rect.left <= primaryProbeX &&
+          rect.right >= primaryProbeX &&
+          rect.top <= primaryProbeY &&
+          rect.bottom >= primaryProbeY;
+
+        if (!overlayCoversPrimaryProbe) {
+          return false;
+        }
+
+        const topmostAtPrimaryProbe =
+          document.elementFromPoint(primaryProbeX, primaryProbeY);
+
+        const visuallyOwnsPrimary =
+          topmostAtPrimaryProbe instanceof Element &&
+          (
+            topmostAtPrimaryProbe === element ||
+            element.contains(topmostAtPrimaryProbe)
+          );
+
+        return (
+          visuallyOwnsPrimary &&
+          rect.width * rect.height >=
+            viewportArea * 0.5
+        );
+      });
+
     blockingDialogs.forEach((dialog, index) => {
       surfaces.push(
         makeSurface(
           dialog,
           "dialog:" + index,
+          "blocking_dialog",
+          true,
+        ),
+      );
+    });
+
+    pageOwningSiblings.forEach((overlay, index) => {
+      surfaces.push(
+        makeSurface(
+          overlay,
+          "overlay:" + index,
           "blocking_dialog",
           true,
         ),
@@ -952,6 +1162,11 @@ export async function collectPageStateSurfaceFacts(
         ) &&
         !dialogs.some((dialog) =>
           dialog.contains(element),
+        ) &&
+        !pageOwningSiblings.some(
+          (overlay) =>
+            overlay === element ||
+            overlay.contains(element),
         ),
     );
 

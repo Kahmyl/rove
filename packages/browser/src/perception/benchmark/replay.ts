@@ -90,12 +90,376 @@ const FORBIDDEN_EXTERNAL_PREFIXES = [
   "textvalue",
 ] as const;
 
+const ALLOWED_EXTERNAL_EVIDENCE_KEYS = new Set([
+  "capturemode",
+  "sourceurl",
+  "documenturl",
+  "frameurls",
+  "resourcetype",
+  "method",
+  "status",
+  "httpstatus",
+  "origin",
+  "readystate",
+  "fingerprint",
+  "fingerprintstable",
+  "screenshotspersisted",
+  "rawcontentpersisted",
+  "privatevaluespersisted",
+  "pageidentifierobserved",
+  "surfacefacts",
+  "sanitizedtextexcerpt",
+]);
+
+const ALLOWED_EXTERNAL_SURFACE_FACT_KEYS = new Set([
+  "available",
+  "ariabusycount",
+  "iframecount",
+  "primaryvisiblechars",
+  "primaryinteractivecount",
+  "visiblecanvascount",
+  "interstitialcanvaspresented",
+  "noninterstitialcanvaspresented",
+  "documentverificationframecount",
+  "documentverificationframeordinals",
+  "primary",
+  "surfaces",
+]);
+
+const ALLOWED_EXTERNAL_SURFACE_KEYS = new Set([
+  "id",
+  "kind",
+  "blocking",
+  "visiblechars",
+  "interactivecount",
+  "semanticchars",
+  "metacontext",
+  "documentrolecontext",
+  "settingscontext",
+  "workflowunavailable",
+  "verificationdirective",
+  "verificationcontrol",
+  "semanticverificationframecount",
+  "localverificationframecount",
+  "semanticverificationframeordinals",
+  "localverificationframeordinals",
+  "authenticationdirective",
+  "credentialgate",
+  "identitychooser",
+  "passkeygate",
+  "providerauthgate",
+  "restrictioncue",
+  "errorcue",
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizedKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function assertAllowedRecordKeys(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  path: string,
+): asserts value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new Error(
+      `External perception replay field must be an object: ${path}.`,
+    );
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(normalizedKey(key))) {
+      throw new Error(
+        `External perception replay cannot persist field because it is not allowlisted: ${path}.${key}.`,
+      );
+    }
+  }
+}
+
+function assertBoundedExternalString(
+  value: unknown,
+  path: string,
+  maxLength: number,
+): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > maxLength ||
+    value.includes("\\0")
+  ) {
+    throw new Error(
+      `External perception replay string field is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalTokenString(
+  value: unknown,
+  path: string,
+  maxLength = 128,
+): asserts value is string {
+  assertBoundedExternalString(value, path, maxLength);
+
+  if (!/^[A-Za-z0-9._:/+-]+$/.test(value)) {
+    throw new Error(
+      `External perception replay structural token is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalBoolean(
+  value: unknown,
+  path: string,
+): asserts value is boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `External perception replay boolean field is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalPrivacyFlag(value: unknown, path: string): void {
+  if (value !== false) {
+    throw new Error(
+      `External perception replay privacy flag must be false: ${path}.`,
+    );
+  }
+}
+
+function assertExternalCount(
+  value: unknown,
+  path: string,
+  max = 10_000_000,
+): asserts value is number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > max
+  ) {
+    throw new Error(
+      `External perception replay count field is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalHttpStatus(value: unknown, path: string): void {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 100 ||
+    value > 599
+  ) {
+    throw new Error(
+      `External perception replay HTTP status is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalOrdinals(value: unknown, path: string): void {
+  if (
+    !Array.isArray(value) ||
+    value.length > 512 ||
+    value.some(
+      (item) =>
+        typeof item !== "number" ||
+        !Number.isSafeInteger(item) ||
+        item < 0 ||
+        item > 1_000_000,
+    )
+  ) {
+    throw new Error(
+      `External perception replay ordinal array is invalid: ${path}.`,
+    );
+  }
+}
+
+function assertExternalSurfaceShape(value: unknown, path: string): void {
+  assertAllowedRecordKeys(value, ALLOWED_EXTERNAL_SURFACE_KEYS, path);
+
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = normalizedKey(key);
+    const childPath = `${path}.${key}`;
+
+    switch (normalized) {
+      case "id": {
+        assertBoundedExternalString(child, childPath, 64);
+
+        if (
+          !/^(?:primary|(?:dialog|overlay|alert|supplementary):\\d+)$/.test(
+            child,
+          )
+        ) {
+          throw new Error(
+            `External perception replay surface id is invalid: ${childPath}.`,
+          );
+        }
+
+        break;
+      }
+
+      case "kind": {
+        if (
+          child !== "primary" &&
+          child !== "blocking_dialog" &&
+          child !== "alert" &&
+          child !== "supplementary"
+        ) {
+          throw new Error(
+            `External perception replay surface kind is invalid: ${childPath}.`,
+          );
+        }
+
+        break;
+      }
+
+      case "visiblechars":
+      case "interactivecount":
+      case "semanticchars":
+      case "semanticverificationframecount":
+      case "localverificationframecount":
+        assertExternalCount(child, childPath);
+        break;
+
+      case "semanticverificationframeordinals":
+      case "localverificationframeordinals":
+        assertExternalOrdinals(child, childPath);
+        break;
+
+      case "blocking":
+      case "metacontext":
+      case "documentrolecontext":
+      case "settingscontext":
+      case "workflowunavailable":
+      case "verificationdirective":
+      case "verificationcontrol":
+      case "authenticationdirective":
+      case "credentialgate":
+      case "identitychooser":
+      case "passkeygate":
+      case "providerauthgate":
+      case "restrictioncue":
+      case "errorcue":
+        assertExternalBoolean(child, childPath);
+        break;
+    }
+  }
+}
+
+function assertExternalSurfaceFactsShape(value: unknown, path: string): void {
+  assertAllowedRecordKeys(value, ALLOWED_EXTERNAL_SURFACE_FACT_KEYS, path);
+
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = normalizedKey(key);
+    const childPath = `${path}.${key}`;
+
+    switch (normalized) {
+      case "available":
+      case "interstitialcanvaspresented":
+      case "noninterstitialcanvaspresented":
+        assertExternalBoolean(child, childPath);
+        break;
+
+      case "ariabusycount":
+      case "iframecount":
+      case "primaryvisiblechars":
+      case "primaryinteractivecount":
+      case "visiblecanvascount":
+      case "documentverificationframecount":
+        assertExternalCount(child, childPath);
+        break;
+
+      case "documentverificationframeordinals":
+        assertExternalOrdinals(child, childPath);
+        break;
+
+      case "primary":
+        assertExternalSurfaceShape(child, childPath);
+        break;
+
+      case "surfaces":
+        if (!Array.isArray(child) || child.length > 128) {
+          throw new Error(
+            `External perception replay surfaces array is invalid: ${childPath}.`,
+          );
+        }
+
+        child.forEach((surface, index) =>
+          assertExternalSurfaceShape(surface, `${childPath}[${index}]`),
+        );
+        break;
+    }
+  }
+}
+
+function assertExternalEvidenceAllowlisted(
+  evidence: Record<string, unknown>,
+): void {
+  assertAllowedRecordKeys(
+    evidence,
+    ALLOWED_EXTERNAL_EVIDENCE_KEYS,
+    "replay.evidence",
+  );
+
+  for (const [key, child] of Object.entries(evidence)) {
+    const normalized = normalizedKey(key);
+    const childPath = `replay.evidence.${key}`;
+
+    switch (normalized) {
+      case "capturemode":
+      case "resourcetype":
+      case "method":
+      case "readystate":
+        assertExternalTokenString(child, childPath, 64);
+        break;
+
+      case "fingerprint":
+        assertExternalTokenString(child, childPath, 256);
+        break;
+
+      case "sourceurl":
+      case "documenturl":
+      case "frameurls":
+        validateExternalUrlField(child, childPath);
+        break;
+
+      case "origin":
+        assertBoundedExternalString(child, childPath, 2048);
+        validateExternalUrl(child, childPath);
+        break;
+
+      case "status":
+      case "httpstatus":
+        assertExternalHttpStatus(child, childPath);
+        break;
+
+      case "fingerprintstable":
+        assertExternalBoolean(child, childPath);
+        break;
+
+      case "screenshotspersisted":
+      case "rawcontentpersisted":
+      case "privatevaluespersisted":
+        assertExternalPrivacyFlag(child, childPath);
+        break;
+
+      case "pageidentifierobserved":
+        assertExternalBoolean(child, childPath);
+        break;
+
+      case "surfacefacts":
+        assertExternalSurfaceFactsShape(child, childPath);
+        break;
+
+      case "sanitizedtextexcerpt":
+        assertBoundedExternalString(child, childPath, 4096);
+        break;
+    }
+  }
 }
 
 function isForbiddenExternalKey(value: string): boolean {
@@ -408,6 +772,8 @@ export function assertReplayPersistable(
   assertReplayShape(value);
 
   if (value.source.tier === "A") return;
+
+  assertExternalEvidenceAllowlisted(value.evidence);
 
   // Walk the complete envelope so future fields cannot bypass the
   // persistence boundary simply by living outside `evidence`.

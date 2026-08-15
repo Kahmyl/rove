@@ -105,7 +105,138 @@ describe("F1 perception replay format", () => {
           [key]: value,
         }),
       ),
-    ).toThrow(/cannot persist/i);
+    ).toThrow(/(?:cannot persist|not allowlisted)/i);
+  });
+
+  it.each(["html", "body", "content", "value"])(
+    "rejects unallowlisted raw external %s evidence",
+    (key) => {
+      expect(() =>
+        assertReplayPersistable(
+          replay("C", {
+            [key]: "<html>private external content</html>",
+          }),
+        ),
+      ).toThrow(/not allowlisted/i);
+    },
+  );
+
+  it.each([
+    ["status", "private external body text"],
+    ["fingerprintStable", "private external body text"],
+    ["pageIdentifierObserved", "private external body text"],
+  ])(
+    "rejects raw text smuggled through allowed external %s fields",
+    (key, value) => {
+      expect(() =>
+        assertReplayPersistable(
+          replay("C", {
+            [key]: value,
+          }),
+        ),
+      ).toThrow(/invalid/i);
+    },
+  );
+
+  it.each([
+    "screenshotsPersisted",
+    "rawContentPersisted",
+    "privateValuesPersisted",
+  ])("requires external privacy flag %s to remain false", (key) => {
+    expect(() =>
+      assertReplayPersistable(
+        replay("C", {
+          [key]: true,
+        }),
+      ),
+    ).toThrow(/must be false/i);
+  });
+
+  it("validates normalized surfaceFacts aliases instead of bypassing nested schema checks", () => {
+    expect(() =>
+      assertReplayPersistable(
+        replay("C", {
+          surface_facts: {
+            html: "<html>private external content</html>",
+          },
+        }),
+      ),
+    ).toThrow(/not allowlisted/i);
+  });
+
+  it("rejects raw text smuggled through allowed nested surface fields", () => {
+    expect(() =>
+      assertReplayPersistable(
+        replay("C", {
+          surfaceFacts: {
+            surfaces: [
+              {
+                id: "primary",
+                kind: "<html>private external content</html>",
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow(/surface kind is invalid/i);
+  });
+
+  it("accepts bounded typed structural surface evidence", () => {
+    const value = replay("C", {
+      captureMode: "dom",
+      documentUrl: "https://example.test/public-path-class",
+      readyState: "complete",
+      status: 200,
+      fingerprint: "abc123",
+      fingerprintStable: true,
+      screenshotsPersisted: false,
+      rawContentPersisted: false,
+      privateValuesPersisted: false,
+      pageIdentifierObserved: false,
+      surfaceFacts: {
+        available: true,
+        ariaBusyCount: 0,
+        iframeCount: 0,
+        primaryVisibleChars: 120,
+        primaryInteractiveCount: 1,
+        documentVerificationFrameOrdinals: [],
+        visibleCanvasCount: 0,
+        interstitialCanvasPresented: false,
+        nonInterstitialCanvasPresented: false,
+        primary: {
+          id: "primary",
+          kind: "primary",
+          blocking: false,
+          visibleChars: 120,
+          interactiveCount: 1,
+          semanticChars: 100,
+          metaContext: false,
+          settingsContext: false,
+          workflowUnavailable: false,
+          verificationDirective: false,
+          verificationControl: false,
+          semanticVerificationFrameOrdinals: [],
+          localVerificationFrameOrdinals: [],
+          authenticationDirective: false,
+          credentialGate: false,
+          identityChooser: false,
+          passkeyGate: false,
+          providerAuthGate: false,
+          restrictionCue: false,
+          errorCue: false,
+        },
+        surfaces: [
+          {
+            id: "primary",
+            kind: "primary",
+            blocking: false,
+          },
+        ],
+      },
+      sanitizedTextExcerpt: "Public heading",
+    });
+
+    expect(() => assertReplayPersistable(value)).not.toThrow();
   });
 
   it("rejects unsanitized external URL arrays as well as scalar URLs", () => {

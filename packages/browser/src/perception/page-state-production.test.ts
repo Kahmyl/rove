@@ -1194,4 +1194,314 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(13);
   }, 30_000);
+
+  it("closes final-review semantic regressions without broadening frozen semantics", async () => {
+    const definitions = [
+      {
+        id: "production-verify-email-control-remains-ready",
+        title: "Profile",
+        body: `
+          <main>
+            <h1>Profile</h1>
+            <p>Your account is active.</p>
+            <button>Verify email</button>
+            <button>Save profile</button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          humanVerificationPresented: false,
+          authenticationRequired: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-real-human-check-remains-blocking",
+        title: "Security check",
+        body: `
+          <main>
+            <h1>Verify you are human</h1>
+            <p>Complete the human check to continue.</p>
+            <button>Verify</button>
+          </main>
+        `,
+        expectedPrimaryState: "human_verification",
+        expectedPropositions: {
+          humanVerificationPresented: true,
+        },
+      },
+      {
+        id: "production-recipient-email-buttons-remain-ready",
+        title: "Recipients",
+        body: `
+          <main>
+            <h1>Choose recipients</h1>
+            <p>Select team members for this message.</p>
+            <button>Ada — ada@example.test</button>
+            <button>Lin — lin@example.test</button>
+            <button>Continue</button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          humanVerificationPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-account-chooser-remains-auth",
+        title: "Choose an account",
+        body: `
+          <main>
+            <h1>Choose an account</h1>
+            <p>Select an account to continue.</p>
+            <button>Ada — ada@example.test</button>
+            <button>Lin — lin@example.test</button>
+          </main>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-fullscreen-auth-sibling-is-page-owning",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <p>Your dashboard remains mounted.</p>
+            <button>Save</button>
+          </main>
+
+          <div
+            style="
+              position: fixed;
+              inset: 0;
+              z-index: 9999;
+              background: white;
+            "
+          >
+            <h1>Sign in to continue</h1>
+
+            <label>
+              Email
+              <input
+                type="email"
+                autocomplete="username"
+              >
+            </label>
+
+            <label>
+              Password
+              <input
+                type="password"
+                autocomplete="current-password"
+              >
+            </label>
+
+            <button type="submit">Sign in</button>
+          </div>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-nested-fullscreen-auth-sibling-is-page-owning",
+        title: "Workspace",
+        body: `
+          <div id="app-shell">
+            <main>
+              <h1>Workspace</h1>
+              <p>Your dashboard remains mounted.</p>
+              <button>Save</button>
+            </main>
+
+            <div
+              style="
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                background: white;
+              "
+            >
+              <h1>Sign in to continue</h1>
+
+              <label>
+                Email
+                <input
+                  type="email"
+                  autocomplete="username"
+                >
+              </label>
+
+              <label>
+                Password
+                <input
+                  type="password"
+                  autocomplete="current-password"
+                >
+              </label>
+
+              <button type="submit">Sign in</button>
+            </div>
+          </div>
+        `,
+        expectedPrimaryState: "authentication_required",
+        expectedPropositions: {
+          authenticationRequired: true,
+        },
+      },
+      {
+        id: "production-large-fixed-background-behind-main-remains-ready",
+        title: "Workspace",
+        body: `
+          <div
+            aria-hidden="true"
+            style="
+              position: fixed;
+              inset: 0;
+              z-index: 0;
+              background: #eee;
+            "
+          ></div>
+
+          <main
+            style="
+              position: relative;
+              z-index: 1;
+            "
+          >
+            <h1>Workspace</h1>
+            <p>The active workflow is available.</p>
+            <button>Save</button>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-small-fixed-sibling-remains-ready",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <p>The active workflow is available.</p>
+            <button>Save</button>
+          </main>
+
+          <div
+            style="
+              position: fixed;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              height: 100px;
+              background: white;
+            "
+          >
+            <p>Need help?</p>
+            <button>Open help</button>
+          </div>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          authenticationRequired: false,
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-documentation-blocker-is-not-meta",
+        title: "Documentation",
+        body: `
+          <main>
+            <h1>Documentation access denied</h1>
+            <p>
+              Your access to this resource
+              has been denied.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "access_restricted",
+        expectedPropositions: {
+          accessRestricted: true,
+        },
+      },
+      {
+        id: "production-blocker-title-ending-in-reference-is-not-meta",
+        title: "Access Denied Reference",
+        body: `
+          <main>
+            <h1>Access denied</h1>
+            <p>
+              Your access to this resource
+              has been denied.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "access_restricted",
+        expectedPropositions: {
+          accessRestricted: true,
+        },
+      },
+      {
+        id: "production-error-title-ending-in-tutorial-is-not-meta",
+        title: "Something Went Wrong Tutorial",
+        body: `
+          <main>
+            <h1>Something went wrong</h1>
+            <p>
+              The application could not load.
+              Reload this page to continue.
+            </p>
+          </main>
+        `,
+        expectedPrimaryState: "error",
+        expectedPropositions: {
+          errorPresented: true,
+        },
+      },
+      {
+        id: "production-structured-documentation-remains-ready",
+        title: "HTTP 429 Documentation",
+        body: `
+          <main>
+            <h1>HTTP 429 Documentation</h1>
+            <h2>Overview</h2>
+            <p>
+              This guide explains access
+              restriction responses.
+            </p>
+            <h2>Examples</h2>
+            <p>
+              An application may display
+              "Access restricted" after
+              excessive requests.
+            </p>
+            <pre><code>429 Too Many Requests</code></pre>
+          </main>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          accessRestricted: false,
+          errorPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+
+    expect(definitions).toHaveLength(12);
+  }, 30_000);
 });

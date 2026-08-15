@@ -191,6 +191,21 @@ describe("InteractionPolicy", () => {
     }
   });
 
+  it("invalidates an inspection when the page revision changes despite the same semantic identity", () => {
+    const policy = new InteractionPolicy();
+
+    policy.recordInspection("ses_test", inspection(ready));
+
+    expect(() =>
+      policy.requireFreshInspectionRevision("ses_test", "page_01", 2),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "INSPECTION_REQUIRED",
+        retryable: true,
+      }),
+    );
+  });
+
   it("blocks a repeated mutation campaign deterministically", () => {
     const policy = new InteractionPolicy();
 
