@@ -257,7 +257,7 @@ User-provided launch arguments are advanced configuration and must not silently 
 | Desktop Windows | `EXPERIMENTAL` | Must be validated before support is claimed. |
 | Container Linux | `SUPPORTED WITH LIMITATIONS` | Sandbox expected where container configuration supports required OS capabilities. |
 
-Rove must not silently disable sandboxing after launch failure. If a configured environment cannot satisfy the requested sandbox policy, Rove must either fail with a structured diagnostic or fall back with an explicit diagnostic while reporting the actual launched sandbox policy in `browserRuntime.sandbox.requested`.
+Rove must not silently disable sandboxing. If a configured environment cannot satisfy the requested sandbox policy, Rove must either fail with a structured diagnostic or resolve to a compatibility fallback before launch with an explicit diagnostic while reporting the actual launched sandbox policy in `browserRuntime.sandbox.requested`.
 
 ## Feature Compatibility Matrix
 
@@ -303,7 +303,7 @@ Diagnostics must distinguish:
 - resolved configuration;
 - verified runtime behavior.
 
-For sandboxing, requested configuration means the launch policy Rove actually used for the running browser. The launch plan may request stronger sandboxing first, but if the runtime falls back for compatibility, `browserRuntime.sandbox.requested` must reflect the fallback launch policy and diagnostics must explain the mismatch. Verified runtime behavior means the observed sandbox result from a runtime probe. Rove must not treat requested sandboxing as proof that sandboxing is enabled.
+For sandboxing, requested configuration means the launch policy Rove actually used for the running browser. The launch plan may request stronger sandboxing first, but on runtimes with known compatibility constraints Rove may resolve that request to a fallback before launch. In that case, `browserRuntime.sandbox.requested` must reflect the fallback launch policy and diagnostics must explain the mismatch. Verified runtime behavior means the observed sandbox result from a runtime probe. Rove must not treat requested sandboxing as proof that sandboxing is enabled.
 
 At minimum, diagnostics should report:
 

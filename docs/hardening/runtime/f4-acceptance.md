@@ -15,8 +15,8 @@ F4 Engineering Complete; additional environment certifications pending.
 | Field | Value |
 | --- | --- |
 | Branch | `feat/browser-runtime-fidelity-and-compatibility` |
-| Validated source revision | `abbe019537aa7e66d85f60140cd58614f0df6c4c` |
-| Acceptance report revision | generated after validation |
+| Validated branch head | `a3894d64288021b15abbbdf11822e7aee35338d0` |
+| Acceptance report | committed with the validated implementation |
 | Date | 2026-08-15 |
 | OS / arch | Windows x64 |
 | Node | v24.13.0 |
@@ -25,7 +25,7 @@ F4 Engineering Complete; additional environment certifications pending.
 | Browser version | 151.0.7922.34 |
 | Mode | headless |
 | Profile modes tested | temporary, Rove-managed persistent |
-| Sandbox result | launch policy reported separately from runtime probe; Windows Playwright Chromium resolves to fallback launch policy with `SANDBOX_LAUNCH_FALLBACK`, verified status `unknown` |
+| Sandbox result | launch policy reported separately from runtime probe; the verified Windows Playwright Chromium runtime resolves the requested sandbox policy to a compatibility fallback before launch with `SANDBOX_LAUNCH_FALLBACK`, verified status `unknown` |
 
 ## Acceptance Table
 
@@ -48,7 +48,7 @@ F4 Engineering Complete; additional environment certifications pending.
 | Tabs/popups | PASS | compatibility fixture |
 | Dialog behavior | PASS | compatibility fixture |
 | Frame plumbing | PASS | iframe inspection/runtime test |
-| Sandbox status | PASS_WITH_LIMITATION | launch plan requests sandboxing; Windows Playwright Chromium runtime falls back with diagnostic and reports verified status as `unknown`; never inferred from launch args alone |
+| Sandbox status | PASS_WITH_LIMITATION | launch plan requests sandboxing; the verified Windows Playwright Chromium runtime resolves to a compatibility fallback before launch with diagnostic and reports verified status as `unknown`; never inferred from launch args alone |
 | 30-minute soak | PASS | 355 iterations, bounded memory |
 | Resource cleanup | PASS | soak cleanup: session and fixture closed |
 | F1/F4 boundary | PASS | ADR and runtime contract |
@@ -71,7 +71,7 @@ session cleanup: passed
 fixture cleanup: passed
 ```
 
-This soak was rerun after launch-result plumbing and Windows sandbox fallback changes.
+This soak was rerun against the validated branch head after launch-result plumbing and Windows sandbox fallback changes.
 
 ## Environment Certification
 

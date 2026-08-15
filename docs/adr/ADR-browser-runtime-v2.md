@@ -37,7 +37,7 @@ The production browser decision is:
 - Local/CI automation: bundled Playwright Chromium is acceptable and expected.
 - Docker/container automation: Chromium headless is supported with limitations until container sandbox status is verified in that environment.
 - Headless and headed runs are not treated as equivalent; compatibility reports must record the mode.
-- Requested sandbox policy records what Rove asked Chromium to do at launch. By default Rove requests normal sandboxing by removing Playwright's sandbox-disabling defaults; caller-supplied sandbox-disabling launch args are reported as requested sandbox disabled. If a verified runtime cannot create usable pages with that request, Rove may fall back only with an explicit diagnostic and must report the actual launched sandbox policy.
+- Requested sandbox policy records what Rove asked Chromium to do at launch. By default Rove requests normal sandboxing by removing Playwright's sandbox-disabling defaults; caller-supplied sandbox-disabling launch args are reported as requested sandbox disabled. On the currently verified Windows Playwright Chromium runtime, Rove resolves that request to a compatibility fallback before launch and emits `SANDBOX_LAUNCH_FALLBACK`; runtime verification remains independently `enabled`, `disabled`, or `unknown`.
 - Verified sandbox state is never inferred from launch args alone. It is `unknown` unless the runtime probe observes a recognized enabled or disabled signal.
 - Downloads are always managed by Rove and surfaced as runtime activity; Runtime persists completed downloads as `file` evidence.
 - Permissions use browser defaults unless a future explicit grant policy is introduced. Sensitive permissions must not be silently granted by F4.
