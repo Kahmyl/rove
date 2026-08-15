@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "description": "F1 asymmetric primary-state classification risk model. Rows are actual state; columns are predicted state.",
+  "states": [
+    "ready",
+    "loading",
+    "authentication_required",
+    "human_verification",
+    "access_restricted",
+    "unknown_interstitial",
+    "error"
+  ],
+  "confidenceErrorMultiplier": {
+    "high": 1.5,
+    "medium": 1.2,
+    "low": 1
+  },
+  "baseCost": {
+    "ready": {
+      "ready": 0,
+      "loading": 15,
+      "authentication_required": 70,
+      "human_verification": 100,
+      "access_restricted": 95,
+      "unknown_interstitial": 65,
+      "error": 90
+    },
+    "loading": {
+      "ready": 60,
+      "loading": 0,
+      "authentication_required": 50,
+      "human_verification": 70,
+      "access_restricted": 65,
+      "unknown_interstitial": 40,
+      "error": 55
+    },
+    "authentication_required": {
+      "ready": 95,
+      "loading": 55,
+      "authentication_required": 0,
+      "human_verification": 30,
+      "access_restricted": 35,
+      "unknown_interstitial": 20,
+      "error": 50
+    },
+    "human_verification": {
+      "ready": 100,
+      "loading": 70,
+      "authentication_required": 30,
+      "human_verification": 0,
+      "access_restricted": 40,
+      "unknown_interstitial": 20,
+      "error": 60
+    },
+    "access_restricted": {
+      "ready": 100,
+      "loading": 70,
+      "authentication_required": 45,
+      "human_verification": 45,
+      "access_restricted": 0,
+      "unknown_interstitial": 25,
+      "error": 35
+    },
+    "unknown_interstitial": {
+      "ready": 80,
+      "loading": 40,
+      "authentication_required": 25,
+      "human_verification": 30,
+      "access_restricted": 30,
+      "unknown_interstitial": 0,
+      "error": 40
+    },
+    "error": {
+      "ready": 95,
+      "loading": 50,
+      "authentication_required": 55,
+      "human_verification": 65,
+      "access_restricted": 35,
+      "unknown_interstitial": 35,
+      "error": 0
+    }
+  },
+  "criticalPairs": [
+    {
+      "actual": "ready",
+      "predicted": "human_verification",
+      "reason": "False human-verification handoff on a normal page."
+    },
+    {
+      "actual": "ready",
+      "predicted": "access_restricted",
+      "reason": "False site-restriction handoff on a normal page."
+    },
+    {
+      "actual": "human_verification",
+      "predicted": "ready",
+      "reason": "Automation could continue into a human-only verification step."
+    },
+    {
+      "actual": "access_restricted",
+      "predicted": "ready",
+      "reason": "Automation could continue after the site has restricted access."
+    },
+    {
+      "actual": "authentication_required",
+      "predicted": "ready",
+      "reason": "Automation could continue when human authentication is required."
+    },
+    {
+      "actual": "error",
+      "predicted": "ready",
+      "reason": "Automation could mutate a page whose normal workflow has failed."
+    },
+    {
+      "actual": "ready",
+      "predicted": "authentication_required",
+      "reason": "False authentication handoff on a known stable ready page."
+    },
+    {
+      "actual": "ready",
+      "predicted": "unknown_interstitial",
+      "reason": "False ambiguity handoff on a known stable ready page."
+    },
+    {
+      "actual": "ready",
+      "predicted": "error",
+      "reason": "False terminal stop on a known stable ready page."
+    }
+  ],
+  "acceptance": {
+    "requireZeroCriticalInvariantViolations": true,
+    "deterministicHighConfidenceErrorRateMax": 0,
+    "deterministicPrimaryStateAccuracyMin": 0.98,
+    "deterministicMacroF1Min": 0.98,
+    "requireRiskWeightedLossBelowFrozenBaseline": true,
+    "targetRiskWeightedLossReductionFraction": 0.5
+  },
+  "notes": [
+    "Base costs encode consequence asymmetry rather than semantic distance.",
+    "Confidence multipliers apply only to incorrect predictions.",
+    "Hard invariants override aggregate metrics.",
+    "Changing this model after the Gate 1 commit requires a version increment, rationale, and rerun of affected results; once Gate 3 exists, the frozen baseline and all compared strategies must also be rerun."
+  ]
+}

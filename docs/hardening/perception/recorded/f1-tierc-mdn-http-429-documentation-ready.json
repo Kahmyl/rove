@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "f1-perception-replay/v1",
+  "source": {
+    "tier": "C",
+    "kind": "recorded"
+  },
+  "caseId": "tierc-mdn-http-429-documentation-ready",
+  "capturedAt": "2026-08-14T17:05:28.784Z",
+  "description": "Recorded public documentation page whose restriction terminology describes HTTP semantics rather than current workflow restriction.",
+  "criticality": "critical",
+  "tags": [
+    "tier-c",
+    "recorded",
+    "public",
+    "ready",
+    "documentation",
+    "lexical-adversary"
+  ],
+  "expected": {
+    "propositions": {
+      "primaryContentAvailable": true,
+      "documentUnstable": false,
+      "authenticationRequired": false,
+      "humanVerificationPresented": false,
+      "accessRestricted": false,
+      "errorPresented": false,
+      "interstitialPresented": false
+    },
+    "primaryState": "ready",
+    "disposition": "continue"
+  },
+  "evidence": {
+    "captureMode": "read_only_external",
+    "sourceUrl": "https://developer.mozilla.org/docs-reference/",
+    "fingerprintStable": true,
+    "screenshotsPersisted": false,
+    "rawContentPersisted": false,
+    "privateValuesPersisted": false,
+    "pageIdentifierObserved": true,
+    "surfaceFacts": {
+      "available": true,
+      "ariaBusyCount": 0,
+      "iframeCount": 0,
+      "primaryVisibleChars": 4406,
+      "primaryInteractiveCount": 5,
+      "visibleCanvasCount": 0,
+      "documentVerificationFrameCount": 0,
+      "primary": {
+        "metaContext": false,
+        "documentRoleContext": true,
+        "settingsContext": false,
+        "workflowUnavailable": false,
+        "verificationDirective": false,
+        "verificationControl": false,
+        "semanticVerificationFrameCount": 0,
+        "localVerificationFrameCount": 0,
+        "authenticationDirective": false,
+        "credentialGate": false,
+        "identityChooser": false,
+        "passkeyGate": false,
+        "restrictionCue": true,
+        "errorCue": false
+      }
+    }
+  },
+  "assessment": {
+    "kind": "ready",
+    "confidence": "high",
+    "signals": [
+      "document:stable"
+    ],
+    "recommendedAction": "continue"
+  }
+}

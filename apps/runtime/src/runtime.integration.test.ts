@@ -3,11 +3,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PlaywrightBrowserEngine, type BrowserEngine, type BrowserSession } from "@rove/browser";
+import {
+  PlaywrightBrowserEngine,
+  type BrowserEngine,
+  type BrowserSession,
+} from "@rove/browser";
 import { loadConfig } from "@rove/config";
-import { RoveError, type BrowserRuntimeCapabilities, type PageInspection, type TargetReference } from "@rove/protocol";
-import { FileEvidenceStore, FileObservationStore, FileSessionStore } from "@rove/storage";
-import { startFixtureServer, type FixtureServer } from "../../../packages/browser/src/fixtures/fixture-server.js";
+import {
+  RoveError,
+  type BrowserRuntimeCapabilities,
+  type PageInspection,
+  type TargetReference,
+} from "@rove/protocol";
+import {
+  FileEvidenceStore,
+  FileObservationStore,
+  FileSessionStore,
+} from "@rove/storage";
+import {
+  startFixtureServer,
+  type FixtureServer,
+} from "../../../packages/browser/src/fixtures/fixture-server.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { ControlService } from "./control/control.service.js";
@@ -47,7 +63,13 @@ const testCapabilities: BrowserRuntimeCapabilities = {
   diagnostics: [],
 };
 
-async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()): Promise<Harness> {
+async function harness(
+  engine: BrowserEngine = new PlaywrightBrowserEngine(),
+  browserPolicy: {
+    headless?: boolean;
+    minimumActionIntervalMs?: number;
+  } = {},
+): Promise<Harness> {
   const home = await mkdtemp(join(tmpdir(), "rove-runtime-"));
   homes.push(home);
   const sessions = new SessionService(new FileSessionStore(home));
@@ -61,7 +83,27 @@ async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()): P
     browser,
     observations,
     new EvidenceService(new FileEvidenceStore(home)),
-    loadConfig({ cwd: home, env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" } }),
+    (() => {
+      const config = loadConfig({
+        cwd: home,
+        env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
+      });
+
+      return {
+        ...config,
+        browser: {
+          ...config.browser,
+          ...(browserPolicy.headless === undefined
+            ? {}
+            : { headless: browserPolicy.headless }),
+          ...(browserPolicy.minimumActionIntervalMs === undefined
+            ? {}
+            : {
+                minimumActionIntervalMs: browserPolicy.minimumActionIntervalMs,
+              }),
+        },
+      };
+    })(),
   );
   return { home, runtime, browser, sessions };
 }
@@ -75,7 +117,11 @@ async function fixture(): Promise<FixtureServer> {
 function target(inspection: PageInspection, name: string): TargetReference {
   const item = inspection.targets?.find((candidate) => candidate.name === name);
   if (!item) throw new Error(`Missing target ${name}`);
-  return { pageId: inspection.pageId, revision: inspection.revision, ref: item.ref };
+  return {
+    pageId: inspection.pageId,
+    revision: inspection.revision,
+    ref: item.ref,
+  };
 }
 
 function readyBrowserSession(id: string): BrowserSession {
@@ -118,26 +164,18 @@ async function waitForObservation(
   const deadline = Date.now() + 2_000;
 
   while (Date.now() < deadline) {
-    const observations =
-      await runtime.getObservations(sessionId);
+    const observations = await runtime.getObservations(sessionId);
 
-    const observation =
-      observations.items.find(
-        (item) => item.type === type,
-      );
+    const observation = observations.items.find((item) => item.type === type);
 
     if (observation !== undefined) {
       return observation;
     }
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 20),
-    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
   }
 
-  throw new Error(
-    `Timed out waiting for observation ${type}.`,
-  );
+  throw new Error(`Timed out waiting for observation ${type}.`);
 }
 
 async function allFileText(directory: string): Promise<string> {
@@ -156,7 +194,8 @@ afterEach(async () => {
     await item.runtime.endSession(item.id).catch(() => undefined);
   }
   while (servers.length > 0) await servers.pop()?.close();
-  while (homes.length > 0) await rm(homes.pop()!, { recursive: true, force: true });
+  while (homes.length > 0)
+    await rm(homes.pop()!, { recursive: true, force: true });
 });
 
 describe("Milestone 4 runtime integration", () => {
@@ -164,7 +203,11 @@ describe("Milestone 4 runtime integration", () => {
     const { runtime, browser, home } = await harness();
     const agent = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: agent.id });
-    expect(agent).toMatchObject({ status: "active", controller: "agent", activePageId: "page_01" });
+    expect(agent).toMatchObject({
+      status: "active",
+      controller: "agent",
+      activePageId: "page_01",
+    });
     expect(agent.browserRuntime).toMatchObject({
       browserFamily: "chromium",
       distribution: "chromium",
@@ -182,8 +225,17 @@ describe("Milestone 4 runtime integration", () => {
     expect(agent.browserRuntime?.sandbox.diagnostic?.length).toBeGreaterThan(0);
     expect(agent.id).toMatch(/^ses_/);
     expect(browser.has(agent.id)).toBe(true);
-    expect(JSON.parse(await readFile(join(home, "sessions", agent.id, "session.json"), "utf8"))).toMatchObject({ status: "active" });
-    expect((await runtime.getObservations(agent.id)).items.map((item) => item.type)).toEqual(["session_started"]);
+    expect(
+      JSON.parse(
+        await readFile(
+          join(home, "sessions", agent.id, "session.json"),
+          "utf8",
+        ),
+      ),
+    ).toMatchObject({ status: "active" });
+    expect(
+      (await runtime.getObservations(agent.id)).items.map((item) => item.type),
+    ).toEqual(["session_started"]);
 
     const companion = await runtime.startSession({ mode: "companion" });
     active.push({ runtime, id: companion.id });
@@ -192,12 +244,19 @@ describe("Milestone 4 runtime integration", () => {
     const capture = await runtime.startSession({ mode: "capture" });
     active.push({ runtime, id: capture.id });
     expect(capture.controller).toBe("human");
-    await expect(runtime.navigate(capture.id, { url: "about:blank" })).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+    await expect(
+      runtime.navigate(capture.id, { url: "about:blank" }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
   });
 
   it("persists failed startup and its observation", async () => {
     const failing: BrowserEngine = {
-      start: async () => { throw new RoveError({ code: "BROWSER_LAUNCH_FAILED", message: "Expected launch failure." }); },
+      start: async () => {
+        throw new RoveError({
+          code: "BROWSER_LAUNCH_FAILED",
+          message: "Expected launch failure.",
+        });
+      },
     };
     const { runtime, sessions, home } = await harness(failing);
     let sessionId = "";
@@ -211,7 +270,9 @@ describe("Milestone 4 runtime integration", () => {
     const failed = await sessions.get(sessionId);
     expect(failed).toMatchObject({ status: "failed", controller: null });
     expect(failed.endedAt).toBeDefined();
-    expect((await runtime.getObservations(sessionId)).items.map((item) => item.type)).toEqual(["session_failed"]);
+    expect(
+      (await runtime.getObservations(sessionId)).items.map((item) => item.type),
+    ).toEqual(["session_failed"]);
   });
 
   it("creates Rove-managed persistent profile metadata before browser launch", async () => {
@@ -286,39 +347,65 @@ describe("Milestone 4 runtime integration", () => {
     expect(session).toMatchObject({
       status: "awaiting_human",
       controller: null,
-      handoff: { reason: "The site has restricted access and requires human review." },
+      handoff: {
+        reason: "The site has restricted access and requires human review.",
+      },
     });
-    expect((await runtime.getObservations(session.id)).items.map((item) => item.type)).toEqual([
-      "session_started",
-      "site_access_restricted",
-    ]);
-    await expect(runtime.navigate(session.id, { url: server.url })).rejects.toMatchObject({
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started", "site_access_restricted"]);
+    await expect(
+      runtime.navigate(session.id, { url: server.url }),
+    ).rejects.toMatchObject({
       code: "CONTROL_NOT_OWNED",
     });
   });
 
   it.each([
-    ["human-verification", "human_verification_required", "human verification step"],
+    [
+      "human-verification",
+      "human_verification_required",
+      "human verification step",
+    ],
     ["authentication", "authentication_required", "requires authentication"],
-    ["unknown-interstitial", "unknown_interstitial", "unrecognized interstitial"],
-  ])("classifies %s as a distinct human-only page state", async (route, eventType, reason) => {
-    const server = await fixture();
-    const { runtime } = await harness();
-    const session = await runtime.startSession({ mode: "agent", startUrl: `${server.url}/${route}` });
-    active.push({ runtime, id: session.id });
+    [
+      "unknown-interstitial",
+      "unknown_interstitial",
+      "unrecognized interstitial",
+    ],
+  ])(
+    "classifies %s as a distinct human-only page state",
+    async (route, eventType, reason) => {
+      const server = await fixture();
+      const { runtime } = await harness();
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/${route}`,
+      });
+      active.push({ runtime, id: session.id });
 
-    expect(session).toMatchObject({ status: "awaiting_human", controller: null });
-    expect(session.handoff?.reason).toContain(reason);
-    expect((await runtime.getObservations(session.id)).items.map((item) => item.type)).toEqual([
-      "session_started",
-      eventType,
-    ]);
-  });
+      expect(session).toMatchObject({
+        status: "awaiting_human",
+        controller: null,
+      });
+      expect(session.handoff?.reason).toContain(reason);
+      expect(
+        (await runtime.getObservations(session.id)).items.map(
+          (item) => item.type,
+        ),
+      ).toEqual(["session_started", eventType]);
+    },
+  );
 
   it("requires a fresh inspection after human control returns", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
-    const session = await runtime.startSession({ mode: "agent", startUrl: `${server.url}/actions` });
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
     active.push({ runtime, id: session.id });
 
     await runtime.requestHuman(session.id, { reason: "Smoke-test handoff" });
@@ -326,57 +413,147 @@ describe("Milestone 4 runtime integration", () => {
     await browser.get(session.id).navigate(`${server.url}/result`);
     await runtime.returnAgentControl(session.id);
 
-    await expect(runtime.navigate(session.id, { url: `${server.url}/actions` })).rejects.toMatchObject({
+    await expect(
+      runtime.navigate(session.id, { url: `${server.url}/actions` }),
+    ).rejects.toMatchObject({
       code: "INSPECTION_REQUIRED",
     });
     await runtime.inspectBrowser(session.id);
-    await expect(runtime.navigate(session.id, { url: `${server.url}/actions` })).resolves.toMatchObject({ ok: true });
+    await expect(
+      runtime.navigate(session.id, { url: `${server.url}/actions` }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("requires a fresh inspection after out-of-band navigation changes the page revision", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/history-a`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspected = await runtime.inspectBrowser(session.id, {
+      includeText: false,
+      includeTargets: false,
+    });
+
+    await browser.get(session.id).navigate(`${server.url}/history-b`);
+
+    const activePage = (await browser.get(session.id).pages()).find(
+      (page) => page.active,
+    );
+
+    expect(activePage?.revision).toBeGreaterThan(inspected.revision);
+
+    await expect(
+      runtime.scroll(session.id, {
+        direction: "down",
+        amount: 100,
+      }),
+    ).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+      retryable: true,
+    });
+
+    await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.scroll(session.id, {
+        direction: "down",
+        amount: 100,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      action: "scroll",
+    });
   });
 
   it("orchestrates real actions, persistence, evidence, and historical reads without persisting typed values", async () => {
     const server = await fixture();
     const { runtime, browser, home } = await harness();
-    const session = await runtime.startSession({ mode: "agent", startUrl: `${server.url}/actions` });
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
     active.push({ runtime, id: session.id });
     expect(session.activePageId).toBe("page_01");
     await runtime.navigate(session.id, { url: `${server.url}/actions` });
     let inspection = await runtime.inspectBrowser(session.id);
     const secret = "DO_NOT_PERSIST_THIS_VALUE";
-    const typed = await runtime.type(session.id, { target: target(inspection, "Password"), value: secret });
+    const typed = await runtime.type(session.id, {
+      target: target(inspection, "Password"),
+      value: secret,
+    });
     expect(typed.sessionId).toBe(session.id);
     inspection = await runtime.inspectBrowser(session.id);
-    const clicked = await runtime.click(session.id, { target: target(inspection, "Change state") });
+    const clicked = await runtime.click(session.id, {
+      target: target(inspection, "Change state"),
+    });
     expect(clicked.sessionId).toBe(session.id);
     const screenshot = await runtime.captureScreenshot(session.id);
-    expect(screenshot).toMatchObject({ sessionId: session.id, type: "screenshot", metadata: { mimeType: "image/png", mode: "viewport" } });
-    expect((await readdir(join(home, "sessions", session.id, "evidence", "screenshots"))).some((name) => name.endsWith(".png"))).toBe(true);
+    expect(screenshot).toMatchObject({
+      sessionId: session.id,
+      type: "screenshot",
+      metadata: { mimeType: "image/png", mode: "viewport" },
+    });
+    expect(
+      (
+        await readdir(
+          join(home, "sessions", session.id, "evidence", "screenshots"),
+        )
+      ).some((name) => name.endsWith(".png")),
+    ).toBe(true);
 
     const record = await runtime.saveEvidence(session.id, {
       type: "record",
       payload: { title: "Senior Backend Engineer", company: "Example" },
     });
-    expect((await runtime.listEvidence(session.id)).map((item) => item.id)).toEqual(expect.arrayContaining([screenshot.id, record.id]));
-    expect((await runtime.readEvidence(session.id, record.id)).id).toBe(record.id);
+    expect(
+      (await runtime.listEvidence(session.id)).map((item) => item.id),
+    ).toEqual(expect.arrayContaining([screenshot.id, record.id]));
+    expect((await runtime.readEvidence(session.id, record.id)).id).toBe(
+      record.id,
+    );
 
     const observations = (await runtime.getObservations(session.id)).items;
-    expect(observations.map((item) => item.type)).toEqual(["session_started", "browser_navigated", "agent_typed", "agent_clicked", "screenshot_captured", "record_saved"]);
+    expect(observations.map((item) => item.type)).toEqual([
+      "session_started",
+      "browser_navigated",
+      "agent_typed",
+      "agent_clicked",
+      "screenshot_captured",
+      "record_saved",
+    ]);
     expect(observations.map((item) => item.seq)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(JSON.stringify(observations)).not.toContain(secret);
-    expect(await allFileText(join(home, "sessions", session.id))).not.toContain(secret);
+    expect(await allFileText(join(home, "sessions", session.id))).not.toContain(
+      secret,
+    );
 
     const ended = await runtime.endSession(session.id);
     active.pop();
     expect(ended).toMatchObject({ status: "completed", controller: null });
     expect(ended.endedAt).toBeDefined();
     expect(browser.has(session.id)).toBe(false);
-    await expect(runtime.endSession(session.id)).rejects.toMatchObject({ code: "SESSION_ALREADY_ENDED" });
-    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({ code: "SESSION_NOT_ACTIVE" });
-    await expect(runtime.navigate(session.id, { url: server.url })).rejects.toMatchObject({ code: "SESSION_NOT_ACTIVE" });
-    expect((await runtime.getObservations(session.id)).items.at(-1)?.type).toBe("session_completed");
+    await expect(runtime.endSession(session.id)).rejects.toMatchObject({
+      code: "SESSION_ALREADY_ENDED",
+    });
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "SESSION_NOT_ACTIVE",
+    });
+    await expect(
+      runtime.navigate(session.id, { url: server.url }),
+    ).rejects.toMatchObject({ code: "SESSION_NOT_ACTIVE" });
+    expect((await runtime.getObservations(session.id)).items.at(-1)?.type).toBe(
+      "session_completed",
+    );
     expect((await runtime.listEvidence(session.id)).length).toBe(2);
 
     const recreated = new EvidenceService(new FileEvidenceStore(home));
-    expect((await recreated.metadata(session.id, record.id)).id).toBe(record.id);
+    expect((await recreated.metadata(session.id, record.id)).id).toBe(
+      record.id,
+    );
   });
 
   it("exposes managed browser downloads as file evidence", async () => {
@@ -437,9 +614,13 @@ describe("Milestone 4 runtime integration", () => {
   it("serializes runtime mutations per session without blocking another session", async () => {
     const order: string[] = [];
     let releaseSlow!: () => void;
-    const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve; });
+    const slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
     let markSlowStarted!: () => void;
-    const slowStarted = new Promise<void>((resolve) => { markSlowStarted = resolve; });
+    const slowStarted = new Promise<void>((resolve) => {
+      markSlowStarted = resolve;
+    });
     let browserCounter = 0;
     const engine: BrowserEngine = {
       start: async () => {
@@ -448,12 +629,38 @@ describe("Milestone 4 runtime integration", () => {
           id: browserId,
           capabilities: testCapabilities,
           onActivity: () => () => undefined,
-          pages: async () => [{ id: "page_01", url: "about:blank", active: true, revision: 0 }],
+          pages: async () => [
+            { id: "page_01", url: "about:blank", active: true, revision: 0 },
+          ],
           inspect: async () => ({
             pageId: "page_01",
             revision: 0,
             url: "about:blank",
             title: "",
+            metadata: {
+              pageState: {
+                kind: "ready",
+                confidence: "high",
+                signals: ["document:stable"],
+                recommendedAction: "continue",
+              },
+              pageStatePropositions: {
+                primaryContentAvailable: true,
+                documentUnstable: false,
+                authenticationRequired: false,
+                humanVerificationPresented: false,
+                accessRestricted: false,
+                errorPresented: false,
+                interstitialPresented: false,
+              },
+              pageStateFingerprint:
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            },
+          }),
+          pageStateIdentity: async () => ({
+            pageId: "page_01",
+            fingerprint:
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           }),
           navigate: async (url: string) => {
             if (url.endsWith("/slow")) {
@@ -464,7 +671,16 @@ describe("Milestone 4 runtime integration", () => {
             } else {
               order.push(`${browserId}:fast`);
             }
-            return { ok: true, action: "navigate", sessionId: browserId, pageId: "page_01", pageChanged: true, previousRevision: 0, currentRevision: 1, url };
+            return {
+              ok: true,
+              action: "navigate",
+              sessionId: browserId,
+              pageId: "page_01",
+              pageChanged: true,
+              previousRevision: 0,
+              currentRevision: 1,
+              url,
+            };
           },
           close: async () => undefined,
         } as BrowserSession;
@@ -473,48 +689,151 @@ describe("Milestone 4 runtime integration", () => {
     const { runtime } = await harness(engine);
     const firstSession = await runtime.startSession({ mode: "agent" });
     const secondSession = await runtime.startSession({ mode: "agent" });
-    active.push({ runtime, id: firstSession.id }, { runtime, id: secondSession.id });
+    active.push(
+      { runtime, id: firstSession.id },
+      { runtime, id: secondSession.id },
+    );
 
-    const first = runtime.navigate(firstSession.id, { url: "https://example.test/slow" });
+    const first = runtime.navigate(firstSession.id, {
+      url: "https://example.test/slow",
+    });
     await slowStarted;
-    const queued = runtime.navigate(firstSession.id, { url: "https://example.test/fast" });
-    await runtime.navigate(secondSession.id, { url: "https://example.test/fast" });
+    const queued = runtime.navigate(firstSession.id, {
+      url: "https://example.test/fast",
+    });
+    await runtime.navigate(secondSession.id, {
+      url: "https://example.test/fast",
+    });
     expect(order).toEqual(["browser_fake_0:slow:start", "browser_fake_1:fast"]);
     releaseSlow();
     await Promise.all([first, queued]);
-    expect(order).toEqual(["browser_fake_0:slow:start", "browser_fake_1:fast", "browser_fake_0:slow:end", "browser_fake_0:fast"]);
+    expect(order).toEqual([
+      "browser_fake_0:slow:start",
+      "browser_fake_1:fast",
+      "browser_fake_0:slow:end",
+      "browser_fake_0:fast",
+    ]);
+  });
+
+  it("rechecks page-state freshness after a visible-mode pacing delay", async () => {
+    const originalFingerprint = "a".repeat(64);
+    const changedFingerprint = "b".repeat(64);
+    let currentFingerprint = originalFingerprint;
+    let navigationCount = 0;
+
+    const engine: BrowserEngine = {
+      start: async () =>
+        ({
+          id: "browser_freshness_race",
+          onActivity: () => () => undefined,
+          pages: async () => [
+            {
+              id: "page_01",
+              url: "about:blank",
+              active: true,
+              revision: 0,
+            },
+          ],
+          inspect: async () => ({
+            pageId: "page_01",
+            revision: 0,
+            url: "about:blank",
+            title: "",
+            metadata: {
+              pageState: {
+                kind: "ready",
+                confidence: "high",
+                signals: ["document:stable"],
+                recommendedAction: "continue",
+              },
+              pageStatePropositions: {
+                primaryContentAvailable: true,
+                documentUnstable: false,
+                authenticationRequired: false,
+                humanVerificationPresented: false,
+                accessRestricted: false,
+                errorPresented: false,
+                interstitialPresented: false,
+              },
+              pageStateFingerprint: originalFingerprint,
+            },
+          }),
+          pageStateIdentity: async () => ({
+            pageId: "page_01",
+            fingerprint: currentFingerprint,
+          }),
+          navigate: async (url: string) => {
+            navigationCount += 1;
+
+            return {
+              ok: true,
+              action: "navigate",
+              sessionId: "browser_freshness_race",
+              pageId: "page_01",
+              pageChanged: true,
+              previousRevision: 0,
+              currentRevision: navigationCount,
+              url,
+            };
+          },
+          close: async () => undefined,
+        }) as BrowserSession,
+    };
+
+    const { runtime } = await harness(engine, {
+      headless: false,
+      minimumActionIntervalMs: 120,
+    });
+
+    const session = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: session.id });
+
+    await runtime.inspectBrowser(session.id);
+
+    await runtime.navigate(session.id, {
+      url: "https://example.test/first",
+    });
+
+    expect(navigationCount).toBe(1);
+
+    setTimeout(() => {
+      currentFingerprint = changedFingerprint;
+    }, 25);
+
+    await expect(
+      runtime.navigate(session.id, {
+        url: "https://example.test/second",
+      }),
+    ).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+      retryable: true,
+    });
+
+    expect(navigationCount).toBe(1);
   });
 });
-
 
 describe("Milestone 9 human activity foundation", () => {
   it("persists browser lifecycle activity only while human owns control", async () => {
     const server = await fixture();
-    const {
-      runtime,
-      browser,
-    } = await harness();
+    const { runtime, browser } = await harness();
 
-    const capture =
-      await runtime.startSession({
-        mode: "capture",
-      });
+    const capture = await runtime.startSession({
+      mode: "capture",
+    });
 
     active.push({
       runtime,
       id: capture.id,
     });
 
-    await browser
-      .get(capture.id)
-      .navigate(`${server.url}/actions`);
+    await browser.get(capture.id).navigate(`${server.url}/actions`);
 
-    const urlChanged =
-      await waitForObservation(
-        runtime,
-        capture.id,
-        "url_changed",
-      );
+    const urlChanged = await waitForObservation(
+      runtime,
+      capture.id,
+      "url_changed",
+    );
 
     expect(urlChanged).toMatchObject({
       actor: "human",
@@ -526,12 +845,11 @@ describe("Milestone 9 human activity foundation", () => {
       },
     });
 
-    const navigation =
-      await waitForObservation(
-        runtime,
-        capture.id,
-        "navigation_completed",
-      );
+    const navigation = await waitForObservation(
+      runtime,
+      capture.id,
+      "navigation_completed",
+    );
 
     expect(navigation).toMatchObject({
       actor: "human",
@@ -542,33 +860,22 @@ describe("Milestone 9 human activity foundation", () => {
       },
     });
 
-    const agent =
-      await runtime.startSession({
-        mode: "agent",
-      });
+    const agent = await runtime.startSession({
+      mode: "agent",
+    });
 
     active.push({
       runtime,
       id: agent.id,
     });
 
-    await browser
-      .get(agent.id)
-      .navigate(`${server.url}/actions`);
+    await browser.get(agent.id).navigate(`${server.url}/actions`);
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 100),
-    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(
-      (
-        await runtime.getObservations(
-          agent.id,
-        )
-      ).items.map((item) => item.type),
-    ).toEqual([
-      "session_started",
-    ]);
+      (await runtime.getObservations(agent.id)).items.map((item) => item.type),
+    ).toEqual(["session_started"]);
   });
 });
 
@@ -576,100 +883,59 @@ describe("Milestone 9 human DOM activity", () => {
   it("persists ordered minimized human interactions without sensitive field values", async () => {
     const server = await fixture();
 
-    const {
-      runtime,
-      browser,
-      home,
-    } = await harness();
+    const { runtime, browser, home } = await harness();
 
-    const capture =
-      await runtime.startSession({
-        mode: "capture",
-      });
+    const capture = await runtime.startSession({
+      mode: "capture",
+    });
 
     active.push({
       runtime,
       id: capture.id,
     });
 
-    const sessionBrowser =
-      browser.get(capture.id);
+    const sessionBrowser = browser.get(capture.id);
 
-    await sessionBrowser.navigate(
-      `${server.url}/actions`,
-    );
+    await sessionBrowser.navigate(`${server.url}/actions`);
 
-    await waitForObservation(
-      runtime,
-      capture.id,
-      "navigation_completed",
-    );
+    await waitForObservation(runtime, capture.id, "navigation_completed");
 
-    const secret =
-      "M9_SECRET_MUST_NEVER_PERSIST";
+    const secret = "M9_SECRET_MUST_NEVER_PERSIST";
 
-    let inspection =
-      await sessionBrowser.inspect();
+    let inspection = await sessionBrowser.inspect();
 
-    await sessionBrowser.type(
-      target(
-        inspection,
-        "Password",
-      ),
-      secret,
-    );
+    await sessionBrowser.type(target(inspection, "Password"), secret);
 
-    inspection =
-      await sessionBrowser.inspect();
+    inspection = await sessionBrowser.inspect();
 
-    await sessionBrowser.click(
-      target(
-        inspection,
-        "Submit search",
-      ),
-    );
+    await sessionBrowser.click(target(inspection, "Submit search"));
 
-    await waitForObservation(
-      runtime,
-      capture.id,
-      "human_submit",
-    );
+    await waitForObservation(runtime, capture.id, "human_submit");
 
-    inspection =
-      await sessionBrowser.inspect();
+    inspection = await sessionBrowser.inspect();
 
-    const select =
-      inspection.targets?.find(
-        (item) =>
-          item.kind === "select",
-      );
+    const select = inspection.targets?.find((item) => item.kind === "select");
 
     if (select === undefined) {
-      throw new Error(
-        "Missing select target.",
-      );
+      throw new Error("Missing select target.");
     }
 
     await sessionBrowser.press(
       {
         pageId: inspection.pageId,
-        revision:
-          inspection.revision,
+        revision: inspection.revision,
         ref: select.ref,
       },
       "o",
     );
 
-    const selection =
-      await waitForObservation(
-        runtime,
-        capture.id,
-        "human_selection",
-      );
+    const selection = await waitForObservation(
+      runtime,
+      capture.id,
+      "human_selection",
+    );
 
-    expect(
-      selection.data,
-    ).toMatchObject({
+    expect(selection.data).toMatchObject({
       selectedIndex: 1,
     });
 
@@ -678,49 +944,21 @@ describe("Milestone 9 human DOM activity", () => {
       amount: 2_000,
     });
 
-    await waitForObservation(
-      runtime,
-      capture.id,
-      "human_scroll",
-    );
+    await waitForObservation(runtime, capture.id, "human_scroll");
 
-    inspection =
-      await sessionBrowser.inspect();
+    inspection = await sessionBrowser.inspect();
 
-    await sessionBrowser.click(
-      target(
-        inspection,
-        "Open popup",
-      ),
-    );
+    await sessionBrowser.click(target(inspection, "Open popup"));
 
-    await waitForObservation(
-      runtime,
-      capture.id,
-      "page_opened",
-    );
+    await waitForObservation(runtime, capture.id, "page_opened");
 
-    await sessionBrowser.switchPage(
-      "page_01",
-    );
+    await sessionBrowser.switchPage("page_01");
 
-    await waitForObservation(
-      runtime,
-      capture.id,
-      "page_switched",
-    );
+    await waitForObservation(runtime, capture.id, "page_switched");
 
-    const observations =
-      (
-        await runtime.getObservations(
-          capture.id,
-        )
-      ).items;
+    const observations = (await runtime.getObservations(capture.id)).items;
 
-    const types =
-      observations.map(
-        (item) => item.type,
-      );
+    const types = observations.map((item) => item.type);
 
     expect(types).toEqual(
       expect.arrayContaining([
@@ -735,37 +973,20 @@ describe("Milestone 9 human DOM activity", () => {
       ]),
     );
 
-    expect(
-      observations.map(
-        (item) => item.seq,
-      ),
-    ).toEqual(
-      observations.map(
-        (_, index) => index + 1,
-      ),
+    expect(observations.map((item) => item.seq)).toEqual(
+      observations.map((_, index) => index + 1),
     );
 
-    expect(
-      JSON.stringify(observations),
-    ).not.toContain(secret);
+    expect(JSON.stringify(observations)).not.toContain(secret);
 
-    expect(
-      await allFileText(
-        join(
-          home,
-          "sessions",
-          capture.id,
-        ),
-      ),
-    ).not.toContain(secret);
+    expect(await allFileText(join(home, "sessions", capture.id))).not.toContain(
+      secret,
+    );
 
     await expect(
-      runtime.navigate(
-        capture.id,
-        {
-          url: `${server.url}/result`,
-        },
-      ),
+      runtime.navigate(capture.id, {
+        url: `${server.url}/result`,
+      }),
     ).rejects.toMatchObject({
       code: "CONTROL_NOT_OWNED",
     });

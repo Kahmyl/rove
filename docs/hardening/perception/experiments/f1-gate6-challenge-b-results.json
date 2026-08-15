@@ -1,0 +1,1102 @@
+{
+  "schemaVersion": 1,
+  "experiment": "f1-gate6-confirmatory-challenge-b",
+  "generatedAt": "2026-08-14T00:02:11.591Z",
+  "metadata": {
+    "sourceRevision": "f1fad0f4cb426123d735388d50e70ed12a94cee2",
+    "nodeVersion": "v22.22.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "chromiumVersion": "151.0.7922.34",
+    "challengeBCorpusVersion": 6002,
+    "candidateSha256Before": "a2295f0dd3629ebe78de33b115b9a45a12d8286867bd9a0dbf1e6f201c8ef3f1",
+    "candidateSha256After": "a2295f0dd3629ebe78de33b115b9a45a12d8286867bd9a0dbf1e6f201c8ef3f1",
+    "hashes": {
+      "riskModel": "901db0f76e44dba6dcbcf4abff0e13649a4d36053e4bf9f1161623232ba14a4b",
+      "frozenCorpus": "9d704a3266b714b2206b949e43ff370b7260486288e851484e090e7b154d947a",
+      "challengeBDefinitions": "54d1f3f628aefdb2874893519e062f7fe44c87a5e4f30e44dc9706d34d1c4b1f"
+    }
+  },
+  "challengeB": {
+    "schemaVersion": 1,
+    "corpusVersion": 6002,
+    "strategy": "gate6-s4r-structural-semantic",
+    "riskModelVersion": 1,
+    "metrics": {
+      "caseCount": 16,
+      "primaryStateAccuracy": 0.25,
+      "dispositionAccuracy": 0.375,
+      "dispositionErrorCount": 10,
+      "perState": [
+        {
+          "state": "ready",
+          "actualSupport": 4,
+          "predictedSupport": 9,
+          "truePositive": 2,
+          "falsePositive": 7,
+          "falseNegative": 2,
+          "precision": 0.2222222222222222,
+          "recall": 0.5,
+          "f1": 0.30769230769230765
+        },
+        {
+          "state": "loading",
+          "actualSupport": 0,
+          "predictedSupport": 0,
+          "truePositive": 0,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "precision": null,
+          "recall": null,
+          "f1": null
+        },
+        {
+          "state": "authentication_required",
+          "actualSupport": 3,
+          "predictedSupport": 0,
+          "truePositive": 0,
+          "falsePositive": 0,
+          "falseNegative": 3,
+          "precision": null,
+          "recall": 0,
+          "f1": 0
+        },
+        {
+          "state": "human_verification",
+          "actualSupport": 3,
+          "predictedSupport": 1,
+          "truePositive": 0,
+          "falsePositive": 1,
+          "falseNegative": 3,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        {
+          "state": "access_restricted",
+          "actualSupport": 2,
+          "predictedSupport": 1,
+          "truePositive": 0,
+          "falsePositive": 1,
+          "falseNegative": 2,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        {
+          "state": "unknown_interstitial",
+          "actualSupport": 1,
+          "predictedSupport": 2,
+          "truePositive": 1,
+          "falsePositive": 1,
+          "falseNegative": 0,
+          "precision": 0.5,
+          "recall": 1,
+          "f1": 0.6666666666666666
+        },
+        {
+          "state": "error",
+          "actualSupport": 3,
+          "predictedSupport": 3,
+          "truePositive": 1,
+          "falsePositive": 2,
+          "falseNegative": 2,
+          "precision": 0.3333333333333333,
+          "recall": 0.3333333333333333,
+          "f1": 0.3333333333333333
+        }
+      ],
+      "macroF1": 0.21794871794871792,
+      "confusionMatrix": {
+        "ready": {
+          "ready": 2,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 1,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 1
+        },
+        "loading": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "authentication_required": {
+          "ready": 2,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 1,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "human_verification": {
+          "ready": 1,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 1,
+          "error": 1
+        },
+        "access_restricted": {
+          "ready": 2,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 0
+        },
+        "unknown_interstitial": {
+          "ready": 0,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 1,
+          "error": 0
+        },
+        "error": {
+          "ready": 2,
+          "loading": 0,
+          "authentication_required": 0,
+          "human_verification": 0,
+          "access_restricted": 0,
+          "unknown_interstitial": 0,
+          "error": 1
+        }
+      },
+      "propositions": [
+        {
+          "proposition": "primaryContentAvailable",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 8,
+          "coverage": 1,
+          "accuracy": 0.5
+        },
+        {
+          "proposition": "documentUnstable",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 16,
+          "coverage": 1,
+          "accuracy": 1
+        },
+        {
+          "proposition": "authenticationRequired",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 13,
+          "coverage": 1,
+          "accuracy": 0.8125
+        },
+        {
+          "proposition": "humanVerificationPresented",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 12,
+          "coverage": 1,
+          "accuracy": 0.75
+        },
+        {
+          "proposition": "accessRestricted",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 14,
+          "coverage": 1,
+          "accuracy": 0.875
+        },
+        {
+          "proposition": "errorPresented",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 13,
+          "coverage": 1,
+          "accuracy": 0.8125
+        },
+        {
+          "proposition": "interstitialPresented",
+          "eligible": 16,
+          "assessed": 16,
+          "correct": 7,
+          "coverage": 1,
+          "accuracy": 0.4375
+        }
+      ],
+      "propositionAggregate": {
+        "eligible": 112,
+        "assessed": 112,
+        "correct": 83,
+        "coverage": 1,
+        "accuracy": 0.7410714285714286
+      },
+      "totalRiskWeightedLoss": 1441.5,
+      "riskWeightedLoss": 90.09375,
+      "highConfidencePredictionCount": 13,
+      "highConfidenceErrorCount": 10,
+      "highConfidenceErrorRate": 0.7692307692307693,
+      "criticalInvariantViolationCount": 10,
+      "unknownCount": 2,
+      "unknownRate": 0.125,
+      "timing": {
+        "acquisitionMs": {
+          "sampleCount": 16,
+          "mean": 15.273247375000018,
+          "median": 12.989250000000084,
+          "p95": 31.20504200000005,
+          "max": 31.20504200000005
+        },
+        "inferenceMs": {
+          "sampleCount": 16,
+          "mean": 0.008031375000001617,
+          "median": 0.004375000000095497,
+          "p95": 0.055708000000095126,
+          "max": 0.055708000000095126
+        },
+        "totalMs": {
+          "sampleCount": 16,
+          "mean": 15.28127875000002,
+          "median": 12.99458350000009,
+          "p95": 31.260750000000144,
+          "max": 31.260750000000144
+        }
+      },
+      "payload": {
+        "evidenceBytes": {
+          "sampleCount": 16,
+          "mean": 1125.625,
+          "median": 1094.5,
+          "p95": 1600,
+          "max": 1600
+        },
+        "persistedArtifactBytes": {
+          "sampleCount": 16,
+          "mean": 346.4375,
+          "median": 330.5,
+          "p95": 394,
+          "max": 394
+        }
+      }
+    },
+    "results": [
+      {
+        "id": "confirm-ready-security-challenge-tutorial-heading",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "ready", "context-negative", "verification"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "human_verification",
+          "confidence": "high",
+          "signals": ["document:stable", "verification:directive_heading"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 150,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 31.20504200000005,
+          "inferenceMs": 0.055708000000095126,
+          "totalMs": 31.260750000000144
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 379
+        }
+      },
+      {
+        "id": "confirm-ready-error-troubleshooting-heading",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "ready", "context-negative", "error"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "error",
+          "confidence": "high",
+          "signals": ["document:stable", "error:heading_or_alert_semantics"],
+          "recommendedAction": "stop"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "riskCost": 135,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 16.351,
+          "inferenceMs": 0.007166999999981272,
+          "totalMs": 16.35816699999998
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 359
+        }
+      },
+      {
+        "id": "confirm-ready-small-nonblocking-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "ready", "dialog", "nonblocking"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 16.132499999999936,
+          "inferenceMs": 0.004999999999881766,
+          "totalMs": 16.137499999999818
+        },
+        "payload": {
+          "evidenceBytes": 1094,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-ready-labelled-canvas-app",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "ready", "canvas", "visual-control"],
+        "expectedPrimaryState": "ready",
+        "expectedDisposition": "continue",
+        "expectedPropositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.974500000000035,
+          "inferenceMs": 0.004625000000032742,
+          "totalMs": 12.979125000000067
+        },
+        "payload": {
+          "evidenceBytes": 1091,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-verification-robot-modal",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "human-verification", "robot", "modal"],
+        "expectedPrimaryState": "human_verification",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "unknown_interstitial",
+          "confidence": "medium",
+          "signals": [
+            "document:stable",
+            "interstitial:blocking_structural_surface"
+          ],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 24,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 17.194082999999978,
+          "inferenceMs": 0.004125000000158252,
+          "totalMs": 17.198208000000136
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 394
+        }
+      },
+      {
+        "id": "confirm-verification-robot-frame-only",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "human-verification", "robot", "frame"],
+        "expectedPrimaryState": "human_verification",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "medium",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 120,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 22.154042000000004,
+          "inferenceMs": 0.004709000000048036,
+          "totalMs": 22.158751000000052
+        },
+        "payload": {
+          "evidenceBytes": 1600,
+          "persistedArtifactBytes": 332
+        }
+      },
+      {
+        "id": "confirm-auth-unlock-session-form",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "authentication", "credential-form"],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.280416999999943,
+          "inferenceMs": 0.004083999999920707,
+          "totalMs": 13.284500999999864
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-auth-select-identity",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "authentication", "identity-chooser"],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 12.923792000000049,
+          "inferenceMs": 0.003582999999935055,
+          "totalMs": 12.927374999999984
+        },
+        "payload": {
+          "evidenceBytes": 1093,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-restriction-http-451",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "access-restricted", "http-451"],
+        "expectedPrimaryState": "access_restricted",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 150,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 12.609541000000036,
+          "inferenceMs": 0.014916999999968539,
+          "totalMs": 12.624458000000004
+        },
+        "payload": {
+          "evidenceBytes": 1094,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-restriction-network-suspended",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "access-restricted", "semantic-variant"],
+        "expectedPrimaryState": "access_restricted",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 150,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.004000000000133,
+          "inferenceMs": 0.006041999999979453,
+          "totalMs": 13.010042000000112
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-error-http-404-not-found",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "error", "http-404"],
+        "expectedPrimaryState": "error",
+        "expectedDisposition": "stop",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 12.204167000000098,
+          "inferenceMs": 0.002292000000124972,
+          "totalMs": 12.206459000000223
+        },
+        "payload": {
+          "evidenceBytes": 1093,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-error-hit-a-snag",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "error", "semantic-variant"],
+        "expectedPrimaryState": "error",
+        "expectedDisposition": "stop",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "ready",
+          "confidence": "high",
+          "signals": ["document:stable"],
+          "recommendedAction": "continue"
+        },
+        "propositions": {
+          "primaryContentAvailable": true,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": false
+        },
+        "riskCost": 142.5,
+        "criticalInvariantViolation": true,
+        "timing": {
+          "acquisitionMs": 13.02387500000009,
+          "inferenceMs": 0.0013750000000527507,
+          "totalMs": 13.025250000000142
+        },
+        "payload": {
+          "evidenceBytes": 1093,
+          "persistedArtifactBytes": 329
+        }
+      },
+      {
+        "id": "confirm-unknown-large-dialog",
+        "tier": "A",
+        "criticality": "critical",
+        "tags": ["confirmatory", "unknown-interstitial", "dialog"],
+        "expectedPrimaryState": "unknown_interstitial",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "unknown_interstitial",
+          "confidence": "medium",
+          "signals": [
+            "document:stable",
+            "interstitial:blocking_structural_surface"
+          ],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.817000000000007,
+          "inferenceMs": 0.004916999999977634,
+          "totalMs": 12.821916999999985
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 394
+        }
+      },
+      {
+        "id": "confirm-overlap-error-robot-verification",
+        "tier": "A",
+        "criticality": "standard",
+        "tags": ["confirmatory", "overlap", "human-verification", "error"],
+        "expectedPrimaryState": "human_verification",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": true,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "error",
+          "confidence": "high",
+          "signals": ["document:stable", "error:http_5xx"],
+          "recommendedAction": "stop"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "riskCost": 90,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.784875000000056,
+          "inferenceMs": 0.004083000000036918,
+          "totalMs": 12.788958000000093
+        },
+        "payload": {
+          "evidenceBytes": 1094,
+          "persistedArtifactBytes": 341
+        }
+      },
+      {
+        "id": "confirm-overlap-auth-restriction",
+        "tier": "A",
+        "criticality": "standard",
+        "tags": [
+          "confirmatory",
+          "overlap",
+          "authentication",
+          "access-restricted"
+        ],
+        "expectedPrimaryState": "authentication_required",
+        "expectedDisposition": "request_human",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": true,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "access_restricted",
+          "confidence": "high",
+          "signals": ["document:stable", "restriction:http_status"],
+          "recommendedAction": "request_human"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": true,
+          "errorPresented": false,
+          "interstitialPresented": true
+        },
+        "riskCost": 52.5,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.967457999999851,
+          "inferenceMs": 0.003833999999869775,
+          "totalMs": 12.971291999999721
+        },
+        "payload": {
+          "evidenceBytes": 1095,
+          "persistedArtifactBytes": 371
+        }
+      },
+      {
+        "id": "confirm-control-http-502",
+        "tier": "A",
+        "criticality": "standard",
+        "tags": ["confirmatory", "error", "positive-control"],
+        "expectedPrimaryState": "error",
+        "expectedDisposition": "stop",
+        "expectedPropositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "actual": {
+          "kind": "error",
+          "confidence": "high",
+          "signals": ["document:stable", "error:http_5xx"],
+          "recommendedAction": "stop"
+        },
+        "propositions": {
+          "primaryContentAvailable": false,
+          "documentUnstable": false,
+          "authenticationRequired": false,
+          "humanVerificationPresented": false,
+          "accessRestricted": false,
+          "errorPresented": true,
+          "interstitialPresented": true
+        },
+        "riskCost": 0,
+        "criticalInvariantViolation": false,
+        "timing": {
+          "acquisitionMs": 12.745666000000028,
+          "inferenceMs": 0.002040999999962878,
+          "totalMs": 12.747706999999991
+        },
+        "payload": {
+          "evidenceBytes": 1093,
+          "persistedArtifactBytes": 341
+        }
+      }
+    ]
+  },
+  "channelAvailability": {
+    "complete": {
+      "assessment": {
+        "kind": "human_verification",
+        "confidence": "high",
+        "signals": ["document:stable", "verification:semantic_frame_presented"],
+        "recommendedAction": "request_human"
+      },
+      "propositions": {
+        "primaryContentAvailable": false,
+        "documentUnstable": false,
+        "authenticationRequired": false,
+        "humanVerificationPresented": true,
+        "accessRestricted": false,
+        "errorPresented": false,
+        "interstitialPresented": true
+      },
+      "timing": {
+        "acquisitionMs": 19.753582999999935,
+        "inferenceMs": 0.011334000000033484,
+        "totalMs": 19.76491699999997
+      },
+      "payload": {
+        "evidenceBytes": 1600,
+        "persistedArtifactBytes": 386
+      }
+    },
+    "geometryUnavailable": {
+      "assessment": {
+        "kind": "ready",
+        "confidence": "medium",
+        "signals": [
+          "document:stable",
+          "evidence:verification_presentation_unresolved"
+        ],
+        "recommendedAction": "continue"
+      },
+      "propositions": {
+        "primaryContentAvailable": false,
+        "documentUnstable": false,
+        "authenticationRequired": false,
+        "humanVerificationPresented": false,
+        "accessRestricted": false,
+        "errorPresented": false,
+        "interstitialPresented": false
+      },
+      "timing": {
+        "acquisitionMs": 19.753582999999935,
+        "inferenceMs": 0.005250000000160071,
+        "totalMs": 19.758833000000095
+      },
+      "payload": {
+        "evidenceBytes": 1600,
+        "persistedArtifactBytes": 380
+      }
+    },
+    "noAccessibility": {
+      "assessment": {
+        "kind": "human_verification",
+        "confidence": "high",
+        "signals": ["document:stable", "verification:semantic_frame_presented"],
+        "recommendedAction": "request_human"
+      },
+      "propositions": {
+        "primaryContentAvailable": false,
+        "documentUnstable": false,
+        "authenticationRequired": false,
+        "humanVerificationPresented": true,
+        "accessRestricted": false,
+        "errorPresented": false,
+        "interstitialPresented": true
+      },
+      "timing": {
+        "acquisitionMs": 19.753582999999935,
+        "inferenceMs": 0.005332999999836829,
+        "totalMs": 19.758915999999772
+      },
+      "payload": {
+        "evidenceBytes": 1600,
+        "persistedArtifactBytes": 386
+      }
+    },
+    "expectations": {
+      "completeHumanVerification": true,
+      "geometryUnavailableVerificationTruth": "indeterminate",
+      "geometryUnavailableMustNotBeHighConfidence": true,
+      "noAccessibilityStillUsesPresentedSemanticFrame": true
+    },
+    "observations": {
+      "completeCorrect": true,
+      "geometryUnavailableEmitsIndeterminate": false,
+      "geometryUnavailableNotHighConfidence": true,
+      "noAccessibilityCorrect": true
+    }
+  },
+  "acquisitionMs": {
+    "sampleCount": 16,
+    "mean": 15.273247375000018,
+    "median": 12.974500000000035,
+    "p95": 31.20504200000005,
+    "max": 31.20504200000005
+  },
+  "candidateUnchanged": true,
+  "confirmatoryPassed": false,
+  "channelAvailabilityPassed": false,
+  "limitations": [
+    "Challenge B is deterministic synthetic confirmatory evidence, not recorded/live Tier C/D evidence.",
+    "The channel-unavailability probe currently covers verification-frame presentation geometry and accessibility availability; other evidence families remain to validate.",
+    "S4R temporal behavior has not yet been rerun end-to-end with S4R-specific acquisition.",
+    "Runtime inspection invalidation after decision-relevant browser activity remains unresolved.",
+    "Final production-path latency/payload is not yet measured."
+  ]
+}

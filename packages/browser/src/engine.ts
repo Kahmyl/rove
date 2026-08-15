@@ -5,6 +5,7 @@ import type {
   BrowserRuntimeCapabilities,
   InspectOptions,
   PageInspection,
+  PageStateIdentity,
   PageSummary,
   ScreenshotOptions,
   ScrollOptions,
@@ -17,6 +18,7 @@ export interface BrowserSession {
   readonly capabilities: BrowserRuntimeCapabilities;
   onActivity(listener: BrowserActivityListener): () => void;
   inspect(options?: InspectOptions): Promise<PageInspection>;
+  pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
   navigate(url: string): Promise<ActionResult>;
   click(target: TargetReference): Promise<ActionResult>;
   type(target: TargetReference, value: string): Promise<ActionResult>;

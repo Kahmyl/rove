@@ -5,7 +5,12 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
-  "exports": { ".": { "types": "./src/index.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -14,8 +19,32 @@
     "demo": "tsx src/demo/browser-demo.ts",
     "doctor": "tsx src/diagnostics/browser-doctor.ts",
     "inspect-demo": "tsx src/demo/inspect-demo.ts",
-    "actions-demo": "tsx src/demo/actions-demo.ts"
+    "actions-demo": "tsx src/demo/actions-demo.ts",
+    "perception:benchmark": "tsx src/perception/benchmark/current-classifier-cli.ts",
+    "perception:baseline:inspect": "tsx src/perception/benchmark/browser-inspect-baseline-cli.ts",
+    "perception:research:gate4": "tsx src/perception/research/gate4-cli.ts",
+    "perception:research:gate5": "tsx src/perception/research/gate5-cli.ts",
+    "perception:validation:gate6": "tsx src/perception/research/gate6-cli.ts",
+    "perception:validation:gate6-remediation": "tsx src/perception/research/gate6-remediation-cli.ts",
+    "perception:validation:gate6-challenge-b": "tsx src/perception/research/gate6-challenge-b-cli.ts",
+    "perception:validation:gate6-s4r2": "tsx src/perception/research/gate6-s4r2-cli.ts",
+    "perception:validation:gate6-challenge-c": "tsx src/perception/research/gate6-challenge-c-cli.ts",
+    "perception:validation:gate6-s4r3": "tsx src/perception/research/gate6-s4r3-cli.ts",
+    "perception:validation:gate6-challenge-d": "tsx src/perception/research/gate6-challenge-d-cli.ts",
+    "perception:validation:gate6-s4r4": "tsx src/perception/research/gate6-s4r4-cli.ts",
+    "perception:validation:gate6-challenge-e": "tsx src/perception/research/gate6-challenge-e-cli.ts",
+    "perception:validation:gate6-s4r5": "tsx src/perception/research/gate6-s4r5-cli.ts",
+    "perception:validation:gate6-challenge-f": "tsx src/perception/research/gate6-challenge-f-cli.ts",
+    "perception:validation:gate6-s4r6": "tsx src/perception/research/gate6-s4r6-cli.ts",
+    "perception:validation:gate6-challenge-g": "tsx src/perception/research/gate6-challenge-g-cli.ts",
+    "perception:validation:gate6-s4r7": "tsx src/perception/research/gate6-s4r7-cli.ts",
+    "perception:validation:gate6-challenge-h": "tsx src/perception/research/gate6-challenge-h-cli.ts"
   },
-  "dependencies": { "@rove/protocol": "workspace:*", "playwright": "^1.54.2" },
-  "devDependencies": { "tsx": "^4.20.3" }
+  "dependencies": {
+    "@rove/protocol": "workspace:*",
+    "playwright": "^1.54.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3"
+  }
 }

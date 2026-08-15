@@ -70,7 +70,13 @@ export interface ControlStatus {
 
 export type RequestHumanRequest = z.infer<typeof requestHumanRequestSchema>;
 export type ControlWaitRequest = z.infer<typeof controlWaitRequestSchema>;
-export type ControlWaitEvent = "human_requested" | "human_took_control" | "human_returned_control" | "session_completed" | "session_failed" | "timeout";
+export type ControlWaitEvent =
+  | "human_requested"
+  | "human_took_control"
+  | "human_returned_control"
+  | "session_completed"
+  | "session_failed"
+  | "timeout";
 export interface ControlWaitResult {
   event: ControlWaitEvent;
   sessionId: string;
@@ -116,10 +122,7 @@ export type PageStateKind =
   | "error";
 
 export type PageStateRecommendedAction =
-  | "continue"
-  | "wait_and_inspect"
-  | "request_human"
-  | "stop";
+  "continue" | "wait_and_inspect" | "request_human" | "stop";
 
 /** Deterministic assessment attached to every browser inspection. */
 export interface PageStateAssessment {
@@ -127,6 +130,23 @@ export interface PageStateAssessment {
   confidence: "high" | "medium" | "low";
   signals: string[];
   recommendedAction: PageStateRecommendedAction;
+}
+
+export type PageStateTruth = boolean | "indeterminate";
+
+export interface PageStatePropositions {
+  primaryContentAvailable: PageStateTruth;
+  documentUnstable: PageStateTruth;
+  authenticationRequired: PageStateTruth;
+  humanVerificationPresented: PageStateTruth;
+  accessRestricted: PageStateTruth;
+  errorPresented: PageStateTruth;
+  interstitialPresented: PageStateTruth;
+}
+
+export interface PageStateIdentity {
+  pageId: string;
+  fingerprint: string;
 }
 
 export interface PolicyDecision {
