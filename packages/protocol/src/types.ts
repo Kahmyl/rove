@@ -144,6 +144,29 @@ export interface PageStatePropositions {
   interstitialPresented: PageStateTruth;
 }
 
+export type PagePolicyDisposition =
+  "continue" | "wait_and_inspect" | "request_human" | "stop";
+
+export type PagePolicyReason =
+  | "page_ready"
+  | "page_unstable"
+  | "insufficient_confidence"
+  | "unresolved_page_state"
+  | "authentication_required"
+  | "human_verification_required"
+  | "access_restricted"
+  | "unknown_interstitial"
+  | "page_error";
+
+export interface PagePolicyDecision {
+  disposition: PagePolicyDisposition;
+  reason: PagePolicyReason;
+  mutationAllowed: boolean;
+  retryable: boolean;
+  errorCode?: RoveErrorCode;
+  message: string;
+}
+
 export interface PageStateIdentity {
   pageId: string;
   fingerprint: string;
