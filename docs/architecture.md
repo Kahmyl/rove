@@ -78,7 +78,21 @@ The browser package currently implements:
 - browser-level Chromium tab reconciliation using CDP `tab` target `embedderData.tabActive`, mapped back to stable Rove page IDs without persisting CDP target identity;
 - deterministic local fixture tests and headed manual verification.
 
-MCP defaults new sessions to the managed persistent `default` profile. Runtime applies a conservative minimum action interval in headed mode, while the browser uses configurable sequential key timing. Page inspection recognizes a deliberately narrow set of explicit access-restriction and human-verification signals. Detection transitions the session to `awaiting_human`, removes agent ownership, and emits `site_access_restricted`; it never retries around or attempts to bypass the restriction.
+MCP defaults new sessions to the managed persistent `default` profile. Runtime applies a conservative minimum action interval in headed mode, while the browser uses configurable sequential key timing.
+
+Page-state handling is split into three explicit layers:
+
+```text
+browser perception
+      ↓
+Runtime page-state policy
+      ↓
+explicit Runtime orchestration
+```
+
+The browser package reports observational page-state perception and propositions only. Runtime evaluates that perception into a `PagePolicyDecision`. Direct `browser.inspect` returns the perception together with `metadata.pagePolicy` and never changes session ownership. Only explicit session-start and post-action orchestration boundaries may translate policy into an automatic control transition.
+
+Authentication and presented human verification may automatically request human control for Agent and Companion sessions. Access restriction, unknown interstitials, page errors, and loading/unstable states never automatically transfer ownership; policy instead blocks or defers autonomous mutation. Capture Mode remains human-owned. Explicit `control.request_human` remains available when the agent judges human assistance useful, including for stop-only states.
 
 The architecture explicitly excludes fingerprint spoofing, automation concealment, proxy rotation, CAPTCHA solving, and other access-control evasion. Rove cannot promise that a third-party site will permit automation, even when the task itself is legitimate.
 
