@@ -29,8 +29,10 @@ import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { BrowserOwnershipFence } from "./control/browser-ownership-fence.js";
 import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
+import { OwnershipTransitionService } from "./control/ownership-transition.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
+import { InteractionPolicy } from "./policy/interaction-policy.js";
 import { RuntimeService } from "./runtime.service.js";
 import { SessionService } from "./session/session.service.js";
 
@@ -1667,5 +1669,925 @@ describe("Milestone 9 human DOM activity", () => {
     ).items.map((item) => item.type);
 
     expect(observationTypes).not.toContain("browser_navigated");
+  });
+});
+
+interface RaceGate {
+  promise: Promise<void>;
+  resolve(): void;
+}
+
+function raceGate(): RaceGate {
+  let resolve!: () => void;
+
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return {
+    promise,
+    resolve,
+  };
+}
+
+function observeNextOwnershipTransition(
+  ownershipFence: BrowserOwnershipFence,
+): Promise<void> {
+  const started = raceGate();
+
+  const originalBeginTransition =
+    ownershipFence.beginTransition.bind(ownershipFence);
+
+  ownershipFence.beginTransition = (sessionId) => {
+    const transition = originalBeginTransition(sessionId);
+
+    started.resolve();
+
+    return transition;
+  };
+
+  return started.promise;
+}
+
+function runtimeOwnershipTransitions(
+  runtime: RuntimeService,
+): OwnershipTransitionService {
+  return (
+    runtime as unknown as {
+      ownershipTransitions: OwnershipTransitionService;
+    }
+  ).ownershipTransitions;
+}
+
+function runtimeInteractionPolicy(runtime: RuntimeService): InteractionPolicy {
+  return (
+    runtime as unknown as {
+      interactionPolicy: InteractionPolicy;
+    }
+  ).interactionPolicy;
+}
+
+function runtimeEvidence(runtime: RuntimeService): EvidenceService {
+  return (
+    runtime as unknown as {
+      evidence: EvidenceService;
+    }
+  ).evidence;
+}
+
+describe("F3.6 adversarial ownership races", () => {
+  it("Race A — inspect vs request-human discards stale inspection before policy commit or return", async () => {
+    const server = await fixture();
+
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const inspectStarted = raceGate();
+    const releaseInspect = raceGate();
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectStarted.resolve();
+
+        await releaseInspect.promise;
+
+        return originalInspect(options);
+      },
+    });
+
+    const policy = runtimeInteractionPolicy(runtime);
+
+    const originalRecordInspection = policy.recordInspection.bind(policy);
+
+    let recordedAfterStart = 0;
+
+    policy.recordInspection = (sessionId, inspection) => {
+      recordedAfterStart += 1;
+
+      return originalRecordInspection(sessionId, inspection);
+    };
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    await inspectStarted.promise;
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race A",
+    });
+
+    let handoffResolved = false;
+
+    void handoff.then(() => {
+      handoffResolved = true;
+    });
+
+    await transitionStarted;
+
+    expect(handoffResolved).toBe(false);
+
+    releaseInspect.resolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    expect(recordedAfterStart).toBe(0);
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+  });
+
+  it("Race B — inspect cannot cross voluntary Companion takeover", async () => {
+    const server = await fixture();
+
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "companion",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const inspectStarted = raceGate();
+    const releaseInspect = raceGate();
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectStarted.resolve();
+
+        await releaseInspect.promise;
+
+        return originalInspect(options);
+      },
+    });
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    await inspectStarted.promise;
+
+    const takeover = runtime.takeHumanControl(session.id);
+
+    await transitionStarted;
+
+    releaseInspect.resolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(takeover).resolves.toMatchObject({
+      status: "active",
+      controller: "human",
+    });
+  });
+
+  it("Race C — pages cannot return across a request-human boundary", async () => {
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalPages = liveBrowser.pages.bind(liveBrowser);
+
+    const pagesStarted = raceGate();
+    const releasePages = raceGate();
+
+    Object.defineProperty(liveBrowser, "pages", {
+      configurable: true,
+      value: async () => {
+        pagesStarted.resolve();
+
+        await releasePages.promise;
+
+        return originalPages();
+      },
+    });
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const pages = runtime.pages(session.id);
+
+    await pagesStarted.promise;
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race C",
+    });
+
+    await transitionStarted;
+
+    releasePages.resolve();
+
+    await expect(pages).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+  });
+
+  it("Race D — a stale screenshot cannot become persisted evidence", async () => {
+    const server = await fixture();
+
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalScreenshot = liveBrowser.screenshot.bind(liveBrowser);
+
+    const screenshotStarted = raceGate();
+    const releaseScreenshot = raceGate();
+
+    Object.defineProperty(liveBrowser, "screenshot", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalScreenshot>[0]) => {
+        screenshotStarted.resolve();
+
+        await releaseScreenshot.promise;
+
+        return originalScreenshot(options);
+      },
+    });
+
+    const evidence = runtimeEvidence(runtime);
+
+    const originalSaveScreenshot = evidence.saveScreenshot.bind(evidence);
+
+    let screenshotSaves = 0;
+
+    const wrappedSaveScreenshot: EvidenceService["saveScreenshot"] = async (
+      ...args
+    ) => {
+      screenshotSaves += 1;
+
+      return originalSaveScreenshot(...args);
+    };
+
+    evidence.saveScreenshot = wrappedSaveScreenshot;
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const screenshot = runtime.captureScreenshot(session.id);
+
+    await screenshotStarted.promise;
+
+    // Exercise the centralized transition service directly so the
+    // transition races the already-running coordinator operation.
+    const handoff = runtimeOwnershipTransitions(runtime).requestHuman(
+      session.id,
+      "Race D",
+    );
+
+    await transitionStarted;
+
+    releaseScreenshot.resolve();
+
+    await expect(screenshot).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+
+    expect(screenshotSaves).toBe(0);
+  });
+
+  it("Race E — mutation queued behind handoff fails before browser execution", async () => {
+    const server = await fixture();
+
+    const { runtime, browser } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    await runtime.inspectBrowser(session.id);
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalNavigate = liveBrowser.navigate.bind(liveBrowser);
+
+    const firstMutationStarted = raceGate();
+    const releaseFirstMutation = raceGate();
+
+    let navigateCalls = 0;
+
+    Object.defineProperty(liveBrowser, "navigate", {
+      configurable: true,
+      value: async (url: string) => {
+        navigateCalls += 1;
+
+        if (navigateCalls === 1) {
+          firstMutationStarted.resolve();
+
+          await releaseFirstMutation.promise;
+        }
+
+        return originalNavigate(url);
+      },
+    });
+
+    const firstMutation = runtime.navigate(session.id, {
+      url: `${server.url}/actions`,
+    });
+
+    await firstMutationStarted.promise;
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race E",
+    });
+
+    const queuedMutation = runtime.navigate(session.id, {
+      url: `${server.url}/actions`,
+    });
+
+    releaseFirstMutation.resolve();
+
+    await expect(firstMutation).resolves.toMatchObject({
+      sessionId: session.id,
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+
+    await expect(queuedMutation).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    expect(navigateCalls).toBe(1);
+  });
+
+  it("Race F — handoff waits for an active non-coordinator inspect to drain", async () => {
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const inspectStarted = raceGate();
+    const releaseInspect = raceGate();
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectStarted.resolve();
+
+        await releaseInspect.promise;
+
+        return originalInspect(options);
+      },
+    });
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    await inspectStarted.promise;
+
+    let handoffResolved = false;
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race F",
+    });
+
+    void handoff.then(() => {
+      handoffResolved = true;
+    });
+
+    await transitionStarted;
+
+    expect(handoffResolved).toBe(false);
+
+    releaseInspect.resolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+  });
+
+  it("Race G — stale pre-human inspect cannot become valid after a later agent generation", async () => {
+    const server = await fixture();
+
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "companion",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const staleInspectStarted = raceGate();
+    const releaseStaleInspect = raceGate();
+
+    let delayed = true;
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        if (delayed) {
+          staleInspectStarted.resolve();
+
+          await releaseStaleInspect.promise;
+
+          delayed = false;
+        }
+
+        return originalInspect(options);
+      },
+    });
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const staleInspection = runtime.inspectBrowser(session.id);
+
+    await staleInspectStarted.promise;
+
+    const takeover = runtime.takeHumanControl(session.id);
+
+    // Queue the return behind takeover before the stale read is
+    // physically allowed to complete.
+    const returned = runtime.returnAgentControl(session.id);
+
+    await transitionStarted;
+
+    releaseStaleInspect.resolve();
+
+    await expect(staleInspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(takeover).resolves.toMatchObject({
+      controller: "human",
+    });
+
+    await expect(returned).resolves.toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+
+    // Handback invalidation, not the old inspect, defines the new era.
+    await expect(
+      runtime.navigate(session.id, {
+        url: `${server.url}/actions`,
+      }),
+    ).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+    });
+
+    await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.navigate(session.id, {
+        url: `${server.url}/actions`,
+      }),
+    ).resolves.toMatchObject({
+      sessionId: session.id,
+    });
+  });
+
+  it("Race H — concurrent stable reads overlap and the transition drains both", async () => {
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const originalPages = liveBrowser.pages.bind(liveBrowser);
+
+    const inspectStarted = raceGate();
+    const pagesStarted = raceGate();
+
+    const releaseInspect = raceGate();
+    const releasePages = raceGate();
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectStarted.resolve();
+
+        await releaseInspect.promise;
+
+        return originalInspect(options);
+      },
+    });
+
+    Object.defineProperty(liveBrowser, "pages", {
+      configurable: true,
+      value: async () => {
+        pagesStarted.resolve();
+
+        await releasePages.promise;
+
+        return originalPages();
+      },
+    });
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    const pages = runtime.pages(session.id);
+
+    // Both operations must physically enter the browser before either
+    // is released, proving reads are not globally serialized.
+    await Promise.all([inspectStarted.promise, pagesStarted.promise]);
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    let handoffResolved = false;
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race H",
+    });
+
+    void handoff.then(() => {
+      handoffResolved = true;
+    });
+
+    await transitionStarted;
+
+    releaseInspect.resolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    expect(handoffResolved).toBe(false);
+
+    releasePages.resolve();
+
+    await expect(pages).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+  });
+
+  it("Race I — transition closes admission immediately so new reads cannot extend drain", async () => {
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const originalPages = liveBrowser.pages.bind(liveBrowser);
+
+    const firstInspectStarted = raceGate();
+    const releaseFirstInspect = raceGate();
+
+    let inspectCalls = 0;
+    let pagesCalls = 0;
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectCalls += 1;
+
+        if (inspectCalls === 1) {
+          firstInspectStarted.resolve();
+
+          await releaseFirstInspect.promise;
+        }
+
+        return originalInspect(options);
+      },
+    });
+
+    Object.defineProperty(liveBrowser, "pages", {
+      configurable: true,
+      value: async () => {
+        pagesCalls += 1;
+
+        return originalPages();
+      },
+    });
+
+    const oldInspection = runtime.inspectBrowser(session.id);
+
+    await firstInspectStarted.promise;
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "Race I",
+    });
+
+    await transitionStarted;
+
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.pages(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    // New work was rejected at admission, before browser execution.
+    expect(inspectCalls).toBe(1);
+    expect(pagesCalls).toBe(0);
+
+    releaseFirstInspect.resolve();
+
+    await expect(oldInspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+  });
+
+  it("Race J — session end invalidates and drains an active inspect before completion", async () => {
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const inspectStarted = raceGate();
+    const releaseInspect = raceGate();
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectStarted.resolve();
+
+        await releaseInspect.promise;
+
+        return originalInspect(options);
+      },
+    });
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    await inspectStarted.promise;
+
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+
+    let endResolved = false;
+
+    const ending = runtime.endSession(session.id);
+
+    void ending.then(() => {
+      endResolved = true;
+    });
+
+    await transitionStarted;
+
+    expect(endResolved).toBe(false);
+
+    releaseInspect.resolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(ending).resolves.toMatchObject({
+      status: "completed",
+      controller: null,
+    });
+
+    let fenceError: unknown;
+
+    try {
+      ownershipFence.acquire(session.id, "agent");
+    } catch (error) {
+      fenceError = error;
+    }
+
+    expect(fenceError).toMatchObject({
+      code: "SESSION_NOT_ACTIVE",
+    });
+  });
+
+  it("Roadmap H — fresh inspection cannot begin before human-return invalidation completes", async () => {
+    const { runtime, browser } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "companion",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    await runtime.takeHumanControl(session.id);
+
+    const liveBrowser = browser.get(session.id);
+
+    const originalInvalidateAllTargets =
+      liveBrowser.invalidateAllTargets.bind(liveBrowser);
+
+    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+
+    const invalidationStarted = raceGate();
+    const releaseInvalidation = raceGate();
+
+    let inspectCalls = 0;
+
+    Object.defineProperty(liveBrowser, "invalidateAllTargets", {
+      configurable: true,
+      value: async () => {
+        invalidationStarted.resolve();
+
+        await releaseInvalidation.promise;
+
+        return originalInvalidateAllTargets();
+      },
+    });
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (options?: Parameters<typeof originalInspect>[0]) => {
+        inspectCalls += 1;
+
+        return originalInspect(options);
+      },
+    });
+
+    const returning = runtime.returnAgentControl(session.id);
+
+    await invalidationStarted.promise;
+
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    expect(inspectCalls).toBe(0);
+
+    releaseInvalidation.resolve();
+
+    await expect(returning).resolves.toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+
+    await expect(runtime.inspectBrowser(session.id)).resolves.toMatchObject({
+      pageId: expect.any(String),
+    });
+
+    expect(inspectCalls).toBe(1);
+  });
+
+  it("Roadmap I — F2 automatic handoff begins only after mutation lease release", async () => {
+    const server = await fixture();
+
+    const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    await runtime.inspectBrowser(session.id);
+
+    // If F2 tries to transition while the mutation lease is still
+    // active, this call deadlocks. Successful completion therefore
+    // proves the post-action ordering frozen in F3.4.
+    const result = await runtime.navigate(session.id, {
+      url: `${server.url}/authentication`,
+    });
+
+    expect(result.url).toBe(`${server.url}/authentication`);
+
+    expect(await runtime.getSession(session.id)).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.pages(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.captureScreenshot(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(
+      runtime.navigate(session.id, {
+        url: `${server.url}/actions`,
+      }),
+    ).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
   });
 });
