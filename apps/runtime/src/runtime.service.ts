@@ -15,7 +15,6 @@ import {
   type ObservationPage,
   type ObservationQuery,
   type PageInspection,
-  type PagePerceptionAssessment,
   type PageSummary,
   type PressRequest,
   type RoveRuntime,
@@ -347,7 +346,19 @@ export class RuntimeService implements RoveRuntime {
         type: "page_switched",
         data: { pageId },
       });
-      await this.assessAndPause(sessionId);
+      {
+        const assessment = await this.assessBrowser(
+          sessionId,
+          this.browser.get(sessionId),
+        );
+
+        await this.pagePolicyOrchestrator.orchestrate(
+          sessionId,
+          assessment.policyDecision,
+          assessment.pageState,
+          "post_action",
+        );
+      }
       return page;
     });
   }
@@ -362,7 +373,19 @@ export class RuntimeService implements RoveRuntime {
         type: "page_closed",
         data: { pageId },
       });
-      await this.assessAndPause(sessionId);
+      {
+        const assessment = await this.assessBrowser(
+          sessionId,
+          this.browser.get(sessionId),
+        );
+
+        await this.pagePolicyOrchestrator.orchestrate(
+          sessionId,
+          assessment.policyDecision,
+          assessment.pageState,
+          "post_action",
+        );
+      }
     });
   }
 
@@ -567,7 +590,18 @@ export class RuntimeService implements RoveRuntime {
           ? {}
           : { pageRevision: result.currentRevision }),
       });
-      await this.assessAndPause(sessionId);
+      const assessment = await this.assessBrowser(
+        sessionId,
+        this.browser.get(sessionId),
+      );
+
+      await this.pagePolicyOrchestrator.orchestrate(
+        sessionId,
+        assessment.policyDecision,
+        assessment.pageState,
+        "post_action",
+      );
+
       return result;
     });
   }
@@ -635,24 +669,6 @@ export class RuntimeService implements RoveRuntime {
     });
 
     return this.interactionPolicy.recordInspection(sessionId, inspection);
-  }
-
-  private async assessAndPause(
-    sessionId: string,
-  ): Promise<PagePerceptionAssessment> {
-    const assessment = await this.assessBrowser(
-      sessionId,
-      this.browser.get(sessionId),
-    );
-
-    await this.pagePolicyOrchestrator.orchestrate(
-      sessionId,
-      assessment.policyDecision,
-      assessment.pageState,
-      "post_action",
-    );
-
-    return assessment.pageState;
   }
 
   private enqueueHumanActivity(
