@@ -39,6 +39,7 @@ import {
 } from "./control/browser-ownership-fence.js";
 import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
+import { OwnershipTransitionService } from "./control/ownership-transition.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { PagePolicyOrchestrator } from "./orchestration/page-policy-orchestrator.js";
@@ -56,6 +57,7 @@ export class RuntimeService implements RoveRuntime {
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
+  private readonly ownershipTransitions: OwnershipTransitionService;
   private readonly pagePolicyOrchestrator: PagePolicyOrchestrator;
 
   constructor(
@@ -73,11 +75,18 @@ export class RuntimeService implements RoveRuntime {
     @Inject(BrowserOwnershipFence)
     private readonly ownershipFence: BrowserOwnershipFence = new BrowserOwnershipFence(),
   ) {
-    this.pagePolicyOrchestrator = new PagePolicyOrchestrator(
+    this.ownershipTransitions = new OwnershipTransitionService(
       this.sessions,
-      this.observations,
+      this.control,
       this.controlWait,
+      this.browser,
+      this.observations,
       this.ownershipFence,
+      this.interactionPolicy,
+    );
+
+    this.pagePolicyOrchestrator = new PagePolicyOrchestrator(
+      this.ownershipTransitions,
     );
   }
 
@@ -199,38 +208,16 @@ export class RuntimeService implements RoveRuntime {
   }
 
   async endSession(sessionId: string): Promise<Session> {
-    return this.coordinator.execute(sessionId, async () => {
-      const existing = await this.sessions.get(sessionId);
-      if (existing.status === "completed" || existing.status === "failed") {
-        throw new RoveError({
-          code: "SESSION_ALREADY_ENDED",
-          message: "Rove session has already ended.",
-        });
-      }
-      await this.flushHumanActivity(sessionId);
-      await this.flushBrowserEvidence(sessionId);
-      this.lastAgentActionAt.delete(sessionId);
-      this.interactionPolicy.clear(sessionId);
-
-      let closeError: unknown;
-      try {
-        await this.browser.close(sessionId);
-      } catch (error) {
-        closeError = error;
-      } finally {
-        await this.releaseProfileLock(sessionId);
-      }
-      const session = await this.sessions.end(sessionId);
-      this.ownershipFence.clear(sessionId);
-      const observation = await this.observations.append(sessionId, {
-        actor: "system",
-        type: "session_completed",
-        data: {},
-      });
-      await this.controlWait.publish(sessionId, observation);
-      if (closeError !== undefined) throw closeError;
-      return session;
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.endSession(sessionId, {
+        flushHumanActivity: () => this.flushHumanActivity(sessionId),
+        flushBrowserEvidence: () => this.flushBrowserEvidence(sessionId),
+        clearRuntimeState: () => {
+          this.lastAgentActionAt.delete(sessionId);
+        },
+        releaseProfileLock: () => this.releaseProfileLock(sessionId),
+      }),
+    );
   }
 
   async inspectBrowser(
@@ -505,149 +492,24 @@ export class RuntimeService implements RoveRuntime {
     request: RequestHumanRequest,
   ): Promise<ControlStatus> {
     const input = requestHumanRequestSchema.parse(request);
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanRequestHuman(session);
-      if (session.status === "awaiting_human" && session.controller === null)
-        return this.toControlStatus(session);
 
-      const transition = this.ownershipFence.beginTransition(sessionId);
-      await transition.waitForDrain();
-
-      const requestedAt = new Date().toISOString();
-
-      let next: Session;
-
-      try {
-        next = await this.sessions.update({
-          ...session,
-          status: "awaiting_human",
-          controller: null,
-          handoff: { reason: input.reason, requestedAt },
-        });
-      } catch (error) {
-        this.ownershipFence.completeTransition(transition, "agent");
-        throw error;
-      }
-
-      this.ownershipFence.completeTransition(transition, null);
-      const observation = await this.observations.append(sessionId, {
-        actor: "agent",
-        type: "human_requested",
-        data: { reason: input.reason },
-      });
-      await this.controlWait.publish(sessionId, observation);
-      return this.toControlStatus(next, observation.seq);
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.requestHuman(sessionId, input.reason),
+    );
   }
 
   async takeHumanControl(sessionId: string): Promise<ControlStatus> {
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanTakeHuman(session);
-      if (session.controller === "human") return this.toControlStatus(session);
-
-      const requested = session.handoff !== undefined;
-      const transition = this.ownershipFence.beginTransition(sessionId);
-
-      await transition.waitForDrain();
-
-      let next: Session;
-
-      try {
-        next = await this.sessions.update({
-          ...session,
-          status: "active",
-          controller: "human",
-        });
-      } catch (error) {
-        this.ownershipFence.completeTransition(transition, session.controller);
-        throw error;
-      }
-
-      this.ownershipFence.completeTransition(transition, "human");
-      const observation = await this.observations.append(sessionId, {
-        actor: "human",
-        type: "human_took_control",
-        data: { requested },
-      });
-      await this.controlWait.publish(sessionId, observation);
-      return this.toControlStatus(next, observation.seq);
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.takeHuman(sessionId),
+    );
   }
 
   async returnAgentControl(sessionId: string): Promise<ControlStatus> {
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanReturnAgent(session);
-      if (session.controller === "agent" && session.handoff === undefined)
-        return this.toControlStatus(session);
-
-      const transition = this.ownershipFence.beginTransition(sessionId);
-      await transition.waitForDrain();
-
-      await this.flushHumanActivity(sessionId);
-
-      let ownershipCompleted = false;
-
-      try {
-        const pages = await this.browser.get(sessionId).pages();
-        const activePageId = pages.find((page) => page.active)?.id;
-        const invalidatedPages = await this.browser
-          .get(sessionId)
-          .invalidateAllTargets();
-        this.interactionPolicy.requireInspection(sessionId);
-        const next: Session = {
-          ...session,
-          status: "active",
-          controller: "agent",
-          ...(activePageId === undefined ? {} : { activePageId }),
-        };
-        delete next.handoff;
-        const persisted = await this.sessions.update(next);
-
-        this.ownershipFence.completeTransition(transition, "agent");
-        ownershipCompleted = true;
-
-        const observation = await this.observations.append(sessionId, {
-          actor: "human",
-          type: "human_returned_control",
-          data: { activePageId, invalidatedPages },
-        });
-        await this.controlWait.publish(sessionId, observation);
-        return this.toControlStatus(persisted, observation.seq);
-      } catch (error) {
-        if (!(error instanceof RoveError) || error.code !== "BROWSER_CLOSED") {
-          if (!ownershipCompleted) {
-            this.ownershipFence.completeTransition(
-              transition,
-              session.controller,
-            );
-          }
-          throw error;
-        }
-
-        this.ownershipFence.clear(sessionId);
-
-        const now = new Date().toISOString();
-        const failed: Session = {
-          ...session,
-          status: "failed",
-          controller: null,
-          endedAt: now,
-          updatedAt: now,
-        };
-        delete failed.handoff;
-        await this.sessions.update(failed);
-        const observation = await this.observations.append(sessionId, {
-          actor: "system",
-          type: "session_failed",
-          data: {},
-        });
-        await this.controlWait.publish(sessionId, observation);
-        throw error;
-      }
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.returnAgent(sessionId, () =>
+        this.flushHumanActivity(sessionId),
+      ),
+    );
   }
 
   async waitForControl(

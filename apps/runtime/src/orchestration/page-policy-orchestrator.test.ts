@@ -3,13 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   PagePerceptionAssessment,
   PagePolicyDecision,
-  Session,
 } from "@rove/protocol";
 
-import { BrowserOwnershipFence } from "../control/browser-ownership-fence.js";
-import { ControlWaitService } from "../control/control-wait.service.js";
-import { ObservationService } from "../observation/observation.service.js";
-import { SessionService } from "../session/session.service.js";
+import { OwnershipTransitionService } from "../control/ownership-transition.service.js";
 import { PagePolicyOrchestrator } from "./page-policy-orchestrator.js";
 
 const authentication: PagePerceptionAssessment = {
@@ -43,68 +39,16 @@ const verificationDecision: PagePolicyDecision = {
   message: "The page requires a human verification step.",
 };
 
-function makeSession(overrides: Partial<Session> = {}): Session {
-  return {
-    id: "ses_test",
-    mode: "agent",
-    status: "active",
-    controller: "agent",
-    ...overrides,
-  } as Session;
-}
+function harness() {
+  const requestHumanForPolicy = vi.fn(async () => undefined);
 
-function harness(initial: Session) {
-  let current = initial;
-
-  const ownershipFence = new BrowserOwnershipFence();
-  ownershipFence.initialize(initial.id, initial.controller);
-
-  const get = vi.fn(async () => current);
-
-  const update = vi.fn(async (next: Session) => {
-    current = next;
-    return next;
-  });
-
-  const append = vi.fn(
-    async (
-      sessionId: string,
-      input: {
-        actor: string;
-        type: string;
-        data: unknown;
-      },
-    ) => ({
-      seq: 1,
-      sessionId,
-      ...input,
-    }),
-  );
-
-  const publish = vi.fn(async () => undefined);
-
-  const orchestrator = new PagePolicyOrchestrator(
-    {
-      get,
-      update,
-    } as unknown as SessionService,
-    {
-      append,
-    } as unknown as ObservationService,
-    {
-      publish,
-    } as unknown as ControlWaitService,
-    ownershipFence,
-  );
+  const ownershipTransitions = {
+    requestHumanForPolicy,
+  } as unknown as OwnershipTransitionService;
 
   return {
-    orchestrator,
-    get,
-    update,
-    append,
-    publish,
-    ownershipFence,
-    current: () => current,
+    requestHumanForPolicy,
+    orchestrator: new PagePolicyOrchestrator(ownershipTransitions),
   };
 }
 
@@ -134,9 +78,9 @@ describe("PagePolicyOrchestrator", () => {
       message: "stop",
     },
   ] satisfies PagePolicyDecision[])(
-    "$disposition never changes browser ownership",
+    "$disposition does not request an ownership transition",
     async (decision) => {
-      const test = harness(makeSession());
+      const test = harness();
 
       await test.orchestrator.orchestrate(
         "ses_test",
@@ -145,15 +89,12 @@ describe("PagePolicyOrchestrator", () => {
         "session_start",
       );
 
-      expect(test.get).not.toHaveBeenCalled();
-      expect(test.update).not.toHaveBeenCalled();
-      expect(test.append).not.toHaveBeenCalled();
-      expect(test.publish).not.toHaveBeenCalled();
+      expect(test.requestHumanForPolicy).not.toHaveBeenCalled();
     },
   );
 
-  it("requests human ownership for authentication from active agent control", async () => {
-    const test = harness(makeSession());
+  it("routes authentication handoff intent to F3 transition semantics", async () => {
+    const test = harness();
 
     await test.orchestrator.orchestrate(
       "ses_test",
@@ -162,38 +103,15 @@ describe("PagePolicyOrchestrator", () => {
       "session_start",
     );
 
-    expect(test.current()).toMatchObject({
-      status: "awaiting_human",
-      controller: null,
-      handoff: {
-        reason:
-          "The page requires authentication that must be completed by a human.",
-      },
+    expect(test.requestHumanForPolicy).toHaveBeenCalledWith("ses_test", {
+      reason: authenticationDecision.message,
+      observationType: "authentication_required",
+      pageState: authentication,
     });
-
-    expect(test.append).toHaveBeenCalledWith(
-      "ses_test",
-      expect.objectContaining({
-        actor: "system",
-        type: "authentication_required",
-        data: authentication,
-      }),
-    );
-
-    expect(test.publish).toHaveBeenCalledTimes(1);
-
-    try {
-      test.ownershipFence.acquire("ses_test", "agent");
-      throw new Error("Expected agent admission to be closed.");
-    } catch (error) {
-      expect(error).toMatchObject({
-        code: "CONTROL_NOT_OWNED",
-      });
-    }
   });
 
-  it("requests human ownership for human verification", async () => {
-    const test = harness(makeSession());
+  it("routes presented human verification to F3 transition semantics", async () => {
+    const test = harness();
 
     await test.orchestrator.orchestrate(
       "ses_test",
@@ -202,62 +120,10 @@ describe("PagePolicyOrchestrator", () => {
       "post_action",
     );
 
-    expect(test.current()).toMatchObject({
-      status: "awaiting_human",
-      controller: null,
+    expect(test.requestHumanForPolicy).toHaveBeenCalledWith("ses_test", {
+      reason: verificationDecision.message,
+      observationType: "human_verification_required",
+      pageState: verification,
     });
-
-    expect(test.append).toHaveBeenCalledWith(
-      "ses_test",
-      expect.objectContaining({
-        type: "human_verification_required",
-        data: verification,
-      }),
-    );
-  });
-
-  it("does nothing when a human already owns the browser", async () => {
-    const test = harness(
-      makeSession({
-        mode: "capture",
-        controller: "human",
-      }),
-    );
-
-    await test.orchestrator.orchestrate(
-      "ses_test",
-      authenticationDecision,
-      authentication,
-      "session_start",
-    );
-
-    expect(test.update).not.toHaveBeenCalled();
-    expect(test.append).not.toHaveBeenCalled();
-    expect(test.publish).not.toHaveBeenCalled();
-    expect(test.current().controller).toBe("human");
-  });
-
-  it("is idempotent when a human handoff is already pending", async () => {
-    const test = harness(
-      makeSession({
-        status: "awaiting_human",
-        controller: null,
-        handoff: {
-          reason: "Existing handoff",
-          requestedAt: "2026-08-16T00:00:00.000Z",
-        },
-      }),
-    );
-
-    await test.orchestrator.orchestrate(
-      "ses_test",
-      authenticationDecision,
-      authentication,
-      "post_action",
-    );
-
-    expect(test.update).not.toHaveBeenCalled();
-    expect(test.append).not.toHaveBeenCalled();
-    expect(test.publish).not.toHaveBeenCalled();
   });
 });
