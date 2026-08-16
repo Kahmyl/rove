@@ -1582,4 +1582,90 @@ describe("Milestone 9 human DOM activity", () => {
       controller: null,
     });
   });
+
+  it("rejects an in-flight mutation result after its ownership generation is invalidated", async () => {
+    const server = await fixture();
+
+    const { runtime, browser, ownershipFence } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    // Establish fresh F1 knowledge for mutation authorization.
+    await runtime.inspectBrowser(session.id, {
+      includeText: false,
+      includeTargets: false,
+    });
+
+    const liveBrowser = browser.get(session.id);
+    const originalNavigate = liveBrowser.navigate.bind(liveBrowser);
+
+    let mutationStartedResolve!: () => void;
+
+    const mutationStarted = new Promise<void>((resolve) => {
+      mutationStartedResolve = resolve;
+    });
+
+    let releaseMutationResolve!: () => void;
+
+    const releaseMutation = new Promise<void>((resolve) => {
+      releaseMutationResolve = resolve;
+    });
+
+    Object.defineProperty(liveBrowser, "navigate", {
+      configurable: true,
+      value: async (url: string) => {
+        mutationStartedResolve();
+
+        await releaseMutation;
+
+        return originalNavigate(url);
+      },
+    });
+
+    const mutation = runtime.navigate(session.id, {
+      url: `${server.url}/ready`,
+    });
+
+    await mutationStarted;
+
+    // Simulate ownership invalidation at the exact fence layer.
+    // F3.5 will centralize all real transition callers.
+    const transition = ownershipFence.beginTransition(session.id);
+
+    let drained = false;
+
+    const drain = transition.waitForDrain().then(() => {
+      drained = true;
+    });
+
+    await Promise.resolve();
+
+    expect(drained).toBe(false);
+
+    releaseMutationResolve();
+
+    await expect(mutation).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await drain;
+
+    expect(drained).toBe(true);
+
+    ownershipFence.completeTransition(transition, null);
+
+    const observationTypes = (
+      await runtime.getObservations(session.id)
+    ).items.map((item) => item.type);
+
+    expect(observationTypes).not.toContain("browser_navigated");
+  });
 });
