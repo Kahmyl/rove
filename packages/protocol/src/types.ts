@@ -112,6 +112,55 @@ export interface PageInspection {
   metadata?: Record<string, unknown>;
 }
 
+export type BrowserNavigationProvenance =
+  "agent" | "human" | "browser" | "unknown";
+
+/** Sanitized, bounded evidence for a main-document navigation. */
+export interface BrowserNavigationEvidence {
+  timestamp: string;
+  pageId: string;
+  frameId: string;
+  mainFrame: boolean;
+  navigationId: string;
+  sourceUrl: string;
+  destinationUrl: string;
+  status?: number;
+  redirectIndex: number;
+  redirectedFromUrl?: string;
+  failureReason?: string;
+  provenance: BrowserNavigationProvenance;
+}
+
+export interface BrowserErrorEvidence {
+  timestamp: string;
+  pageId: string;
+  kind: "page_error" | "console" | "request_failure";
+  severity: "warning" | "error";
+  summary: string;
+  url?: string;
+  resourceType?: string;
+  frameId?: string;
+  mainFrame?: boolean;
+  detailHash?: string;
+  originalSummaryLength?: number;
+  urlPathHash?: string;
+}
+
+/** Evidence exposed by inspection; buffers are deliberately bounded. */
+export interface BrowserEvidenceSnapshot {
+  navigations: BrowserNavigationEvidence[];
+  errors: BrowserErrorEvidence[];
+  latestMainDocumentStatus?: number;
+  truncation: {
+    truncated: boolean;
+    dropped: {
+      navigationBuffer: number;
+      errorBuffer: number;
+      persistence: number;
+    };
+  };
+}
+
 export type PageStateKind =
   | "ready"
   | "loading"

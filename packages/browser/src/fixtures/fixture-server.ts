@@ -150,6 +150,22 @@ const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html>
 const SERVER_ERROR_HTML = `<!doctype html><html><head><title>Service unavailable</title></head><body>
   <h1>Service unavailable</h1>
 </body></html>`;
+const BROWSER_EVIDENCE_HTML = `<!doctype html><html><head><title>Evidence fixture</title></head><body>
+  <main><h1>Evidence fixture</h1></main>
+  <script>
+    console.warn('token=console-secret warning from https://example.test/path?token=url-secret');
+    setTimeout(() => { throw new Error('password=page-secret failed'); }, 0);
+    fetch('http://127.0.0.1:1/challenge.js?token=request-secret').catch(() => undefined);
+  </script>
+</body></html>`;
+const ARBITRARY_CONSOLE_HTML = `<!doctype html><html><head><title>Console fixture</title></head><body>
+  <main><h1>Console fixture</h1></main>
+  <script>console.error('Patient Ada Lovelace has a private diagnosis');</script>
+</body></html>`;
+const CONSOLE_BURST_HTML = `<!doctype html><html><head><title>Console burst</title></head><body>
+  <main><h1>Console burst</h1></main>
+  <script>for (let index = 0; index < 205; index += 1) console.warn('diagnostic event ' + index);</script>
+</body></html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -185,9 +201,36 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
   const server = createServer((request, response) => {
+    if (request.url === "/evidence-redirect") {
+      response.writeHead(302, {
+        location: "/evidence-terminal?token=redirect-secret",
+      });
+      response.end();
+      return;
+    }
+
+    if (request.url?.startsWith("/evidence-terminal") === true) {
+      response.writeHead(451, { "content-type": "text/html; charset=utf-8" });
+      response.end(BROWSER_EVIDENCE_HTML);
+      return;
+    }
+
+    if (request.url === "/arbitrary-console") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(ARBITRARY_CONSOLE_HTML);
+      return;
+    }
+
+    if (request.url === "/console-burst") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(CONSOLE_BURST_HTML);
+      return;
+    }
+
     if (request.url === "/download.txt") {
       response.writeHead(200, {
-        "content-disposition": 'attachment; filename="rove-session-download.txt"',
+        "content-disposition":
+          'attachment; filename="rove-session-download.txt"',
         "content-type": "text/plain; charset=utf-8",
       });
       response.end("rove session download");
