@@ -150,6 +150,17 @@ const UNKNOWN_INTERSTITIAL_HTML = `<!doctype html>
 const SERVER_ERROR_HTML = `<!doctype html><html><head><title>Service unavailable</title></head><body>
   <h1>Service unavailable</h1>
 </body></html>`;
+
+const F2_LOADING_HTML = `<!doctype html>
+<html>
+  <head><title>Loading workspace</title></head>
+  <body>
+    <main id="f2-loading-workflow" aria-busy="true">
+      <h1>Loading workspace</h1>
+      <div role="progressbar" aria-label="Loading workspace"></div>
+    </main>
+  </body>
+</html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -187,7 +198,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
   const server = createServer((request, response) => {
     if (request.url === "/download.txt") {
       response.writeHead(200, {
-        "content-disposition": 'attachment; filename="rove-session-download.txt"',
+        "content-disposition":
+          'attachment; filename="rove-session-download.txt"',
         "content-type": "text/plain; charset=utf-8",
       });
       response.end("rove session download");
@@ -214,6 +226,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/authentication": AUTHENTICATION_HTML,
         "/unknown-interstitial": UNKNOWN_INTERSTITIAL_HTML,
         "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
+        "/loading": F2_LOADING_HTML,
         "/dynamic-target": DYNAMIC_TARGET_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;
