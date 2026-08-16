@@ -1,90 +1,162 @@
 # Browser safety orchestration
 
 Rove is a user-authorized browser assistant. This layer keeps automation at a
-human-scale, hands human-only steps back to the user, and stops ambiguous
-workflows. It is a compliance boundary, not a promise that sites will never
-restrict access and not an anti-detection or CAPTCHA-solving system.
+human scale, separates browser perception from operational policy, hands
+human-only steps back to the user when appropriate, and stops unsafe or
+unresolved autonomous mutation. It is a safety boundary, not a promise that
+sites will permit automation and not an anti-detection or CAPTCHA-solving
+system.
 
-## Runtime-owned contract
+## Perception, policy, and orchestration
+
+F1 browser perception and F2 Runtime policy have separate responsibilities:
 
 ```text
-Agent -> MCP contract -> Runtime policy -> paced browser action
-                                      -> inspection -> page classifier
-                                                    -> continue | wait | handoff | stop
+Browser
+  │
+  ▼
+F1 perception
+  │  PagePerceptionAssessment
+  │  PageStatePropositions
+  ▼
+F2 PageStatePolicy
+  │  PagePolicyDecision
+  ├──────────────► browser.inspect returns result
+  │
+  └──────────────► explicit orchestration boundary
+                    session_start / post_action
+                              │
+                              ▼
+                       possible control transition
 ```
 
-The Runtime is authoritative. An alternative MCP client cannot bypass these
-rules. MCP descriptions tell agents how to respond, while stable `RoveError`
-codes make the response machine-readable.
+The browser package answers what is happening on the page. It does not decide
+who should own browser control.
 
-Every Playwright inspection includes `metadata.pageState`:
+Runtime policy answers what autonomous mutation is currently allowed. The
+policy is pure and does not modify session state.
 
-- `ready`: mutations may continue within the action budget.
-- `loading`: wait, then inspect again.
-- `authentication_required`: request human control.
-- `human_verification`: request human control; never solve automatically.
-- `access_restricted`: stop mutations and request human review.
-- `unknown_interstitial`: do not guess; request human review.
-- `error`: stop the current mutation workflow.
+`PagePolicyOrchestrator` is the only page-policy component that may translate a
+policy decision into an automatic ownership transition, and it is invoked only
+at session-start and post-action boundaries.
 
-The classifier uses explainable signals: URL/title, main-document HTTP status,
-visible text, raw HTML, document readiness, frame URLs, and target/content
-presence. It deliberately does not use OCR or infer a CAPTCHA from an empty
-DOM. Empty visible content on a non-empty stable HTTP document becomes
-`unknown_interstitial`.
+MCP remains an adapter. It does not own page policy or control state.
 
-After human control returns, all target references are invalidated and the
-agent must call `browser.inspect` before any mutation. The Runtime also applies
-headed-browser action pacing, a rolling action budget, and a deterministic
-repeated-action limit. It does not add random cursor movement, fingerprint
-spoofing, stealth plugins, CAPTCHA solving, or proxy rotation.
+## Inspection contract
 
-## Smoke campaign
+Runtime-returned `browser.inspect` results expose:
 
-Run locally before any live campaign:
+- `metadata.pageState` — observational page-state perception;
+- `metadata.pageStatePropositions` — bounded F1 propositions when available;
+- `metadata.pagePolicy` — the Runtime's `PagePolicyDecision`.
 
-```sh
-pnpm vitest run packages/browser/src/safety apps/runtime/src/policy apps/runtime/src/runtime.integration.test.ts
+Inspection is observational. Calling `browser.inspect` repeatedly cannot change
+the session's `status`, `controller`, or `handoff`.
+
+The policy dispositions mean:
+
+| Disposition        | Operational meaning                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `continue`         | The current inspected state authorizes mutation, subject to freshness, target, budget, and repeated-action checks.                |
+| `wait_and_inspect` | Mutation is blocked while the page is unstable, unresolved, or insufficiently confident. No ownership transition occurs.          |
+| `request_human`    | Human collaboration is appropriate. Automatic handoff is still performed only by the Runtime orchestrator at an allowed boundary. |
+| `stop`             | Autonomous mutation must stop for the current state. No automatic handoff occurs.                                                 |
+
+An MCP agent should interpret these semantics rather than follow a hard-coded
+tool-call sequence.
+
+## Page-state behavior
+
+The authoritative F2 behavior is:
+
+| Page state                | Policy             | Automatic ownership behavior                                    |
+| ------------------------- | ------------------ | --------------------------------------------------------------- |
+| `ready`                   | `continue`         | no transition                                                   |
+| `loading` / unstable      | `wait_and_inspect` | no transition                                                   |
+| `authentication_required` | `request_human`    | Agent/Companion may request handoff at orchestration boundaries |
+| `human_verification`      | `request_human`    | Agent/Companion may request handoff at orchestration boundaries |
+| `access_restricted`       | `stop`             | no automatic handoff                                            |
+| `unknown_interstitial`    | `stop`             | no automatic handoff                                            |
+| `error`                   | `stop`             | no automatic handoff                                            |
+
+Capture Mode starts human-owned. Page policy remains visible, but authentication
+or human verification does not convert an `active / human` Capture session into
+`awaiting_human / null`.
+
+`control.request_human` remains an explicit agent capability and is broader
+than automatic policy. For example, an agent may explicitly request human
+review of an unknown interstitial even though its automatic page policy is
+`stop`.
+
+## Mutation authorization and freshness
+
+A successful inspection records both perception and the corresponding
+`PagePolicyDecision`. Later autonomous mutation requires the recorded decision
+to allow mutation and still requires the existing F1/runtime safety checks,
+including:
+
+- fresh page revision;
+- fresh semantic page-state identity;
+- valid revision-scoped target references;
+- action budget;
+- repeated-action protection.
+
+Out-of-band navigation, semantic decision changes, or human-to-agent handback
+therefore require a fresh inspection before mutation.
+
+After human control returns, all page target references are invalidated before
+agent ownership is restored.
+
+## Responsible browsing boundary
+
+Rove does not spoof browser fingerprints, conceal automation or developer
+tooling, rotate proxies, solve CAPTCHAs, or bypass site access controls.
+
+Authentication secrets, MFA responses, passkeys, CAPTCHA/security verification,
+and other human-only steps remain human responsibilities.
+
+A site restriction is authoritative. `access_restricted` stops autonomous
+mutation, but the restriction itself is not treated as proof that control must
+automatically transfer to a human.
+
+## Deterministic regression coverage
+
+The automated F2 acceptance surface includes:
+
+| Scenario                                  | Expected result                                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| Ready page                                | `continue`; mutation may proceed                                                       |
+| Loading/unstable page                     | `wait_and_inspect`; no handoff                                                         |
+| Authentication                            | `request_human`; Agent/Companion automatic requested handoff at orchestration boundary |
+| Human verification                        | `request_human`; Agent/Companion automatic requested handoff at orchestration boundary |
+| Explicit restriction / HTTP 403           | `stop`; agent ownership preserved                                                      |
+| Unknown interstitial                      | `stop`; agent ownership preserved                                                      |
+| HTTP 5xx/error state                      | `stop`; agent ownership preserved                                                      |
+| Capture Mode                              | human ownership preserved for every page-policy state                                  |
+| Repeated direct inspection                | policy returned; ownership unchanged                                                   |
+| Explicit human request on stop-only state | `control.request_human` remains available                                              |
+| Out-of-band revision change               | `INSPECTION_REQUIRED`                                                                  |
+| Semantic fingerprint change               | `INSPECTION_REQUIRED`                                                                  |
+| Return from human control                 | `INSPECTION_REQUIRED` until reinspection                                               |
+
+F1 perception acceptance, privacy/freshness guarantees, runtime control tests,
+and the whole-repository regression remain release gates.
+
+## Release boundary
+
+F2 establishes who may request an automatic ownership transition and why. It
+does not introduce ownership epochs or concurrency fencing; that remains an F3
+concern.
+
+The intended architecture after F2 is deliberately small:
+
+```text
+one F1 perception path
+        ↓
+one PageStatePolicy evaluator
+        ↓
+one PagePolicyOrchestrator
 ```
 
-The deterministic fixtures cover:
-
-| Scenario | Expected result |
-| --- | --- |
-| Normal document | `ready` |
-| Loading document | `loading`; mutation rejected as retryable |
-| Login wall | `authentication_required`; human handoff |
-| CAPTCHA/security frame | `human_verification`; human handoff |
-| Explicit restriction or HTTP 403/429 | `access_restricted`; human handoff |
-| Visual/empty-DOM interstitial | `unknown_interstitial`; human handoff |
-| HTTP 5xx | `error`; mutation stopped |
-| Repeated identical action | `REPEATED_ACTION_BLOCKED` |
-| Rolling action excess | `ACTION_BUDGET_EXCEEDED` |
-| Return from human control | `INSPECTION_REQUIRED` until reinspection |
-
-## Live campaign protocol
-
-Live validation is read-only and intentionally small. Test one representative
-site per state, save inspection/screenshot evidence, and stop immediately when
-the site requests verification or restricts access.
-
-1. Start a headed persistent-profile session.
-2. Inspect before the first mutation and record `metadata.pageState`.
-3. Exercise a short normal navigation on a low-risk public documentation site.
-4. Exercise authentication only up to the login wall, then verify handoff.
-5. Use an official CAPTCHA/Turnstile demo only to verify classification and
-   handoff; do not solve it automatically.
-6. Verify an internally controlled visual interstitial and slow SPA fixture.
-7. Record expected state, actual state, signals, action result, and evidence ID.
-8. End the session. A failed or ambiguous classification blocks release.
-
-Do not use a site that is currently restricting the device or network as a
-smoke target. A later retry is a separate, user-authorized live campaign—not an
-automatic retry loop.
-
-## Release gate
-
-The slice is ready when classifier and policy unit tests pass, Runtime handoff
-integration tests pass, MCP exposes the structured contract, full typecheck and
-lint pass, and a read-only live campaign produces evidence for each live state
-attempted. Site-specific access is never a release guarantee.
+No generic rules engine, workflow DSL, or policy implementation belongs in MCP
+or the browser package.

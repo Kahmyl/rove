@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { classifyPageState } from "../../safety/page-state-classifier.js";
+import { classifyPageState } from "../research/legacy-page-state-classifier.js";
 import {
   LOCAL_PERCEPTION_CASES,
   LOCAL_PERCEPTION_CORPUS_VERSION,
@@ -10,7 +10,7 @@ import {
 import { loadF1RiskModel } from "./risk-model.js";
 import { runBenchmark } from "./runner.js";
 import type { BenchmarkStrategy } from "./types.js";
-import type { PageSignals } from "../../safety/page-state-classifier.js";
+import type { PageSignals } from "../research/legacy-page-state-classifier.js";
 
 function outputPath(): string | undefined {
   const index = process.argv.indexOf("--out");

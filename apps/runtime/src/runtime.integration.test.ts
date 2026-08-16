@@ -337,9 +337,108 @@ describe("Milestone 4 runtime integration", () => {
     expect(starts).toBe(1);
   });
 
-  it("pauses for human review when a site explicitly restricts access", async () => {
+  it("keeps repeated direct inspection observational while returning page policy", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+
+    const session = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+    expect(session.handoff).toBeUndefined();
+
+    // Deliberately move the browser to authentication outside a runtime
+    // orchestration boundary. Inspection must observe it, not seize control.
+    await browser.get(session.id).navigate(`${server.url}/authentication`);
+
+    const rawInspection = await browser.get(session.id).inspect();
+
+    expect(rawInspection.metadata?.pageState).toMatchObject({
+      kind: "authentication_required",
+    });
+    expect(rawInspection.metadata?.pagePolicy).toBeUndefined();
+
+    for (let index = 0; index < 3; index += 1) {
+      const inspection = await runtime.inspectBrowser(session.id);
+
+      expect(inspection.metadata?.pageState).toMatchObject({
+        kind: "authentication_required",
+      });
+
+      expect(inspection.metadata?.pagePolicy).toMatchObject({
+        disposition: "request_human",
+        reason: "authentication_required",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "AUTHENTICATION_REQUIRED",
+      });
+
+      const current = await runtime.getSession(session.id);
+
+      expect(current).toMatchObject({
+        status: "active",
+        controller: "agent",
+      });
+      expect(current.handoff).toBeUndefined();
+    }
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started"]);
+  });
+
+  it("orchestrates authentication only after a successful action boundary", async () => {
     const server = await fixture();
     const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const inspection = await runtime.inspectBrowser(session.id);
+
+    expect(inspection.metadata?.pagePolicy).toMatchObject({
+      disposition: "continue",
+      mutationAllowed: true,
+    });
+
+    const result = await runtime.navigate(session.id, {
+      url: `${server.url}/authentication`,
+    });
+
+    expect(result.url).toBe(`${server.url}/authentication`);
+
+    expect(await runtime.getSession(session.id)).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      handoff: {
+        reason:
+          "The page requires authentication that must be completed by a human.",
+      },
+    });
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual([
+      "session_started",
+      "browser_navigated",
+      "authentication_required",
+    ]);
+  });
+
+  it("keeps agent ownership when a site explicitly restricts access", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+
     const session = await runtime.startSession({
       mode: "agent",
       startUrl: `${server.url}/access-restricted`,
@@ -347,21 +446,22 @@ describe("Milestone 4 runtime integration", () => {
     active.push({ runtime, id: session.id });
 
     expect(session).toMatchObject({
-      status: "awaiting_human",
-      controller: null,
-      handoff: {
-        reason: "The site has restricted access and requires human review.",
-      },
+      status: "active",
+      controller: "agent",
     });
+    expect(session.handoff).toBeUndefined();
+
     expect(
       (await runtime.getObservations(session.id)).items.map(
         (item) => item.type,
       ),
-    ).toEqual(["session_started", "site_access_restricted"]);
+    ).toEqual(["session_started"]);
+
     await expect(
       runtime.navigate(session.id, { url: server.url }),
     ).rejects.toMatchObject({
-      code: "CONTROL_NOT_OWNED",
+      code: "SITE_ACCESS_RESTRICTED",
+      retryable: false,
     });
   });
 
@@ -409,13 +509,8 @@ describe("Milestone 4 runtime integration", () => {
       "human verification step",
     ],
     ["authentication", "authentication_required", "requires authentication"],
-    [
-      "unknown-interstitial",
-      "unknown_interstitial",
-      "unrecognized interstitial",
-    ],
   ])(
-    "classifies %s as a distinct human-only page state",
+    "automatically requests human control for %s",
     async (route, eventType, reason) => {
       const server = await fixture();
       const { runtime } = await harness();
@@ -437,6 +532,254 @@ describe("Milestone 4 runtime integration", () => {
       ).toEqual(["session_started", eventType]);
     },
   );
+
+  it("stops on an unknown interstitial without automatic handoff", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/unknown-interstitial`,
+    });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+    expect(session.handoff).toBeUndefined();
+
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started"]);
+
+    await expect(
+      runtime.navigate(session.id, { url: server.url }),
+    ).rejects.toMatchObject({
+      code: "UNKNOWN_INTERSTITIAL",
+      retryable: false,
+    });
+  });
+
+  describe("F2.5 page-policy state and mode matrix", () => {
+    const cases = [
+      {
+        label: "ready",
+        route: "actions",
+        pageState: "ready",
+        disposition: "continue",
+        reason: "page_ready",
+        mutationAllowed: true,
+        retryable: false,
+      },
+      {
+        label: "authentication",
+        route: "authentication",
+        pageState: "authentication_required",
+        disposition: "request_human",
+        reason: "authentication_required",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "AUTHENTICATION_REQUIRED",
+        handoffObservation: "authentication_required",
+      },
+      {
+        label: "human verification",
+        route: "human-verification",
+        pageState: "human_verification",
+        disposition: "request_human",
+        reason: "human_verification_required",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "HUMAN_VERIFICATION_REQUIRED",
+        handoffObservation: "human_verification_required",
+      },
+      {
+        label: "access restriction",
+        route: "access-restricted",
+        pageState: "access_restricted",
+        disposition: "stop",
+        reason: "access_restricted",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "SITE_ACCESS_RESTRICTED",
+      },
+      {
+        label: "unknown interstitial",
+        route: "unknown-interstitial",
+        pageState: "unknown_interstitial",
+        disposition: "stop",
+        reason: "unknown_interstitial",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "UNKNOWN_INTERSTITIAL",
+      },
+      {
+        label: "page error",
+        route: "server-error",
+        pageState: "error",
+        disposition: "stop",
+        reason: "page_error",
+        mutationAllowed: false,
+        retryable: false,
+        errorCode: "PAGE_NOT_READY",
+      },
+      {
+        label: "loading",
+        route: "loading",
+        pageState: "loading",
+        disposition: "wait_and_inspect",
+        reason: "page_unstable",
+        mutationAllowed: false,
+        retryable: true,
+        errorCode: "PAGE_NOT_READY",
+      },
+    ] as const;
+
+    const modes = ["agent", "companion", "capture"] as const;
+
+    it.each(
+      modes.flatMap((mode) =>
+        cases.map((pageCase) => ({
+          mode,
+          ...pageCase,
+        })),
+      ),
+    )(
+      "$mode mode + $label has the frozen F2 ownership behavior",
+      async ({
+        mode,
+        route,
+        pageState,
+        disposition,
+        reason,
+        mutationAllowed,
+        retryable,
+        errorCode,
+        handoffObservation,
+      }) => {
+        const server = await fixture();
+        const { runtime } = await harness();
+
+        const session = await runtime.startSession({
+          mode,
+          startUrl: `${server.url}/${route}`,
+        });
+
+        active.push({ runtime, id: session.id });
+
+        const agentOwned = mode !== "capture";
+        const automaticHandoff = agentOwned && disposition === "request_human";
+
+        if (automaticHandoff) {
+          expect(session).toMatchObject({
+            status: "awaiting_human",
+            controller: null,
+          });
+          expect(session.handoff).toBeDefined();
+
+          expect(
+            (await runtime.getObservations(session.id)).items.map(
+              (item) => item.type,
+            ),
+          ).toEqual(["session_started", handoffObservation]);
+
+          return;
+        }
+
+        expect(session).toMatchObject({
+          status: "active",
+          controller: mode === "capture" ? "human" : "agent",
+        });
+        expect(session.handoff).toBeUndefined();
+
+        expect(
+          (await runtime.getObservations(session.id)).items.map(
+            (item) => item.type,
+          ),
+        ).toEqual(["session_started"]);
+
+        const beforeInspect = await runtime.getSession(session.id);
+
+        const inspection = await runtime.inspectBrowser(session.id, {
+          includeText: false,
+          includeTargets: false,
+        });
+
+        expect(inspection.metadata?.pageState).toMatchObject({
+          kind: pageState,
+        });
+
+        expect(inspection.metadata?.pagePolicy).toMatchObject({
+          disposition,
+          reason,
+          mutationAllowed,
+          retryable,
+          ...(errorCode === undefined ? {} : { errorCode }),
+        });
+
+        const afterInspect = await runtime.getSession(session.id);
+
+        expect(afterInspect.status).toBe(beforeInspect.status);
+        expect(afterInspect.controller).toBe(beforeInspect.controller);
+        expect(afterInspect.handoff).toEqual(beforeInspect.handoff);
+
+        // For agent-owned stop/wait states, prove that preserving ownership
+        // does not mean autonomous mutation remains authorized.
+        if (
+          mode !== "capture" &&
+          mutationAllowed === false &&
+          disposition !== "request_human"
+        ) {
+          await expect(
+            runtime.navigate(session.id, {
+              url: `${server.url}/actions`,
+            }),
+          ).rejects.toMatchObject({
+            code: errorCode,
+            retryable,
+          });
+
+          expect(await runtime.getSession(session.id)).toMatchObject({
+            status: "active",
+            controller: "agent",
+          });
+        }
+      },
+      15_000,
+    );
+  });
+
+  it("keeps explicit human collaboration available for a stop-only interstitial", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/unknown-interstitial`,
+    });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+    });
+    expect(session.handoff).toBeUndefined();
+
+    await runtime.requestHuman(session.id, {
+      reason: "Please review the unexpected page.",
+    });
+
+    expect(await runtime.getSession(session.id)).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      handoff: {
+        reason: "Please review the unexpected page.",
+      },
+    });
+  });
 
   it("requires a fresh inspection after human control returns", async () => {
     const server = await fixture();

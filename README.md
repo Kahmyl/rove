@@ -105,7 +105,7 @@ Rove supports real headed Playwright browser sessions with Rove-managed persiste
 
 ### Responsible browsing boundary
 
-Rove is designed as a user-directed assistant, not an anti-detection system. In headed mode it uses normal system Chrome with JavaScript enabled, applies a configurable minimum interval between agent actions, and emits sequential keyboard events for normal-sized text input. Explicit site restriction or human-verification pages pause the session, remove agent control, persist a `site_access_restricted` observation, and surface a human handoff.
+Rove is designed as a user-directed assistant, not an anti-detection system. In headed mode it uses normal system Chrome with JavaScript enabled, applies a configurable minimum interval between agent actions, and emits sequential keyboard events for normal-sized text input. Browser perception is evaluated separately from Runtime policy: authentication and presented human-verification states may automatically request human control at session-start or post-action orchestration boundaries, while access restriction, unknown interstitials, page errors, and loading states block or defer autonomous mutation without automatically transferring control. `browser.inspect` is observational and reports perception plus Runtime policy without changing ownership.
 
 These safeguards reduce accidental rapid automation and disposable-session behavior, but they do not guarantee access to any site. Rove does not spoof browser fingerprints, hide automation or developer tooling, rotate proxies, solve CAPTCHAs, or bypass a site's access controls. A site's restriction remains authoritative and must be handled by the user or site operator.
 
@@ -152,7 +152,6 @@ Human tab selection is reconciled from Chromium's browser-level tab state and ma
 The Companion discovers active Capture sessions, displays their observation and evidence counts, keeps takeover and handback controls unavailable, and allows the human to finish the session.
 
 See [docs/implementation/m9-human-activity-observation-capture-mode.md](docs/implementation/m9-human-activity-observation-capture-mode.md) for the observation model, privacy rules, and manual verification.
-
 
 The private runtime API starts and closes real browser sessions, serializes agent mutations per session, enforces the Agent, Companion, and Capture control state machines, and persists minimized observations and evidence. Its private control routes support status, requested handoff, human take/return, and lost-wakeup-safe event waits. Human-to-agent handback invalidates all page target references before restoring agent ownership. The API is unauthenticated only for loopback development when no runtime token is configured; non-loopback binding requires `ROVE_RUNTIME_TOKEN`.
 

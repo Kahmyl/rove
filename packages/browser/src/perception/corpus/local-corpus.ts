@@ -1,6 +1,6 @@
 import type { PageStateKind, PageStateRecommendedAction } from "@rove/protocol";
 
-import type { PageSignals } from "../../safety/page-state-classifier.js";
+import type { PageSignals } from "../research/legacy-page-state-classifier.js";
 import type { BenchmarkCase, PropositionSet } from "../benchmark/types.js";
 
 export const LOCAL_PERCEPTION_CORPUS_VERSION = 1;

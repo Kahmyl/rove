@@ -538,7 +538,6 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       pageState: {
         kind: "ready",
         confidence: "high",
-        recommendedAction: "continue",
       },
       pageStatePropositions: {
         primaryContentAvailable: true,
@@ -562,6 +561,14 @@ describe("Milestone 2 semantic inspection acceptance", () => {
         }
       ).pageState?.signals,
     ).toEqual(expect.any(Array));
+
+    expect(
+      (
+        inspection.metadata as {
+          pageState?: Record<string, unknown>;
+        }
+      ).pageState,
+    ).not.toHaveProperty("recommendedAction");
 
     expect(
       (

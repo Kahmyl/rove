@@ -174,10 +174,26 @@ export type PageStateRecommendedAction =
   "continue" | "wait_and_inspect" | "request_human" | "stop";
 
 /** Deterministic assessment attached to every browser inspection. */
-export interface PageStateAssessment {
+/**
+ * Production page-state perception.
+ *
+ * This contract answers only what F1 believes is happening in the browser.
+ * Operational decisions belong to PagePolicyDecision.
+ */
+export interface PagePerceptionAssessment {
   kind: PageStateKind;
   confidence: "high" | "medium" | "low";
   signals: string[];
+}
+
+/**
+ * @deprecated Frozen F1 research compatibility contract.
+ *
+ * Historical research artifacts still use recommendedAction and must remain
+ * byte-for-byte unchanged. Production perception must use
+ * PagePerceptionAssessment instead.
+ */
+export interface PageStateAssessment extends PagePerceptionAssessment {
   recommendedAction: PageStateRecommendedAction;
 }
 
@@ -191,6 +207,29 @@ export interface PageStatePropositions {
   accessRestricted: PageStateTruth;
   errorPresented: PageStateTruth;
   interstitialPresented: PageStateTruth;
+}
+
+export type PagePolicyDisposition =
+  "continue" | "wait_and_inspect" | "request_human" | "stop";
+
+export type PagePolicyReason =
+  | "page_ready"
+  | "page_unstable"
+  | "insufficient_confidence"
+  | "unresolved_page_state"
+  | "authentication_required"
+  | "human_verification_required"
+  | "access_restricted"
+  | "unknown_interstitial"
+  | "page_error";
+
+export interface PagePolicyDecision {
+  disposition: PagePolicyDisposition;
+  reason: PagePolicyReason;
+  mutationAllowed: boolean;
+  retryable: boolean;
+  errorCode?: RoveErrorCode;
+  message: string;
 }
 
 export interface PageStateIdentity {

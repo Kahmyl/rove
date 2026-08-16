@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { PageSignals } from "../../safety/page-state-classifier.js";
+import type { PageSignals } from "../research/legacy-page-state-classifier.js";
 import {
   LOCAL_PERCEPTION_CASES,
   LOCAL_PERCEPTION_CORPUS_VERSION,

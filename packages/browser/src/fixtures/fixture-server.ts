@@ -166,6 +166,16 @@ const CONSOLE_BURST_HTML = `<!doctype html><html><head><title>Console burst</tit
   <main><h1>Console burst</h1></main>
   <script>for (let index = 0; index < 205; index += 1) console.warn('diagnostic event ' + index);</script>
 </body></html>`;
+const F2_LOADING_HTML = `<!doctype html>
+<html>
+  <head><title>Loading workspace</title></head>
+  <body>
+    <main id="f2-loading-workflow" aria-busy="true">
+      <h1>Loading workspace</h1>
+      <div role="progressbar" aria-label="Loading workspace"></div>
+    </main>
+  </body>
+</html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -257,6 +267,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/authentication": AUTHENTICATION_HTML,
         "/unknown-interstitial": UNKNOWN_INTERSTITIAL_HTML,
         "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
+        "/loading": F2_LOADING_HTML,
         "/dynamic-target": DYNAMIC_TARGET_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;

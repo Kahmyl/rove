@@ -4,7 +4,7 @@ import { performance } from "node:perf_hooks";
 import type { BrowserContext, Page } from "playwright";
 import type { PageStateAssessment, PageStateKind } from "@rove/protocol";
 
-import type { PageSignals } from "../../safety/page-state-classifier.js";
+import type { PageSignals } from "./legacy-page-state-classifier.js";
 import {
   collectResearchEvidence,
   PageObservationRecorder,

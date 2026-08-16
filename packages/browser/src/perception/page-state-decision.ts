@@ -1,5 +1,5 @@
 import type {
-  PageStateAssessment,
+  PagePerceptionAssessment,
   PageStateKind,
   PageStatePropositions,
 } from "@rove/protocol";
@@ -22,7 +22,7 @@ export interface PageStateClassificationInput {
 }
 
 export interface PageStateClassificationResult {
-  assessment: PageStateAssessment;
+  assessment: PagePerceptionAssessment;
   propositions: PageStatePropositions;
 }
 
@@ -202,24 +202,6 @@ function anyTrue(values: Truth[]): boolean {
 
 function anyIndeterminate(values: Truth[]): boolean {
   return values.some((value) => value === "indeterminate");
-}
-
-function disposition(
-  kind: PageStateKind,
-): PageStateAssessment["recommendedAction"] {
-  if (kind === "ready") {
-    return "continue";
-  }
-
-  if (kind === "loading") {
-    return "wait_and_inspect";
-  }
-
-  if (kind === "error") {
-    return "stop";
-  }
-
-  return "request_human";
 }
 
 function derivePrimaryState(
@@ -534,7 +516,7 @@ export function classifyObservedPageState(
     interstitialPresented,
   ]);
 
-  let confidence: PageStateAssessment["confidence"];
+  let confidence: PagePerceptionAssessment["confidence"];
 
   if (kind === "loading" || kind === "unknown_interstitial") {
     confidence = "medium";
@@ -545,7 +527,7 @@ export function classifyObservedPageState(
     confidence = "high";
   }
 
-  const assessment: PageStateAssessment = {
+  const assessment: PagePerceptionAssessment = {
     kind,
     confidence,
     signals: [
@@ -575,7 +557,6 @@ export function classifyObservedPageState(
         ? [`ready:http_status:${input.signals.httpStatus}`]
         : []),
     ],
-    recommendedAction: disposition(kind),
   };
 
   return {
