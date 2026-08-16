@@ -10,6 +10,8 @@ import type { Page } from "playwright";
 
 import {
   classifyObservedPageState,
+  diagnoseObservedPageState,
+  type PageStateDecisionDiagnostics,
   type PageStateClassificationResult,
 } from "./page-state-decision.js";
 import { collectPageStateFrameEvidence } from "./page-state-frame-evidence.js";
@@ -22,6 +24,7 @@ const POLL_MS = 10;
 export interface PageStateObservation extends PageStateClassificationResult {
   fingerprint: string;
   acquisitionMs: number;
+  diagnostics?: PageStateDecisionDiagnostics;
 }
 
 export interface StablePageStateObservation extends PageStateObservation {
@@ -121,6 +124,10 @@ export async function collectPageStateObservation(
     ...afterResult,
     fingerprint: afterFingerprint,
     acquisitionMs: performance.now() - started,
+    diagnostics: diagnoseObservedPageState(
+      inputFor(readyState, httpStatus, after, evidence),
+      afterResult,
+    ),
   };
 }
 

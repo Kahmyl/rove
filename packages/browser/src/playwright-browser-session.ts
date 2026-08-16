@@ -774,6 +774,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
         pageState,
         pageStatePropositions: pageStateObservation.propositions,
         pageStateFingerprint: pageStateObservation.fingerprint,
+        ...(pageStateObservation.diagnostics === undefined
+          ? {}
+          : { pageStateDiagnostics: pageStateObservation.diagnostics }),
         browserEvidence,
         ...(accessRestriction === undefined ? {} : { accessRestriction }),
       },

@@ -149,6 +149,64 @@ describe("Milestone 9 browser activity foundation", () => {
     expect(serialized).not.toContain("url-secret");
     expect(serialized).not.toContain("cookie");
     expect(serialized).not.toContain("authorization");
+    expect(evidence?.truncation).toEqual({
+      truncated: false,
+      dropped: {
+        navigationBuffer: 0,
+        errorBuffer: 0,
+        persistence: 0,
+      },
+    });
+  });
+
+  it("redacts arbitrary site-controlled error prose from durable activity", async () => {
+    const server = await startFixtureServer();
+    servers.push(server);
+    const browser = await createBrowser();
+    const activities: BrowserActivity[] = [];
+    browser.onActivity((activity) => activities.push(activity));
+
+    const marker = "Patient Ada Lovelace has a private diagnosis";
+    await browser.navigate(`${server.url}/arbitrary-console`);
+
+    const activity = await waitForActivity(
+      activities,
+      "browser_evidence",
+      (item) =>
+        (item.data.evidence as { kind?: string }).kind === "console",
+    );
+    const durable = activity.data.evidence as {
+      summary: string;
+      detailHash?: string;
+      originalSummaryLength?: number;
+    };
+
+    expect(durable.summary).toBe("console:error:details_redacted");
+    expect(durable.summary).not.toContain(marker);
+    expect(durable.detailHash).toMatch(/^[a-f0-9]{16}$/u);
+    expect(durable.originalSummaryLength).toBe(marker.length);
+  });
+
+  it("reports bounded-buffer and persistence drops explicitly", async () => {
+    const server = await startFixtureServer();
+    servers.push(server);
+    const browser = await createBrowser();
+    await browser.navigate(`${server.url}/console-burst`);
+
+    const inspection = await browser.inspect();
+    const evidence = inspection.metadata?.browserEvidence as
+      | BrowserEvidenceSnapshot
+      | undefined;
+
+    expect(evidence?.errors).toHaveLength(100);
+    expect(evidence?.truncation).toEqual({
+      truncated: true,
+      dropped: {
+        navigationBuffer: 0,
+        errorBuffer: 105,
+        persistence: 6,
+      },
+    });
   });
 
   it("emits normalized navigation and title activity", async () => {

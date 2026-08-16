@@ -141,6 +141,9 @@ export interface BrowserErrorEvidence {
   resourceType?: string;
   frameId?: string;
   mainFrame?: boolean;
+  detailHash?: string;
+  originalSummaryLength?: number;
+  urlPathHash?: string;
 }
 
 /** Evidence exposed by inspection; buffers are deliberately bounded. */
@@ -148,6 +151,14 @@ export interface BrowserEvidenceSnapshot {
   navigations: BrowserNavigationEvidence[];
   errors: BrowserErrorEvidence[];
   latestMainDocumentStatus?: number;
+  truncation: {
+    truncated: boolean;
+    dropped: {
+      navigationBuffer: number;
+      errorBuffer: number;
+      persistence: number;
+    };
+  };
 }
 
 export type PageStateKind =

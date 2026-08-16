@@ -158,6 +158,14 @@ const BROWSER_EVIDENCE_HTML = `<!doctype html><html><head><title>Evidence fixtur
     fetch('http://127.0.0.1:1/challenge.js?token=request-secret').catch(() => undefined);
   </script>
 </body></html>`;
+const ARBITRARY_CONSOLE_HTML = `<!doctype html><html><head><title>Console fixture</title></head><body>
+  <main><h1>Console fixture</h1></main>
+  <script>console.error('Patient Ada Lovelace has a private diagnosis');</script>
+</body></html>`;
+const CONSOLE_BURST_HTML = `<!doctype html><html><head><title>Console burst</title></head><body>
+  <main><h1>Console burst</h1></main>
+  <script>for (let index = 0; index < 205; index += 1) console.warn('diagnostic event ' + index);</script>
+</body></html>`;
 const DYNAMIC_TARGET_HTML = `<!doctype html>
 <html><head><title>Dynamic target</title></head><body>
   <button id="replace-me">Replace me</button>
@@ -204,6 +212,18 @@ export async function startFixtureServer(): Promise<FixtureServer> {
     if (request.url?.startsWith("/evidence-terminal") === true) {
       response.writeHead(451, { "content-type": "text/html; charset=utf-8" });
       response.end(BROWSER_EVIDENCE_HTML);
+      return;
+    }
+
+    if (request.url === "/arbitrary-console") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(ARBITRARY_CONSOLE_HTML);
+      return;
+    }
+
+    if (request.url === "/console-burst") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(CONSOLE_BURST_HTML);
       return;
     }
 

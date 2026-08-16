@@ -154,6 +154,61 @@ async function checkRoutedDefinition(definition: {
 }
 
 describe("production page-state semantic conformance", () => {
+  it("classifies the production query-invisible verification frame failure mode", async () => {
+    const page = await context.newPage();
+
+    try {
+      await page.setContent(`
+        <main>
+          <h1>Performing security verification</h1>
+          <p>This website is verifying you are not a bot.</p>
+          <div id="challenge-host"></div>
+        </main>
+      `);
+      await page.locator("#challenge-host").evaluate((host) => {
+        const root = host.attachShadow({ mode: "closed" });
+        const frame = document.createElement("iframe");
+        frame.title = "Security verification challenge";
+        frame.srcdoc = "<!doctype html><p>Verification control</p>";
+        frame.style.width = "300px";
+        frame.style.height = "65px";
+        root.append(frame);
+      });
+      expect(await page.locator("iframe").count()).toBe(0);
+      await expect.poll(() => page.frames().length).toBe(2);
+
+      const observation = await observeStablePageState(page, 403);
+      const frame = observation.diagnostics?.frames[0];
+      const primary = observation.diagnostics?.surfaces.find(
+        (surface) => surface.kind === "primary",
+      );
+
+      expect(frame).toMatchObject({
+        domOrdinal: null,
+        verificationIdentity: true,
+        elementAcquisition: "available",
+        presentation: true,
+      });
+      expect(primary).toMatchObject({
+        verificationCue: true,
+        verificationDirective: false,
+        verificationControl: false,
+        frameOrdinals: [],
+        identifiedVerificationFrame: false,
+      });
+      expect(observation.assessment.kind).toBe("human_verification");
+      expect(observation.propositions).toMatchObject({
+        humanVerificationPresented: true,
+        accessRestricted: true,
+      });
+      expect(observation.assessment.signals).toContain(
+        "verification:primary_cue_presented_frame_restrictive_status",
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
   it("covers the F1 challenge, restriction, terminal-failure, and negative-control corpus", async () => {
     const cases = [
       {

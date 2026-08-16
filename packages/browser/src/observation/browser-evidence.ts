@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type {
   BrowserErrorEvidence,
@@ -29,9 +29,65 @@ interface PendingProvenance {
   expiresAt: number;
 }
 
-function boundedPush<T>(items: T[], item: T, limit: number): void {
+function boundedPush<T>(items: T[], item: T, limit: number): number {
   items.push(item);
-  if (items.length > limit) items.splice(0, items.length - limit);
+  if (items.length <= limit) return 0;
+  const dropped = items.length - limit;
+  items.splice(0, dropped);
+  return dropped;
+}
+
+function emptySnapshot(): BrowserEvidenceSnapshot {
+  return {
+    navigations: [],
+    errors: [],
+    truncation: {
+      truncated: false,
+      dropped: {
+        navigationBuffer: 0,
+        errorBuffer: 0,
+        persistence: 0,
+      },
+    },
+  };
+}
+
+function durableErrorEvidence(item: BrowserErrorEvidence): BrowserErrorEvidence {
+  const { url, ...withoutUrl } = item;
+  const errorCode = /\b(?:net::)?(ERR_[A-Z0-9_]+)\b/u.exec(item.summary)?.[1];
+  const httpStatus = /\b(?:status(?:\s+of)?|http)\D{0,16}(\d{3})\b/iu.exec(
+    item.summary,
+  )?.[1];
+  const category =
+    errorCode !== undefined
+      ? `${item.kind}:browser_error:${errorCode}`
+      : httpStatus !== undefined
+        ? `${item.kind}:http_status:${httpStatus}`
+        : `${item.kind}:${item.severity}:details_redacted`;
+
+  let durableUrl: string | undefined;
+  let urlPathHash: string | undefined;
+  if (url !== undefined) {
+    try {
+      const parsed = new URL(url);
+      durableUrl = `${parsed.origin}/`;
+      urlPathHash = createHash("sha256")
+        .update(parsed.pathname)
+        .digest("hex")
+        .slice(0, 16);
+    } catch {
+      durableUrl = undefined;
+    }
+  }
+
+  return {
+    ...withoutUrl,
+    summary: category,
+    detailHash: createHash("sha256").update(item.summary).digest("hex").slice(0, 16),
+    originalSummaryLength: item.summary.length,
+    ...(durableUrl === undefined ? {} : { url: durableUrl }),
+    ...(urlPathHash === undefined ? {} : { urlPathHash }),
+  };
 }
 
 /** Removes URL credentials/query data and common secret-bearing assignments. */
@@ -92,7 +148,7 @@ export class BrowserEvidenceRecorder {
   constructor(private readonly onEvidence?: EvidenceListener) {}
 
   observe(page: Page, pageId: string): void {
-    this.snapshots.set(pageId, { navigations: [], errors: [] });
+    this.snapshots.set(pageId, emptySnapshot());
     this.emittedCounts.set(pageId, 0);
 
     page.on("request", (request) => this.onRequest(page, request));
@@ -137,10 +193,14 @@ export class BrowserEvidenceRecorder {
 
   snapshot(pageId: string): BrowserEvidenceSnapshot {
     const snapshot = this.snapshots.get(pageId);
-    if (snapshot === undefined) return { navigations: [], errors: [] };
+    if (snapshot === undefined) return emptySnapshot();
     return {
       navigations: snapshot.navigations.map((item) => ({ ...item })),
       errors: snapshot.errors.map((item) => ({ ...item })),
+      truncation: {
+        truncated: snapshot.truncation.truncated,
+        dropped: { ...snapshot.truncation.dropped },
+      },
       ...(snapshot.latestMainDocumentStatus === undefined
         ? {}
         : { latestMainDocumentStatus: snapshot.latestMainDocumentStatus }),
@@ -221,7 +281,15 @@ export class BrowserEvidenceRecorder {
 
     const snapshot = this.requireSnapshot(pageId);
     snapshot.latestMainDocumentStatus = response.status();
-    boundedPush(snapshot.navigations, item, MAX_NAVIGATIONS_PER_PAGE);
+    const dropped = boundedPush(
+      snapshot.navigations,
+      item,
+      MAX_NAVIGATIONS_PER_PAGE,
+    );
+    if (dropped > 0) {
+      snapshot.truncation.truncated = true;
+      snapshot.truncation.dropped.navigationBuffer += dropped;
+    }
     this.emitEvidence(pageId, item);
   }
 
@@ -256,11 +324,16 @@ export class BrowserEvidenceRecorder {
         failureReason,
         provenance: context?.provenance ?? "unknown",
       };
-      boundedPush(
-        this.requireSnapshot(pageId).navigations,
+      const snapshot = this.requireSnapshot(pageId);
+      const dropped = boundedPush(
+        snapshot.navigations,
         item,
         MAX_NAVIGATIONS_PER_PAGE,
       );
+      if (dropped > 0) {
+        snapshot.truncation.truncated = true;
+        snapshot.truncation.dropped.navigationBuffer += dropped;
+      }
       this.emitEvidence(pageId, item);
     }
 
@@ -291,21 +364,34 @@ export class BrowserEvidenceRecorder {
   }
 
   private recordError(pageId: string, item: BrowserErrorEvidence): void {
-    boundedPush(this.requireSnapshot(pageId).errors, item, MAX_ERRORS_PER_PAGE);
+    const snapshot = this.requireSnapshot(pageId);
+    const dropped = boundedPush(snapshot.errors, item, MAX_ERRORS_PER_PAGE);
+    if (dropped > 0) {
+      snapshot.truncation.truncated = true;
+      snapshot.truncation.dropped.errorBuffer += dropped;
+    }
     this.emitEvidence(pageId, item);
   }
 
   private emitEvidence(pageId: string, item: EvidenceItem): void {
     const count = this.emittedCounts.get(pageId) ?? 0;
-    if (count >= MAX_PERSISTED_ITEMS_PER_PAGE) return;
+    if (count >= MAX_PERSISTED_ITEMS_PER_PAGE) {
+      const snapshot = this.requireSnapshot(pageId);
+      snapshot.truncation.truncated = true;
+      snapshot.truncation.dropped.persistence += 1;
+      return;
+    }
     this.emittedCounts.set(pageId, count + 1);
-    this.onEvidence?.(pageId, item);
+    this.onEvidence?.(
+      pageId,
+      "kind" in item ? durableErrorEvidence(item) : item,
+    );
   }
 
   private requireSnapshot(pageId: string): BrowserEvidenceSnapshot {
     let snapshot = this.snapshots.get(pageId);
     if (snapshot === undefined) {
-      snapshot = { navigations: [], errors: [] };
+      snapshot = emptySnapshot();
       this.snapshots.set(pageId, snapshot);
     }
     return snapshot;
