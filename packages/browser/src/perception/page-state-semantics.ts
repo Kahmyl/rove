@@ -21,7 +21,9 @@ export interface PageStateSemanticSurface {
   workflowUnavailable: boolean;
 
   verificationDirective: boolean;
+  verificationCue: boolean;
   verificationControl: boolean;
+  frameOrdinals: number[];
   semanticVerificationFrameOrdinals: number[];
   localVerificationFrameOrdinals: number[];
 
@@ -33,6 +35,8 @@ export interface PageStateSemanticSurface {
 
   restrictionCue: boolean;
   errorCue: boolean;
+  terminalFailureCue: boolean;
+  abnormalStateCue: boolean;
 }
 
 export interface PageStateSurfaceFacts {
@@ -204,6 +208,26 @@ export async function collectPageStateSurfaceFacts(
         /\\bwe hit a snag\\b/.test(text) ||
         /\\b(?:application|page|view|service|dashboard|workspace)\\b.{0,110}\\b(?:could not|cannot|can't|failed to|unable to)\\b.{0,110}\\b(?:load|start|continue|display(?:ed)?|open)\\b/.test(text) ||
         /\\b(?:could not|cannot|can't|unable to)\\b.{0,60}\\b(?:load|display(?:ed)?|start|open)\\b/.test(text)
+      );
+    };
+
+    const terminalFailureCue = (value) => {
+      const text = normalize(value);
+
+      return (
+        /\\b(?:couldn['’]t|could not|can['’]t|cannot|unable to)\\s+(?:sign (?:you )?in|log (?:you )?in|authorize|complete (?:the |this )?(?:request|sign.?in|operation))\\b/.test(text) ||
+        /\\b(?:browser|app|application|client)\\b.{0,80}\\b(?:may not be|is not|isn't|unsupported)\\b.{0,40}\\b(?:secure|supported|allowed|compatible)\\b/.test(text) ||
+        /\\b(?:account|profile)\\b.{0,50}\\b(?:locked|disabled|suspended)\\b/.test(text) ||
+        /\\b(?:authorization|permission|consent)\\b.{0,50}\\b(?:denied|declined|failed|not granted)\\b/.test(text) ||
+        /\\b(?:request|operation|sign.?in)\\b.{0,60}\\b(?:could not|couldn['’]t|cannot|can['’]t|failed to)\\s+be\\s+completed\\b/.test(text)
+      );
+    };
+
+    const abnormalStateCue = (value) => {
+      const text = normalize(value);
+      return (
+        /^(?:attention|required action|action unavailable|unable to continue|cannot continue)\\b/.test(text) ||
+        /\\b(?:unsupported|incompatible)\\s+(?:browser|application|client)\\b/.test(text)
       );
     };
 
@@ -936,7 +960,12 @@ export async function collectPageStateSurfaceFacts(
           workflowUnavailableCue(headingText + " " + semanticText),
         verificationDirective:
           verificationDirectivePresent,
+        verificationCue:
+          semanticMessages.some((message) =>
+            verificationCue(message),
+          ),
         verificationControl,
+        frameOrdinals,
         semanticVerificationFrameOrdinals,
         localVerificationFrameOrdinals,
         authenticationDirective:
@@ -952,6 +981,14 @@ export async function collectPageStateSurfaceFacts(
         errorCue:
           semanticMessages.some((message) =>
             errorCue(message),
+          ),
+        terminalFailureCue:
+          semanticMessages.some((message) =>
+            terminalFailureCue(message),
+          ),
+        abnormalStateCue:
+          semanticMessages.some((message) =>
+            abnormalStateCue(message),
           ),
       };
     };

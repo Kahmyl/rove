@@ -7,6 +7,7 @@ export type BrowserActivityType =
   | "dialog_opened"
   | "download_completed"
   | "download_failed"
+  | "browser_evidence"
   | "interaction_click"
   | "form_submitted"
   | "scroll_milestone"
@@ -20,6 +21,4 @@ export interface BrowserActivity {
   data: Record<string, unknown>;
 }
 
-export type BrowserActivityListener = (
-  activity: BrowserActivity,
-) => void;
+export type BrowserActivityListener = (activity: BrowserActivity) => void;

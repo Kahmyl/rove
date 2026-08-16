@@ -48,6 +48,7 @@ import { ROVE_CONFIG } from "./tokens.js";
 @Injectable()
 export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
+  private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
@@ -198,6 +199,7 @@ export class RuntimeService implements RoveRuntime {
         });
       }
       await this.flushHumanActivity(sessionId);
+      await this.flushBrowserEvidence(sessionId);
       this.lastAgentActionAt.delete(sessionId);
       this.interactionPolicy.clear(sessionId);
 
@@ -814,6 +816,11 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     activity: BrowserActivity,
   ): void {
+    if (activity.type === "browser_evidence") {
+      this.enqueueBrowserEvidence(sessionId, activity);
+      return;
+    }
+
     if (activity.type === "download_completed") {
       this.enqueueDownloadEvidence(sessionId, activity);
       return;
@@ -835,6 +842,54 @@ export class RuntimeService implements RoveRuntime {
     }
 
     this.enqueueHumanActivity(sessionId, activity);
+  }
+
+  private enqueueBrowserEvidence(
+    sessionId: string,
+    activity: BrowserActivity,
+  ): void {
+    const previous =
+      this.browserEvidenceQueues.get(sessionId) ?? Promise.resolve();
+    const evidence = activity.data.evidence as Record<string, unknown>;
+    const next = previous
+      .then(() =>
+        this.evidence.savePayload(
+          sessionId,
+          {
+            type: "record",
+            label: "browser_evidence",
+            pageId: activity.pageId,
+            ...(activity.pageRevision === undefined
+              ? {}
+              : { pageRevision: activity.pageRevision }),
+            ...(typeof evidence.destinationUrl === "string"
+              ? { url: evidence.destinationUrl }
+              : typeof evidence.url === "string"
+                ? { url: evidence.url }
+                : {}),
+            metadata: {
+              source: "browser_evidence",
+              kind:
+                typeof evidence.kind === "string"
+                  ? evidence.kind
+                  : "navigation",
+            },
+          },
+          activity.data,
+        ),
+      )
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.browserEvidenceQueues.get(sessionId) === next) {
+          this.browserEvidenceQueues.delete(sessionId);
+        }
+      });
+    this.browserEvidenceQueues.set(sessionId, next);
+  }
+
+  private async flushBrowserEvidence(sessionId: string): Promise<void> {
+    await this.browserEvidenceQueues.get(sessionId);
   }
 
   private async releaseProfileLock(sessionId: string): Promise<void> {

@@ -525,7 +525,9 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     const inspection = await session.inspect();
 
     expect(Object.keys(inspection.metadata ?? {}).sort()).toEqual([
+      "browserEvidence",
       "pageState",
+      "pageStateDiagnostics",
       "pageStateFingerprint",
       "pageStatePropositions",
       "targetsTruncated",

@@ -26,6 +26,40 @@ export interface PageStateClassificationResult {
   propositions: PageStatePropositions;
 }
 
+export interface PageStateDecisionDiagnostics {
+  inputs: PageStateClassificationInput["signals"];
+  semanticIframeCount: number;
+  documentVerificationFrameOrdinals: number[];
+  documentFramePresentation: Truth;
+  unscopedVerificationFramePresentation: Truth;
+  frames: Array<{
+    depth: number;
+    domOrdinal: number | null;
+    source: string | null;
+    verificationIdentity: boolean;
+    elementAcquisition: "available" | "not_applicable" | "unavailable";
+    presentation: Truth;
+    element: PageStateEvidence["frames"][number]["element"];
+  }>;
+  surfaces: Array<{
+    id: string;
+    kind: PageStateSemanticSurface["kind"];
+    eligible: boolean;
+    lexicalSuppression: boolean;
+    verificationCue: boolean;
+    verificationDirective: boolean;
+    verificationControl: boolean;
+    frameOrdinals: number[];
+    semanticVerificationFrameOrdinals: number[];
+    localVerificationFrameOrdinals: number[];
+    semanticFramePresentation: Truth;
+    localFramePresentation: Truth;
+    identifiedVerificationFrame: Truth;
+  }>;
+  finalPropositions: PageStatePropositions;
+  finalKind: PageStateKind;
+}
+
 function presented(element: {
   cssVisible: boolean;
   area: number;
@@ -89,6 +123,63 @@ function framePresentation(
   }
 
   return false;
+}
+
+function individualFramePresentation(
+  frame: PageStateEvidence["frames"][number],
+): Truth {
+  if (frame.elementAcquisition === "unavailable") return "indeterminate";
+  if (frame.elementAcquisition !== "available" || frame.element === null) {
+    return false;
+  }
+  return presented(frame.element);
+}
+
+function verificationIdentityFramePresentation(
+  evidence: PageStateEvidence | undefined,
+  domOrdinals: ReadonlySet<number>,
+): Truth {
+  if (domOrdinals.size === 0) return false;
+  if (evidence === undefined) return "indeterminate";
+
+  let unavailable = false;
+  for (const frame of evidence.frames) {
+    if (
+      frame.domOrdinal === null ||
+      !domOrdinals.has(frame.domOrdinal) ||
+      !frame.verificationIdentity
+    )
+      continue;
+    if (frame.elementAcquisition === "unavailable") {
+      unavailable = true;
+    } else if (
+      frame.elementAcquisition === "available" &&
+      frame.element !== null &&
+      presented(frame.element)
+    ) {
+      return true;
+    }
+  }
+  return unavailable ? "indeterminate" : false;
+}
+
+function anyVerificationIdentityFramePresentation(
+  evidence: PageStateEvidence | undefined,
+): Truth {
+  if (evidence === undefined) return "indeterminate";
+
+  let unavailable = false;
+  let identified = false;
+  for (const frame of evidence.frames) {
+    if (!frame.verificationIdentity) continue;
+    identified = true;
+    const presentation = individualFramePresentation(frame);
+    if (presentation === true) return true;
+    if (presentation === "indeterminate") unavailable = true;
+  }
+
+  if (!identified) return false;
+  return unavailable ? "indeterminate" : false;
 }
 
 function statusRestriction(status: number | undefined): boolean {
@@ -163,6 +254,7 @@ export function classifyObservedPageState(
   let authTrue = false;
   let restrictionTrue = false;
   let errorTrue = false;
+  let abnormalTrue = false;
 
   const signals: string[] = [];
 
@@ -171,6 +263,8 @@ export function classifyObservedPageState(
     new Set(facts?.documentVerificationFrameOrdinals ?? []),
     facts?.iframeCount ?? 0,
   );
+  const unscopedVerificationFrame =
+    anyVerificationIdentityFramePresentation(input.evidence);
 
   for (const surface of surfaces) {
     if (!surfaceEligibleForKnownBlocker(surface)) {
@@ -195,22 +289,38 @@ export function classifyObservedPageState(
       facts?.iframeCount ?? 0,
     );
 
+    const identifiedVerificationFrame = verificationIdentityFramePresentation(
+      input.evidence,
+      new Set(surface.frameOrdinals),
+    );
+    const restrictiveStatusFrameCorroboration =
+      isPrimary &&
+      statusRestriction(input.signals.httpStatus) &&
+      surface.verificationCue &&
+      unscopedVerificationFrame === true;
+
     if (!suppressLexical) {
       if (
         surface.verificationDirective ||
         surface.verificationControl ||
         semanticFrame === true ||
-        localFrame === true
+        localFrame === true ||
+        (surface.verificationCue && identifiedVerificationFrame === true) ||
+        restrictiveStatusFrameCorroboration
       ) {
         verificationTrue = true;
         signals.push(
-          surface.kind === "blocking_dialog"
+          restrictiveStatusFrameCorroboration
+            ? "verification:primary_cue_presented_frame_restrictive_status"
+            : surface.kind === "blocking_dialog"
             ? "verification:blocking_surface"
             : "verification:primary_surface",
         );
       } else if (
         semanticFrame === "indeterminate" ||
-        localFrame === "indeterminate"
+        localFrame === "indeterminate" ||
+        (surface.verificationCue &&
+          identifiedVerificationFrame === "indeterminate")
       ) {
         verificationIndeterminate = true;
       }
@@ -230,6 +340,22 @@ export function classifyObservedPageState(
           surface.kind === "blocking_dialog"
             ? "error:blocking_surface"
             : "error:primary_surface",
+        );
+      }
+
+      if (surface.terminalFailureCue) {
+        errorTrue = true;
+        signals.push(
+          surface.kind === "blocking_dialog"
+            ? "terminal_failure:blocking_surface"
+            : "terminal_failure:primary_surface",
+        );
+      } else if (surface.abnormalStateCue) {
+        abnormalTrue = true;
+        signals.push(
+          surface.kind === "blocking_dialog"
+            ? "abnormal:blocking_surface"
+            : "abnormal:primary_surface",
         );
       }
     }
@@ -298,15 +424,15 @@ export function classifyObservedPageState(
     statusError(input.signals.httpStatus) || errorTrue;
 
   if (statusAuthentication(input.signals.httpStatus)) {
-    signals.push("auth:http_status");
+    signals.push(`auth:http_status:${input.signals.httpStatus}`);
   }
 
   if (statusRestriction(input.signals.httpStatus)) {
-    signals.push("restriction:http_status");
+    signals.push(`restriction:http_status:${input.signals.httpStatus}`);
   }
 
   if (statusError(input.signals.httpStatus)) {
-    signals.push("error:http_status");
+    signals.push(`error:http_status:${input.signals.httpStatus}`);
   }
 
   const knownBlockers = [
@@ -333,7 +459,9 @@ export function classifyObservedPageState(
           surface.restrictionCue ||
           surface.errorCue
         ),
-    ) || facts?.interstitialCanvasPresented === true;
+    ) ||
+    facts?.interstitialCanvasPresented === true ||
+    abnormalTrue;
 
   let interstitialPresented: Truth;
 
@@ -374,7 +502,11 @@ export function classifyObservedPageState(
     interstitialPresented,
   };
 
-  const kind = derivePrimaryState(propositions);
+  const derivedKind = derivePrimaryState(propositions);
+  const kind =
+    derivedKind === "ready" && facts?.available !== true
+      ? "unknown_interstitial"
+      : derivedKind;
 
   const unresolvedBlocker = anyIndeterminate([
     humanVerificationPresented,
@@ -409,11 +541,108 @@ export function classifyObservedPageState(
       ...(blockingUnknownSurface && !knownBlockerTrue
         ? ["interstitial:blocking_unknown_surface"]
         : []),
+      ...(facts?.available !== true ? ["evidence:surface_unavailable"] : []),
+      ...(kind === "ready" && ordinaryPrimarySurface
+        ? ["ready:primary_content"]
+        : []),
+      ...(kind === "ready" &&
+      !ordinaryPrimarySurface &&
+      facts?.available === true
+        ? ["ready:observed_empty_document"]
+        : []),
+      ...(kind === "ready" &&
+      input.signals.httpStatus !== undefined &&
+      input.signals.httpStatus >= 200 &&
+      input.signals.httpStatus < 400
+        ? [`ready:http_status:${input.signals.httpStatus}`]
+        : []),
     ],
   };
 
   return {
     assessment,
     propositions,
+  };
+}
+
+/** Diagnostic mirror of the deterministic inputs used by the production decision. */
+export function diagnoseObservedPageState(
+  input: PageStateClassificationInput,
+  result: PageStateClassificationResult,
+): PageStateDecisionDiagnostics {
+  const facts = input.surfaceFacts;
+  const documentVerificationFrameOrdinals =
+    facts?.documentVerificationFrameOrdinals ?? [];
+  const relevantOrdinals = new Set([
+    ...documentVerificationFrameOrdinals,
+    ...(facts?.surfaces ?? []).flatMap((surface) => surface.frameOrdinals),
+  ]);
+
+  return {
+    inputs: { ...input.signals },
+    semanticIframeCount: facts?.iframeCount ?? 0,
+    documentVerificationFrameOrdinals: [
+      ...documentVerificationFrameOrdinals,
+    ],
+    documentFramePresentation: framePresentation(
+      input.evidence,
+      new Set(documentVerificationFrameOrdinals),
+      facts?.iframeCount ?? 0,
+    ),
+    unscopedVerificationFramePresentation:
+      anyVerificationIdentityFramePresentation(input.evidence),
+    frames: (input.evidence?.frames ?? [])
+      .filter(
+        (frame) =>
+          frame.verificationIdentity ||
+          (frame.domOrdinal !== null && relevantOrdinals.has(frame.domOrdinal)),
+      )
+      .map((frame) => ({
+      depth: frame.depth,
+      domOrdinal: frame.domOrdinal,
+      source: frame.source,
+      verificationIdentity: frame.verificationIdentity,
+      elementAcquisition: frame.elementAcquisition,
+      presentation: individualFramePresentation(frame),
+      element: frame.element === null ? null : { ...frame.element },
+      })),
+    surfaces: (facts?.surfaces ?? []).map((surface) => {
+      const eligible = surfaceEligibleForKnownBlocker(surface);
+      const lexicalSuppression =
+        surface.kind === "primary" &&
+        (surface.metaContext || surface.documentRoleContext === true);
+      return {
+        id: surface.id,
+        kind: surface.kind,
+        eligible,
+        lexicalSuppression,
+        verificationCue: surface.verificationCue,
+        verificationDirective: surface.verificationDirective,
+        verificationControl: surface.verificationControl,
+        frameOrdinals: [...surface.frameOrdinals],
+        semanticVerificationFrameOrdinals: [
+          ...surface.semanticVerificationFrameOrdinals,
+        ],
+        localVerificationFrameOrdinals: [
+          ...surface.localVerificationFrameOrdinals,
+        ],
+        semanticFramePresentation: framePresentation(
+          input.evidence,
+          new Set(surface.semanticVerificationFrameOrdinals),
+          facts?.iframeCount ?? 0,
+        ),
+        localFramePresentation: framePresentation(
+          input.evidence,
+          new Set(surface.localVerificationFrameOrdinals),
+          facts?.iframeCount ?? 0,
+        ),
+        identifiedVerificationFrame: verificationIdentityFramePresentation(
+          input.evidence,
+          new Set(surface.frameOrdinals),
+        ),
+      };
+    }),
+    finalPropositions: { ...result.propositions },
+    finalKind: result.assessment.kind,
   };
 }

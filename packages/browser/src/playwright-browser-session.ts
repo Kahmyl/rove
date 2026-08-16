@@ -26,6 +26,7 @@ import type {
   BrowserActivity,
   BrowserActivityListener,
 } from "./observation/browser-activity.js";
+import { BrowserEvidenceRecorder } from "./observation/browser-evidence.js";
 import {
   installDomActivityListeners,
   normalizeDomActivityPayload,
@@ -88,7 +89,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private browserCdp: CDPSession | undefined;
   private activeTabTimer: ReturnType<typeof setInterval> | undefined;
   private reconcilingActiveTab = false;
-  private readonly mainDocumentStatuses = new Map<string, number>();
+  private readonly evidenceRecorder = new BrowserEvidenceRecorder(
+    (pageId, evidence) => {
+      const state = this.pageRegistry.has(pageId)
+        ? this.pageRegistry.stateFor(pageId)
+        : undefined;
+      this.emitActivity({
+        type: "browser_evidence",
+        pageId,
+        ...(state === undefined ? {} : { pageRevision: state.revision }),
+        timestamp: new Date().toISOString(),
+        data: { evidence },
+      });
+    },
+  );
   private downloadSaveQueue: Promise<void> = Promise.resolve();
 
   private constructor(
@@ -104,6 +118,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
+      this.evidenceRecorder.forget(pageId);
 
       if (this.closed || !wasActive) return;
 
@@ -256,8 +271,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       return;
     }
 
-    this.browserCdp =
-      await this.browser.newBrowserCDPSession();
+    this.browserCdp = await this.browser.newBrowserCDPSession();
 
     await this.reconcileActiveTab();
 
@@ -394,6 +408,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
       return;
     }
 
+    if (activity.type === "interaction_click") {
+      this.evidenceRecorder.markHumanNavigation(page);
+    }
+
     if (this.pageRegistry.activeId() !== pageId) {
       const state = this.pageRegistry.activate(pageId);
 
@@ -444,6 +462,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   private observePage(page: Page, pageId: string): void {
+    this.evidenceRecorder.observe(page, pageId);
     let previousTitle: string | undefined;
 
     const observeTitle = () => {
@@ -479,17 +498,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
     page.on("domcontentloaded", observeTitle);
     page.on("load", observeTitle);
     page.on("dialog", (dialog) => {
-      const state =
-        this.pageRegistry.has(pageId)
-          ? this.pageRegistry.stateFor(pageId)
-          : undefined;
+      const state = this.pageRegistry.has(pageId)
+        ? this.pageRegistry.stateFor(pageId)
+        : undefined;
 
       this.emitActivity({
         type: "dialog_opened",
         pageId,
         ...(state === undefined ? {} : { pageRevision: state.revision }),
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         data: {
           type: dialog.type(),
           defaultAction: "dismiss",
@@ -503,64 +520,50 @@ export class PlaywrightBrowserSession implements BrowserSession {
         return;
       }
 
-      this.downloadSaveQueue =
-        this.downloadSaveQueue
-          .then(async () => {
-            if (this.downloadRuntime === undefined) {
-              return;
-            }
+      this.downloadSaveQueue = this.downloadSaveQueue
+        .then(async () => {
+          if (this.downloadRuntime === undefined) {
+            return;
+          }
 
-            const saved = await saveManagedDownload(
-              download,
-              this.downloadRuntime.directory,
-            );
-            const state =
-              this.pageRegistry.has(pageId)
-                ? this.pageRegistry.stateFor(pageId)
-                : undefined;
+          const saved = await saveManagedDownload(
+            download,
+            this.downloadRuntime.directory,
+          );
+          const state = this.pageRegistry.has(pageId)
+            ? this.pageRegistry.stateFor(pageId)
+            : undefined;
 
-            this.emitActivity({
-              type: "download_completed",
-              pageId,
-              ...(state === undefined ? {} : { pageRevision: state.revision }),
-              timestamp:
-                new Date().toISOString(),
-              data: {
-                filename: saved.filename,
-                path: saved.path,
-                directory: saved.directory,
-                sizeBytes: saved.sizeBytes,
-                suggestedFilename:
-                  download.suggestedFilename(),
-                url: page.url(),
-              },
-            });
-          })
-          .catch((error: unknown) => {
-            this.emitActivity({
-              type: "download_failed",
-              pageId,
-              timestamp:
-                new Date().toISOString(),
-              data: {
-                reason:
-                  error instanceof Error
-                    ? error.message
-                    : "Unknown download failure.",
-                suggestedFilename:
-                  download.suggestedFilename(),
-                url: page.url(),
-              },
-            });
+          this.emitActivity({
+            type: "download_completed",
+            pageId,
+            ...(state === undefined ? {} : { pageRevision: state.revision }),
+            timestamp: new Date().toISOString(),
+            data: {
+              filename: saved.filename,
+              path: saved.path,
+              directory: saved.directory,
+              sizeBytes: saved.sizeBytes,
+              suggestedFilename: download.suggestedFilename(),
+              url: page.url(),
+            },
           });
-    });
-    page.on("response", (response) => {
-      if (
-        response.request().resourceType() === "document" &&
-        response.frame() === page.mainFrame()
-      ) {
-        this.mainDocumentStatuses.set(pageId, response.status());
-      }
+        })
+        .catch((error: unknown) => {
+          this.emitActivity({
+            type: "download_failed",
+            pageId,
+            timestamp: new Date().toISOString(),
+            data: {
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : "Unknown download failure.",
+              suggestedFilename: download.suggestedFilename(),
+              url: page.url(),
+            },
+          });
+        });
     });
   }
 
@@ -613,10 +616,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const page = this.pageRegistry.pageFor(pageId);
     const previousRevision = this.pageRegistry.stateFor(pageId).revision;
     try {
-      await page.goto(url, {
-        waitUntil: "domcontentloaded",
-        timeout: this.navigationTimeoutMs,
-      });
+      await this.evidenceRecorder.withAgentAction(page, () =>
+        page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: this.navigationTimeoutMs,
+        }),
+      );
     } catch (error) {
       if (error instanceof playwrightErrors.TimeoutError) {
         throw new RoveError({
@@ -734,7 +739,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
       mutationVersion: await readMaterialMutationVersion(page),
     });
 
-    const httpStatus = this.mainDocumentStatuses.get(pageId);
+    const browserEvidence = this.evidenceRecorder.snapshot(pageId);
+    const httpStatus = browserEvidence.latestMainDocumentStatus;
 
     const pageStateObservation = await observeStablePageState(page, httpStatus);
 
@@ -768,6 +774,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
         pageState,
         pageStatePropositions: pageStateObservation.propositions,
         pageStateFingerprint: pageStateObservation.fingerprint,
+        ...(pageStateObservation.diagnostics === undefined
+          ? {}
+          : { pageStateDiagnostics: pageStateObservation.diagnostics }),
+        browserEvidence,
         ...(accessRestriction === undefined ? {} : { accessRestriction }),
       },
     };
@@ -783,7 +793,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     return collectPageStateIdentity(
       page,
       pageId,
-      this.mainDocumentStatuses.get(pageId),
+      this.evidenceRecorder.latestMainDocumentStatus(pageId),
     );
   }
 
@@ -820,6 +830,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   async click(target: TargetReference): Promise<ActionResult> {
     this.ensureOpen();
+    const page = this.pageRegistry.pageFor(target.pageId);
     const beforePages = this.pageRegistry.summaries();
     const resolved = await this.resolveActionTarget(target);
     const previous = this.pageRegistry.stateFor(target.pageId);
@@ -827,7 +838,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
       .waitForEvent("page", { timeout: POPUP_GRACE_MS })
       .catch(() => null);
     try {
-      await resolved.locator.click({ timeout: this.actionTimeoutMs });
+      await this.evidenceRecorder.withAgentAction(page, () =>
+        resolved.locator.click({ timeout: this.actionTimeoutMs }),
+      );
       if (this.pageRegistry.summaries().length === beforePages.length)
         await popup;
     } catch (error) {
@@ -1071,16 +1084,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const previous = this.pageRegistry.stateFor(pageId);
     const beforePages = this.pageRegistry.summaries();
     try {
-      const response =
+      const response = await this.evidenceRecorder.withAgentAction(page, () =>
         action === "back"
-          ? await page.goBack({
+          ? page.goBack({
               waitUntil: "domcontentloaded",
               timeout: this.navigationTimeoutMs,
             })
-          : await page.goForward({
+          : page.goForward({
               waitUntil: "domcontentloaded",
               timeout: this.navigationTimeoutMs,
-            });
+            }),
+      );
       if (response === null) {
         return {
           ok: true,
@@ -1173,20 +1187,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch {
       // Browser already closed; continue shutdown.
     }
-    await this.downloadSaveQueue.catch(
-      () => undefined,
-    );
+    await this.downloadSaveQueue.catch(() => undefined);
     this.pageRegistry.clear();
     this.inspector.clear();
 
     if (this.downloadRuntime?.temporary === true) {
-      await rm(
-        this.downloadRuntime.root,
-        {
-          recursive: true,
-          force: true,
-        },
-      ).catch(() => undefined);
+      await rm(this.downloadRuntime.root, {
+        recursive: true,
+        force: true,
+      }).catch(() => undefined);
     }
   }
 

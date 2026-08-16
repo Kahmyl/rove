@@ -184,6 +184,238 @@ describe("production page-state semantic conformance", () => {
     }
   });
 
+  it("classifies the production query-invisible verification frame failure mode", async () => {
+    const page = await context.newPage();
+
+    try {
+      await page.setContent(`
+        <main>
+          <h1>Performing security verification</h1>
+          <p>This website is verifying you are not a bot.</p>
+          <div id="challenge-host"></div>
+        </main>
+      `);
+      await page.locator("#challenge-host").evaluate((host) => {
+        const root = host.attachShadow({ mode: "closed" });
+        const frame = document.createElement("iframe");
+        frame.title = "Security verification challenge";
+        frame.srcdoc = "<!doctype html><p>Verification control</p>";
+        frame.style.width = "300px";
+        frame.style.height = "65px";
+        root.append(frame);
+      });
+      expect(await page.locator("iframe").count()).toBe(0);
+      await expect.poll(() => page.frames().length).toBe(2);
+
+      const observation = await observeStablePageState(page, 403);
+      const frame = observation.diagnostics?.frames[0];
+      const primary = observation.diagnostics?.surfaces.find(
+        (surface) => surface.kind === "primary",
+      );
+
+      expect(frame).toMatchObject({
+        domOrdinal: null,
+        verificationIdentity: true,
+        elementAcquisition: "available",
+        presentation: true,
+      });
+      expect(primary).toMatchObject({
+        verificationCue: true,
+        verificationDirective: false,
+        verificationControl: false,
+        frameOrdinals: [],
+        identifiedVerificationFrame: false,
+      });
+      expect(observation.assessment.kind).toBe("human_verification");
+      expect(observation.propositions).toMatchObject({
+        humanVerificationPresented: true,
+        accessRestricted: true,
+      });
+      expect(observation.assessment.signals).toContain(
+        "verification:primary_cue_presented_frame_restrictive_status",
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("covers the F1 challenge, restriction, terminal-failure, and negative-control corpus", async () => {
+    const cases = [
+      {
+        id: "f1-himalayas-visible-cloudflare-challenge",
+        title: "Just a moment...",
+        httpStatus: 403,
+        body: `<main><h1>Performing security verification</h1>
+          <iframe title="Security challenge" src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/" srcdoc="Challenge"></iframe>
+        </main>`,
+        expectedPrimaryState: "human_verification",
+        expectedPropositions: {
+          humanVerificationPresented: true,
+          accessRestricted: true,
+        },
+      },
+      {
+        id: "f1-interactive-verification",
+        title: "Verify",
+        body: `<main><h1>Verify that you are human</h1><label><input type="checkbox"> I am human</label></main>`,
+        expectedPrimaryState: "human_verification",
+      },
+      {
+        id: "f1-completed-challenge",
+        title: "Jobs",
+        body: `<main><h1>Open roles</h1><button>Apply</button></main>`,
+        expectedPrimaryState: "ready",
+      },
+      {
+        id: "f1-hard-access-denied",
+        title: "Access denied",
+        httpStatus: 403,
+        body: `<main><h1>Access denied</h1><p>Your network is blocked from this resource.</p></main>`,
+        expectedPrimaryState: "access_restricted",
+      },
+      {
+        id: "f1-ordinary-403",
+        title: "Forbidden",
+        httpStatus: 403,
+        body: `<main><h1>Forbidden</h1></main>`,
+        expectedPrimaryState: "access_restricted",
+      },
+      {
+        id: "f1-rate-limit",
+        title: "Slow down",
+        httpStatus: 429,
+        body: `<main><h1>Too many requests</h1></main>`,
+        expectedPrimaryState: "access_restricted",
+      },
+      {
+        id: "f1-remotive-captcha-text-negative",
+        title: "Automation engineer",
+        body: `<main><h1>Automation engineer</h1><p>${"Role responsibilities and qualifications. ".repeat(20)} Familiarity with proxy management, CAPTCHA handling, and IP rotation strategies.</p><button>Apply</button></main>`,
+        expectedPrimaryState: "ready",
+      },
+      {
+        id: "f1-passive-provider-negative",
+        title: "Dashboard",
+        body: `<main><h1>Dashboard</h1><p>${"Ordinary account content. ".repeat(30)}</p><button>Continue</button>
+          <iframe title="Provider integration" src="https://captcha.example.test/widget" srcdoc="passive"></iframe>
+        </main>`,
+        expectedPrimaryState: "ready",
+      },
+      {
+        id: "f1-google-terminal-signin-rejection",
+        title: "Couldn't sign you in",
+        body: `<main><h1>Couldn't sign you in</h1><p>This browser or app may not be secure.</p><a href="/help">Learn more</a></main>`,
+        expectedPrimaryState: "error",
+        expectedPropositions: { errorPresented: true },
+      },
+      {
+        id: "f1-invalid-password-remains-operable-auth",
+        title: "Sign in",
+        body: `<main><h1>Invalid password</h1><p>Try again.</p><label>Password <input type="password"></label><button>Sign in</button></main>`,
+        expectedPrimaryState: "authentication_required",
+      },
+      {
+        id: "f1-account-locked-terminal",
+        title: "Account locked",
+        body: `<main><h1>Account locked</h1><p>Contact your administrator.</p></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-unsupported-browser-terminal",
+        title: "Unsupported browser",
+        body: `<main><h1>This browser is not supported</h1><p>Use a compatible client.</p></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-expired-session-auth",
+        title: "Session expired",
+        body: `<main><h1>Session expired</h1><p>Sign in to continue.</p><button>Sign in</button></main>`,
+        expectedPrimaryState: "authentication_required",
+      },
+      {
+        id: "f1-authorization-denied-terminal",
+        title: "Authorization denied",
+        body: `<main><h1>Authorization denied</h1><p>Consent was not granted.</p></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-generic-application-error",
+        title: "Application error",
+        body: `<main><h1>Something went wrong</h1><p>The application could not load.</p></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-not-found-terminal",
+        title: "Not found",
+        httpStatus: 404,
+        body: `<main><h1>Page not found</h1></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-gone-terminal",
+        title: "Gone",
+        httpStatus: 410,
+        body: `<main><h1>Resource removed</h1></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-server-error-terminal",
+        title: "Unavailable",
+        httpStatus: 503,
+        body: `<main><h1>Service unavailable</h1></main>`,
+        expectedPrimaryState: "error",
+      },
+      {
+        id: "f1-terminal-keyword-negative",
+        title: "Security incident guide",
+        body: `<main><h1>Security incident guide</h1><p>${"Learn how secure systems report an error or denied request. ".repeat(12)}</p><button>Continue reading</button></main>`,
+        expectedPrimaryState: "ready",
+      },
+      {
+        id: "f1-unknown-abnormal-interstitial",
+        title: "Attention required",
+        body: `<main><h1>Attention required</h1><p>Review the current state before proceeding.</p></main>`,
+        expectedPrimaryState: "unknown_interstitial",
+      },
+    ];
+
+    for (const definition of cases) await checkDefinition(definition);
+  }, 30_000);
+
+  it("attaches exact status and positive ready provenance to decisions", async () => {
+    const restricted = classifyObservedPageState({
+      signals: { readyState: "complete", httpStatus: 451 },
+    });
+    expect(restricted.assessment.signals).toContain(
+      "restriction:http_status:451",
+    );
+
+    const unsupportedReady = classifyObservedPageState({
+      signals: { readyState: "complete" },
+    });
+    expect(unsupportedReady.assessment.kind).toBe("unknown_interstitial");
+    expect(unsupportedReady.assessment.signals).toContain(
+      "evidence:surface_unavailable",
+    );
+
+    const page = await context.newPage();
+    try {
+      await page.setContent(
+        "<main><h1>Workspace</h1><button>Continue</button></main>",
+      );
+      const ready = await observeStablePageState(page, 200);
+      expect(ready.assessment.kind).toBe("ready");
+      expect(ready.assessment.signals).toEqual(
+        expect.arrayContaining([
+          "ready:primary_content",
+          "ready:http_status:200",
+        ]),
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
   it("matches all 166 frozen, remedial, and independent deterministic cases", async () => {
     let count = 0;
 

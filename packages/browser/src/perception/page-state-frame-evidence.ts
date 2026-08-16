@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 
-import type { ElementHandle, Page } from "playwright";
+import type { ElementHandle, Frame, Page } from "playwright";
 
 export interface PageStateFrameElementEvidence {
   cssVisible: boolean;
@@ -13,6 +13,8 @@ export interface PageStateFrameElementEvidence {
 export interface PageStateFrameEvidence {
   depth: number;
   domOrdinal: number | null;
+  source: string | null;
+  verificationIdentity: boolean;
   element: PageStateFrameElementEvidence | null;
   elementAcquisition: "available" | "not_applicable" | "unavailable";
 }
@@ -23,7 +25,8 @@ export interface PageStateEvidence {
 
 async function collectFrameElement(
   handle: ElementHandle,
-  domOrdinal: number,
+  depth: number,
+  sourceFallback: string,
 ): Promise<PageStateFrameEvidence> {
   try {
     const element = await handle.evaluate((node) => {
@@ -69,7 +72,13 @@ async function collectFrameElement(
         area === 0 ? 0 : areaOf(viewportIntersection) / area;
 
       let ancestorClipped = ownRect;
-      let ancestor = html.parentElement;
+      const composedParent = (element: Element): Element | null => {
+        if (element.parentElement !== null) return element.parentElement;
+        const root = element.getRootNode();
+        return root instanceof ShadowRoot ? root.host : null;
+      };
+
+      let ancestor = composedParent(html);
       let effectiveOpacity = Number.parseFloat(style.opacity || "1");
       let ancestorsCssVisible = true;
 
@@ -108,7 +117,7 @@ async function collectFrameElement(
           });
         }
 
-        ancestor = ancestor.parentElement;
+        ancestor = composedParent(ancestor);
       }
 
       const ancestorClipRatio = area === 0 ? 0 : areaOf(ancestorClipped) / area;
@@ -137,7 +146,11 @@ async function collectFrameElement(
         for (const [xRatio, yRatio] of points) {
           const x = effective.left + effectiveWidth * xRatio;
           const y = effective.top + effectiveHeight * yRatio;
-          const atPoint = document.elementFromPoint(x, y);
+          const root = html.getRootNode();
+          const atPoint =
+            root instanceof ShadowRoot
+              ? root.elementFromPoint(x, y)
+              : document.elementFromPoint(x, y);
 
           if (
             atPoint === html ||
@@ -171,20 +184,81 @@ async function collectFrameElement(
       };
     });
 
+    const identity = await handle.evaluate((node) => {
+      const frame = node as HTMLIFrameElement;
+      const semanticName = [
+        frame.title,
+        frame.getAttribute("aria-label"),
+        frame.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      let source: string | null = null;
+      try {
+        const url = new URL(frame.src, document.baseURI);
+        url.username = "";
+        url.password = "";
+        url.search = "";
+        url.hash = "";
+        source = url.toString();
+      } catch {
+        source = null;
+      }
+      const ordinal = Array.from(
+        document.querySelectorAll("iframe"),
+      ).indexOf(frame);
+      return {
+        domOrdinal: ordinal < 0 ? null : ordinal,
+        source,
+        verificationIdentity:
+          /(?:captcha|challenge|turnstile|human.?verification|security.?check)/i.test(
+            `${semanticName} ${source ?? ""}`,
+          ),
+      };
+    });
+
     return {
-      depth: 1,
-      domOrdinal,
+      depth,
+      domOrdinal: identity.domOrdinal,
+      source: identity.source ?? sanitizeFrameSource(sourceFallback),
+      verificationIdentity: identity.verificationIdentity,
       element,
       elementAcquisition: "available",
     };
   } catch {
     return {
-      depth: 1,
-      domOrdinal,
+      depth,
+      domOrdinal: null,
+      source: sanitizeFrameSource(sourceFallback),
+      verificationIdentity: false,
       element: null,
       elementAcquisition: "unavailable",
     };
   }
+}
+
+function sanitizeFrameSource(value: string): string | null {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function frameDepth(frame: Frame, mainFrame: Frame): number {
+  let depth = 0;
+  let current: Frame | null = frame;
+  while (current !== null && current !== mainFrame) {
+    depth += 1;
+    current = current.parentFrame();
+  }
+  return depth;
 }
 
 export async function collectPageStateFrameEvidence(
@@ -197,14 +271,37 @@ export async function collectPageStateFrameEvidence(
   await page.evaluate("globalThis.__name ??= value => value");
 
   do {
-    const handles = await page.locator("iframe").elementHandles();
+    const mainFrame = page.mainFrame();
+    const childFrames = page.frames().filter((frame) => frame !== mainFrame);
 
     frames = await Promise.all(
-      handles.map((handle, ordinal) => collectFrameElement(handle, ordinal)),
+      childFrames.map(async (frame) => {
+        try {
+          const handle = await frame.frameElement();
+          try {
+            return await collectFrameElement(
+              handle,
+              frameDepth(frame, mainFrame),
+              frame.url(),
+            );
+          } finally {
+            await handle.dispose().catch(() => undefined);
+          }
+        } catch {
+          return {
+            depth: frameDepth(frame, mainFrame),
+            domOrdinal: null,
+            source: sanitizeFrameSource(frame.url()),
+            verificationIdentity: false,
+            element: null,
+            elementAcquisition: "unavailable" as const,
+          };
+        }
+      }),
     );
 
     if (
-      handles.length >= expectedIframeCount &&
+      frames.length >= expectedIframeCount &&
       frames.every((frame) => frame.elementAcquisition === "available")
     ) {
       return { frames };
