@@ -11,7 +11,7 @@ import {
   startFixtureServer,
   type FixtureServer,
 } from "../../fixtures/fixture-server.js";
-import type { PageSignals } from "../../safety/page-state-classifier.js";
+import type { PageSignals } from "./legacy-page-state-classifier.js";
 import { loadF1RiskModel } from "../benchmark/risk-model.js";
 import { runBenchmark } from "../benchmark/runner.js";
 import type { BenchmarkCase, BenchmarkReport } from "../benchmark/types.js";

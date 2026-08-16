@@ -5,7 +5,7 @@ import type { PageStateAssessment, PageStateKind } from "@rove/protocol";
 import {
   classifyPageState,
   type PageSignals,
-} from "../../safety/page-state-classifier.js";
+} from "./legacy-page-state-classifier.js";
 import type { BenchmarkStrategy, PropositionSet } from "../benchmark/types.js";
 import type { ResearchEvidence } from "./evidence.js";
 
