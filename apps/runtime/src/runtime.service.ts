@@ -33,8 +33,13 @@ import { RoveProfileLock, RoveProfileManager } from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
+import {
+  BrowserOwnershipFence,
+  type BrowserOwnershipLease,
+} from "./control/browser-ownership-fence.js";
 import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
+import { OwnershipTransitionService } from "./control/ownership-transition.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { PagePolicyOrchestrator } from "./orchestration/page-policy-orchestrator.js";
@@ -52,6 +57,7 @@ export class RuntimeService implements RoveRuntime {
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly interactionPolicy = new InteractionPolicy();
+  private readonly ownershipTransitions: OwnershipTransitionService;
   private readonly pagePolicyOrchestrator: PagePolicyOrchestrator;
 
   constructor(
@@ -66,16 +72,27 @@ export class RuntimeService implements RoveRuntime {
     private readonly observations: ObservationService,
     @Inject(EvidenceService) private readonly evidence: EvidenceService,
     @Inject(ROVE_CONFIG) private readonly config: RoveConfig,
+    @Inject(BrowserOwnershipFence)
+    private readonly ownershipFence: BrowserOwnershipFence = new BrowserOwnershipFence(),
   ) {
-    this.pagePolicyOrchestrator = new PagePolicyOrchestrator(
+    this.ownershipTransitions = new OwnershipTransitionService(
       this.sessions,
-      this.observations,
+      this.control,
       this.controlWait,
+      this.browser,
+      this.observations,
+      this.ownershipFence,
+      this.interactionPolicy,
+    );
+
+    this.pagePolicyOrchestrator = new PagePolicyOrchestrator(
+      this.ownershipTransitions,
     );
   }
 
   async startSession(request: StartSessionRequest): Promise<Session> {
     let session = await this.sessions.start(request);
+    this.ownershipFence.initialize(session.id, session.controller);
     let profileLock: RoveProfileLock | undefined;
     try {
       const persistentProfile = await new RoveProfileManager(
@@ -150,6 +167,7 @@ export class RuntimeService implements RoveRuntime {
 
       return this.sessions.get(session.id);
     } catch (error) {
+      this.ownershipFence.clear(session.id);
       await this.browser.close(session.id).catch(() => undefined);
       await profileLock?.release().catch(() => undefined);
       await this.releaseProfileLock(session.id);
@@ -190,37 +208,16 @@ export class RuntimeService implements RoveRuntime {
   }
 
   async endSession(sessionId: string): Promise<Session> {
-    return this.coordinator.execute(sessionId, async () => {
-      const existing = await this.sessions.get(sessionId);
-      if (existing.status === "completed" || existing.status === "failed") {
-        throw new RoveError({
-          code: "SESSION_ALREADY_ENDED",
-          message: "Rove session has already ended.",
-        });
-      }
-      await this.flushHumanActivity(sessionId);
-      await this.flushBrowserEvidence(sessionId);
-      this.lastAgentActionAt.delete(sessionId);
-      this.interactionPolicy.clear(sessionId);
-
-      let closeError: unknown;
-      try {
-        await this.browser.close(sessionId);
-      } catch (error) {
-        closeError = error;
-      } finally {
-        await this.releaseProfileLock(sessionId);
-      }
-      const session = await this.sessions.end(sessionId);
-      const observation = await this.observations.append(sessionId, {
-        actor: "system",
-        type: "session_completed",
-        data: {},
-      });
-      await this.controlWait.publish(sessionId, observation);
-      if (closeError !== undefined) throw closeError;
-      return session;
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.endSession(sessionId, {
+        flushHumanActivity: () => this.flushHumanActivity(sessionId),
+        flushBrowserEvidence: () => this.flushBrowserEvidence(sessionId),
+        clearRuntimeState: () => {
+          this.lastAgentActionAt.delete(sessionId);
+        },
+        releaseProfileLock: () => this.releaseProfileLock(sessionId),
+      }),
+    );
   }
 
   async inspectBrowser(
@@ -229,19 +226,30 @@ export class RuntimeService implements RoveRuntime {
   ): Promise<PageInspection> {
     await this.requireActive(sessionId);
 
-    const inspection = await this.browser.get(sessionId).inspect(options);
-    const assessment = this.interactionPolicy.recordInspection(
+    return this.ownershipFence.runAgentBrowserOperation(
       sessionId,
-      inspection,
-    );
+      async (lease) => {
+        const inspection = await this.browser.get(sessionId).inspect(options);
 
-    return {
-      ...inspection,
-      metadata: {
-        ...(inspection.metadata ?? {}),
-        pagePolicy: assessment.policyDecision,
+        // A stale inspection must never enter InteractionPolicy.
+        lease.assertCurrent();
+
+        const assessment = this.interactionPolicy.recordInspection(
+          sessionId,
+          inspection,
+        );
+
+        lease.assertCurrent();
+
+        return {
+          ...inspection,
+          metadata: {
+            ...(inspection.metadata ?? {}),
+            pagePolicy: assessment.policyDecision,
+          },
+        };
       },
-    };
+    );
   }
 
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult> {
@@ -335,82 +343,142 @@ export class RuntimeService implements RoveRuntime {
 
   async pages(sessionId: string): Promise<PageSummary[]> {
     await this.requireActive(sessionId);
-    return this.browser.get(sessionId).pages();
+
+    return this.ownershipFence.runAgentBrowserOperation(
+      sessionId,
+      async (lease) => {
+        const pages = await this.browser.get(sessionId).pages();
+        lease.assertCurrent();
+        return pages;
+      },
+    );
   }
 
-  switchPage(sessionId: string, pageId: string): Promise<PageSummary> {
-    return this.mutateValue(sessionId, async () => {
-      await this.authorizeMutation(sessionId, `switch_page:${pageId}`);
-      const page = await this.browser.get(sessionId).switchPage(pageId);
-      await this.syncActivePage(sessionId);
-      await this.observations.append(sessionId, {
-        actor: "agent",
-        type: "page_switched",
-        data: { pageId },
-      });
-      {
+  async switchPage(sessionId: string, pageId: string): Promise<PageSummary> {
+    const { page } = await this.mutateValue(
+      sessionId,
+      async (lease) => {
+        await this.authorizeMutation(sessionId, `switch_page:${pageId}`, lease);
+
+        const page = await this.browser.get(sessionId).switchPage(pageId);
+
+        lease.assertCurrent();
+
+        await this.syncActivePage(sessionId, lease);
+
+        lease.assertCurrent();
+
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: "page_switched",
+          data: { pageId },
+        });
+
+        lease.assertCurrent();
+
         const assessment = await this.assessBrowser(
           sessionId,
           this.browser.get(sessionId),
+          lease,
         );
 
+        lease.assertCurrent();
+
+        return {
+          page,
+          assessment,
+        };
+      },
+      async ({ assessment }) => {
         await this.pagePolicyOrchestrator.orchestrate(
           sessionId,
           assessment.policyDecision,
           assessment.pageState,
           "post_action",
         );
-      }
-      return page;
-    });
+      },
+    );
+
+    return page;
   }
 
-  closePage(sessionId: string, pageId: string): Promise<void> {
-    return this.mutateValue(sessionId, async () => {
-      await this.authorizeMutation(sessionId, `close_page:${pageId}`);
-      await this.browser.get(sessionId).closePage(pageId);
-      await this.syncActivePage(sessionId);
-      await this.observations.append(sessionId, {
-        actor: "agent",
-        type: "page_closed",
-        data: { pageId },
-      });
-      {
+  async closePage(sessionId: string, pageId: string): Promise<void> {
+    await this.mutateValue(
+      sessionId,
+      async (lease) => {
+        await this.authorizeMutation(sessionId, `close_page:${pageId}`, lease);
+
+        await this.browser.get(sessionId).closePage(pageId);
+
+        lease.assertCurrent();
+
+        await this.syncActivePage(sessionId, lease);
+
+        lease.assertCurrent();
+
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: "page_closed",
+          data: { pageId },
+        });
+
+        lease.assertCurrent();
+
         const assessment = await this.assessBrowser(
           sessionId,
           this.browser.get(sessionId),
+          lease,
         );
 
+        lease.assertCurrent();
+
+        return assessment;
+      },
+      async (assessment) => {
         await this.pagePolicyOrchestrator.orchestrate(
           sessionId,
           assessment.policyDecision,
           assessment.pageState,
           "post_action",
         );
-      }
-    });
+      },
+    );
   }
 
   captureScreenshot(
     sessionId: string,
     options: ScreenshotOptions = {},
   ): Promise<Evidence> {
-    return this.mutateValue(sessionId, async () => {
+    return this.mutateValue(sessionId, async (lease) => {
       const artifact = await this.browser.get(sessionId).screenshot(options);
+
+      lease.assertCurrent();
+
       const item = await this.evidence.saveScreenshot(
         sessionId,
         artifact,
         options,
       );
+
+      lease.assertCurrent();
+
       await this.observations.append(sessionId, {
         actor: "agent",
         type: "screenshot_captured",
-        data: { evidenceId: item.id, label: item.label },
+        data: {
+          evidenceId: item.id,
+          label: item.label,
+        },
         ...(item.pageId === undefined ? {} : { pageId: item.pageId }),
         ...(item.pageRevision === undefined
           ? {}
-          : { pageRevision: item.pageRevision }),
+          : {
+              pageRevision: item.pageRevision,
+            }),
       });
+
+      lease.assertCurrent();
+
       return item;
     });
   }
@@ -424,102 +492,24 @@ export class RuntimeService implements RoveRuntime {
     request: RequestHumanRequest,
   ): Promise<ControlStatus> {
     const input = requestHumanRequestSchema.parse(request);
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanRequestHuman(session);
-      if (session.status === "awaiting_human" && session.controller === null)
-        return this.toControlStatus(session);
-      const requestedAt = new Date().toISOString();
-      const next = await this.sessions.update({
-        ...session,
-        status: "awaiting_human",
-        controller: null,
-        handoff: { reason: input.reason, requestedAt },
-      });
-      const observation = await this.observations.append(sessionId, {
-        actor: "agent",
-        type: "human_requested",
-        data: { reason: input.reason },
-      });
-      await this.controlWait.publish(sessionId, observation);
-      return this.toControlStatus(next, observation.seq);
-    });
+
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.requestHuman(sessionId, input.reason),
+    );
   }
 
   async takeHumanControl(sessionId: string): Promise<ControlStatus> {
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanTakeHuman(session);
-      if (session.controller === "human") return this.toControlStatus(session);
-      const requested = session.handoff !== undefined;
-      const next = await this.sessions.update({
-        ...session,
-        status: "active",
-        controller: "human",
-      });
-      const observation = await this.observations.append(sessionId, {
-        actor: "human",
-        type: "human_took_control",
-        data: { requested },
-      });
-      await this.controlWait.publish(sessionId, observation);
-      return this.toControlStatus(next, observation.seq);
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.takeHuman(sessionId),
+    );
   }
 
   async returnAgentControl(sessionId: string): Promise<ControlStatus> {
-    return this.coordinator.execute(sessionId, async () => {
-      const session = await this.sessions.get(sessionId);
-      this.control.assertCanReturnAgent(session);
-      if (session.controller === "agent" && session.handoff === undefined)
-        return this.toControlStatus(session);
-
-      await this.flushHumanActivity(sessionId);
-
-      try {
-        const pages = await this.browser.get(sessionId).pages();
-        const activePageId = pages.find((page) => page.active)?.id;
-        const invalidatedPages = await this.browser
-          .get(sessionId)
-          .invalidateAllTargets();
-        this.interactionPolicy.requireInspection(sessionId);
-        const next: Session = {
-          ...session,
-          status: "active",
-          controller: "agent",
-          ...(activePageId === undefined ? {} : { activePageId }),
-        };
-        delete next.handoff;
-        const persisted = await this.sessions.update(next);
-        const observation = await this.observations.append(sessionId, {
-          actor: "human",
-          type: "human_returned_control",
-          data: { activePageId, invalidatedPages },
-        });
-        await this.controlWait.publish(sessionId, observation);
-        return this.toControlStatus(persisted, observation.seq);
-      } catch (error) {
-        if (!(error instanceof RoveError) || error.code !== "BROWSER_CLOSED")
-          throw error;
-        const now = new Date().toISOString();
-        const failed: Session = {
-          ...session,
-          status: "failed",
-          controller: null,
-          endedAt: now,
-          updatedAt: now,
-        };
-        delete failed.handoff;
-        await this.sessions.update(failed);
-        const observation = await this.observations.append(sessionId, {
-          actor: "system",
-          type: "session_failed",
-          data: {},
-        });
-        await this.controlWait.publish(sessionId, observation);
-        throw error;
-      }
-    });
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.returnAgent(sessionId, () =>
+        this.flushHumanActivity(sessionId),
+      ),
+    );
   }
 
   async waitForControl(
@@ -575,37 +565,75 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     signature: string,
     operation: () => Promise<ActionResult>,
-    observation: (result: ActionResult) => { type: string; data: unknown },
+    observation: (result: ActionResult) => {
+      type: string;
+      data: unknown;
+    },
   ): Promise<ActionResult> {
-    return this.mutateValue(sessionId, async () => {
-      await this.paceAgentAction(sessionId);
-      await this.authorizeMutation(sessionId, signature);
-      const result = { ...(await operation()), sessionId };
-      await this.syncActivePage(sessionId);
-      const event = observation(result);
-      await this.observations.append(sessionId, {
-        actor: "agent",
-        type: event.type,
-        data: event.data,
-        ...(result.pageId === undefined ? {} : { pageId: result.pageId }),
-        ...(result.currentRevision === undefined
-          ? {}
-          : { pageRevision: result.currentRevision }),
-      });
-      const assessment = await this.assessBrowser(
-        sessionId,
-        this.browser.get(sessionId),
-      );
+    const { result } = await this.mutateValue(
+      sessionId,
+      async (lease) => {
+        await this.paceAgentAction(sessionId);
 
-      await this.pagePolicyOrchestrator.orchestrate(
-        sessionId,
-        assessment.policyDecision,
-        assessment.pageState,
-        "post_action",
-      );
+        lease.assertCurrent();
 
-      return result;
-    });
+        await this.authorizeMutation(sessionId, signature, lease);
+
+        const result = {
+          ...(await operation()),
+          sessionId,
+        };
+
+        lease.assertCurrent();
+
+        await this.syncActivePage(sessionId, lease);
+
+        lease.assertCurrent();
+
+        const event = observation(result);
+
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: event.type,
+          data: event.data,
+          ...(result.pageId === undefined ? {} : { pageId: result.pageId }),
+          ...(result.currentRevision === undefined
+            ? {}
+            : {
+                pageRevision: result.currentRevision,
+              }),
+        });
+
+        lease.assertCurrent();
+
+        const assessment = await this.assessBrowser(
+          sessionId,
+          this.browser.get(sessionId),
+          lease,
+        );
+
+        lease.assertCurrent();
+
+        return {
+          result,
+          assessment,
+        };
+      },
+      async ({ assessment }) => {
+        // IMPORTANT:
+        // mutateValue releases the browser ownership lease before
+        // invoking this callback. Automatic F2 handoff can therefore
+        // drain safely instead of waiting on its own action lease.
+        await this.pagePolicyOrchestrator.orchestrate(
+          sessionId,
+          assessment.policyDecision,
+          assessment.pageState,
+          "post_action",
+        );
+      },
+    );
+
+    return result;
   }
 
   private async paceAgentAction(sessionId: string): Promise<void> {
@@ -623,12 +651,23 @@ export class RuntimeService implements RoveRuntime {
   private async authorizeMutation(
     sessionId: string,
     signature: string,
+    lease: BrowserOwnershipLease,
   ): Promise<void> {
     try {
+      lease.assertCurrent();
+
       const browser = this.browser.get(sessionId);
+
       const identity = await browser.pageStateIdentity();
+
+      lease.assertCurrent();
+
       const pages = await browser.pages();
+
+      lease.assertCurrent();
+
       const activePage = pages.find((page) => page.active);
+
       const currentRevision =
         activePage?.id === identity.pageId ? activePage.revision : undefined;
 
@@ -644,8 +683,15 @@ export class RuntimeService implements RoveRuntime {
         Date.now(),
         identity,
       );
+
+      lease.assertCurrent();
     } catch (error) {
-      if (error instanceof RoveError) {
+      if (error instanceof RoveError && error.code !== "CONTROL_NOT_OWNED") {
+        // If ownership changed while authorization was being derived,
+        // prefer the ownership failure and do not emit a stale policy
+        // rejection.
+        lease.assertCurrent();
+
         await this.observations.append(sessionId, {
           actor: "system",
           type: "policy_action_rejected",
@@ -653,24 +699,43 @@ export class RuntimeService implements RoveRuntime {
             action: signature.split(":", 1)[0],
             code: error.code,
             retryable: error.retryable,
-            ...(error.details === undefined ? {} : { details: error.details }),
+            ...(error.details === undefined
+              ? {}
+              : {
+                  details: error.details,
+                }),
           },
         });
+
+        lease.assertCurrent();
       }
+
       throw error;
     }
   }
 
   private async assessBrowser(
     sessionId: string,
-    browser: { inspect(options?: InspectOptions): Promise<PageInspection> },
+    browser: {
+      inspect(options?: InspectOptions): Promise<PageInspection>;
+    },
+    lease?: BrowserOwnershipLease,
   ): Promise<PageInspectionPolicyRecord> {
     const inspection = await browser.inspect({
       includeText: false,
       includeTargets: false,
     });
 
-    return this.interactionPolicy.recordInspection(sessionId, inspection);
+    lease?.assertCurrent();
+
+    const assessment = this.interactionPolicy.recordInspection(
+      sessionId,
+      inspection,
+    );
+
+    lease?.assertCurrent();
+
+    return assessment;
   }
 
   private enqueueHumanActivity(
@@ -916,22 +981,50 @@ export class RuntimeService implements RoveRuntime {
 
   private async mutateValue<T>(
     sessionId: string,
-    operation: () => Promise<T>,
+    operation: (lease: BrowserOwnershipLease) => Promise<T>,
+    afterOperation?: (result: T) => Promise<void>,
   ): Promise<T> {
     return this.coordinator.execute(sessionId, async () => {
       const session = await this.requireActive(sessionId);
+
       this.control.assertCanMutate(session, "agent");
-      return operation();
+
+      const result = await this.ownershipFence.runAgentBrowserOperation(
+        sessionId,
+        operation,
+      );
+
+      // runAgentBrowserOperation has released the ownership lease
+      // before control reaches this callback.
+      if (afterOperation !== undefined) {
+        await afterOperation(result);
+      }
+
+      return result;
     });
   }
 
-  private async syncActivePage(sessionId: string): Promise<void> {
-    const activePageId = (await this.browser.get(sessionId).pages()).find(
-      (page) => page.active,
-    )?.id;
+  private async syncActivePage(
+    sessionId: string,
+    lease: BrowserOwnershipLease,
+  ): Promise<void> {
+    const pages = await this.browser.get(sessionId).pages();
+
+    lease.assertCurrent();
+
+    const activePageId = pages.find((page) => page.active)?.id;
+
     const session = await this.sessions.get(sessionId);
+
+    lease.assertCurrent();
+
     if (activePageId !== undefined && activePageId !== session.activePageId) {
-      await this.sessions.update({ ...session, activePageId });
+      await this.sessions.update({
+        ...session,
+        activePageId,
+      });
+
+      lease.assertCurrent();
     }
   }
 
