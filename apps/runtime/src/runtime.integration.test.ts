@@ -26,6 +26,7 @@ import {
 } from "../../../packages/browser/src/fixtures/fixture-server.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
+import { BrowserOwnershipFence } from "./control/browser-ownership-fence.js";
 import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
@@ -38,6 +39,7 @@ interface Harness {
   runtime: RuntimeService;
   browser: BrowserService;
   sessions: SessionService;
+  ownershipFence: BrowserOwnershipFence;
 }
 
 const homes: string[] = [];
@@ -75,6 +77,8 @@ async function harness(
   const sessions = new SessionService(new FileSessionStore(home));
   const browser = new BrowserService(engine);
   const observations = new ObservationService(new FileObservationStore(home));
+  const ownershipFence = new BrowserOwnershipFence();
+
   const runtime = new RuntimeService(
     sessions,
     new ControlService(),
@@ -104,8 +108,16 @@ async function harness(
         },
       };
     })(),
+    ownershipFence,
   );
-  return { home, runtime, browser, sessions };
+
+  return {
+    home,
+    runtime,
+    browser,
+    sessions,
+    ownershipFence,
+  };
 }
 
 async function fixture(): Promise<FixtureServer> {
@@ -702,6 +714,35 @@ describe("Milestone 4 runtime integration", () => {
         ).toEqual(["session_started"]);
 
         const beforeInspect = await runtime.getSession(session.id);
+
+        if (mode === "capture") {
+          await expect(
+            runtime.inspectBrowser(session.id, {
+              includeText: false,
+              includeTargets: false,
+            }),
+          ).rejects.toMatchObject({
+            code: "CONTROL_NOT_OWNED",
+          });
+
+          await expect(runtime.pages(session.id)).rejects.toMatchObject({
+            code: "CONTROL_NOT_OWNED",
+          });
+
+          await expect(
+            runtime.captureScreenshot(session.id),
+          ).rejects.toMatchObject({
+            code: "CONTROL_NOT_OWNED",
+          });
+
+          const afterDeniedReads = await runtime.getSession(session.id);
+
+          expect(afterDeniedReads.status).toBe(beforeInspect.status);
+          expect(afterDeniedReads.controller).toBe("human");
+          expect(afterDeniedReads.handoff).toEqual(beforeInspect.handoff);
+
+          return;
+        }
 
         const inspection = await runtime.inspectBrowser(session.id, {
           includeText: false,
@@ -1376,6 +1417,169 @@ describe("Milestone 9 human DOM activity", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONTROL_NOT_OWNED",
+    });
+  });
+
+  it("blocks agent live reads while Capture Mode owns the browser", async () => {
+    const browserSession = readyBrowserSession("browser_capture_f3");
+
+    let inspectCalls = 0;
+    let pagesCalls = 0;
+    let screenshotCalls = 0;
+
+    const baseInspect = browserSession.inspect.bind(browserSession);
+    const basePages = browserSession.pages.bind(browserSession);
+
+    browserSession.inspect = async (options) => {
+      inspectCalls += 1;
+      return baseInspect(options);
+    };
+
+    browserSession.pages = async () => {
+      pagesCalls += 1;
+      return basePages();
+    };
+
+    browserSession.screenshot = async () => {
+      screenshotCalls += 1;
+      throw new Error("Capture screenshot should never reach the browser.");
+    };
+
+    const engine: BrowserEngine = {
+      start: async () => browserSession,
+    };
+
+    const { runtime } = await harness(engine);
+
+    const session = await runtime.startSession({
+      mode: "capture",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const startupInspectCalls = inspectCalls;
+    const startupPagesCalls = pagesCalls;
+
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.pages(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.captureScreenshot(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    expect(inspectCalls).toBe(startupInspectCalls);
+    expect(pagesCalls).toBe(startupPagesCalls);
+    expect(screenshotCalls).toBe(0);
+  });
+
+  it("invalidates an in-flight inspect before request-human completes", async () => {
+    const browserSession = readyBrowserSession("browser_inspect_f3");
+
+    let inspectCalls = 0;
+
+    let inspectStartedResolve!: () => void;
+
+    const inspectStarted = new Promise<void>((resolve) => {
+      inspectStartedResolve = resolve;
+    });
+
+    let releaseInspectResolve!: () => void;
+
+    const releaseInspect = new Promise<void>((resolve) => {
+      releaseInspectResolve = resolve;
+    });
+
+    const baseInspect = browserSession.inspect.bind(browserSession);
+
+    browserSession.inspect = async (options) => {
+      inspectCalls += 1;
+
+      // startSession performs the first assessment.
+      // Call two is the agent-facing inspect under test.
+      if (inspectCalls === 2) {
+        inspectStartedResolve();
+        await releaseInspect;
+      }
+
+      return baseInspect(options);
+    };
+
+    const engine: BrowserEngine = {
+      start: async () => browserSession,
+    };
+
+    const { runtime, ownershipFence } = await harness(engine);
+
+    const session = await runtime.startSession({
+      mode: "agent",
+    });
+
+    active.push({
+      runtime,
+      id: session.id,
+    });
+
+    const inspection = runtime.inspectBrowser(session.id);
+
+    await inspectStarted;
+
+    let transitionStartedResolve!: () => void;
+
+    const transitionStarted = new Promise<void>((resolve) => {
+      transitionStartedResolve = resolve;
+    });
+
+    const originalBeginTransition =
+      ownershipFence.beginTransition.bind(ownershipFence);
+
+    ownershipFence.beginTransition = (transitionSessionId) => {
+      const transition = originalBeginTransition(transitionSessionId);
+
+      transitionStartedResolve();
+
+      return transition;
+    };
+
+    const handoff = runtime.requestHuman(session.id, {
+      reason: "F3 inspect race",
+    });
+
+    // Exact F3 synchronization boundary:
+    // the old generation has been invalidated and new admission
+    // is closed, while requestHuman waits for the old inspect.
+    await transitionStarted;
+
+    let admissionError: unknown;
+
+    try {
+      const unexpectedLease = ownershipFence.acquire(session.id, "agent");
+
+      unexpectedLease.release();
+    } catch (error) {
+      admissionError = error;
+    }
+
+    expect(admissionError).toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    releaseInspectResolve();
+
+    await expect(inspection).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
     });
   });
 });

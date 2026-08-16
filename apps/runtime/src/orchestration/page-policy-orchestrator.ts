@@ -3,6 +3,7 @@ import type {
   PagePolicyDecision,
 } from "@rove/protocol";
 
+import { BrowserOwnershipFence } from "../control/browser-ownership-fence.js";
 import { ControlWaitService } from "../control/control-wait.service.js";
 import { ObservationService } from "../observation/observation.service.js";
 import { SessionService } from "../session/session.service.js";
@@ -35,6 +36,7 @@ export class PagePolicyOrchestrator {
     private readonly sessions: SessionService,
     private readonly observations: ObservationService,
     private readonly controlWait: ControlWaitService,
+    private readonly ownershipFence: BrowserOwnershipFence,
   ) {}
 
   async orchestrate(
@@ -67,17 +69,28 @@ export class PagePolicyOrchestrator {
       return;
     }
 
+    const transition = this.ownershipFence.beginTransition(sessionId);
+
+    await transition.waitForDrain();
+
     const requestedAt = new Date().toISOString();
 
-    await this.sessions.update({
-      ...session,
-      status: "awaiting_human",
-      controller: null,
-      handoff: {
-        reason: decision.message,
-        requestedAt,
-      },
-    });
+    try {
+      await this.sessions.update({
+        ...session,
+        status: "awaiting_human",
+        controller: null,
+        handoff: {
+          reason: decision.message,
+          requestedAt,
+        },
+      });
+    } catch (error) {
+      this.ownershipFence.completeTransition(transition, "agent");
+      throw error;
+    }
+
+    this.ownershipFence.completeTransition(transition, null);
 
     const observation = await this.observations.append(sessionId, {
       actor: "system",

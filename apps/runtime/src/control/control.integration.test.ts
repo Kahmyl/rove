@@ -99,7 +99,7 @@ afterEach(async () => {
 });
 
 describe("Milestone 7 requested handoff", () => {
-  it("persists request, blocks mutations, wakes waits, and stales old targets before handback", async () => {
+  it("persists request, blocks agent browser access, wakes waits, and stales old targets before handback", async () => {
     const fixture = await startFixtureServer();
     servers.push(fixture);
     const { runtime } = await harness();
@@ -135,8 +135,16 @@ describe("Milestone 7 requested handoff", () => {
         value: "blocked",
       }),
     ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
-    await expect(runtime.inspectBrowser(session.id)).resolves.toMatchObject({
-      pageId: "page_01",
+    await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.pages(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
+    });
+
+    await expect(runtime.captureScreenshot(session.id)).rejects.toMatchObject({
+      code: "CONTROL_NOT_OWNED",
     });
 
     const waitForTake = runtime.waitForControl(session.id, {

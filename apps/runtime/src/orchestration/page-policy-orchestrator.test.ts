@@ -6,6 +6,7 @@ import type {
   Session,
 } from "@rove/protocol";
 
+import { BrowserOwnershipFence } from "../control/browser-ownership-fence.js";
 import { ControlWaitService } from "../control/control-wait.service.js";
 import { ObservationService } from "../observation/observation.service.js";
 import { SessionService } from "../session/session.service.js";
@@ -55,6 +56,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 function harness(initial: Session) {
   let current = initial;
 
+  const ownershipFence = new BrowserOwnershipFence();
+  ownershipFence.initialize(initial.id, initial.controller);
+
   const get = vi.fn(async () => current);
 
   const update = vi.fn(async (next: Session) => {
@@ -90,6 +94,7 @@ function harness(initial: Session) {
     {
       publish,
     } as unknown as ControlWaitService,
+    ownershipFence,
   );
 
   return {
@@ -98,6 +103,7 @@ function harness(initial: Session) {
     update,
     append,
     publish,
+    ownershipFence,
     current: () => current,
   };
 }
@@ -175,6 +181,15 @@ describe("PagePolicyOrchestrator", () => {
     );
 
     expect(test.publish).toHaveBeenCalledTimes(1);
+
+    try {
+      test.ownershipFence.acquire("ses_test", "agent");
+      throw new Error("Expected agent admission to be closed.");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "CONTROL_NOT_OWNED",
+      });
+    }
   });
 
   it("requests human ownership for human verification", async () => {
