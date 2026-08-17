@@ -48,6 +48,7 @@ describe("external Chrome engine integration", () => {
     const fakeSession = {} as BrowserSession;
 
     const close = vi.fn(async () => undefined);
+    const closeGracefully = vi.fn(async () => undefined);
 
     const discover = vi
       .spyOn(externalChromeRuntime, "discoverExternalChromeExecutable")
@@ -62,6 +63,7 @@ describe("external Chrome engine integration", () => {
         userDataDir,
         temporaryProfile: false,
         close,
+        closeGracefully,
       });
 
     const connect = vi
@@ -117,7 +119,7 @@ describe("external Chrome engine integration", () => {
       ]),
     });
 
-    expect(call?.[5]).toBe(close);
+    expect(call?.[5]).toBe(closeGracefully);
   });
 
   it("falls back to bundled Chromium when system Chrome is unavailable", async () => {
@@ -168,6 +170,65 @@ describe("external Chrome engine integration", () => {
       temporaryDirectories.push(downloadRuntime.root);
     }
   });
+
+  it("requests native browser shutdown before external runtime cleanup", async () => {
+    const userDataDir = await mkdtemp(
+      join(tmpdir(), "rove-owned-runtime-native-close-"),
+    );
+
+    temporaryDirectories.push(userDataDir);
+
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      headless: true,
+    });
+
+    const browser = context.browser();
+
+    if (browser === null) {
+      throw new Error("Persistent test context has no browser.");
+    }
+
+    const cdp = await browser.newBrowserCDPSession();
+    const send = vi.spyOn(cdp, "send").mockResolvedValue(undefined as never);
+
+    vi.spyOn(browser, "newBrowserCDPSession").mockResolvedValue(cdp);
+
+    const cleanup = vi.fn(async () => {
+      expect(send).toHaveBeenCalledWith("Browser.close");
+    });
+
+    const session = await PlaywrightBrowserSession.createPersistent(
+      context,
+      {
+        headless: true,
+        browser: "chrome",
+        profile: {
+          mode: "persistent",
+          name: "owned-runtime-native-close",
+        },
+        profileUserDataDir: userDataDir,
+      },
+      {
+        distribution: "chrome",
+        sandbox: true,
+        diagnostics: [],
+      },
+      undefined,
+      "browser_owned_runtime_native_close_test",
+      cleanup,
+    );
+
+    try {
+      await session.close();
+      await session.close();
+
+      expect(send).toHaveBeenCalledWith("Browser.close");
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      await context.close().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    }
+  }, 15_000);
 
   it("runs an owned runtime cleanup hook exactly once when a session closes", async () => {
     const userDataDir = await mkdtemp(

@@ -41,6 +41,7 @@ export interface ExternalChromeRuntime {
   readonly userDataDir: string;
   readonly temporaryProfile: boolean;
   close(): Promise<void>;
+  closeGracefully(): Promise<void>;
 }
 
 async function defaultPathExists(executablePath: string): Promise<boolean> {
@@ -433,24 +434,36 @@ export async function launchExternalChrome(
     stderrTail = appendTail(stderrTail, chunk);
   });
 
-  let closed = false;
+  let closePromise: Promise<void> | undefined;
 
-  const close = async (): Promise<void> => {
-    if (closed) {
-      return;
+  const closeWithGracePeriod = (allowNaturalExit: boolean): Promise<void> => {
+    if (closePromise !== undefined) {
+      return closePromise;
     }
 
-    closed = true;
+    closePromise = (async () => {
+      if (allowNaturalExit && !processExited(child)) {
+        await waitForExit(child, PROCESS_EXIT_TIMEOUT_MS);
+      }
 
-    await terminateOwnedChrome(child).catch(() => undefined);
+      if (!processExited(child)) {
+        await terminateOwnedChrome(child).catch(() => undefined);
+      }
 
-    if (temporaryProfile) {
-      await rm(userDataDir, {
-        recursive: true,
-        force: true,
-      }).catch(() => undefined);
-    }
+      if (temporaryProfile) {
+        await rm(userDataDir, {
+          recursive: true,
+          force: true,
+        }).catch(() => undefined);
+      }
+    })();
+
+    return closePromise;
   };
+
+  const close = (): Promise<void> => closeWithGracePeriod(false);
+
+  const closeGracefully = (): Promise<void> => closeWithGracePeriod(true);
 
   try {
     await waitForDevTools(
@@ -477,5 +490,6 @@ export async function launchExternalChrome(
     userDataDir,
     temporaryProfile,
     close,
+    closeGracefully,
   };
 }

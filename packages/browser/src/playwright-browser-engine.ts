@@ -215,7 +215,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         },
         downloadRuntime,
         sessionId,
-        external.close,
+        external.closeGracefully,
       );
     } catch (error) {
       await browser?.close().catch(() => undefined);

@@ -1249,26 +1249,47 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const browserCdp = this.browserCdp;
 
     this.browserCdp = undefined;
-
-    if (browserCdp !== undefined) {
-      await browserCdp.detach().catch(() => undefined);
-    }
-
     this.activityListeners.clear();
-    try {
-      await this.context.close();
-    } catch {
-      // Context already closed; continue shutdown.
-    }
-    try {
-      await this.browser.close();
-    } catch {
-      // Browser already closed; continue shutdown.
-    }
-    await this.downloadSaveQueue.catch(() => undefined);
 
-    if (this.ownedRuntimeCleanup !== undefined) {
+    const ownsExternalChrome =
+      this.capabilities.distribution === "chrome" &&
+      this.ownedRuntimeCleanup !== undefined;
+
+    if (ownsExternalChrome) {
+      await this.downloadSaveQueue.catch(() => undefined);
+
+      const shutdownCdp =
+        browserCdp ??
+        (await this.browser.newBrowserCDPSession().catch(() => undefined));
+
+      if (shutdownCdp !== undefined) {
+        await shutdownCdp.send("Browser.close").catch(() => undefined);
+        await shutdownCdp.detach().catch(() => undefined);
+      }
+
       await this.ownedRuntimeCleanup().catch(() => undefined);
+    } else {
+      if (browserCdp !== undefined) {
+        await browserCdp.detach().catch(() => undefined);
+      }
+
+      try {
+        await this.context.close();
+      } catch {
+        // Context already closed; continue shutdown.
+      }
+
+      try {
+        await this.browser.close();
+      } catch {
+        // Browser already closed; continue shutdown.
+      }
+
+      await this.downloadSaveQueue.catch(() => undefined);
+
+      if (this.ownedRuntimeCleanup !== undefined) {
+        await this.ownedRuntimeCleanup().catch(() => undefined);
+      }
     }
 
     this.pageRegistry.clear();
