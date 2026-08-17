@@ -28,7 +28,7 @@ import type {
 } from "./observation/browser-activity.js";
 import { BrowserEvidenceRecorder } from "./observation/browser-evidence.js";
 import {
-  installDomActivityListeners,
+  DOM_ACTIVITY_INIT_SCRIPT,
   normalizeDomActivityPayload,
 } from "./observation/dom-activity.js";
 import { PageInspector } from "./inspection/inspector.js";
@@ -89,6 +89,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private browserCdp: CDPSession | undefined;
   private activeTabTimer: ReturnType<typeof setInterval> | undefined;
   private reconcilingActiveTab = false;
+  private domActivityDrainTimer: ReturnType<typeof setInterval> | undefined;
+  private drainingDomActivity = false;
   private readonly evidenceRecorder = new BrowserEvidenceRecorder(
     (pageId, evidence) => {
       const state = this.pageRegistry.has(pageId)
@@ -115,6 +117,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     private readonly typingDelayMs: number,
     private readonly headless: boolean,
     private readonly downloadRuntime?: ResolvedDownloadRuntime,
+    private readonly ownedRuntimeCleanup?: () => Promise<void>,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -186,6 +189,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     runtime: BrowserRuntimeSnapshot,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
+    ownedRuntimeCleanup?: () => Promise<void>,
   ): Promise<PlaywrightBrowserSession> {
     const browser = context.browser();
 
@@ -207,6 +211,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       sandbox,
       downloadRuntime,
       sessionId,
+      ownedRuntimeCleanup,
     );
   }
 
@@ -219,6 +224,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     sandbox: BrowserSandboxVerification,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
+    ownedRuntimeCleanup?: () => Promise<void>,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
@@ -230,6 +236,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       config.interaction?.typingDelayMs ?? 0,
       config.headless,
       downloadRuntime,
+      ownedRuntimeCleanup,
     );
 
     await session.installDomActivityBridge();
@@ -246,20 +253,85 @@ export class PlaywrightBrowserSession implements BrowserSession {
       await context.newPage();
     }
 
+    session.startDomActivityDrain();
+
     await session.startActiveTabObservation();
 
     return session;
   }
 
   private async installDomActivityBridge(): Promise<void> {
-    await this.context.exposeBinding(
-      "__roveReportActivity",
-      ({ page }, payload: unknown) => {
-        this.handleDomActivity(page, payload);
-      },
-    );
+    await this.context.addInitScript({
+      content: DOM_ACTIVITY_INIT_SCRIPT,
+    });
 
-    await this.context.addInitScript(installDomActivityListeners);
+    await Promise.all(
+      this.context.pages().flatMap((page) =>
+        page.frames().map(async (frame) => {
+          await frame.evaluate(DOM_ACTIVITY_INIT_SCRIPT).catch(() => undefined);
+        }),
+      ),
+    );
+  }
+
+  private startDomActivityDrain(): void {
+    if (this.domActivityDrainTimer !== undefined) {
+      return;
+    }
+
+    this.domActivityDrainTimer = setInterval(() => {
+      void this.drainDomActivityQueues();
+    }, 500);
+  }
+
+  private async drainDomActivityQueues(): Promise<void> {
+    if (this.closed || this.drainingDomActivity) {
+      return;
+    }
+
+    this.drainingDomActivity = true;
+
+    try {
+      for (const page of this.context.pages()) {
+        if (page.isClosed()) {
+          continue;
+        }
+
+        const pageId = this.pageRegistry.pageIdFor(page);
+
+        if (pageId === undefined || !this.pageRegistry.has(pageId)) {
+          continue;
+        }
+
+        for (const frame of page.frames()) {
+          let payloads: unknown[];
+
+          try {
+            payloads = await frame.evaluate(() => {
+              const queue = (
+                window as unknown as {
+                  __roveDomActivityQueue?: unknown[];
+                }
+              ).__roveDomActivityQueue;
+
+              if (!Array.isArray(queue) || queue.length === 0) {
+                return [];
+              }
+
+              return queue.splice(0, 100);
+            });
+          } catch {
+            continue;
+          }
+
+          for (const payload of payloads) {
+            this.handleDomActivity(page, payload);
+          }
+        }
+      }
+    } finally {
+      this.drainingDomActivity = false;
+    }
   }
 
   private async startActiveTabObservation(): Promise<void> {
@@ -1168,26 +1240,58 @@ export class PlaywrightBrowserSession implements BrowserSession {
       this.activeTabTimer = undefined;
     }
 
+    if (this.domActivityDrainTimer !== undefined) {
+      clearInterval(this.domActivityDrainTimer);
+
+      this.domActivityDrainTimer = undefined;
+    }
+
     const browserCdp = this.browserCdp;
 
     this.browserCdp = undefined;
-
-    if (browserCdp !== undefined) {
-      await browserCdp.detach().catch(() => undefined);
-    }
-
     this.activityListeners.clear();
-    try {
-      await this.context.close();
-    } catch {
-      // Context already closed; continue shutdown.
+
+    const ownsExternalChrome =
+      this.capabilities.distribution === "chrome" &&
+      this.ownedRuntimeCleanup !== undefined;
+
+    if (ownsExternalChrome) {
+      await this.downloadSaveQueue.catch(() => undefined);
+
+      const shutdownCdp =
+        browserCdp ??
+        (await this.browser.newBrowserCDPSession().catch(() => undefined));
+
+      if (shutdownCdp !== undefined) {
+        await shutdownCdp.send("Browser.close").catch(() => undefined);
+        await shutdownCdp.detach().catch(() => undefined);
+      }
+
+      await this.ownedRuntimeCleanup().catch(() => undefined);
+    } else {
+      if (browserCdp !== undefined) {
+        await browserCdp.detach().catch(() => undefined);
+      }
+
+      try {
+        await this.context.close();
+      } catch {
+        // Context already closed; continue shutdown.
+      }
+
+      try {
+        await this.browser.close();
+      } catch {
+        // Browser already closed; continue shutdown.
+      }
+
+      await this.downloadSaveQueue.catch(() => undefined);
+
+      if (this.ownedRuntimeCleanup !== undefined) {
+        await this.ownedRuntimeCleanup().catch(() => undefined);
+      }
     }
-    try {
-      await this.browser.close();
-    } catch {
-      // Browser already closed; continue shutdown.
-    }
-    await this.downloadSaveQueue.catch(() => undefined);
+
     this.pageRegistry.clear();
     this.inspector.clear();
 

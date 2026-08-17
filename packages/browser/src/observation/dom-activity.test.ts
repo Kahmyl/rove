@@ -1,27 +1,30 @@
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
+  DOM_ACTIVITY_INIT_SCRIPT,
   normalizeDomActivityPayload,
 } from "./dom-activity.js";
 
 describe("DOM activity minimization", () => {
-  it("drops arbitrary fields and raw values", () => {
-    const secret =
-      "DO_NOT_PERSIST_THIS_VALUE";
+  it("stays browser-serializable without bundler runtime helpers", () => {
+    const source = DOM_ACTIVITY_INIT_SCRIPT;
 
-    const click =
-      normalizeDomActivityPayload({
-        type: "interaction_click",
-        tag: "button",
-        role: "button",
-        label: "Submit",
-        value: secret,
-        password: secret,
-      });
+    expect(source).not.toContain("__name(");
+
+    expect(source).toContain("__roveDomActivityQueue");
+  });
+
+  it("drops arbitrary fields and raw values", () => {
+    const secret = "DO_NOT_PERSIST_THIS_VALUE";
+
+    const click = normalizeDomActivityPayload({
+      type: "interaction_click",
+      tag: "button",
+      role: "button",
+      label: "Submit",
+      value: secret,
+      password: secret,
+    });
 
     expect(click).toEqual({
       type: "interaction_click",
@@ -32,18 +35,15 @@ describe("DOM activity minimization", () => {
       },
     });
 
-    expect(
-      JSON.stringify(click),
-    ).not.toContain(secret);
+    expect(JSON.stringify(click)).not.toContain(secret);
 
-    const selection =
-      normalizeDomActivityPayload({
-        type: "selection_changed",
-        tag: "select",
-        label: "sort",
-        selectedIndex: 1,
-        value: secret,
-      });
+    const selection = normalizeDomActivityPayload({
+      type: "selection_changed",
+      tag: "select",
+      label: "sort",
+      selectedIndex: 1,
+      value: secret,
+    });
 
     expect(selection).toEqual({
       type: "selection_changed",
@@ -54,9 +54,7 @@ describe("DOM activity minimization", () => {
       },
     });
 
-    expect(
-      JSON.stringify(selection),
-    ).not.toContain(secret);
+    expect(JSON.stringify(selection)).not.toContain(secret);
   });
 
   it("accepts only fixed scroll milestones", () => {
