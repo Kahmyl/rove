@@ -117,6 +117,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     private readonly typingDelayMs: number,
     private readonly headless: boolean,
     private readonly downloadRuntime?: ResolvedDownloadRuntime,
+    private readonly ownedRuntimeCleanup?: () => Promise<void>,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -188,6 +189,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     runtime: BrowserRuntimeSnapshot,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
+    ownedRuntimeCleanup?: () => Promise<void>,
   ): Promise<PlaywrightBrowserSession> {
     const browser = context.browser();
 
@@ -209,6 +211,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       sandbox,
       downloadRuntime,
       sessionId,
+      ownedRuntimeCleanup,
     );
   }
 
@@ -221,6 +224,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     sandbox: BrowserSandboxVerification,
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
+    ownedRuntimeCleanup?: () => Promise<void>,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
@@ -232,6 +236,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       config.interaction?.typingDelayMs ?? 0,
       config.headless,
       downloadRuntime,
+      ownedRuntimeCleanup,
     );
 
     await session.installDomActivityBridge();
@@ -1261,6 +1266,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
       // Browser already closed; continue shutdown.
     }
     await this.downloadSaveQueue.catch(() => undefined);
+
+    if (this.ownedRuntimeCleanup !== undefined) {
+      await this.ownedRuntimeCleanup().catch(() => undefined);
+    }
+
     this.pageRegistry.clear();
     this.inspector.clear();
 
