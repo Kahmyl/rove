@@ -9,32 +9,20 @@ export interface NormalizedDomActivity {
   data: Record<string, unknown>;
 }
 
-function record(
-  value: unknown,
-): Record<string, unknown> | null {
-  return typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-    ? value as Record<string, unknown>
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
     : null;
 }
 
-function boundedString(
-  value: unknown,
-  max = 120,
-): string | undefined {
+function boundedString(value: unknown, max = 120): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
 
-  const normalized = value
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
+  const normalized = value.replace(/\s+/g, " ").trim().slice(0, max);
 
-  return normalized.length === 0
-    ? undefined
-    : normalized;
+  return normalized.length === 0 ? undefined : normalized;
 }
 
 export function normalizeDomActivityPayload(
@@ -42,10 +30,7 @@ export function normalizeDomActivityPayload(
 ): NormalizedDomActivity | null {
   const item = record(payload);
 
-  if (
-    item === null ||
-    typeof item.type !== "string"
-  ) {
+  if (item === null || typeof item.type !== "string") {
     return null;
   }
 
@@ -59,33 +44,21 @@ export function normalizeDomActivityPayload(
       data: {
         ...(tag === undefined ? {} : { tag }),
         ...(role === undefined ? {} : { role }),
-        ...(label === undefined
-          ? {}
-          : { label }),
+        ...(label === undefined ? {} : { label }),
       },
     };
   }
 
   if (item.type === "form_submitted") {
-    const formId = boundedString(
-      item.formId,
-      80,
-    );
+    const formId = boundedString(item.formId, 80);
 
-    const method = boundedString(
-      item.method,
-      20,
-    );
+    const method = boundedString(item.method, 20);
 
     return {
       type: item.type,
       data: {
-        ...(formId === undefined
-          ? {}
-          : { formId }),
-        ...(method === undefined
-          ? {}
-          : { method }),
+        ...(formId === undefined ? {} : { formId }),
+        ...(method === undefined ? {} : { method }),
       },
     };
   }
@@ -125,46 +98,67 @@ export function normalizeDomActivityPayload(
       data: {
         ...(tag === undefined ? {} : { tag }),
         ...(role === undefined ? {} : { role }),
-        ...(label === undefined
-          ? {}
-          : { label }),
-        ...(selectedIndex === undefined
-          ? {}
-          : { selectedIndex }),
+        ...(label === undefined ? {} : { label }),
+        ...(selectedIndex === undefined ? {} : { selectedIndex }),
       },
     };
   }
 
-
   return null;
 }
 
-export function installDomActivityListeners(): void {
-  type Reporter = (
-    payload: Record<string, unknown>,
-  ) => Promise<void>;
+export const DOM_ACTIVITY_INIT_SCRIPT = String.raw`
+(() => {
+  const activityWindow = window;
 
-  const reporter = (
-    window as unknown as {
-      __roveReportActivity?: Reporter;
-    }
-  ).__roveReportActivity;
-
-  if (typeof reporter !== "function") {
+  if (
+    activityWindow.__roveDomActivityInstalled ===
+    true
+  ) {
     return;
   }
 
-  const report = (
-    payload: Record<string, unknown>,
-  ) => {
-    void reporter(payload).catch(
-      () => undefined,
-    );
-  };
+  let queue =
+    activityWindow.__roveDomActivityQueue;
 
-  const labelFor = (
-    element: Element,
-  ): string => {
+  if (!Array.isArray(queue)) {
+    queue = [];
+
+    Object.defineProperty(
+      activityWindow,
+      "__roveDomActivityQueue",
+      {
+        value: queue,
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      },
+    );
+  }
+
+  Object.defineProperty(
+    activityWindow,
+    "__roveDomActivityInstalled",
+    {
+      value: true,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    },
+  );
+
+  function report(payload) {
+    queue.push(payload);
+
+    if (queue.length > 1000) {
+      queue.splice(
+        0,
+        queue.length - 1000,
+      );
+    }
+  }
+
+  function labelFor(element) {
     const aria =
       element
         .getAttribute("aria-label")
@@ -179,7 +173,8 @@ export function installDomActivityListeners(): void {
       element.tagName === "A" ||
       element.getAttribute("role") ===
         "button" ||
-      element.getAttribute("role") === "link"
+      element.getAttribute("role") ===
+        "link"
     ) {
       const text =
         element.textContent
@@ -196,31 +191,34 @@ export function installDomActivityListeners(): void {
       element.id ||
       element.tagName.toLowerCase()
     ).slice(0, 120);
-  };
+  }
 
   document.addEventListener(
     "click",
     (event) => {
-      if (!(event.target instanceof Element)) {
+      if (
+        !(event.target instanceof Element)
+      ) {
         return;
       }
 
-      const element = event.target.closest(
-        [
-          "a",
-          "button",
-          "summary",
-          "select",
-          "[role='button']",
-          "[role='link']",
-          "[role='tab']",
-          "[role='menuitem']",
-          "input[type='button']",
-          "input[type='submit']",
-          "input[type='checkbox']",
-          "input[type='radio']",
-        ].join(","),
-      );
+      const element =
+        event.target.closest(
+          [
+            "a",
+            "button",
+            "summary",
+            "select",
+            "[role='button']",
+            "[role='link']",
+            "[role='tab']",
+            "[role='menuitem']",
+            "input[type='button']",
+            "input[type='submit']",
+            "input[type='checkbox']",
+            "input[type='radio']",
+          ].join(","),
+        );
 
       if (element === null) {
         return;
@@ -228,7 +226,8 @@ export function installDomActivityListeners(): void {
 
       report({
         type: "interaction_click",
-        tag: element.tagName.toLowerCase(),
+        tag:
+          element.tagName.toLowerCase(),
         role:
           element.getAttribute("role") ??
           "",
@@ -241,7 +240,12 @@ export function installDomActivityListeners(): void {
   document.addEventListener(
     "submit",
     (event) => {
-      if (!(event.target instanceof HTMLFormElement)) {
+      if (
+        !(
+          event.target instanceof
+          HTMLFormElement
+        )
+      ) {
         return;
       }
 
@@ -249,7 +253,9 @@ export function installDomActivityListeners(): void {
         type: "form_submitted",
         formId:
           event.target.id ||
-          event.target.getAttribute("name") ||
+          event.target.getAttribute(
+            "name",
+          ) ||
           "",
         method: event.target.method,
       });
@@ -258,11 +264,11 @@ export function installDomActivityListeners(): void {
   );
 
   const selectedIndices =
-    new WeakMap<HTMLSelectElement, number>();
+    new WeakMap();
 
   for (
     const element of Array.from(
-      document.querySelectorAll<HTMLSelectElement>(
+      document.querySelectorAll(
         "select",
       ),
     )
@@ -273,9 +279,7 @@ export function installDomActivityListeners(): void {
     );
   }
 
-  const reportSelection = (
-    element: HTMLSelectElement,
-  ) => {
+  function reportSelection(element) {
     const selectedIndex =
       element.selectedIndex;
 
@@ -303,19 +307,20 @@ export function installDomActivityListeners(): void {
       label: labelFor(element),
       selectedIndex,
     });
-  };
+  }
 
-  const observeSelection = (
-    event: Event,
-  ) => {
+  function observeSelection(event) {
     if (
-      !(event.target instanceof HTMLSelectElement)
+      !(
+        event.target instanceof
+        HTMLSelectElement
+      )
     ) {
       return;
     }
 
     reportSelection(event.target);
-  };
+  }
 
   document.addEventListener(
     "input",
@@ -333,7 +338,10 @@ export function installDomActivityListeners(): void {
     "keyup",
     (event) => {
       if (
-        !(event.target instanceof HTMLSelectElement)
+        !(
+          event.target instanceof
+          HTMLSelectElement
+        )
       ) {
         return;
       }
@@ -358,41 +366,56 @@ export function installDomActivityListeners(): void {
       requestAnimationFrame(() => {
         scrollScheduled = false;
 
-        const scrollHeight = Math.max(
-          document.documentElement.scrollHeight,
-          document.body?.scrollHeight ?? 0,
-        );
+        const scrollHeight =
+          Math.max(
+            document.documentElement
+              .scrollHeight,
+            document.body
+              ?.scrollHeight ?? 0,
+          );
 
         const maximum =
-          scrollHeight - window.innerHeight;
+          scrollHeight -
+          window.innerHeight;
 
         if (maximum <= 0) {
           return;
         }
 
         const percentage =
-          (window.scrollY / maximum) * 100;
+          (
+            window.scrollY /
+            maximum
+          ) * 100;
 
         let milestone = 0;
 
         if (percentage >= 100) {
           milestone = 100;
-        } else if (percentage >= 75) {
+        } else if (
+          percentage >= 75
+        ) {
           milestone = 75;
-        } else if (percentage >= 50) {
+        } else if (
+          percentage >= 50
+        ) {
           milestone = 50;
-        } else if (percentage >= 25) {
+        } else if (
+          percentage >= 25
+        ) {
           milestone = 25;
         }
 
         if (
           milestone === 0 ||
-          milestone <= highestScrollMilestone
+          milestone <=
+            highestScrollMilestone
         ) {
           return;
         }
 
-        highestScrollMilestone = milestone;
+        highestScrollMilestone =
+          milestone;
 
         report({
           type: "scroll_milestone",
@@ -404,6 +427,5 @@ export function installDomActivityListeners(): void {
       passive: true,
     },
   );
-
-
-}
+})();
+`;
