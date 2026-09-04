@@ -328,63 +328,344 @@ Phase 2 is accepted only when:
 - unknown consequential outcomes cannot be retried automatically;
 - human control behavior remains unchanged.
 
-## Phase 3 — Adaptive visual escalation
+## Phase 3 — Agent-visible visual perception
 
-### Outcome
+### Status
 
-At completion, Rove handles relevant content that cannot be understood reliably
-through ordinary semantic and accessibility channels.
+Research-realigned after completion of Phases 1 and 2.
 
-### Escalation order
+Phase 3 does not create a second browser perception system. Phase 1 already
+implemented observation-correlated screenshots and bounded MCP image delivery,
+while Phase 2 already implemented grounded target resolution, Playwright-owned
+interaction, successor observations, action receipts and unknown-outcome
+handling.
+
+The Phase 3 entry question is therefore narrower:
+
+> Can a compatible vision-capable calling agent actually consume and reason
+> over the visual evidence already returned by Rove, and can that reasoning
+> improve browser understanding without creating a second action authority?
+
+### Complete phase outcome
+
+At the end of Phase 3, a compatible vision-capable calling agent can request a
+current bounded screenshot from Rove, actually receive that image in model
+context, use it to understand rendered state, and continue through Rove's
+existing target-resolution and verified-interaction contracts.
+
+Rove continues to own:
+
+- session and page identity;
+- document and revision identity;
+- ownership generation;
+- target identity;
+- target freshness;
+- Playwright interaction dispatch;
+- successor observations;
+- expected-effect verification;
+- `ActionReceipt`;
+- consequential replay fencing;
+- human-control transitions.
+
+The calling agent owns interpretation of the image.
+
+A screenshot is evidence. It is never independent action authority.
+
+### Existing production capability reused by Phase 3
+
+Phase 3 reuses the existing `browser.screenshot` contract.
+
+Supported capture modes already are:
+
+- viewport;
+- full-page;
+- target;
+- region.
+
+An `observationId` may bind a capture to one exact current
+`BrowserObservation`.
+
+Viewport and bounded region captures can already be returned through MCP as
+actual image content while the same capture remains durable Rove evidence.
+
+Phase 3 must qualify this existing path before adding another visual transport
+or screenshot tool.
+
+### Intended normal path
 
 ```text
-semantic structure
-    -> geometry and hit testing
-    -> target or region screenshot
-    -> region-first OCR
-    -> model vision
+BrowserObservation
+    ↓ sufficient
+continue semantically
+
+BrowserObservation
+    ↓ rendered meaning remains unclear
+browser.screenshot
+    ↓
+same calling agent inspects image
+    ↓
+agent chooses current intent / current target
+    ↓
+browser.resolve_target when grounding is needed
+    ↓
+browser.interact
+    ↓
+Playwright
+    ↓
+successor observation
+    ↓
+ActionReceipt
 ```
 
-### Production scope
+The caller decides when visual evidence is useful. Rove does not need an
+internal model or an automatic model-routing layer merely to decide whether the
+agent should look at a screenshot.
 
-Phase 3 includes:
+### Visual target disambiguation
 
-- explicit escalation policy;
-- local OCR provider interface;
-- bounded OCR regions;
-- OCR confidence and bounds;
-- visual anchors;
-- canvas and image-surface handling;
-- model-vision provider interface;
-- visual verification;
-- evidence provenance;
-- warm-provider and cancellation strategy where measurements justify it;
-- latency, image, memory, and model-context budgets.
+When the structured observation contains plausible alternatives that remain
+ambiguous, the caller may request a viewport, target or region screenshot and
+use that image to decide which current Rove target best matches its intent.
 
-### Isolated experiment
+The caller must still return or select a current `TargetReference`.
 
-The same fixed corpus compares:
+The screenshot itself does not manufacture a new action target.
 
-1. semantic structure;
-2. structure plus geometry;
-3. structure, geometry, and screenshot;
-4. structure, geometry, and OCR;
-5. structure, geometry, and model vision.
+A stale screenshot cannot revive a stale target.
 
-The comparison records success, incorrect-action rate, ambiguity, latency,
-memory use, image size, and model cost. Only channels with demonstrated
-incremental value enter production.
+### Existing coordinate interaction
 
-### Acceptance
+Phase 2 already includes a `coordinate_click` interaction.
 
-Phase 3 is accepted only when:
+Its current protocol requires:
 
-- ordinary semantic pages remain on the inexpensive path;
-- OCR is region-first;
-- visual providers are replaceable;
-- temporary OCR and visual artifacts are bounded;
-- visual evidence does not bypass freshness or action authority;
-- every admitted provider has recorded value and cost.
+- a current `TargetReference`;
+- an exact `observationId`;
+- finite `offsetX` and `offsetY` values.
+
+Those requirements make the operation target- and observation-scoped, but the
+protocol schema alone does not prove that the offsets are constrained to remain
+inside the target bounds.
+
+Phase 3 therefore does not treat `coordinate_click` as already-qualified
+visual-only action authority.
+
+Before this primitive could be used for a genuine canvas or image-only
+interaction, an isolated experiment must prove that the production dispatch
+path:
+
+- preserves the exact current target and observation authority;
+- rejects stale page, document and ownership state;
+- constrains the effective click to the intended current visual surface; and
+- cannot escape that surface through arbitrary offsets.
+
+Until those properties are proven, visual-only mutation remains a human-control
+case.
+
+Phase 3 must not expose unrestricted page coordinates or raw CDP action
+dispatch.
+
+### Mandatory isolated experiment
+
+Before any Phase 3 production browser change, one disposable experiment must
+qualify the existing screenshot path with the actual intended calling-agent
+client.
+
+The experiment hypothesis is:
+
+> A screenshot captured by the existing Rove/Playwright path can reach the
+> calling vision-capable agent as actual visual context, the agent can
+> demonstrate that it saw pixel-only information, and visual reasoning can
+> assist understanding without bypassing current Rove target authority.
+
+The experiment must use content whose answer exists only in rendered pixels,
+not in ordinary DOM or accessibility text.
+
+A representative fixture should contain:
+
+- a randomized visual nonce drawn into a canvas;
+- two randomized shapes whose spatial relationship changes per run;
+- one visually rendered label that is absent from semantic page text;
+- an ordinary semantic control elsewhere on the page.
+
+The caller must correctly report:
+
+- the nonce;
+- the spatial relationship;
+- the rendered label.
+
+The experiment must separately prove that the agent cannot use that image to
+bypass the normal target contract for the semantic control.
+
+### Client/transport qualification
+
+Image transport is considered qualified only when the actual supported caller
+can reason about the delivered image.
+
+The experiment must record:
+
+- MCP client and version;
+- calling model;
+- transport used;
+- image response shape;
+- capture mode;
+- MIME type;
+- encoded byte length;
+- screenshot dimensions;
+- evidence ID;
+- source observation ID;
+- whether the model demonstrably saw the pixel-only nonce;
+- whether the spatial answer was correct;
+- whether the rendered label was correct.
+
+Byte-valid PNG transport alone is not sufficient evidence that the model saw
+the image.
+
+A client that does not surface the image to the model is reported as
+`visual_delivery_unverified`. Rove must not pretend that such a client supports
+agent-visible screenshots.
+
+### Success threshold
+
+The selected image response shape is accepted only if the intended supported
+caller achieves, across at least ten randomized runs:
+
+- 10/10 correct visual nonces;
+- 10/10 correct spatial relationships;
+- 10/10 correct rendered labels;
+- exact observation-to-evidence correlation;
+- no silent image drop;
+- no stale observation accepted after page mutation or ownership change.
+
+Failure holds Phase 3 production implementation at the experiment gate.
+
+### Optional focused-disambiguation comparison
+
+Only after end-to-end caller vision is proven should the experiment compare:
+
+1. semantic observation only;
+2. semantic observation plus viewport screenshot;
+3. semantic observation plus focused region screenshot.
+
+This comparison should use deterministic fixtures with duplicate labels,
+visually distinct controls, dense layouts, frames, occlusion and deliberately
+unresolvable cases.
+
+A focused screenshot enters any additional production guidance only if it
+reduces ambiguity or incorrect target choice without weakening abstention.
+
+No annotated Set-of-Mark system is assumed necessary.
+
+### OCR decision
+
+OCR is excluded from the immediate Phase 3 production path.
+
+Phase 3 does not add:
+
+- Tesseract;
+- OCR language data;
+- a local OCR provider interface;
+- a remote OCR service;
+- a generic visual-provider abstraction.
+
+OCR remains a future hypothesis only.
+
+It may be reconsidered if real workflows demonstrate recurring cases where:
+
+- required text exists only in pixels;
+- the calling client cannot consume images;
+- vision-capable callers repeatedly fail to localize small rendered text; or
+- deterministic text boxes provide proven incremental value.
+
+Any future OCR implementation requires a new isolated experiment against those
+observed failures. Existing production code must not be shaped around a
+speculative OCR provider.
+
+### Model-vision decision
+
+Rove does not own a model-vision provider.
+
+No internal multimodal model, model router, extra inference service or visual
+model API is part of Phase 3.
+
+"Vision" in this architecture means the existing visual capability of the same
+agent already calling Rove.
+
+### Visual verification
+
+Phase 2 remains authoritative for action outcome.
+
+A screenshot may later provide supporting evidence for rendered-state
+verification, but a pixel change alone must never become business success.
+
+The existing outcomes remain:
+
+- `applied`;
+- `not_applied`;
+- `unknown`.
+
+Missing or contradictory successor evidence remains unresolved or unknown as
+defined by Phase 2.
+
+Consequential unknown outcomes remain non-replayable under their stable
+`consequenceKey`.
+
+### Security and privacy boundary
+
+Visual content is untrusted page evidence.
+
+Text or instructions appearing in screenshots must not:
+
+- change Rove's tool authority;
+- expand workflow scope;
+- create new target authority;
+- bypass ownership;
+- bypass stale-reference checks;
+- override approval or consequential-action rules;
+- automatically become durable workflow instructions or memory.
+
+Existing screenshot masking and ownership-generation freshness remain
+authoritative.
+
+### Explicit exclusions
+
+Phase 3 does not include:
+
+- an internal vision model;
+- a model-vision provider;
+- OCR;
+- OCR provider abstractions;
+- automatic screenshots on every observation;
+- full-page OCR;
+- unrestricted coordinate clicking;
+- raw CDP mutation;
+- screenshot-derived action authority;
+- CAPTCHA solving;
+- a browser extension;
+- a second browser architecture;
+- a Set-of-Mark implementation by default;
+- workflow memory derived automatically from screenshot content.
+
+### Acceptance boundary
+
+Phase 3 is accepted when:
+
+- the existing Phase 1 and Phase 2 contracts remain green;
+- the actual intended calling agent demonstrably receives image content;
+- pixel-only randomized evidence is read correctly across the required runs;
+- screenshot evidence is correlated to its exact source observation;
+- stale screenshot/observation authority fails closed;
+- normal semantic pages require no automatic screenshot;
+- the caller may use visual evidence to inform current target selection without
+  bypassing `TargetReference`;
+- no new unrestricted coordinate authority exists;
+- no OCR dependency or speculative OCR abstraction is introduced;
+- no internal model-vision dependency is introduced;
+- the experiment records an explicit adopt, modify or reject decision for any
+  optional visual mechanism;
+- production changes, if any, are limited to gaps actually demonstrated by the
+  experiment.
+
 
 ## Phase 4 — Browser-following compact control surface
 
