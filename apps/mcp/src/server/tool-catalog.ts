@@ -5,6 +5,8 @@ export const TOOL_CATALOG = [
   "session.observations",
   "browser.navigate",
   "browser.inspect",
+  "browser.resolve_target",
+  "browser.interact",
   "browser.click",
   "browser.type",
   "browser.press",

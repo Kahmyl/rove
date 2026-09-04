@@ -26,6 +26,8 @@ export const ROVE_ERROR_CODES = [
   "TARGET_NOT_INTERACTIVE",
   "NAVIGATION_FAILED",
   "ACTION_TIMEOUT",
+  "ACTION_OUTCOME_UNKNOWN",
+  "CONSEQUENTIAL_ACTION_UNRESOLVED",
   "BROWSER_CLOSED",
   "BROWSER_LAUNCH_FAILED",
   "PROFILE_NOT_FOUND",
@@ -82,5 +84,8 @@ export class RoveError extends Error {
 export function asRoveError(error: unknown): RoveError {
   return error instanceof RoveError
     ? error
-    : new RoveError({ code: "INVALID_CONFIGURATION", message: "Unexpected Rove failure." });
+    : new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Unexpected Rove failure.",
+      });
 }

@@ -29,6 +29,7 @@ import type {
   typeRequestSchema,
 } from "./schemas.js";
 import type { RoveErrorCode } from "./errors.js";
+import type { PerceivedControl } from "./phase2-interaction.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
@@ -137,9 +138,12 @@ export interface BrowserObservationCapabilities {
   occlusion: boolean;
   frameProvenance: boolean;
   openShadowDom: boolean;
-  screenshotModes: Array<
-    "viewport" | "full-page" | "target" | "region"
-  >;
+  screenshotModes: Array<"viewport" | "full-page" | "target" | "region">;
+}
+
+export interface PageTargetState {
+  checked?: boolean;
+  selectedValues?: string[];
 }
 
 export interface PageTarget {
@@ -153,6 +157,8 @@ export interface PageTarget {
   frame?: BrowserFrameReference;
   shadowRootDepth?: number;
   geometry?: BrowserTargetGeometry;
+  perceived?: PerceivedControl;
+  state?: PageTargetState;
 }
 
 export interface PageInspection {
@@ -331,7 +337,17 @@ export type BrowserActionType =
   | "forward"
   | "screenshot"
   | "switch_page"
-  | "close_page";
+  | "close_page"
+  | "hover"
+  | "clear"
+  | "fill"
+  | "select"
+  | "check"
+  | "uncheck"
+  | "drag"
+  | "upload"
+  | "precise_scroll"
+  | "coordinate_click";
 
 export interface ActionResult {
   ok: boolean;

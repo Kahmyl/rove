@@ -1,4 +1,5 @@
 export * from "./engine.js";
+export * from "./interaction/interaction-dispatch-error.js";
 export * from "./not-implemented-engine.js";
 export * from "./playwright-browser-engine.js";
 export * from "./pages/page-registry.js";
@@ -17,3 +18,5 @@ export * from "./profiles/profile-lock.js";
 export * from "./profiles/profile-manager.js";
 export * from "./runtime/browser-launch-plan.js";
 export * from "./runtime/browser-sandbox.js";
+
+export * from "./grounding/grounding.js";

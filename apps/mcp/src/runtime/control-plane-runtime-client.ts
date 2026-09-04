@@ -19,6 +19,10 @@ import type {
   StartSessionRequest,
   TargetReference,
   TypeRequest,
+  ActionReceipt,
+  TargetResolution,
+  TargetResolutionRequest,
+  VerifiedInteractionRequest,
 } from "@rove/protocol";
 
 import { RuntimeClientError } from "./runtime-client.error.js";
@@ -57,7 +61,10 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     return this.call("session.end", { sessionId });
   }
 
-  getObservations(sessionId: string, input: ObservationQuery): Promise<ObservationPage> {
+  getObservations(
+    sessionId: string,
+    input: ObservationQuery,
+  ): Promise<ObservationPage> {
     return this.call("session.observations", { sessionId, input });
   }
 
@@ -69,7 +76,24 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     return this.call("browser.inspect", { sessionId, input });
   }
 
-  click(sessionId: string, input: { target: TargetReference }): Promise<ActionResult> {
+  resolveTarget(
+    sessionId: string,
+    input: TargetResolutionRequest,
+  ): Promise<TargetResolution> {
+    return this.call("browser.resolve_target", { sessionId, input });
+  }
+
+  interact(
+    sessionId: string,
+    input: VerifiedInteractionRequest,
+  ): Promise<ActionReceipt> {
+    return this.call("browser.interact", { sessionId, input });
+  }
+
+  click(
+    sessionId: string,
+    input: { target: TargetReference },
+  ): Promise<ActionResult> {
     return this.call("browser.click", { sessionId, input });
   }
 
@@ -105,7 +129,10 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     return this.call("evidence.list", { sessionId });
   }
 
-  readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
+  readEvidence(
+    sessionId: string,
+    evidenceId: string,
+  ): Promise<EvidenceReadResult> {
     return this.call("evidence.read", { sessionId, evidenceId });
   }
 
@@ -145,7 +172,11 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
             authorization: `Bearer ${this.options.serviceToken}`,
             "content-type": "application/json",
           },
-          body: JSON.stringify({ operation, payload, timeoutMs: Math.min(timeoutMs - 1_000, 300_000) }),
+          body: JSON.stringify({
+            operation,
+            payload,
+            timeoutMs: Math.min(timeoutMs - 1_000, 300_000),
+          }),
           signal:
             signal === undefined
               ? AbortSignal.timeout(timeoutMs)
@@ -154,21 +185,37 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
       );
     } catch (error) {
       if (error instanceof DOMException && error.name === "TimeoutError") {
-        throw new RuntimeClientError("CONTROL_PLANE_TIMEOUT", "Control-plane command timed out.", true);
+        throw new RuntimeClientError(
+          "CONTROL_PLANE_TIMEOUT",
+          "Control-plane command timed out.",
+          true,
+        );
       }
-      throw new RuntimeClientError("CONTROL_PLANE_UNAVAILABLE", "Control plane is unavailable.", true);
+      throw new RuntimeClientError(
+        "CONTROL_PLANE_UNAVAILABLE",
+        "Control plane is unavailable.",
+        true,
+      );
     }
 
     const text = await response.text();
     if (!response.ok) {
-      throw new RuntimeClientError("CONTROL_PLANE_PROTOCOL_ERROR", `Control plane failed with HTTP ${response.status}.`, response.status >= 500);
+      throw new RuntimeClientError(
+        "CONTROL_PLANE_PROTOCOL_ERROR",
+        `Control plane failed with HTTP ${response.status}.`,
+        response.status >= 500,
+      );
     }
 
     let result: HubCommandResult;
     try {
       result = hubCommandResultSchema.parse(JSON.parse(text));
     } catch {
-      throw new RuntimeClientError("CONTROL_PLANE_PROTOCOL_ERROR", "Control plane returned malformed JSON.", false);
+      throw new RuntimeClientError(
+        "CONTROL_PLANE_PROTOCOL_ERROR",
+        "Control plane returned malformed JSON.",
+        false,
+      );
     }
     if (!result.ok) {
       throw new RuntimeClientError(

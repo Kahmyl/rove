@@ -16,6 +16,10 @@ import type {
   StartSessionRequest,
   TargetReference,
   TypeRequest,
+  ActionReceipt,
+  TargetResolution,
+  TargetResolutionRequest,
+  VerifiedInteractionRequest,
 } from "@rove/protocol";
 
 export interface ScrollInput {
@@ -33,10 +37,24 @@ export interface RuntimeClient {
   startSession(input: StartSessionRequest): Promise<SessionSnapshot>;
   getSession(sessionId: string): Promise<SessionSnapshot>;
   endSession(sessionId: string): Promise<SessionSnapshot>;
-  getObservations(sessionId: string, input: ObservationQuery): Promise<ObservationPage>;
+  getObservations(
+    sessionId: string,
+    input: ObservationQuery,
+  ): Promise<ObservationPage>;
   navigate(sessionId: string, input: NavigateRequest): Promise<ActionResult>;
   inspect(sessionId: string, input: InspectOptions): Promise<PageInspection>;
-  click(sessionId: string, input: { target: TargetReference }): Promise<ActionResult>;
+  resolveTarget(
+    sessionId: string,
+    input: TargetResolutionRequest,
+  ): Promise<TargetResolution>;
+  interact(
+    sessionId: string,
+    input: VerifiedInteractionRequest,
+  ): Promise<ActionReceipt>;
+  click(
+    sessionId: string,
+    input: { target: TargetReference },
+  ): Promise<ActionResult>;
   type(sessionId: string, input: TypeRequest): Promise<ActionResult>;
   press(sessionId: string, input: PressRequest): Promise<ActionResult>;
   scroll(sessionId: string, input: ScrollInput): Promise<ActionResult>;
@@ -45,8 +63,15 @@ export interface RuntimeClient {
   screenshot(sessionId: string, input: ScreenshotOptions): Promise<Evidence>;
   saveRecord(sessionId: string, input: SaveRecordInput): Promise<Evidence>;
   listEvidence(sessionId: string): Promise<Evidence[]>;
-  readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult>;
+  readEvidence(
+    sessionId: string,
+    evidenceId: string,
+  ): Promise<EvidenceReadResult>;
   getControlStatus(sessionId: string): Promise<ControlStatus>;
   requestHuman(sessionId: string, reason: string): Promise<ControlStatus>;
-  waitForControl(sessionId: string, input: ControlWaitRequest, signal?: AbortSignal): Promise<ControlWaitResult>;
+  waitForControl(
+    sessionId: string,
+    input: ControlWaitRequest,
+    signal?: AbortSignal,
+  ): Promise<ControlWaitResult>;
 }

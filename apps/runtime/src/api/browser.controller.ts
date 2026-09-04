@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+} from "@nestjs/common";
 import {
   clickRequestSchema,
   inspectOptionsSchema,
@@ -14,12 +23,18 @@ import {
   type ScrollOptions,
   type TypeRequest,
   typeRequestSchema,
+  targetResolutionRequestSchema,
+  verifiedInteractionRequestSchema,
+  type TargetResolutionRequest,
+  type VerifiedInteractionRequest,
 } from "@rove/protocol";
 import { RuntimeService } from "../runtime.service.js";
 
 @Controller("sessions/:id/browser")
 export class BrowserController {
-  constructor(@Inject(RuntimeService) private readonly runtime: RuntimeService) {}
+  constructor(
+    @Inject(RuntimeService) private readonly runtime: RuntimeService,
+  ) {}
 
   @Post("navigate")
   navigate(@Param("id") id: string, @Body() body: NavigateRequest) {
@@ -27,22 +42,47 @@ export class BrowserController {
   }
 
   @Get("inspect")
-  inspectGet(@Param("id") id: string, @Query() query: Record<string, string | undefined>) {
-    return this.runtime.inspectBrowser(id, inspectOptionsSchema.parse({
-      pageId: query.pageId,
-      includeText: parseBoolean(query.includeText),
-      includeTargets: parseBoolean(query.includeTargets),
-      includeViewport: parseBoolean(query.includeViewport),
-      includeStructure: parseBoolean(query.includeStructure),
-      maxTextChars: parseNumber(query.maxTextChars),
-      maxStructureChars: parseNumber(query.maxStructureChars),
-      targetLimit: parseNumber(query.targetLimit),
-    }));
+  inspectGet(
+    @Param("id") id: string,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    return this.runtime.inspectBrowser(
+      id,
+      inspectOptionsSchema.parse({
+        pageId: query.pageId,
+        includeText: parseBoolean(query.includeText),
+        includeTargets: parseBoolean(query.includeTargets),
+        includeViewport: parseBoolean(query.includeViewport),
+        includeStructure: parseBoolean(query.includeStructure),
+        maxTextChars: parseNumber(query.maxTextChars),
+        maxStructureChars: parseNumber(query.maxStructureChars),
+        targetLimit: parseNumber(query.targetLimit),
+      }),
+    );
   }
 
   @Post("inspect")
   inspectPost(@Param("id") id: string, @Body() body: InspectOptions = {}) {
     return this.runtime.inspectBrowser(id, inspectOptionsSchema.parse(body));
+  }
+
+  @Post("resolve-target")
+  resolveTarget(
+    @Param("id") id: string,
+    @Body() body: TargetResolutionRequest,
+  ) {
+    return this.runtime.resolveBrowserTarget(
+      id,
+      targetResolutionRequestSchema.parse(body),
+    );
+  }
+
+  @Post("interact")
+  interact(@Param("id") id: string, @Body() body: VerifiedInteractionRequest) {
+    return this.runtime.interact(
+      id,
+      verifiedInteractionRequestSchema.parse(body),
+    );
   }
 
   @Post("click")
@@ -77,7 +117,10 @@ export class BrowserController {
 
   @Post("screenshot")
   screenshot(@Param("id") id: string, @Body() body: ScreenshotOptions = {}) {
-    return this.runtime.captureScreenshot(id, screenshotOptionsSchema.parse(body));
+    return this.runtime.captureScreenshot(
+      id,
+      screenshotOptionsSchema.parse(body),
+    );
   }
 
   @Get("pages")

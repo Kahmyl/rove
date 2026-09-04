@@ -21,8 +21,13 @@ import {
   type ScreenshotOptions,
   type ScrollOptions,
   type TargetReference,
+  type TargetResolution,
+  type TargetResolutionRequest,
+  type BrowserInteractionRequest,
+  type DialogDirective,
 } from "@rove/protocol";
-import type { BrowserSession } from "./engine.js";
+import type { BrowserInteractionContext, BrowserSession } from "./engine.js";
+import { InteractionDispatchError } from "./interaction/interaction-dispatch-error.js";
 import type {
   BrowserActivity,
   BrowserActivityListener,
@@ -41,6 +46,8 @@ import {
   DEFAULT_NAVIGATION_TIMEOUT_MS,
   POPUP_GRACE_MS,
 } from "./actions/action-runner.js";
+import { groundTarget } from "./grounding/grounding.js";
+
 import {
   readMaterialMutationVersion,
   installMutationTracker,
@@ -111,11 +118,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
+  private readonly observationSnapshots = new Map<string, BrowserObservation>();
+
   private readonly observationAuthorities = new Map<
     string,
     ObservationAuthority
   >();
   private readonly activityListeners = new Set<BrowserActivityListener>();
+  private readonly pendingDialogDirectives = new Map<string, DialogDirective>();
   private recovering: Promise<void> | null = null;
   private browserCdp: CDPSession | undefined;
   private activeTabTimer: ReturnType<typeof setInterval> | undefined;
@@ -594,6 +604,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
         ? this.pageRegistry.stateFor(pageId)
         : undefined;
 
+      const directive =
+        dialog.type() === "beforeunload"
+          ? undefined
+          : this.pendingDialogDirectives.get(pageId);
+
+      this.pendingDialogDirectives.delete(pageId);
+
+      const action =
+        directive === undefined || directive.action === "dismiss"
+          ? "dismiss"
+          : "accept";
+
       this.emitActivity({
         type: "dialog_opened",
         pageId,
@@ -601,11 +623,21 @@ export class PlaywrightBrowserSession implements BrowserSession {
         timestamp: new Date().toISOString(),
         data: {
           type: dialog.type(),
-          defaultAction: "dismiss",
+          defaultAction: action,
         },
       });
 
-      void dialog.dismiss().catch(() => undefined);
+      if (action === "dismiss") {
+        void dialog.dismiss().catch(() => undefined);
+        return;
+      }
+
+      if (directive?.action === "accept_prompt" && dialog.type() === "prompt") {
+        void dialog.accept(directive.value).catch(() => undefined);
+        return;
+      }
+
+      void dialog.accept().catch(() => undefined);
     });
     page.on("download", (download) => {
       if (this.downloadRuntime === undefined) {
@@ -917,6 +949,32 @@ export class PlaywrightBrowserSession implements BrowserSession {
     return observation;
   }
 
+  async resolveTarget(
+    request: TargetResolutionRequest,
+  ): Promise<TargetResolution> {
+    const observation = await this.readObservation(request.observationId);
+
+    return groundTarget(observation, request.intent);
+  }
+
+  async readObservation(observationId: string): Promise<BrowserObservation> {
+    this.ensureOpen();
+
+    await this.assertObservationCurrent(observationId);
+
+    const observation = this.observationSnapshots.get(observationId);
+
+    if (observation === undefined) {
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message: "The referenced browser observation is no longer available.",
+        retryable: true,
+      });
+    }
+
+    return observation;
+  }
+
   async pageStateIdentity(
     pageId = this.requireActivePageId(),
   ): Promise<PageStateIdentity> {
@@ -937,6 +995,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ): Promise<void> {
     const viewport = observation.viewport ?? (await readBrowserViewport(page));
 
+    this.observationSnapshots.set(observation.observationId, observation);
+
     this.observationAuthorities.set(observation.observationId, {
       observationId: observation.observationId,
       pageId: observation.pageId,
@@ -954,6 +1014,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       }
 
       this.observationAuthorities.delete(oldest);
+      this.observationSnapshots.delete(oldest);
     }
   }
 
@@ -972,6 +1033,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     if (!this.pageRegistry.has(authority.pageId)) {
       this.observationAuthorities.delete(observationId);
+      this.observationSnapshots.delete(observationId);
 
       throw new RoveError({
         code: "OBSERVATION_STALE",
@@ -1004,6 +1066,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       viewportChanged
     ) {
       this.observationAuthorities.delete(observationId);
+      this.observationSnapshots.delete(observationId);
 
       throw new RoveError({
         code: "OBSERVATION_STALE",
@@ -1027,6 +1090,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async invalidateTargets(): Promise<void> {
     this.ensureOpen();
     this.observationAuthorities.clear();
+    this.observationSnapshots.clear();
 
     const pageId = this.requireActivePageId();
     const page = this.pageRegistry.pageFor(pageId);
@@ -1042,6 +1106,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async invalidateAllTargets(): Promise<number> {
     this.ensureOpen();
     this.observationAuthorities.clear();
+    this.observationSnapshots.clear();
     let invalidated = 0;
     for (const summary of this.pageRegistry.summaries()) {
       if (!this.pageRegistry.has(summary.id)) continue;
@@ -1055,6 +1120,501 @@ export class PlaywrightBrowserSession implements BrowserSession {
       invalidated += 1;
     }
     return invalidated;
+  }
+
+  async interact(
+    request: BrowserInteractionRequest,
+    context: BrowserInteractionContext,
+  ): Promise<ActionResult> {
+    this.ensureOpen();
+
+    await this.assertObservationCurrent(context.observationId);
+
+    if (
+      request.kind === "coordinate_click" &&
+      request.observationId !== context.observationId
+    ) {
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message:
+          "Coordinate interaction must use the same current observation authority.",
+        retryable: true,
+      });
+    }
+
+    switch (request.kind) {
+      case "click":
+        return this.runTargetInteraction(
+          "click",
+          request.target,
+          request.dialog,
+          "Click",
+          async (resolved) => {
+            await resolved.locator.click({
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+
+      case "hover":
+        return this.runTargetInteraction(
+          "hover",
+          request.target,
+          request.dialog,
+          "Hover",
+          async (resolved) => {
+            await resolved.locator.hover({
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+
+      case "clear":
+        return this.runTargetInteraction(
+          "clear",
+          request.target,
+          request.dialog,
+          "Clear",
+          async (resolved) => {
+            if (!resolved.state.editable) {
+              throw new RoveError({
+                code: "TARGET_NOT_INTERACTIVE",
+                message: "The target does not accept text.",
+              });
+            }
+
+            await resolved.locator.fill("", {
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+
+      case "fill":
+        return this.runTargetInteraction(
+          "fill",
+          request.target,
+          request.dialog,
+          "Fill",
+          async (resolved) => {
+            if (!resolved.state.editable) {
+              throw new RoveError({
+                code: "TARGET_NOT_INTERACTIVE",
+                message: "The target does not accept text.",
+              });
+            }
+
+            void isSensitiveTarget(resolved.state.identity);
+
+            await resolved.locator.fill(request.value, {
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+
+      case "select":
+        return this.runTargetInteraction(
+          "select",
+          request.target,
+          request.dialog,
+          "Select",
+          async (resolved) => {
+            if (resolved.state.identity.tag !== "select") {
+              throw new RoveError({
+                code: "TARGET_NOT_INTERACTIVE",
+                message: "The target is not a native selectable control.",
+              });
+            }
+
+            await resolved.locator.selectOption(request.values, {
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+
+      case "check":
+        return this.runTargetInteraction(
+          "check",
+          request.target,
+          request.dialog,
+          "Check",
+          async (resolved) => {
+            await this.applyCheckedState(resolved, true);
+          },
+        );
+
+      case "uncheck":
+        return this.runTargetInteraction(
+          "uncheck",
+          request.target,
+          request.dialog,
+          "Uncheck",
+          async (resolved) => {
+            await this.applyCheckedState(resolved, false);
+          },
+        );
+
+      case "drag": {
+        if (request.destination.pageId !== request.target.pageId) {
+          throw new RoveError({
+            code: "INVALID_CONFIGURATION",
+            message:
+              "Drag source and destination must belong to the same page.",
+          });
+        }
+
+        const destination = await this.resolveActionTarget(request.destination);
+
+        return this.runTargetInteraction(
+          "drag",
+          request.target,
+          request.dialog,
+          "Drag",
+          async (resolved) => {
+            await resolved.locator.dragTo(destination.locator, {
+              timeout: this.actionTimeoutMs,
+            });
+          },
+        );
+      }
+
+      case "upload": {
+        const upload = context.upload;
+
+        if (upload === undefined) {
+          throw new RoveError({
+            code: "INVALID_CONFIGURATION",
+            message:
+              "Upload interaction requires an internally materialized Rove file artifact.",
+          });
+        }
+
+        return this.runTargetInteraction(
+          "upload",
+          request.target,
+          request.dialog,
+          "Upload",
+          async (resolved) => {
+            if (
+              resolved.state.identity.tag !== "input" ||
+              resolved.state.identity.type !== "file"
+            ) {
+              throw new RoveError({
+                code: "TARGET_NOT_INTERACTIVE",
+                message: "The target is not a file input.",
+              });
+            }
+
+            await resolved.locator.setInputFiles(
+              {
+                name: upload.filename,
+                mimeType: "application/octet-stream",
+                buffer: Buffer.from(upload.bytes),
+              },
+              {
+                timeout: this.actionTimeoutMs,
+              },
+            );
+          },
+        );
+      }
+
+      case "precise_scroll":
+        return this.runPreciseScroll(request);
+
+      case "coordinate_click":
+        return this.runCoordinateClick(request);
+    }
+  }
+
+  private async runTargetInteraction(
+    action: ActionResult["action"],
+    target: TargetReference,
+    dialog: DialogDirective | undefined,
+    actionName: string,
+    operation: (resolved: ResolvedTarget) => Promise<void>,
+  ): Promise<ActionResult> {
+    const page = this.pageRegistry.pageFor(target.pageId);
+
+    const beforePages = this.pageRegistry.summaries();
+
+    const resolved = await this.resolveActionTarget(target);
+
+    const previous = this.pageRegistry.stateFor(target.pageId);
+
+    const popup = this.context
+      .waitForEvent("page", {
+        timeout: POPUP_GRACE_MS,
+      })
+      .catch(() => null);
+
+    let dispatched = false;
+
+    try {
+      await this.withDialogDirective(target.pageId, dialog, async () => {
+        dispatched = true;
+
+        await this.evidenceRecorder.withAgentAction(page, () =>
+          operation(resolved),
+        );
+      });
+
+      if (this.pageRegistry.summaries().length === beforePages.length) {
+        await popup;
+      }
+
+      return this.synchronizeAfterAction(
+        action,
+        target.pageId,
+        previous,
+        beforePages,
+      );
+    } catch (error) {
+      if (!dispatched) {
+        throw error;
+      }
+
+      const mapped =
+        error instanceof RoveError ? error : actionError(error, actionName);
+
+      const result = await this.synchronizeAfterAction(
+        action,
+        target.pageId,
+        previous,
+        beforePages,
+      ).catch(() => undefined);
+
+      throw new InteractionDispatchError(mapped, result);
+    }
+  }
+
+  private async runPreciseScroll(
+    request: Extract<BrowserInteractionRequest, { kind: "precise_scroll" }>,
+  ): Promise<ActionResult> {
+    const pageId = request.target?.pageId ?? this.requireActivePageId();
+
+    const page = this.pageRegistry.pageFor(pageId);
+
+    const beforePages = this.pageRegistry.summaries();
+
+    const previous = this.pageRegistry.stateFor(pageId);
+
+    let dispatched = false;
+
+    try {
+      if (request.target === undefined) {
+        dispatched = true;
+
+        await page.mouse.wheel(request.deltaX, request.deltaY);
+      } else {
+        const resolved = await this.resolveActionTarget(request.target);
+
+        dispatched = true;
+
+        await resolved.locator.evaluate(
+          (element, delta) => {
+            element.scrollBy({
+              left: delta.x,
+              top: delta.y,
+              behavior: "instant",
+            });
+          },
+          {
+            x: request.deltaX,
+            y: request.deltaY,
+          },
+        );
+      }
+
+      return this.synchronizeAfterAction(
+        "precise_scroll",
+        pageId,
+        previous,
+        beforePages,
+      );
+    } catch (error) {
+      if (!dispatched) {
+        throw error;
+      }
+
+      const mapped =
+        error instanceof RoveError
+          ? error
+          : actionError(error, "Precise scroll");
+
+      const result = await this.synchronizeAfterAction(
+        "precise_scroll",
+        pageId,
+        previous,
+        beforePages,
+      ).catch(() => undefined);
+
+      throw new InteractionDispatchError(mapped, result);
+    }
+  }
+
+  private async runCoordinateClick(
+    request: Extract<BrowserInteractionRequest, { kind: "coordinate_click" }>,
+  ): Promise<ActionResult> {
+    await this.assertObservationCurrent(request.observationId);
+
+    const resolved = await this.resolveActionTarget(request.target);
+
+    const bounds = await resolved.locator.boundingBox().catch(() => null);
+
+    if (bounds === null) {
+      throw new RoveError({
+        code: "TARGET_NOT_VISIBLE",
+        message: "The current target does not have usable interaction bounds.",
+      });
+    }
+
+    if (
+      request.offsetX < 0 ||
+      request.offsetY < 0 ||
+      request.offsetX > bounds.width ||
+      request.offsetY > bounds.height
+    ) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message:
+          "Coordinate fallback point must remain inside the current target bounds.",
+      });
+    }
+
+    const pageId = request.target.pageId;
+
+    const page = this.pageRegistry.pageFor(pageId);
+
+    const beforePages = this.pageRegistry.summaries();
+
+    const previous = this.pageRegistry.stateFor(pageId);
+
+    let dispatched = false;
+
+    try {
+      await this.withDialogDirective(pageId, request.dialog, async () => {
+        dispatched = true;
+
+        await this.evidenceRecorder.withAgentAction(page, () =>
+          page.mouse.click(
+            bounds.x + request.offsetX,
+            bounds.y + request.offsetY,
+          ),
+        );
+      });
+
+      return this.synchronizeAfterAction(
+        "coordinate_click",
+        pageId,
+        previous,
+        beforePages,
+      );
+    } catch (error) {
+      if (!dispatched) {
+        throw error;
+      }
+
+      const mapped =
+        error instanceof RoveError
+          ? error
+          : actionError(error, "Coordinate click");
+
+      const result = await this.synchronizeAfterAction(
+        "coordinate_click",
+        pageId,
+        previous,
+        beforePages,
+      ).catch(() => undefined);
+
+      throw new InteractionDispatchError(mapped, result);
+    }
+  }
+
+  private async applyCheckedState(
+    resolved: ResolvedTarget,
+    checked: boolean,
+  ): Promise<void> {
+    const tag = resolved.state.identity.tag;
+
+    const type = resolved.state.identity.type;
+
+    if (tag === "input" && (type === "checkbox" || type === "radio")) {
+      if (checked) {
+        await resolved.locator.check({
+          timeout: this.actionTimeoutMs,
+        });
+
+        return;
+      }
+
+      if (type === "radio") {
+        throw new RoveError({
+          code: "TARGET_NOT_INTERACTIVE",
+          message: "Radio controls cannot be unchecked directly.",
+        });
+      }
+
+      await resolved.locator.uncheck({
+        timeout: this.actionTimeoutMs,
+      });
+
+      return;
+    }
+
+    const role = resolved.state.identity.role;
+
+    if (role !== "checkbox" && role !== "switch") {
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The target does not expose a supported checked state.",
+      });
+    }
+
+    const before = await resolved.locator.getAttribute("aria-checked");
+
+    const current = before === "true";
+
+    if (current === checked) {
+      return;
+    }
+
+    await resolved.locator.click({
+      timeout: this.actionTimeoutMs,
+    });
+
+    const after = await resolved.locator.getAttribute("aria-checked");
+
+    if ((after === "true") !== checked) {
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The target did not enter the requested checked state.",
+      });
+    }
+  }
+
+  private async withDialogDirective<T>(
+    pageId: string,
+    directive: DialogDirective | undefined,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (directive === undefined) {
+      return operation();
+    }
+
+    if (this.pendingDialogDirectives.has(pageId)) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "A dialog directive is already pending for this page.",
+      });
+    }
+
+    this.pendingDialogDirectives.set(pageId, directive);
+
+    try {
+      return await operation();
+    } finally {
+      this.pendingDialogDirectives.delete(pageId);
+    }
   }
 
   async click(target: TargetReference): Promise<ActionResult> {
@@ -1413,6 +1973,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ): Promise<ActionResult> {
     const page = this.pageRegistry.pageFor(pageId);
     this.observationAuthorities.clear();
+    this.observationSnapshots.clear();
     let current = await this.pageRegistry.syncMetadata(pageId);
     const mutationVersion = await readMaterialMutationVersion(page);
     if (
@@ -1647,6 +2208,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
 
     this.observationAuthorities.clear();
+    this.observationSnapshots.clear();
+    this.pendingDialogDirectives.clear();
     this.pageRegistry.clear();
     this.inspector.clear();
 

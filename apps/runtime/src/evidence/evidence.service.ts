@@ -14,9 +14,14 @@ import { EVIDENCE_STORE } from "../tokens.js";
 
 @Injectable()
 export class EvidenceService {
-  constructor(@Inject(EVIDENCE_STORE) private readonly evidence: EvidenceStore) {}
+  constructor(
+    @Inject(EVIDENCE_STORE) private readonly evidence: EvidenceStore,
+  ) {}
 
-  async save(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence> {
+  async save(
+    sessionId: string,
+    request: SaveEvidenceRequest,
+  ): Promise<Evidence> {
     return this.savePayload(sessionId, request, request.payload);
   }
 
@@ -32,7 +37,9 @@ export class EvidenceService {
       createdAt: new Date().toISOString(),
       ...(request.label === undefined ? {} : { label: request.label }),
       ...(request.pageId === undefined ? {} : { pageId: request.pageId }),
-      ...(request.pageRevision === undefined ? {} : { pageRevision: request.pageRevision }),
+      ...(request.pageRevision === undefined
+        ? {}
+        : { pageRevision: request.pageRevision }),
       ...(request.url === undefined ? {} : { url: request.url }),
       ...(request.metadata === undefined ? {} : { metadata: request.metadata }),
     };
@@ -45,69 +52,53 @@ export class EvidenceService {
     artifact: Artifact,
     options: ScreenshotOptions = {},
   ): Promise<Evidence> {
-    const metadata =
-      artifact.metadata ?? {};
+    const metadata = artifact.metadata ?? {};
 
     const item: Evidence = {
-      id:
-        `ev_${randomUUID().replaceAll("-", "")}`,
+      id: `ev_${randomUUID().replaceAll("-", "")}`,
       sessionId,
       type: "screenshot",
       createdAt:
         typeof metadata.timestamp === "string"
           ? metadata.timestamp
           : new Date().toISOString(),
-      ...(options.label === undefined
-        ? {}
-        : { label: options.label }),
+      ...(options.label === undefined ? {} : { label: options.label }),
       ...(typeof metadata.pageId === "string"
         ? { pageId: metadata.pageId }
         : {}),
       ...(typeof metadata.revision === "number"
         ? {
-            pageRevision:
-              metadata.revision,
+            pageRevision: metadata.revision,
           }
         : {}),
-      ...(typeof metadata.url === "string"
-        ? { url: metadata.url }
-        : {}),
+      ...(typeof metadata.url === "string" ? { url: metadata.url } : {}),
       metadata: {
-        mimeType:
-          artifact.mimeType,
-        mode:
-          options.mode ?? "viewport",
+        mimeType: artifact.mimeType,
+        mode: options.mode ?? "viewport",
         ...(typeof metadata.observationId === "string"
           ? {
-              observationId:
-                metadata.observationId,
+              observationId: metadata.observationId,
             }
           : {}),
         ...(metadata.viewport === undefined
           ? {}
           : {
-              viewport:
-                metadata.viewport,
+              viewport: metadata.viewport,
             }),
         ...(metadata.region === undefined
           ? {}
           : {
-              region:
-                metadata.region,
+              region: metadata.region,
             }),
         ...(metadata.targetBounds === undefined
           ? {}
           : {
-              targetBounds:
-                metadata.targetBounds,
+              targetBounds: metadata.targetBounds,
             }),
       },
     };
 
-    await this.persist(
-      item,
-      artifact.bytes,
-    );
+    await this.persist(item, artifact.bytes);
 
     return item;
   }
@@ -117,12 +108,21 @@ export class EvidenceService {
   }
 
   async metadata(sessionId: string, evidenceId: string): Promise<Evidence> {
-    const item = (await this.evidence.list(sessionId)).find((candidate) => candidate.id === evidenceId);
-    if (!item) throw new RoveError({ code: "EVIDENCE_NOT_FOUND", message: "Evidence was not found." });
+    const item = (await this.evidence.list(sessionId)).find(
+      (candidate) => candidate.id === evidenceId,
+    );
+    if (!item)
+      throw new RoveError({
+        code: "EVIDENCE_NOT_FOUND",
+        message: "Evidence was not found.",
+      });
     return item;
   }
 
-  async read(sessionId: string, evidenceId: string): Promise<EvidenceReadResult> {
+  async read(
+    sessionId: string,
+    evidenceId: string,
+  ): Promise<EvidenceReadResult> {
     const item = await this.metadata(sessionId, evidenceId);
     const payload = await this.evidence.read(sessionId, evidenceId);
     if (payload instanceof Uint8Array) {
@@ -131,12 +131,63 @@ export class EvidenceService {
     return { ...item, content: payload };
   }
 
-  private async persist(item: Evidence, payload: EvidencePayload): Promise<void> {
+  async readFilePayload(
+    sessionId: string,
+    evidenceId: string,
+  ): Promise<{
+    filename: string;
+    bytes: Uint8Array;
+  }> {
+    const item = await this.metadata(sessionId, evidenceId);
+
+    if (item.type !== "file") {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Upload source evidence must be a Rove file artifact.",
+      });
+    }
+
+    const payload = await this.evidence.read(sessionId, evidenceId);
+
+    if (!(payload instanceof Uint8Array)) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Upload source evidence does not contain binary file payload.",
+      });
+    }
+
+    const metadataName =
+      typeof item.metadata?.filename === "string"
+        ? item.metadata.filename
+        : undefined;
+
+    const candidate = metadataName ?? item.label ?? "upload.bin";
+
+    const filename =
+      candidate
+        .replace(/[\\/]/g, "_")
+        .replace(/[^\P{Cc}\t\n\r]/gu, "")
+        .trim()
+        .slice(0, 200) || "upload.bin";
+
+    return {
+      filename,
+      bytes: payload,
+    };
+  }
+
+  private async persist(
+    item: Evidence,
+    payload: EvidencePayload,
+  ): Promise<void> {
     try {
       await this.evidence.save(item, payload);
     } catch (error) {
       if (error instanceof RoveError) throw error;
-      throw new RoveError({ code: "EVIDENCE_WRITE_FAILED", message: "Evidence could not be persisted." });
+      throw new RoveError({
+        code: "EVIDENCE_WRITE_FAILED",
+        message: "Evidence could not be persisted.",
+      });
     }
   }
 }

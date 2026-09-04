@@ -6,6 +6,8 @@ import {
   screenshotRequestSchema,
   scrollRequestSchema,
   typeRequestSchema,
+  targetResolutionRequestSchema,
+  verifiedInteractionRequestSchema,
 } from "@rove/protocol";
 import { z } from "zod";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
@@ -18,8 +20,451 @@ import {
   targetSchema,
 } from "./schemas.js";
 
+const dialogDirectiveJsonSchema = {
+  oneOf: [
+    {
+      type: "object",
+      properties: {
+        action: {
+          const: "dismiss",
+        },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        action: {
+          const: "accept",
+        },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        action: {
+          const: "accept_prompt",
+        },
+        value: {
+          type: "string",
+          maxLength: 10000,
+        },
+      },
+      required: ["action", "value"],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+const browserInteractionActionJsonSchema = {
+  oneOf: [
+    ...["click", "hover", "clear", "check", "uncheck"].map((kind) => ({
+      type: "object",
+      properties: {
+        kind: {
+          const: kind,
+        },
+        target: targetJsonSchema,
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target"],
+      additionalProperties: false,
+    })),
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "fill",
+        },
+        target: targetJsonSchema,
+        value: {
+          type: "string",
+          maxLength: 100000,
+        },
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target", "value"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "select",
+        },
+        target: targetJsonSchema,
+        values: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: "string",
+            maxLength: 5000,
+          },
+        },
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target", "values"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "drag",
+        },
+        target: targetJsonSchema,
+        destination: targetJsonSchema,
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target", "destination"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "upload",
+        },
+        target: targetJsonSchema,
+        evidenceId: {
+          type: "string",
+          pattern: "^ev_",
+        },
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target", "evidenceId"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "precise_scroll",
+        },
+        target: targetJsonSchema,
+        deltaX: {
+          type: "number",
+          minimum: -100000,
+          maximum: 100000,
+        },
+        deltaY: {
+          type: "number",
+          minimum: -100000,
+          maximum: 100000,
+        },
+      },
+      required: ["kind", "deltaX", "deltaY"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "coordinate_click",
+        },
+        target: targetJsonSchema,
+        observationId: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+        },
+        offsetX: {
+          type: "number",
+        },
+        offsetY: {
+          type: "number",
+        },
+        dialog: dialogDirectiveJsonSchema,
+      },
+      required: ["kind", "target", "observationId", "offsetX", "offsetY"],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+const expectedTargetJsonSchema = {
+  type: "object",
+  properties: {
+    name: {
+      type: "string",
+      minLength: 1,
+      maxLength: 500,
+    },
+    kind: {
+      type: "string",
+      enum: [
+        "button",
+        "link",
+        "input",
+        "textarea",
+        "select",
+        "checkbox",
+        "radio",
+        "tab",
+        "menuitem",
+        "option",
+        "control",
+      ],
+    },
+  },
+  required: ["name"],
+  additionalProperties: false,
+} as const;
+
+const expectedEffectJsonSchema = {
+  oneOf: [
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "url_equals",
+        },
+        url: {
+          type: "string",
+          format: "uri",
+        },
+      },
+      required: ["kind", "url"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "url_changed",
+        },
+      },
+      required: ["kind"],
+      additionalProperties: false,
+    },
+    ...["text_present", "text_absent"].map((kind) => ({
+      type: "object",
+      properties: {
+        kind: {
+          const: kind,
+        },
+        text: {
+          type: "string",
+          minLength: 1,
+          maxLength: 5000,
+        },
+      },
+      required: ["kind", "text"],
+      additionalProperties: false,
+    })),
+    ...[
+      "target_present",
+      "target_absent",
+      "target_enabled",
+      "target_disabled",
+      "target_checked",
+      "target_unchecked",
+    ].map((kind) => ({
+      type: "object",
+      properties: {
+        kind: {
+          const: kind,
+        },
+        target: expectedTargetJsonSchema,
+      },
+      required: ["kind", "target"],
+      additionalProperties: false,
+    })),
+    {
+      type: "object",
+      properties: {
+        kind: {
+          const: "selected_value",
+        },
+        target: expectedTargetJsonSchema,
+        value: {
+          type: "string",
+          maxLength: 5000,
+        },
+      },
+      required: ["kind", "target", "value"],
+      additionalProperties: false,
+    },
+    ...["page_opened", "page_closed"].map((kind) => ({
+      type: "object",
+      properties: {
+        kind: {
+          const: kind,
+        },
+      },
+      required: ["kind"],
+      additionalProperties: false,
+    })),
+  ],
+} as const;
+
 export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
   return [
+    {
+      name: "browser.resolve_target",
+      description:
+        "Resolve an intended browser control against one exact current BrowserObservation. Returns selected, ambiguous, or unresolved grounding and never bypasses the existing TargetReference authority.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            minLength: 1,
+          },
+          observationId: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          intent: {
+            type: "object",
+            properties: {
+              capability: {
+                type: "string",
+                enum: [
+                  "activate",
+                  "fill",
+                  "select",
+                  "check",
+                  "uncheck",
+                  "hover",
+                  "drag",
+                  "upload",
+                  "scroll",
+                ],
+              },
+              text: {
+                type: "string",
+                minLength: 1,
+                maxLength: 500,
+              },
+              scope: {
+                type: "object",
+                properties: {
+                  kind: {
+                    type: "string",
+                    enum: ["form", "dialog", "card", "row", "region", "group"],
+                  },
+                  label: {
+                    type: "string",
+                    maxLength: 500,
+                  },
+                },
+                required: ["kind"],
+                additionalProperties: false,
+              },
+              frameLabel: {
+                type: "string",
+                minLength: 1,
+                maxLength: 500,
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ["sessionId", "observationId", "intent"],
+        additionalProperties: false,
+      },
+      handler: (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            observationId: z.string().min(1).max(200),
+            intent: z.unknown(),
+          })
+          .parse(input);
+
+        return runtime.resolveTarget(
+          parsed.sessionId,
+          targetResolutionRequestSchema.parse({
+            observationId: parsed.observationId,
+            intent: parsed.intent,
+          }),
+        );
+      },
+    },
+    {
+      name: "browser.interact",
+      description:
+        "Perform a grounded Phase 2 browser interaction through Playwright, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. Consequential actions require a stable consequenceKey; an unknown consequential outcome blocks automatic replay of that same key.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            minLength: 1,
+          },
+          observationId: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          action: browserInteractionActionJsonSchema,
+          expectedEffects: {
+            type: "array",
+            maxItems: 20,
+            items: expectedEffectJsonSchema,
+          },
+          consequential: {
+            type: "boolean",
+            default: false,
+          },
+          consequenceKey: {
+            type: "string",
+            minLength: 1,
+            maxLength: 500,
+          },
+        },
+        required: ["sessionId", "observationId", "action"],
+        allOf: [
+          {
+            if: {
+              properties: {
+                consequential: {
+                  const: true,
+                },
+              },
+              required: ["consequential"],
+            },
+            then: {
+              required: ["consequenceKey"],
+            },
+          },
+        ],
+        additionalProperties: false,
+      },
+      handler: (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            observationId: z.string().min(1).max(200),
+            action: z.unknown(),
+            expectedEffects: z
+              .array(z.unknown())
+              .max(20)
+              .optional()
+              .default([]),
+            consequential: z.boolean().optional().default(false),
+            consequenceKey: z.string().min(1).max(500).optional(),
+          })
+          .parse(input);
+
+        return runtime.interact(
+          parsed.sessionId,
+          verifiedInteractionRequestSchema.parse({
+            observationId: parsed.observationId,
+            action: parsed.action,
+            expectedEffects: parsed.expectedEffects,
+            consequential: parsed.consequential,
+            consequenceKey: parsed.consequenceKey,
+          }),
+        );
+      },
+    },
     {
       name: "browser.navigate",
       description:
@@ -247,16 +692,10 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           },
           mode: {
             type: "string",
-            enum: [
-              "viewport",
-              "full-page",
-              "target",
-              "region",
-            ],
+            enum: ["viewport", "full-page", "target", "region"],
             default: "viewport",
           },
-          target:
-            targetJsonSchema,
+          target: targetJsonSchema,
 
           region: {
             type: "object",
@@ -278,12 +717,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
                 exclusiveMinimum: 0,
               },
             },
-            required: [
-              "x",
-              "y",
-              "width",
-              "height",
-            ],
+            required: ["x", "y", "width", "height"],
             additionalProperties: false,
           },
           observationId: {
@@ -299,56 +733,29 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId"],
         additionalProperties: false,
       },
-      present:
-        toolSuccessWithImage,
+      present: toolSuccessWithImage,
       handler: (input) => {
-        const parsed =
-          z.object({
-            sessionId:
-              sessionIdSchema,
-            mode:
-              z.enum([
-                "viewport",
-                "full-page",
-                "target",
-                "region",
-              ])
-                .optional()
-                .default(
-                  "viewport",
-                ),
-            target:
-              targetSchema.optional(),
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            mode: z
+              .enum(["viewport", "full-page", "target", "region"])
+              .optional()
+              .default("viewport"),
+            target: targetSchema.optional(),
 
-            region:
-              z.object({
-                x:
-                  z.number()
-                    .finite()
-                    .nonnegative(),
-                y:
-                  z.number()
-                    .finite()
-                    .nonnegative(),
-                width:
-                  z.number()
-                    .finite()
-                    .positive(),
-                height:
-                  z.number()
-                    .finite()
-                    .positive(),
-              }).optional(),
-            observationId:
-              z.string()
-                .min(1)
-                .max(200)
-                .optional(),
-            label:
-              z.string()
-                .max(200)
-                .optional(),
-          }).parse(input);
+            region: z
+              .object({
+                x: z.number().finite().nonnegative(),
+                y: z.number().finite().nonnegative(),
+                width: z.number().finite().positive(),
+                height: z.number().finite().positive(),
+              })
+              .optional(),
+            observationId: z.string().min(1).max(200).optional(),
+            label: z.string().max(200).optional(),
+          })
+          .parse(input);
 
         return runtime.screenshot(
           parsed.sessionId,
@@ -356,8 +763,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             mode: parsed.mode,
             target: parsed.target,
             region: parsed.region,
-            observationId:
-              parsed.observationId,
+            observationId: parsed.observationId,
             label: parsed.label,
           }),
         );

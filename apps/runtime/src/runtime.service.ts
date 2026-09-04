@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { readFile } from "node:fs/promises";
 import type { RoveConfig } from "@rove/config";
@@ -28,8 +29,18 @@ import {
   type RequestHumanRequest,
   requestHumanRequestSchema,
   controlWaitRequestSchema,
+  verifiedInteractionRequestSchema,
+  type ActionReceipt,
+  type BrowserObservation,
+  type TargetResolution,
+  type TargetResolutionRequest,
+  type VerifiedInteractionRequest,
 } from "@rove/protocol";
-import { RoveProfileLock, RoveProfileManager } from "@rove/browser";
+import {
+  RoveProfileLock,
+  RoveProfileManager,
+  InteractionDispatchError,
+} from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
@@ -49,12 +60,20 @@ import {
 } from "./policy/interaction-policy.js";
 import { SessionService } from "./session/session.service.js";
 import { ROVE_CONFIG } from "./tokens.js";
+import {
+  classifyActionOutcome,
+  interactionSignature,
+  interactionTarget,
+  verifyExpectedEffects,
+} from "./interaction/verified-interaction.js";
+import { ConsequenceReplayFence } from "./interaction/consequence-replay-fence.js";
 
-const MAX_INLINE_SCREENSHOT_BYTES =
-  2 * 1024 * 1024;
+const MAX_INLINE_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 
 @Injectable()
 export class RuntimeService implements RoveRuntime {
+  private readonly consequenceReplayFence = new ConsequenceReplayFence();
+
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
   private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
@@ -217,6 +236,7 @@ export class RuntimeService implements RoveRuntime {
         flushBrowserEvidence: () => this.flushBrowserEvidence(sessionId),
         clearRuntimeState: () => {
           this.lastAgentActionAt.delete(sessionId);
+          this.consequenceReplayFence.clearSession(sessionId);
         },
         releaseProfileLock: () => this.releaseProfileLock(sessionId),
       }),
@@ -254,6 +274,282 @@ export class RuntimeService implements RoveRuntime {
         };
       },
     );
+  }
+
+  resolveBrowserTarget(
+    sessionId: string,
+    request: TargetResolutionRequest,
+  ): Promise<TargetResolution> {
+    return this.ownershipFence.runAgentBrowserOperation(
+      sessionId,
+      async (lease) => {
+        const result = await this.browser.get(sessionId).resolveTarget(request);
+
+        lease.assertCurrent();
+
+        return result;
+      },
+    );
+  }
+
+  async interact(
+    sessionId: string,
+    request: VerifiedInteractionRequest,
+  ): Promise<ActionReceipt> {
+    const input = verifiedInteractionRequestSchema.parse(request);
+
+    const { receipt } = await this.mutateValue(
+      sessionId,
+      async (lease) => {
+        await this.paceAgentAction(sessionId);
+
+        lease.assertCurrent();
+
+        const browser = this.browser.get(sessionId);
+
+        const predecessor = await browser.readObservation(input.observationId);
+
+        lease.assertCurrent();
+
+        const beforePages = await browser.pages();
+
+        lease.assertCurrent();
+
+        if (input.consequential && input.consequenceKey !== undefined) {
+          this.consequenceReplayFence.assertAvailable(
+            sessionId,
+            input.consequenceKey,
+          );
+        }
+
+        const signature = interactionSignature(input.action);
+
+        await this.authorizeMutation(sessionId, signature, lease);
+
+        lease.assertCurrent();
+
+        const upload =
+          input.action.kind === "upload"
+            ? await this.evidence.readFilePayload(
+                sessionId,
+                input.action.evidenceId,
+              )
+            : undefined;
+
+        lease.assertCurrent();
+
+        let result: ActionResult | undefined;
+
+        let dispatched = false;
+
+        let dispatchFailure: unknown;
+
+        try {
+          result = await browser.interact(input.action, {
+            observationId: input.observationId,
+            ...(upload === undefined
+              ? {}
+              : {
+                  upload,
+                }),
+          });
+
+          dispatched = true;
+        } catch (error) {
+          if (!(error instanceof InteractionDispatchError)) {
+            throw error;
+          }
+
+          dispatched = true;
+          result = error.result;
+          dispatchFailure = error.original;
+        }
+
+        lease.assertCurrent();
+
+        let synchronizationFailed = false;
+
+        try {
+          await this.syncActivePage(sessionId, lease);
+        } catch {
+          lease.assertCurrent();
+          synchronizationFailed = true;
+        }
+
+        lease.assertCurrent();
+
+        let successor: BrowserObservation | undefined;
+
+        if (!synchronizationFailed) {
+          try {
+            successor = await browser.inspect();
+
+            lease.assertCurrent();
+          } catch {
+            lease.assertCurrent();
+          }
+        }
+
+        let afterPages: PageSummary[] | undefined;
+
+        try {
+          afterPages = await browser.pages();
+
+          lease.assertCurrent();
+        } catch {
+          lease.assertCurrent();
+        }
+
+        const effects = verifyExpectedEffects(
+          input.expectedEffects,
+          predecessor,
+          successor,
+          result,
+          beforePages,
+          afterPages,
+        );
+
+        let outcome = classifyActionOutcome(effects);
+
+        if (dispatchFailure !== undefined && successor === undefined) {
+          outcome = "unknown";
+        }
+
+        const target = interactionTarget(input.action);
+
+        const receipt: ActionReceipt = {
+          receiptId: `rcpt_${randomUUID().replaceAll("-", "")}`,
+          sessionId,
+          action: input.action.kind,
+          dispatched,
+          outcome,
+          consequential: input.consequential,
+          ...(input.consequenceKey === undefined
+            ? {}
+            : {
+                consequenceKey: input.consequenceKey,
+              }),
+          predecessorObservationId: input.observationId,
+          ...(successor === undefined
+            ? {}
+            : {
+                successorObservationId: successor.observationId,
+              }),
+          ...(target === undefined
+            ? {}
+            : {
+                target,
+              }),
+          effects,
+          ...(result?.pageChanged === undefined
+            ? {}
+            : {
+                pageChanged: result.pageChanged,
+              }),
+          ...(result?.previousRevision === undefined
+            ? {}
+            : {
+                previousRevision: result.previousRevision,
+              }),
+          ...(result?.currentRevision === undefined
+            ? {}
+            : {
+                currentRevision: result.currentRevision,
+              }),
+          ...(result?.url === undefined
+            ? {}
+            : {
+                url: result.url,
+              }),
+          ...(result?.openedPages === undefined
+            ? {}
+            : {
+                openedPages: result.openedPages,
+              }),
+        };
+
+        if (
+          input.consequential &&
+          input.consequenceKey !== undefined &&
+          outcome === "unknown"
+        ) {
+          this.consequenceReplayFence.recordUnknown(
+            sessionId,
+            input.consequenceKey,
+          );
+        }
+
+        lease.assertCurrent();
+
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: "agent_interaction_receipt",
+          data: {
+            receiptId: receipt.receiptId,
+            action: receipt.action,
+            dispatched: receipt.dispatched,
+            outcome: receipt.outcome,
+            consequential: receipt.consequential,
+            ...(target === undefined
+              ? {}
+              : {
+                  targetRef: target.ref,
+                }),
+            ...(successor === undefined
+              ? {}
+              : {
+                  successorObservationId: successor.observationId,
+                }),
+            effects: effects.map((effect) => ({
+              kind: effect.effect.kind,
+              state: effect.state,
+            })),
+          },
+          ...(result?.pageId === undefined
+            ? target === undefined
+              ? {}
+              : {
+                  pageId: target.pageId,
+                }
+            : {
+                pageId: result.pageId,
+              }),
+          ...(result?.currentRevision === undefined
+            ? {}
+            : {
+                pageRevision: result.currentRevision,
+              }),
+        });
+
+        lease.assertCurrent();
+
+        const assessment =
+          successor === undefined
+            ? undefined
+            : this.interactionPolicy.recordInspection(sessionId, successor);
+
+        lease.assertCurrent();
+
+        return {
+          receipt,
+          assessment,
+        };
+      },
+      async ({ assessment }) => {
+        if (assessment === undefined) {
+          return;
+        }
+
+        await this.pagePolicyOrchestrator.orchestrate(
+          sessionId,
+          assessment.policyDecision,
+          assessment.pageState,
+          "post_action",
+        );
+      },
+    );
+
+    return receipt;
   }
 
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult> {
@@ -453,97 +749,66 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     options: ScreenshotOptions = {},
   ): Promise<Evidence> {
-    return this.mutateValue(
-      sessionId,
-      async (lease) => {
-        const artifact =
-          await this.browser
-            .get(sessionId)
-            .screenshot(options);
+    return this.mutateValue(sessionId, async (lease) => {
+      const artifact = await this.browser.get(sessionId).screenshot(options);
 
-        lease.assertCurrent();
+      lease.assertCurrent();
 
-        const item =
-          await this.evidence
-            .saveScreenshot(
-              sessionId,
-              artifact,
-              options,
-            );
+      const item = await this.evidence.saveScreenshot(
+        sessionId,
+        artifact,
+        options,
+      );
 
-        lease.assertCurrent();
+      lease.assertCurrent();
 
-        await this.observations.append(
-          sessionId,
-          {
-            actor: "agent",
-            type:
-              "screenshot_captured",
-            data: {
-              evidenceId:
-                item.id,
-              label:
-                item.label,
-              ...(typeof artifact.metadata
-                ?.observationId === "string"
-                ? {
-                    observationId:
-                      artifact.metadata
-                        .observationId,
-                  }
-                : {}),
-            },
-            ...(item.pageId === undefined
-              ? {}
-              : {
-                  pageId:
-                    item.pageId,
-                }),
-            ...(item.pageRevision === undefined
-              ? {}
-              : {
-                  pageRevision:
-                    item.pageRevision,
-                }),
-          },
-        );
-
-        lease.assertCurrent();
-
-        const mode =
-          options.mode ?? "viewport";
-
-        const inline =
-          mode !== "full-page" &&
-          artifact.bytes.byteLength <=
-            MAX_INLINE_SCREENSHOT_BYTES;
-
-        return {
-          ...item,
-          ...(inline
+      await this.observations.append(sessionId, {
+        actor: "agent",
+        type: "screenshot_captured",
+        data: {
+          evidenceId: item.id,
+          label: item.label,
+          ...(typeof artifact.metadata?.observationId === "string"
             ? {
-                image: {
-                  mimeType:
-                    "image/png",
-                  data:
-                    Buffer.from(
-                      artifact.bytes,
-                    ).toString(
-                      "base64",
-                    ),
-                  byteLength:
-                    artifact.bytes.byteLength,
-                },
+                observationId: artifact.metadata.observationId,
               }
-            : {
-                imageOmitted:
-                  mode === "full-page"
-                    ? "full_page"
-                    : "size_limit",
-              }),
-        };
-      },
-    );
+            : {}),
+        },
+        ...(item.pageId === undefined
+          ? {}
+          : {
+              pageId: item.pageId,
+            }),
+        ...(item.pageRevision === undefined
+          ? {}
+          : {
+              pageRevision: item.pageRevision,
+            }),
+      });
+
+      lease.assertCurrent();
+
+      const mode = options.mode ?? "viewport";
+
+      const inline =
+        mode !== "full-page" &&
+        artifact.bytes.byteLength <= MAX_INLINE_SCREENSHOT_BYTES;
+
+      return {
+        ...item,
+        ...(inline
+          ? {
+              image: {
+                mimeType: "image/png",
+                data: Buffer.from(artifact.bytes).toString("base64"),
+                byteLength: artifact.bytes.byteLength,
+              },
+            }
+          : {
+              imageOmitted: mode === "full-page" ? "full_page" : "size_limit",
+            }),
+      };
+    });
   }
 
   async getControlStatus(sessionId: string): Promise<ControlStatus> {

@@ -10,6 +10,8 @@ export const hubOperationSchema = z.enum([
   "session.observations",
   "browser.navigate",
   "browser.inspect",
+  "browser.resolve_target",
+  "browser.interact",
   "browser.click",
   "browser.type",
   "browser.press",

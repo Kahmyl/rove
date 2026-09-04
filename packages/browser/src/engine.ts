@@ -10,16 +10,33 @@ import type {
   ScreenshotOptions,
   ScrollOptions,
   TargetReference,
+  TargetResolution,
+  TargetResolutionRequest,
+  BrowserInteractionRequest,
 } from "@rove/protocol";
 import type { BrowserActivityListener } from "./observation/browser-activity.js";
+
+export interface BrowserInteractionUpload {
+  filename: string;
+  bytes: Uint8Array;
+}
+
+export interface BrowserInteractionContext {
+  observationId: string;
+  upload?: BrowserInteractionUpload;
+}
 
 export interface BrowserSession {
   readonly id: string;
   readonly capabilities: BrowserRuntimeCapabilities;
   onActivity(listener: BrowserActivityListener): () => void;
-  inspect(
-    options?: InspectOptions,
-  ): Promise<BrowserObservation>;
+  inspect(options?: InspectOptions): Promise<BrowserObservation>;
+  resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;
+  readObservation(observationId: string): Promise<BrowserObservation>;
+  interact(
+    request: BrowserInteractionRequest,
+    context: BrowserInteractionContext,
+  ): Promise<ActionResult>;
   pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
   navigate(url: string): Promise<ActionResult>;
   click(target: TargetReference): Promise<ActionResult>;
