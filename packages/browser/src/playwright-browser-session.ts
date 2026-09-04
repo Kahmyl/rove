@@ -12,9 +12,10 @@ import {
   type ActionResult,
   type Artifact,
   type BrowserLaunchConfig,
+  type BrowserObservation,
   type BrowserRuntimeCapabilities,
+  type BrowserViewport,
   type InspectOptions,
-  type PageInspection,
   type PageStateIdentity,
   type PageSummary,
   type ScreenshotOptions,
@@ -31,7 +32,7 @@ import {
   DOM_ACTIVITY_INIT_SCRIPT,
   normalizeDomActivityPayload,
 } from "./observation/dom-activity.js";
-import { PageInspector } from "./inspection/inspector.js";
+import { PageInspector, readBrowserViewport } from "./inspection/inspector.js";
 import { PlaywrightPageRegistry } from "./pages/playwright-page-registry.js";
 import { recordMutation, type PageState } from "./pages/page-state.js";
 import { actionError } from "./actions/action-errors.js";
@@ -43,6 +44,7 @@ import {
 import {
   readMaterialMutationVersion,
   installMutationTracker,
+  setTransientTargetStyleMutationSuppression,
 } from "./mutations/mutation-tracker.js";
 import {
   resolveTarget,
@@ -66,10 +68,35 @@ import {
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+const MAX_OBSERVATION_AUTHORITIES = 100;
+
+interface ObservationAuthority {
+  observationId: string;
+  pageId: string;
+  revision: number;
+  mutationVersion: number;
+  url: string;
+  viewport: BrowserViewport;
+}
+
 function isBrowserClosedError(error: unknown): boolean {
   return (
     error instanceof Error &&
     /has been closed|is closed|browser.*disconnected/i.test(error.message)
+  );
+}
+
+function sameTargetInlineStyles(
+  before: Record<string, string | null>,
+  after: Record<string, string | null>,
+): boolean {
+  const beforeKeys = Object.keys(before);
+
+  const afterKeys = Object.keys(after);
+
+  return (
+    beforeKeys.length === afterKeys.length &&
+    beforeKeys.every((marker) => after[marker] === before[marker])
   );
 }
 
@@ -84,6 +111,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private closed = false;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
+  private readonly observationAuthorities = new Map<
+    string,
+    ObservationAuthority
+  >();
   private readonly activityListeners = new Set<BrowserActivityListener>();
   private recovering: Promise<void> | null = null;
   private browserCdp: CDPSession | undefined;
@@ -484,20 +515,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
       this.evidenceRecorder.markHumanNavigation(page);
     }
 
-    if (this.pageRegistry.activeId() !== pageId) {
-      const state = this.pageRegistry.activate(pageId);
-
-      this.emitActivity({
-        type: "page_switched",
-        pageId,
-        pageRevision: state.revision,
-        timestamp: new Date().toISOString(),
-        data: {
-          url: page.url(),
-        },
-      });
-    }
-
+    // DOM activity is evidence from the page that produced it.
+    // Queue delivery may be delayed, so it must not establish
+    // active-tab authority or override a later explicit/tab-observed switch.
     const state = this.pageRegistry.stateFor(pageId);
 
     this.emitActivity({
@@ -787,7 +807,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     await this.recoverActivePage();
   }
 
-  async inspect(options: InspectOptions = {}): Promise<PageInspection> {
+  async inspect(options: InspectOptions = {}): Promise<BrowserObservation> {
     this.ensureOpen();
 
     const pageId = options.pageId ?? this.requireActivePageId();
@@ -807,20 +827,44 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }
 
     await installMutationTracker(page);
+
     state = this.pageRegistry.update(pageId, {
       mutationVersion: await readMaterialMutationVersion(page),
     });
 
     const browserEvidence = this.evidenceRecorder.snapshot(pageId);
-    const httpStatus = browserEvidence.latestMainDocumentStatus;
 
-    const pageStateObservation = await observeStablePageState(page, httpStatus);
+    const pageStateObservation = await observeStablePageState(
+      page,
+      browserEvidence.latestMainDocumentStatus,
+    );
 
     state = this.pageRegistry.update(pageId, {
       mutationVersion: await readMaterialMutationVersion(page),
     });
 
     const inspection = await this.inspector.inspect(page, state, options);
+
+    const finalState = this.pageRegistry.stateFor(pageId);
+
+    const finalMutationVersion = await readMaterialMutationVersion(page);
+
+    if (
+      finalState.revision !== state.revision ||
+      finalMutationVersion !== state.mutationVersion ||
+      page.url() !== inspection.url
+    ) {
+      await this.inspector
+        .invalidatePage(page, pageId, finalState.revision)
+        .catch(() => undefined);
+
+      throw new RoveError({
+        code: "PAGE_CHANGED",
+        message:
+          "The browser changed while the observation was being collected.",
+        retryable: true,
+      });
+    }
 
     const pageState = pageStateObservation.assessment;
 
@@ -839,8 +883,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
             }
           : undefined;
 
-    return {
+    const observation: BrowserObservation = {
       ...inspection,
+
+      capabilities: {
+        connection:
+          this.capabilities.distribution === "chrome" ? "cdp" : "playwright",
+        semanticHierarchy: true,
+        targetGeometry: true,
+        occlusion: true,
+        frameProvenance: true,
+        openShadowDom: true,
+        screenshotModes: ["viewport", "full-page", "target", "region"],
+      },
+
       metadata: {
         ...inspection.metadata,
         pageState,
@@ -848,11 +904,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
         pageStateFingerprint: pageStateObservation.fingerprint,
         ...(pageStateObservation.diagnostics === undefined
           ? {}
-          : { pageStateDiagnostics: pageStateObservation.diagnostics }),
+          : {
+              pageStateDiagnostics: pageStateObservation.diagnostics,
+            }),
         browserEvidence,
         ...(accessRestriction === undefined ? {} : { accessRestriction }),
       },
     };
+
+    await this.rememberObservation(page, observation);
+
+    return observation;
   }
 
   async pageStateIdentity(
@@ -869,8 +931,102 @@ export class PlaywrightBrowserSession implements BrowserSession {
     );
   }
 
+  private async rememberObservation(
+    page: Page,
+    observation: BrowserObservation,
+  ): Promise<void> {
+    const viewport = observation.viewport ?? (await readBrowserViewport(page));
+
+    this.observationAuthorities.set(observation.observationId, {
+      observationId: observation.observationId,
+      pageId: observation.pageId,
+      revision: observation.revision,
+      mutationVersion: observation.mutationVersion,
+      url: observation.url,
+      viewport,
+    });
+
+    while (this.observationAuthorities.size > MAX_OBSERVATION_AUTHORITIES) {
+      const oldest = this.observationAuthorities.keys().next().value;
+
+      if (oldest === undefined) {
+        break;
+      }
+
+      this.observationAuthorities.delete(oldest);
+    }
+  }
+
+  private async assertObservationCurrent(
+    observationId: string,
+  ): Promise<ObservationAuthority> {
+    const authority = this.observationAuthorities.get(observationId);
+
+    if (authority === undefined) {
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message: "The referenced browser observation is no longer current.",
+        retryable: true,
+      });
+    }
+
+    if (!this.pageRegistry.has(authority.pageId)) {
+      this.observationAuthorities.delete(observationId);
+
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message: "The observed page no longer exists.",
+        retryable: true,
+      });
+    }
+
+    const page = this.pageRegistry.pageFor(authority.pageId);
+
+    await installMutationTracker(page);
+
+    const state = this.pageRegistry.stateFor(authority.pageId);
+
+    const mutationVersion = await readMaterialMutationVersion(page);
+
+    const viewport = await readBrowserViewport(page);
+
+    const viewportChanged =
+      viewport.width !== authority.viewport.width ||
+      viewport.height !== authority.viewport.height ||
+      viewport.deviceScaleFactor !== authority.viewport.deviceScaleFactor ||
+      Math.abs(viewport.scrollX - authority.viewport.scrollX) > 0.5 ||
+      Math.abs(viewport.scrollY - authority.viewport.scrollY) > 0.5;
+
+    if (
+      state.revision !== authority.revision ||
+      mutationVersion !== authority.mutationVersion ||
+      page.url() !== authority.url ||
+      viewportChanged
+    ) {
+      this.observationAuthorities.delete(observationId);
+
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message: "The browser changed after the referenced observation.",
+        retryable: true,
+        details: {
+          observationId,
+          expectedRevision: authority.revision,
+          currentRevision: state.revision,
+          expectedMutationVersion: authority.mutationVersion,
+          currentMutationVersion: mutationVersion,
+          urlChanged: page.url() !== authority.url,
+          viewportChanged,
+        },
+      });
+    }
+
+    return authority;
+  }
+
   async invalidateTargets(): Promise<void> {
     this.ensureOpen();
+    this.observationAuthorities.clear();
 
     const pageId = this.requireActivePageId();
     const page = this.pageRegistry.pageFor(pageId);
@@ -885,6 +1041,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   async invalidateAllTargets(): Promise<number> {
     this.ensureOpen();
+    this.observationAuthorities.clear();
     let invalidated = 0;
     for (const summary of this.pageRegistry.summaries()) {
       if (!this.pageRegistry.has(summary.id)) continue;
@@ -1023,10 +1180,29 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   async screenshot(options: ScreenshotOptions = {}): Promise<Artifact> {
     this.ensureOpen();
+
     const mode = options.mode ?? "viewport";
-    const pageId = options.target?.pageId ?? this.requireActivePageId();
+
+    const authority =
+      options.observationId === undefined
+        ? undefined
+        : await this.assertObservationCurrent(options.observationId);
+
+    const pageId =
+      options.target?.pageId ?? authority?.pageId ?? this.requireActivePageId();
+
+    if (authority !== undefined && authority.pageId !== pageId) {
+      throw new RoveError({
+        code: "OBSERVATION_STALE",
+        message: "The screenshot target belongs to another observed page.",
+        retryable: true,
+      });
+    }
+
     const page = this.pageRegistry.pageFor(pageId);
+
     let target: ResolvedTarget | undefined;
+
     if (mode === "target") {
       if (options.target === undefined) {
         throw new RoveError({
@@ -1034,38 +1210,168 @@ export class PlaywrightBrowserSession implements BrowserSession {
           message: "Target screenshot requires a TargetReference.",
         });
       }
+
       target = await this.resolveActionTarget(options.target);
     }
+
+    if (mode === "region" && options.region === undefined) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Region screenshot requires a viewport-relative region.",
+      });
+    }
+
     await this.applySensitiveMask(page);
+
     try {
-      const bytes =
-        mode === "target"
-          ? await target!.locator.screenshot({
-              type: "png",
-              timeout: this.actionTimeoutMs,
-            })
-          : await page.screenshot({
-              type: "png",
-              fullPage: mode === "full-page",
-              timeout: this.actionTimeoutMs,
+      const targetStylesBefore =
+        options.observationId === undefined
+          ? undefined
+          : await this.captureTargetInlineStyles(page);
+
+      let bytes: Buffer;
+
+      await setTransientTargetStyleMutationSuppression(page, true);
+
+      try {
+        if (mode === "target") {
+          bytes = await target!.locator.screenshot({
+            type: "png",
+            timeout: this.actionTimeoutMs,
+          });
+        } else if (mode === "region") {
+          const viewport = await readBrowserViewport(page);
+
+          const region = options.region!;
+
+          if (
+            region.x + region.width > viewport.width ||
+            region.y + region.height > viewport.height
+          ) {
+            throw new RoveError({
+              code: "INVALID_CONFIGURATION",
+              message:
+                "Screenshot region must fit inside the current viewport.",
             });
+          }
+
+          bytes = await page.screenshot({
+            type: "png",
+            clip: {
+              x: viewport.scrollX + region.x,
+              y: viewport.scrollY + region.y,
+              width: region.width,
+              height: region.height,
+            },
+            timeout: this.actionTimeoutMs,
+          });
+        } else {
+          bytes = await page.screenshot({
+            type: "png",
+            fullPage: mode === "full-page",
+            timeout: this.actionTimeoutMs,
+          });
+        }
+      } finally {
+        await setTransientTargetStyleMutationSuppression(page, false).catch(
+          () => undefined,
+        );
+      }
+
+      if (options.observationId !== undefined) {
+        const targetStylesAfter = await this.captureTargetInlineStyles(page);
+
+        if (!sameTargetInlineStyles(targetStylesBefore!, targetStylesAfter)) {
+          throw new RoveError({
+            code: "OBSERVATION_STALE",
+            message:
+              "An observed target style changed while the screenshot was being captured.",
+            retryable: true,
+            details: {
+              observationId: options.observationId,
+              targetStylesChanged: true,
+            },
+          });
+        }
+
+        await this.assertObservationCurrent(options.observationId);
+      }
+
       const state = await this.pageRegistry.syncMetadata(pageId);
+
+      const viewport = await readBrowserViewport(page);
+
+      const mutationVersion = await readMaterialMutationVersion(page);
+
+      const targetBounds =
+        target === undefined
+          ? undefined
+          : await target.locator.boundingBox().catch(() => null);
+
       return {
         mimeType: "image/png",
         bytes,
         metadata: {
           pageId,
           revision: state.revision,
+          mutationVersion,
           url: state.url,
           mode,
+          viewport,
+          ...(options.observationId === undefined
+            ? {}
+            : {
+                observationId: options.observationId,
+              }),
+          ...(options.region === undefined
+            ? {}
+            : {
+                region: options.region,
+              }),
+          ...(targetBounds == null
+            ? {}
+            : {
+                targetBounds: {
+                  x: targetBounds.x,
+                  y: targetBounds.y,
+                  width: targetBounds.width,
+                  height: targetBounds.height,
+                },
+              }),
           timestamp: new Date().toISOString(),
         },
       };
     } catch (error) {
+      if (error instanceof RoveError) {
+        throw error;
+      }
+
       throw actionError(error, "Screenshot");
     } finally {
       await this.removeSensitiveMask(page).catch(() => undefined);
     }
+  }
+
+  private async captureTargetInlineStyles(
+    page: Page,
+  ): Promise<Record<string, string | null>> {
+    return page.evaluate(() => {
+      const result: Record<string, string | null> = {};
+
+      for (const element of Array.from(
+        document.querySelectorAll<HTMLElement>("[data-rove-target]"),
+      )) {
+        const marker = element.getAttribute("data-rove-target");
+
+        if (marker === null) {
+          continue;
+        }
+
+        result[marker] = element.getAttribute("style");
+      }
+
+      return result;
+    });
   }
 
   private async resolveActionTarget(
@@ -1106,6 +1412,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     beforePages: PageSummary[],
   ): Promise<ActionResult> {
     const page = this.pageRegistry.pageFor(pageId);
+    this.observationAuthorities.clear();
     let current = await this.pageRegistry.syncMetadata(pageId);
     const mutationVersion = await readMaterialMutationVersion(page);
     if (
@@ -1197,38 +1504,85 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   private async applySensitiveMask(page: Page): Promise<void> {
-    await page.evaluate(() => {
-      if (!document.querySelector("style[data-rove-sensitive-style]")) {
-        const style = document.createElement("style");
-        style.setAttribute("data-rove-sensitive-style", "");
-        style.textContent =
-          "[data-rove-sensitive-mask]{-webkit-text-security:disc!important;color:transparent!important;text-shadow:0 0 0 currentColor!important}";
-        document.head.append(style);
-      }
-      for (const element of Array.from(
-        document.querySelectorAll<HTMLInputElement>("input"),
-      )) {
-        const semantic =
-          `${element.type} ${element.autocomplete} ${element.name} ${element.id} ${element.getAttribute("aria-label") ?? ""}`.toLowerCase();
-        if (
-          element.type === "password" ||
-          element.autocomplete === "one-time-code" ||
-          /password|passcode|otp|one.?time|secret|token/.test(semantic)
-        ) {
-          element.setAttribute("data-rove-sensitive-mask", "");
-        }
-      }
-    });
+    await Promise.all(
+      page.frames().map(async (frame) => {
+        await frame
+          .evaluate(() => {
+            const visit = (root: Document | ShadowRoot): void => {
+              if (
+                root.querySelector("style[data-rove-sensitive-style]") === null
+              ) {
+                const style = document.createElement("style");
+
+                style.setAttribute("data-rove-sensitive-style", "");
+
+                style.textContent =
+                  "[data-rove-sensitive-mask]{-webkit-text-security:disc!important;color:transparent!important;text-shadow:0 0 0 currentColor!important}";
+
+                if (root instanceof Document) {
+                  (root.head ?? root.documentElement).append(style);
+                } else {
+                  root.append(style);
+                }
+              }
+
+              for (const element of Array.from(
+                root.querySelectorAll<HTMLInputElement>("input"),
+              )) {
+                const semantic =
+                  `${element.type} ${element.autocomplete} ${element.name} ${element.id} ${element.getAttribute("aria-label") ?? ""}`.toLowerCase();
+
+                if (
+                  element.type === "password" ||
+                  element.autocomplete === "one-time-code" ||
+                  /password|passcode|otp|one.?time|secret|token/.test(semantic)
+                ) {
+                  element.setAttribute("data-rove-sensitive-mask", "");
+                }
+              }
+
+              for (const host of Array.from(
+                root.querySelectorAll<HTMLElement>("*"),
+              )) {
+                if (host.shadowRoot !== null) {
+                  visit(host.shadowRoot);
+                }
+              }
+            };
+
+            visit(document);
+          })
+          .catch(() => undefined);
+      }),
+    );
   }
 
   private async removeSensitiveMask(page: Page): Promise<void> {
-    await page.evaluate(() => {
-      document
-        .querySelectorAll("[data-rove-sensitive-mask]")
-        .forEach((element) =>
-          element.removeAttribute("data-rove-sensitive-mask"),
-        );
-    });
+    await Promise.all(
+      page.frames().map(async (frame) => {
+        await frame
+          .evaluate(() => {
+            const visit = (root: Document | ShadowRoot): void => {
+              root
+                .querySelectorAll("[data-rove-sensitive-mask]")
+                .forEach((element) =>
+                  element.removeAttribute("data-rove-sensitive-mask"),
+                );
+
+              for (const host of Array.from(
+                root.querySelectorAll<HTMLElement>("*"),
+              )) {
+                if (host.shadowRoot !== null) {
+                  visit(host.shadowRoot);
+                }
+              }
+            };
+
+            visit(document);
+          })
+          .catch(() => undefined);
+      }),
+    );
   }
 
   async close(): Promise<void> {
@@ -1292,6 +1646,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       }
     }
 
+    this.observationAuthorities.clear();
     this.pageRegistry.clear();
     this.inspector.clear();
 

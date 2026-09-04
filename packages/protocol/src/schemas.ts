@@ -125,7 +125,9 @@ export const inspectOptionsSchema = z.object({
   includeText: z.boolean().optional(),
   includeTargets: z.boolean().optional(),
   includeViewport: z.boolean().optional(),
+  includeStructure: z.boolean().optional(),
   maxTextChars: z.number().int().positive().max(50_000).optional(),
+  maxStructureChars: z.number().int().positive().max(30_000).optional(),
   targetLimit: z.number().int().positive().max(500).optional(),
   targetKinds: z.array(targetKindSchema).optional(),
   pageId: z.string().optional(),
@@ -146,11 +148,42 @@ export const scrollOptionsSchema = z.object({
   amount: z.number().int().min(1).max(10_000).optional().default(600),
 });
 export const scrollRequestSchema = scrollOptionsSchema;
-export const screenshotOptionsSchema = z.object({
-  mode: z.enum(["viewport", "full-page", "target"]).optional().default("viewport"),
-  target: targetReferenceSchema.optional(),
-  label: z.string().max(200).optional(),
+export const browserRegionSchema = z.object({
+  x: z.number().finite().nonnegative().max(100_000),
+  y: z.number().finite().nonnegative().max(100_000),
+  width: z.number().finite().positive().max(20_000),
+  height: z.number().finite().positive().max(20_000),
 });
+
+export const screenshotOptionsSchema = z
+  .object({
+    mode: z
+      .enum(["viewport", "full-page", "target", "region"])
+      .optional()
+      .default("viewport"),
+    target: targetReferenceSchema.optional(),
+    region: browserRegionSchema.optional(),
+    observationId: z.string().min(1).max(200).optional(),
+    label: z.string().max(200).optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.mode === "target" && value.target === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["target"],
+        message: "Target screenshot mode requires a target reference.",
+      });
+    }
+
+    if (value.mode === "region" && value.region === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["region"],
+        message: "Region screenshot mode requires a viewport-relative region.",
+      });
+    }
+  });
+
 export const screenshotRequestSchema = screenshotOptionsSchema;
 export const switchPageRequestSchema = z.object({ pageId: z.string().min(1) });
 

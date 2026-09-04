@@ -280,6 +280,9 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     expect(inspection.viewport).toEqual({
       width: 1440,
       height: 900,
+      scrollX: 0,
+      scrollY: 0,
+      deviceScaleFactor: 1,
     });
 
     expect(inspection.text).toContain("Rove Inspection Fixture");
@@ -471,11 +474,13 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       includeText: false,
       includeTargets: false,
       includeViewport: false,
+      includeStructure: false,
     });
 
     expect(inspection).not.toHaveProperty("text");
     expect(inspection).not.toHaveProperty("targets");
     expect(inspection).not.toHaveProperty("viewport");
+    expect(inspection).not.toHaveProperty("structure");
 
     expect(inspection).toMatchObject({
       pageId: "page_01",
@@ -578,4 +583,84 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       ).pageStateFingerprint,
     ).toMatch(/^[a-f0-9]{64}$/);
   });
+  it("returns redacted hierarchy, geometry, frames, and open-shadow controls", async () => {
+    const server =
+      await startServer();
+
+    const session =
+      await startSession();
+
+    await session.navigate(
+      server.url,
+    );
+
+    const inspection =
+      await session.inspect();
+
+    expect(
+      inspection.observationId,
+    ).toMatch(
+      /^bobs_[a-f0-9]+$/,
+    );
+
+    expect(
+      inspection.document,
+    ).toEqual({
+      url:
+        inspection.url,
+      revision:
+        inspection.revision,
+    });
+
+    const structure =
+      JSON.stringify(
+        inspection.structure,
+      );
+
+    expect(structure).toContain(
+      "Alpha",
+    );
+
+    expect(structure).toContain(
+      "Beta",
+    );
+
+    expect(structure).toContain(
+      "Shadow action",
+    );
+
+    expect(structure).not.toContain(
+      "private-query-value",
+    );
+
+    const shadow =
+      inspection.targets?.find(
+        (item) =>
+          item.name === "Shadow action",
+      );
+
+    expect(shadow).toMatchObject({
+      shadowRootDepth: 1,
+      geometry: {
+        bounds:
+          expect.any(Object),
+        occluded: false,
+      },
+    });
+
+    const covered =
+      inspection.targets?.find(
+        (item) =>
+          item.name === "Covered action",
+      );
+
+    expect(covered).toMatchObject({
+      geometry: {
+        bounds:
+          expect.any(Object),
+        occluded: true,
+      },
+    });
+  });
+
 });

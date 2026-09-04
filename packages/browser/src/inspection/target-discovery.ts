@@ -40,312 +40,223 @@ export async function discoverTargetCandidates(
   page: Frame | Page,
 ): Promise<DomCandidate[]> {
   return page.evaluate(
-    ({
-      candidateSelector,
-      markerAttribute,
-      identityAttributes,
-    }) => {
-      document
-        .querySelectorAll(`[${markerAttribute}]`)
-        .forEach((element) =>
-          element.removeAttribute(markerAttribute),
-        );
+    ({ candidateSelector, markerAttribute, identityAttributes }) => {
+      type Located = {
+        element: HTMLElement;
+        shadowRootDepth: number;
+      };
 
-      const elements = Array.from(
-        document.querySelectorAll<HTMLElement>(
-          candidateSelector,
-        ),
-      );
+      const normalize = (
+        value: string | null | undefined,
+      ): string | undefined => {
+        const result = value?.replace(/\s+/g, " ").trim();
+        return result && result.length > 0 ? result : undefined;
+      };
 
-      return elements.map((element, index) => {
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-
-        const visible =
-          element.isConnected &&
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          style.visibility !== "collapse" &&
-          Number.parseFloat(style.opacity || "1") !== 0 &&
-          rect.width > 0 &&
-          rect.height > 0;
-
-        const marker = `r${index + 1}`;
-        element.setAttribute(markerAttribute, marker);
-
-        const input =
-          element instanceof HTMLInputElement
-            ? element
-            : undefined;
-
-        const type = input?.type.toLowerCase();
-
-        const rawRole = element.getAttribute("role");
-        const normalizedRole = rawRole
-          ?.replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-
-        const role =
-          normalizedRole && normalizedRole.length > 0
-            ? normalizedRole
-            : undefined;
-
-        const nativeDisabled =
-          element instanceof HTMLButtonElement ||
-          element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement ||
-          element instanceof HTMLSelectElement
-            ? element.disabled
-            : false;
-
-        const ariaDisabled =
-          element
-            .getAttribute("aria-disabled")
-            ?.trim()
-            .toLowerCase() === "true";
-
-        const buttonLikeInput =
-          input !== undefined &&
-          ["button", "submit", "reset", "image"].includes(
-            input.type,
+      const clear = (root: Document | ShadowRoot): void => {
+        root
+          .querySelectorAll(`[${markerAttribute}]`)
+          .forEach((element) =>
+            element.removeAttribute(markerAttribute),
           );
 
-        const rawAriaLabel =
-          element.getAttribute("aria-label");
+        for (const element of Array.from(
+          root.querySelectorAll<HTMLElement>("*"),
+        )) {
+          if (element.shadowRoot !== null) {
+            clear(element.shadowRoot);
+          }
+        }
+      };
 
-        const normalizedAriaLabel = rawAriaLabel
-          ?.replace(/\s+/g, " ")
-          .trim();
+      const collect = (
+        root: Document | ShadowRoot,
+        depth: number,
+      ): Located[] => {
+        const found = Array.from(
+          root.querySelectorAll<HTMLElement>(candidateSelector),
+        ).map((element) => ({
+          element,
+          shadowRootDepth: depth,
+        }));
 
-        const ariaLabel =
-          normalizedAriaLabel &&
-          normalizedAriaLabel.length > 0
-            ? normalizedAriaLabel
-            : undefined;
-
-        let ariaLabelledbyText: string | undefined;
-
-        const labelledbyIds = element
-          .getAttribute("aria-labelledby")
-          ?.split(/\s+/)
-          .filter(Boolean);
-
-        if (labelledbyIds?.length) {
-          const labelledText = labelledbyIds
-            .map(
-              (id) =>
-                document.getElementById(id)?.textContent ??
-                "",
-            )
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim();
-
-          if (labelledText.length > 0) {
-            ariaLabelledbyText = labelledText;
+        for (const element of Array.from(
+          root.querySelectorAll<HTMLElement>("*"),
+        )) {
+          if (element.shadowRoot !== null) {
+            found.push(...collect(element.shadowRoot, depth + 1));
           }
         }
 
-        let labelText: string | undefined;
+        return found;
+      };
 
-        if (element.id) {
-          const explicitLabel = Array.from(
-            document.querySelectorAll<HTMLLabelElement>(
-              "label",
-            ),
-          ).find(
-            (label) => label.htmlFor === element.id,
+      clear(document);
+
+      return collect(document, 0).map(
+        ({ element, shadowRootDepth }, index) => {
+          const style = window.getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+
+          const visible =
+            element.isConnected &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            style.visibility !== "collapse" &&
+            Number.parseFloat(style.opacity || "1") !== 0 &&
+            rect.width > 0 &&
+            rect.height > 0;
+
+          const marker = `r${index + 1}`;
+          element.setAttribute(markerAttribute, marker);
+
+          const input =
+            element instanceof HTMLInputElement ? element : undefined;
+
+          const type = input?.type.toLowerCase();
+          const role = normalize(element.getAttribute("role"))?.toLowerCase();
+
+          const nativeDisabled =
+            element instanceof HTMLButtonElement ||
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+              ? element.disabled
+              : false;
+
+          const ariaDisabled =
+            element.getAttribute("aria-disabled")?.trim().toLowerCase() ===
+            "true";
+
+          const semanticRoot = element.getRootNode();
+
+          const queryRoot =
+            semanticRoot instanceof Document ||
+            semanticRoot instanceof ShadowRoot
+              ? semanticRoot
+              : document;
+
+          const ariaLabel = normalize(
+            element.getAttribute("aria-label"),
           );
 
-          const explicitText = explicitLabel?.innerText
-            .replace(/\s+/g, " ")
-            .trim();
+          let ariaLabelledbyText: string | undefined;
 
-          if (explicitText && explicitText.length > 0) {
-            labelText = explicitText;
-          }
-        }
+          const labelledbyIds = element
+            .getAttribute("aria-labelledby")
+            ?.split(/\s+/)
+            .filter(Boolean);
 
-        if (labelText === undefined) {
-          const wrappingLabel =
-            element.closest("label");
-
-          const wrappingText = wrappingLabel?.innerText
-            .replace(/\s+/g, " ")
-            .trim();
-
-          if (wrappingText && wrappingText.length > 0) {
-            labelText = wrappingText;
-          }
-        }
-
-        const rawAlt = element.getAttribute("alt");
-        const normalizedAlt = rawAlt
-          ?.replace(/\s+/g, " ")
-          .trim();
-
-        const alt =
-          normalizedAlt && normalizedAlt.length > 0
-            ? normalizedAlt
-            : undefined;
-
-        const rawTitle =
-          element.getAttribute("title");
-
-        const normalizedTitle = rawTitle
-          ?.replace(/\s+/g, " ")
-          .trim();
-
-        const title =
-          normalizedTitle && normalizedTitle.length > 0
-            ? normalizedTitle
-            : undefined;
-
-        const rawPlaceholder =
-          element.getAttribute("placeholder");
-
-        const normalizedPlaceholder = rawPlaceholder
-          ?.replace(/\s+/g, " ")
-          .trim();
-
-        const placeholder =
-          normalizedPlaceholder &&
-          normalizedPlaceholder.length > 0
-            ? normalizedPlaceholder
-            : undefined;
-
-        let buttonValue: string | undefined;
-
-        if (buttonLikeInput) {
-          const normalizedButtonValue = input.value
-            .replace(/\s+/g, " ")
-            .trim();
-
-          if (normalizedButtonValue.length > 0) {
-            buttonValue = normalizedButtonValue;
-          }
-        }
-
-        const normalizedId = element.id
-          .replace(/\s+/g, " ")
-          .trim();
-
-        const id =
-          normalizedId.length > 0
-            ? normalizedId
-            : undefined;
-
-        const rawTestId =
-          element.getAttribute("data-testid");
-
-        const normalizedTestId = rawTestId
-          ?.replace(/\s+/g, " ")
-          .trim();
-
-        const testId =
-          normalizedTestId &&
-          normalizedTestId.length > 0
-            ? normalizedTestId
-            : undefined;
-
-        const attributes: Record<string, string> = {};
-
-        for (const attributeName of identityAttributes) {
-          const rawValue =
-            element.getAttribute(attributeName);
-
-          const normalizedValue = rawValue
-            ?.replace(/\s+/g, " ")
-            .trim();
-
-          if (
-            normalizedValue &&
-            normalizedValue.length > 0
-          ) {
-            attributes[attributeName] =
-              normalizedValue;
-          }
-        }
-
-        const pathSegments: string[] = [];
-        let current: Element | null = element;
-
-        while (current !== null) {
-          let segment =
-            current.tagName.toLowerCase();
-
-          const parent: Element | null =
-            current.parentElement;
-
-          if (parent !== null) {
-            const currentTagName = current.tagName;
-
-            const sameTagSiblings = Array.from(
-              parent.children,
-            ).filter(
-              (sibling: Element) =>
-                sibling.tagName === currentTagName,
+          if (labelledbyIds?.length) {
+            ariaLabelledbyText = normalize(
+              labelledbyIds
+                .map(
+                  (id) =>
+                    queryRoot.getElementById(id)?.textContent ?? "",
+                )
+                .join(" "),
             );
+          }
 
-            if (sameTagSiblings.length > 1) {
-              const position =
-                sameTagSiblings.indexOf(current) + 1;
+          let labelText: string | undefined;
 
-              segment += `:nth-of-type(${position})`;
+          if (element.id) {
+            const label = Array.from(
+              queryRoot.querySelectorAll<HTMLLabelElement>("label"),
+            ).find((candidate) => candidate.htmlFor === element.id);
+
+            labelText = normalize(label?.innerText);
+          }
+
+          if (labelText === undefined) {
+            labelText = normalize(element.closest("label")?.innerText);
+          }
+
+          const attributes: Record<string, string> = {};
+
+          for (const name of identityAttributes) {
+            const value = normalize(element.getAttribute(name));
+            if (value !== undefined) {
+              attributes[name] = value;
             }
           }
 
-          pathSegments.unshift(segment);
-          current = parent;
-        }
+          const pathSegments: string[] = [];
+          let current: HTMLElement | null = element;
 
-        const domPathHint =
-          pathSegments.join(">");
+          while (current !== null) {
+            let segment = current.tagName.toLowerCase();
 
-        const normalizedText = element.innerText
-          .replace(/\s+/g, " ")
-          .trim();
+            const parent: HTMLElement | null =
+              current.parentElement;
 
-        return {
-          marker,
-          tag: element.tagName.toLowerCase(),
-          ...(type === undefined ? {} : { type }),
-          ...(role === undefined ? {} : { role }),
-          text: normalizedText,
-          visible,
-          disabled: nativeDisabled || ariaDisabled,
-          contentEditable:
-            element.getAttribute("contenteditable") ===
-            "true",
-          tabIndex: element.tabIndex,
-          ...(ariaLabel === undefined
-            ? {}
-            : { ariaLabel }),
-          ...(ariaLabelledbyText === undefined
-            ? {}
-            : { ariaLabelledbyText }),
-          ...(labelText === undefined
-            ? {}
-            : { labelText }),
-          ...(alt === undefined ? {} : { alt }),
-          ...(title === undefined ? {} : { title }),
-          ...(placeholder === undefined
-            ? {}
-            : { placeholder }),
-          ...(buttonValue === undefined
-            ? {}
-            : { buttonValue }),
-          ...(id === undefined ? {} : { id }),
-          ...(testId === undefined
-            ? {}
-            : { testId }),
-          ...(Object.keys(attributes).length === 0
-            ? {}
-            : { attributes }),
-          domPathHint,
-        };
-      });
+            if (parent !== null) {
+              const tag = current.tagName;
+
+              const siblings: HTMLElement[] = Array.from(
+                parent.children,
+              ).filter(
+                (sibling): sibling is HTMLElement =>
+                  sibling instanceof HTMLElement &&
+                  sibling.tagName === tag,
+              );
+
+              if (siblings.length > 1) {
+                segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+              }
+            }
+
+            pathSegments.unshift(segment);
+            current = parent;
+          }
+
+          const buttonLikeInput =
+            input !== undefined &&
+            ["button", "submit", "reset", "image"].includes(input.type);
+
+          const alt = normalize(element.getAttribute("alt"));
+          const title = normalize(element.getAttribute("title"));
+          const placeholder = normalize(
+            element.getAttribute("placeholder"),
+          );
+          const buttonValue = buttonLikeInput
+            ? normalize(input.value)
+            : undefined;
+          const id = normalize(element.id);
+          const testId = normalize(
+            element.getAttribute("data-testid"),
+          );
+
+          return {
+            marker,
+            tag: element.tagName.toLowerCase(),
+            ...(type === undefined ? {} : { type }),
+            ...(role === undefined ? {} : { role }),
+            text: element.innerText.replace(/\s+/g, " ").trim(),
+            visible,
+            disabled: nativeDisabled || ariaDisabled,
+            contentEditable:
+              element.getAttribute("contenteditable") === "true",
+            tabIndex: element.tabIndex,
+            shadowRootDepth,
+            ...(ariaLabel === undefined ? {} : { ariaLabel }),
+            ...(ariaLabelledbyText === undefined
+              ? {}
+              : { ariaLabelledbyText }),
+            ...(labelText === undefined ? {} : { labelText }),
+            ...(alt === undefined ? {} : { alt }),
+            ...(title === undefined ? {} : { title }),
+            ...(placeholder === undefined ? {} : { placeholder }),
+            ...(buttonValue === undefined ? {} : { buttonValue }),
+            ...(id === undefined ? {} : { id }),
+            ...(testId === undefined ? {} : { testId }),
+            ...(Object.keys(attributes).length === 0
+              ? {}
+              : { attributes }),
+            domPathHint: pathSegments.join(">"),
+          };
+        },
+      );
     },
     {
       candidateSelector: CANDIDATE_SELECTOR,
@@ -365,10 +276,22 @@ async function clearFrameTargetMarkers(
   frame: Frame,
 ): Promise<void> {
   await frame.evaluate((markerAttribute) => {
-    document
-      .querySelectorAll(`[${markerAttribute}]`)
-      .forEach((element) =>
-        element.removeAttribute(markerAttribute),
-      );
+    const clear = (root: Document | ShadowRoot): void => {
+      root
+        .querySelectorAll(`[${markerAttribute}]`)
+        .forEach((element) =>
+          element.removeAttribute(markerAttribute),
+        );
+
+      for (const element of Array.from(
+        root.querySelectorAll<HTMLElement>("*"),
+      )) {
+        if (element.shadowRoot !== null) {
+          clear(element.shadowRoot);
+        }
+      }
+    };
+
+    clear(document);
   }, TARGET_MARKER_ATTRIBUTE);
 }

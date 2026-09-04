@@ -172,8 +172,7 @@ describe("Milestone 9 browser activity foundation", () => {
     const activity = await waitForActivity(
       activities,
       "browser_evidence",
-      (item) =>
-        (item.data.evidence as { kind?: string }).kind === "console",
+      (item) => (item.data.evidence as { kind?: string }).kind === "console",
     );
     const durable = activity.data.evidence as {
       summary: string;
@@ -195,8 +194,7 @@ describe("Milestone 9 browser activity foundation", () => {
 
     const inspection = await browser.inspect();
     const evidence = inspection.metadata?.browserEvidence as
-      | BrowserEvidenceSnapshot
-      | undefined;
+      BrowserEvidenceSnapshot | undefined;
 
     expect(evidence?.errors).toHaveLength(100);
     expect(evidence?.truncation).toEqual({
@@ -347,5 +345,43 @@ describe("Milestone 9 browser activity foundation", () => {
     expect(switched.data).toHaveProperty("url");
 
     expect(JSON.stringify(activities)).not.toContain(secret);
+  });
+
+  it("does not let delayed DOM activity steal a later explicit page switch", async () => {
+    const server = await startFixtureServer();
+
+    servers.push(server);
+
+    const browser = await createBrowser();
+
+    await browser.navigate(`${server.url}/actions`);
+
+    let inspection = await browser.inspect();
+
+    await browser.click(target(inspection, "Open popup"));
+
+    await browser.switchPage("page_02");
+
+    await browser.navigate(`${server.url}/handoff`);
+
+    await browser.switchPage("page_02");
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    const pages = await browser.pages();
+
+    expect(pages.find((page) => page.id === "page_02")?.active).toBe(true);
+
+    expect(pages.find((page) => page.id === "page_01")?.active).toBe(false);
+
+    inspection = await browser.inspect();
+
+    expect(inspection.pageId).toBe("page_02");
+
+    expect(inspection.url).toBe(`${server.url}/handoff`);
+
+    expect(
+      inspection.targets?.some((candidate) => candidate.name === "Update"),
+    ).toBe(true);
   });
 });

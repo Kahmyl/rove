@@ -2,9 +2,9 @@ import type {
   ActionResult,
   Artifact,
   BrowserLaunchConfig,
+  BrowserObservation,
   BrowserRuntimeCapabilities,
   InspectOptions,
-  PageInspection,
   PageStateIdentity,
   PageSummary,
   ScreenshotOptions,
@@ -17,7 +17,9 @@ export interface BrowserSession {
   readonly id: string;
   readonly capabilities: BrowserRuntimeCapabilities;
   onActivity(listener: BrowserActivityListener): () => void;
-  inspect(options?: InspectOptions): Promise<PageInspection>;
+  inspect(
+    options?: InspectOptions,
+  ): Promise<BrowserObservation>;
   pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
   navigate(url: string): Promise<ActionResult>;
   click(target: TargetReference): Promise<ActionResult>;

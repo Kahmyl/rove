@@ -17,6 +17,7 @@ const RUNTIME_TOKEN = "m10-runtime-token-1234567890";
 const MCP_TOKEN = "m10-streamable-http-token-1234567890";
 
 type Inspection = {
+  observationId: string;
   pageId: string;
   revision: number;
   url: string;
@@ -206,9 +207,16 @@ async function runAgentScenario(client: Client): Promise<void> {
       },
     });
 
-    await callJson(client, "browser.screenshot", {
+    await callScreenshot(client, {
       sessionId,
-      mode: "viewport",
+      mode: "region",
+      observationId: inspection.observationId,
+      region: {
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 200,
+      },
       label: "result-page",
     });
 
@@ -463,6 +471,69 @@ function target(
     revision: inspection.revision,
     ref: item.ref,
   };
+}
+
+async function callScreenshot(
+  client: Client,
+  args: Record<string, unknown>,
+): Promise<void> {
+  const result =
+    await client.callTool({
+      name:
+        "browser.screenshot",
+      arguments:
+        args,
+    });
+
+  if (
+    result.isError === true
+  ) {
+    throw new Error(
+      "browser.screenshot returned an MCP error.",
+    );
+  }
+
+  const image =
+    result.content.find(
+      (item) =>
+        item.type === "image",
+    );
+
+  if (
+    image === undefined ||
+    image.type !== "image"
+  ) {
+    throw new Error(
+      "Expected screenshot image content.",
+    );
+  }
+
+  expect(
+    image.mimeType,
+  ).toBe(
+    "image/png",
+  );
+
+  const bytes =
+    Buffer.from(
+      image.data,
+      "base64",
+    );
+
+  expect(
+    bytes.length,
+  ).toBeGreaterThan(24);
+
+  expect(
+    Array.from(
+      bytes.subarray(0, 4),
+    ),
+  ).toEqual([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+  ]);
 }
 
 async function callJson<T = unknown>(

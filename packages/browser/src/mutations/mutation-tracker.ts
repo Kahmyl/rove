@@ -2,13 +2,19 @@ import type { Page } from "playwright";
 
 const MUTATION_VERSION_KEY = "__roveMaterialMutationVersion";
 const MUTATION_OBSERVER_KEY = "__roveMaterialMutationObserver";
+const TRANSIENT_TARGET_STYLE_KEY =
+  "__roveTransientTargetStyleMutationSuppression";
 
 export async function installMutationTracker(page: Page): Promise<void> {
   // tsx names nested functions with a small `__name` helper. Playwright
   // serializes the callback without that module-scoped helper in manual demos.
   await page.evaluate("globalThis.__name ??= (value) => value");
   await page.evaluate(
-    ({ observerKey, versionKey }) => {
+    ({
+      observerKey,
+      versionKey,
+      transientTargetStyleKey,
+    }) => {
       const state = window as unknown as Record<string, unknown>;
       if (state[observerKey] !== undefined) return;
 
@@ -41,10 +47,19 @@ export async function installMutationTracker(page: Page): Promise<void> {
 
       const isMaterial = (mutation: MutationRecord): boolean => {
         if (mutation.type === "attributes") {
-          return (
+          const targetIsMarked =
             mutation.target instanceof Element &&
-            mutation.target.matches(markerSelector)
-          );
+            mutation.target.matches(markerSelector);
+
+          if (
+            targetIsMarked &&
+            mutation.attributeName === "style" &&
+            state[transientTargetStyleKey] === true
+          ) {
+            return false;
+          }
+
+          return targetIsMarked;
         }
 
         const parent =
@@ -96,7 +111,12 @@ export async function installMutationTracker(page: Page): Promise<void> {
 
       state[observerKey] = observer;
     },
-    { observerKey: MUTATION_OBSERVER_KEY, versionKey: MUTATION_VERSION_KEY },
+    {
+      observerKey: MUTATION_OBSERVER_KEY,
+      versionKey: MUTATION_VERSION_KEY,
+      transientTargetStyleKey:
+        TRANSIENT_TARGET_STYLE_KEY,
+    },
   );
 }
 
@@ -106,5 +126,24 @@ export async function readMaterialMutationVersion(page: Page): Promise<number> {
     (versionKey) =>
       Number((window as unknown as Record<string, unknown>)[versionKey] ?? 0),
     MUTATION_VERSION_KEY,
+  );
+}
+
+export async function setTransientTargetStyleMutationSuppression(
+  page: Page,
+  suppressed: boolean,
+): Promise<void> {
+  await installMutationTracker(page);
+
+  await page.evaluate(
+    ({ key, suppressed }) => {
+      (
+        window as unknown as Record<string, unknown>
+      )[key] = suppressed;
+    },
+    {
+      key: TRANSIENT_TARGET_STYLE_KEY,
+      suppressed,
+    },
   );
 }

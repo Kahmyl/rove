@@ -594,15 +594,44 @@ Commands must:
 - remove superseded staging implementations rather than retaining parallel
   authority.
 
+## Phase 1 experiment decision
+
+The isolated Phase 1 experiment passed.
+
+The selected production strategy is:
+
+```text
+Playwright ARIA snapshot
+    + existing Rove DOM semantics
+    + Playwright target geometry
+```
+
+The experiment proved the required semantic hierarchy, duplicate-control scope,
+open-shadow perception, frame-bound controls, target geometry, basic occlusion,
+DPR-aware screenshot correlation, stale-capture rejection, attached Chrome
+compatibility, and MCP image transport.
+
+The bounded CDP AX/DOMSnapshot candidate also passed the experiment corpus, but
+added no required capability over the smaller Playwright strategy and therefore
+does not enter the Phase 1 production path.
+
+Phase 1 reuses existing page revision authority and binds each browser
+observation to URL, material mutation version, viewport, scroll position, and
+device scale.
+
+Production bounds:
+
+- ARIA structure defaults to 12,000 characters and is capped at 30,000;
+- target inventory remains 200 by default and 500 maximum;
+- visible text remains 20,000 characters by default and 50,000 maximum;
+- inline screenshot presentation is capped at 2 MiB of raw PNG bytes;
+- full-page capture remains durable evidence rather than guaranteed inline
+  content;
+- live editable values and snapshot URLs are redacted before ARIA structure is
+  agent-visible.
+
 ## Immediate next gate
 
-No production behavior changes are authorized yet.
-
-The next gate is the Phase 1 isolated experiment. Its first result must determine
-the smallest observation strategy that can provide:
-
-- usable semantic hierarchy;
-- correlated geometry;
-- model-viewable screenshots;
-- current observation authority;
-- acceptable cost across both Rove browser modes.
+Qualify and audit the complete Phase 1 production implementation. CDP
+AX/DOMSnapshot, OCR, model vision, compact controls, Codex App Server, and
+workflow-domain behavior remain outside Phase 1.

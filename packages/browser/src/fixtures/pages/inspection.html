@@ -17,7 +17,7 @@
       <button id="submit">Submit</button>
 
       <label for="search">Search jobs</label>
-      <input id="search" type="text" />
+      <input id="search" type="text" value="private-query-value" />
 
       <input id="password" type="password" autocomplete="current-password" />
 
@@ -38,6 +38,59 @@
       <div role="button" tabindex="0">Custom action</div>
 
       <div role="heading">Structural role</div>
+
+      <section role="region" aria-label="Alpha">
+        <h2>Alpha</h2>
+        <button>Save</button>
+      </section>
+
+      <section role="region" aria-label="Beta">
+        <h2>Beta</h2>
+        <button>Save</button>
+      </section>
+
+      <section role="region" aria-label="Occlusion">
+        <div style="position: relative; width: 240px; height: 70px">
+          <button
+            style="
+              position: absolute;
+              left: 10px;
+              top: 10px;
+              width: 180px;
+              height: 40px;
+            "
+          >
+            Covered action
+          </button>
+          <div
+            aria-hidden="true"
+            style="
+              position: absolute;
+              inset: 0;
+              z-index: 10;
+              background: rgba(0, 0, 0, 0.05);
+            "
+          ></div>
+        </div>
+      </section>
+
+      <div id="open-shadow-host"></div>
+
+      <script>
+        const shadowHost =
+          document.querySelector("#open-shadow-host");
+
+        const shadowRoot =
+          shadowHost.attachShadow({
+            mode: "open",
+          });
+
+        shadowRoot.innerHTML = `
+          <section role="region" aria-label="Shadow Region">
+            <button>Shadow action</button>
+          </section>
+        `;
+      </script>
 
       <section>
         <p>

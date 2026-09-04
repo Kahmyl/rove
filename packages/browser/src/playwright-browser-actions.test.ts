@@ -1,11 +1,24 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { Page } from "playwright";
 
-import { RoveError, type BrowserLaunchConfig, type PageInspection, type TargetReference } from "@rove/protocol";
+import {
+  RoveError,
+  type BrowserLaunchConfig,
+  type PageInspection,
+  type TargetReference,
+} from "@rove/protocol";
 import type { BrowserSession } from "./engine.js";
-import { startFixtureServer, type FixtureServer } from "./fixtures/fixture-server.js";
+import {
+  startFixtureServer,
+  type FixtureServer,
+} from "./fixtures/fixture-server.js";
 import { PlaywrightBrowserEngine } from "./playwright-browser-engine.js";
 
-const config: BrowserLaunchConfig = { headless: true, browser: "chromium", profile: { mode: "temporary" } };
+const config: BrowserLaunchConfig = {
+  headless: true,
+  browser: "chromium",
+  profile: { mode: "temporary" },
+};
 const sessions: BrowserSession[] = [];
 const servers: FixtureServer[] = [];
 
@@ -19,9 +32,93 @@ async function setup(path = "/actions") {
 }
 
 function target(inspection: PageInspection, name: string): TargetReference {
-  const found = inspection.targets?.find((candidate) => candidate.name === name);
+  const found = inspection.targets?.find(
+    (candidate) => candidate.name === name,
+  );
   if (!found) throw new Error(`Missing fixture target: ${name}`);
-  return { pageId: inspection.pageId, revision: inspection.revision, ref: found.ref };
+  return {
+    pageId: inspection.pageId,
+    revision: inspection.revision,
+    ref: found.ref,
+  };
+}
+
+function testPage(session: BrowserSession): Page {
+  const internal = session as unknown as {
+    pageRegistry: {
+      activeId(): string | undefined;
+      pageFor(pageId: string): Page;
+    };
+  };
+
+  const pageId = internal.pageRegistry.activeId();
+
+  if (pageId === undefined) {
+    throw new Error("Fixture session has no active page.");
+  }
+
+  return internal.pageRegistry.pageFor(pageId);
+}
+
+async function hideObservedTarget(session: BrowserSession): Promise<void> {
+  await testPage(session).evaluate(() => {
+    const element = document.querySelector<HTMLElement>("#replace-me");
+
+    if (element === null) {
+      throw new Error("Dynamic fixture target is missing.");
+    }
+
+    element.style.display = "none";
+  });
+}
+
+async function replaceObservedTarget(session: BrowserSession): Promise<void> {
+  await testPage(session).evaluate(() => {
+    const old = document.querySelector<HTMLElement>("#replace-me");
+
+    if (old === null) {
+      throw new Error("Dynamic fixture target is missing.");
+    }
+
+    const replacement = document.createElement("button");
+
+    replacement.id = "replace-me";
+    replacement.textContent = "Replace me";
+
+    replacement.addEventListener("click", () => {
+      document.body.dataset.replacementClicked = "true";
+    });
+
+    old.replaceWith(replacement);
+  });
+}
+
+async function duplicateObservedTarget(session: BrowserSession): Promise<void> {
+  await testPage(session).evaluate(() => {
+    const original = document.querySelector<HTMLElement>("#replace-me");
+
+    if (original === null) {
+      throw new Error("Dynamic fixture target is missing.");
+    }
+
+    const duplicate = original.cloneNode(true) as HTMLElement;
+
+    duplicate.id = "duplicate";
+
+    original.after(duplicate);
+  });
+}
+
+async function mutateUnrelatedContent(session: BrowserSession): Promise<void> {
+  await testPage(session).evaluate(() => {
+    const unrelated = document.querySelector<HTMLElement>("#unrelated");
+
+    if (unrelated === null) {
+      throw new Error("Dynamic fixture unrelated node is missing.");
+    }
+
+    unrelated.textContent = "changed";
+  });
 }
 
 afterEach(async () => {
@@ -34,7 +131,11 @@ describe("Milestone 3 browser actions", () => {
     const { session } = await setup();
     const inspection = await session.inspect();
     const result = await session.click(target(inspection, "Change state"));
-    expect(result).toMatchObject({ action: "click", pageChanged: true, previousRevision: inspection.revision });
+    expect(result).toMatchObject({
+      action: "click",
+      pageChanged: true,
+      previousRevision: inspection.revision,
+    });
     expect((await session.inspect()).text).toContain("State changed");
   });
 
@@ -45,7 +146,9 @@ describe("Milestone 3 browser actions", () => {
     const result = await session.click(target(inspection, "Navigate result"));
     expect(result.pageChanged).toBe(true);
     expect(result.currentRevision).toBeGreaterThan(inspection.revision);
-    await expect(session.type(old, "ignored")).rejects.toMatchObject({ code: "TARGET_STALE" });
+    await expect(session.type(old, "ignored")).rejects.toMatchObject({
+      code: "TARGET_STALE",
+    });
   });
 
   it("fills instead of appending and supports targeted and page keyboard presses", async () => {
@@ -56,7 +159,9 @@ describe("Milestone 3 browser actions", () => {
     const next = await session.inspect();
     await session.press(target(next, "Search"), "Enter");
     expect((await session.inspect()).text).toContain("submitted:backend");
-    await expect(session.press(null, "Escape")).resolves.toMatchObject({ action: "press" });
+    await expect(session.press(null, "Escape")).resolves.toMatchObject({
+      action: "press",
+    });
   });
 
   it("never returns or serializes sensitive typed values", async () => {
@@ -65,14 +170,20 @@ describe("Milestone 3 browser actions", () => {
     const secret = "super-secret-test-value";
     const result = await session.type(target(inspection, "Password"), secret);
     expect(JSON.stringify(result)).not.toContain(secret);
-    expect(JSON.stringify(new RoveError({ code: "TARGET_STALE", message: "stale" }).toJSON())).not.toContain(secret);
+    expect(
+      JSON.stringify(
+        new RoveError({ code: "TARGET_STALE", message: "stale" }).toJSON(),
+      ),
+    ).not.toContain(secret);
   });
 
   it("scrolls in the requested direction and rejects invalid amounts", async () => {
     const { session } = await setup();
     await session.scroll({ direction: "down", amount: 700 });
     expect((await session.inspect()).text).toMatch(/scrolled:[1-9]/);
-    await expect(session.scroll({ direction: "down", amount: 0 })).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+    await expect(
+      session.scroll({ direction: "down", amount: 0 }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
   });
 
   it("supports history and treats missing history as a successful no-op", async () => {
@@ -87,7 +198,10 @@ describe("Milestone 3 browser actions", () => {
 
     const fresh = await new PlaywrightBrowserEngine().start(config);
     sessions.push(fresh);
-    await expect(fresh.back()).resolves.toMatchObject({ ok: true, pageChanged: false });
+    await expect(fresh.back()).resolves.toMatchObject({
+      ok: true,
+      pageChanged: false,
+    });
   });
 
   it("captures viewport, full-page, target, and masked sensitive screenshots", async () => {
@@ -97,55 +211,137 @@ describe("Milestone 3 browser actions", () => {
       const artifact = await session.screenshot({ mode });
       expect(artifact.mimeType).toBe("image/png");
       expect(artifact.bytes.length).toBeGreaterThan(0);
-      expect(artifact.metadata).toMatchObject({ mode, pageId: inspection.pageId });
+      expect(artifact.metadata).toMatchObject({
+        mode,
+        pageId: inspection.pageId,
+      });
     }
-    const targetArtifact = await session.screenshot({ mode: "target", target: target(inspection, "Submit search") });
+    const targetArtifact = await session.screenshot({
+      mode: "target",
+      target: target(inspection, "Submit search"),
+      observationId: inspection.observationId,
+    });
+
     expect(targetArtifact.bytes.length).toBeGreaterThan(0);
+
+    const regionArtifact = await session.screenshot({
+      mode: "region",
+      observationId: inspection.observationId,
+      region: {
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 200,
+      },
+    });
+
+    expect(regionArtifact.bytes.length).toBeGreaterThan(0);
+
+    expect(regionArtifact.metadata).toMatchObject({
+      mode: "region",
+      observationId: inspection.observationId,
+    });
     await session.type(target(inspection, "One-time code"), "849291");
     inspection = await session.inspect();
-    const sensitive = await session.screenshot({ mode: "target", target: target(inspection, "One-time code") });
+    const sensitive = await session.screenshot({
+      mode: "target",
+      target: target(inspection, "One-time code"),
+    });
     expect(sensitive.bytes.length).toBeGreaterThan(0);
-    await expect(session.type(target(inspection, "One-time code"), "still-editable")).resolves.toMatchObject({ ok: true });
-    await expect(session.screenshot({ mode: "target" })).rejects.toMatchObject({ code: "TARGET_NOT_FOUND" });
+    await expect(
+      session.type(target(inspection, "One-time code"), "still-editable"),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(session.screenshot({ mode: "target" })).rejects.toMatchObject({
+      code: "TARGET_NOT_FOUND",
+    });
+
+    const staleObservationId = inspection.observationId;
+
+    await session.invalidateTargets();
+
+    await expect(
+      session.screenshot({
+        mode: "viewport",
+        observationId: staleObservationId,
+      }),
+    ).rejects.toMatchObject({
+      code: "OBSERVATION_STALE",
+      retryable: true,
+    });
   });
 
   it("reports disabled, hidden, stale, and ambiguous targets without guessing", async () => {
     const first = await setup();
+
     let inspection = await first.session.inspect();
-    await expect(first.session.click(target(inspection, "Disabled action"))).rejects.toMatchObject({ code: "TARGET_DISABLED" });
 
-    const hidden = await setup("/dynamic-target#hidden-later");
+    await expect(
+      first.session.click(target(inspection, "Disabled action")),
+    ).rejects.toMatchObject({
+      code: "TARGET_DISABLED",
+    });
+
+    const hidden = await setup("/dynamic-target");
+
     inspection = await hidden.session.inspect();
+
     const hiddenRef = target(inspection, "Replace me");
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await expect(hidden.session.click(hiddenRef)).rejects.toMatchObject({ code: "TARGET_NOT_VISIBLE" });
 
-    const replaced = await setup("/dynamic-target#replace-later");
+    await hideObservedTarget(hidden.session);
+
+    await expect(hidden.session.click(hiddenRef)).rejects.toMatchObject({
+      code: "TARGET_NOT_VISIBLE",
+    });
+
+    const replaced = await setup("/dynamic-target");
+
     inspection = await replaced.session.inspect();
-    const replacedRef = target(inspection, "Replace me");
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await expect(replaced.session.click(replacedRef)).rejects.toMatchObject({ code: "TARGET_STALE", retryable: true });
 
-    const duplicate = await setup("/dynamic-target#duplicate-later");
+    const replacedRef = target(inspection, "Replace me");
+
+    await replaceObservedTarget(replaced.session);
+
+    await expect(replaced.session.click(replacedRef)).rejects.toMatchObject({
+      code: "TARGET_STALE",
+      retryable: true,
+    });
+
+    const duplicate = await setup("/dynamic-target");
+
     inspection = await duplicate.session.inspect();
+
     const duplicateRef = target(inspection, "Replace me");
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await expect(duplicate.session.click(duplicateRef)).rejects.toMatchObject({ code: "TARGET_AMBIGUOUS" });
+
+    await duplicateObservedTarget(duplicate.session);
+
+    await expect(duplicate.session.click(duplicateRef)).rejects.toMatchObject({
+      code: "TARGET_AMBIGUOUS",
+    });
   });
 
   it("allows an unchanged target after an unrelated mutation", async () => {
-    const { session } = await setup("/dynamic-target#unrelated-later");
+    const { session } = await setup("/dynamic-target");
+
     const inspection = await session.inspect();
+
     const ref = target(inspection, "Replace me");
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await expect(session.click(ref)).resolves.toMatchObject({ ok: true, action: "click" });
+
+    await mutateUnrelatedContent(session);
+
+    await expect(session.click(ref)).resolves.toMatchObject({
+      ok: true,
+      action: "click",
+    });
   });
 
   it("reports newly opened pages from click", async () => {
     const { session } = await setup();
     const inspection = await session.inspect();
     const result = await session.click(target(inspection, "Open popup"));
-    expect(result.openedPages?.[0]).toMatchObject({ id: "page_02", active: true });
+    expect(result.openedPages?.[0]).toMatchObject({
+      id: "page_02",
+      active: true,
+    });
     expect(result.pageChanged).toBe(true);
   });
 
@@ -155,20 +351,26 @@ describe("Milestone 3 browser actions", () => {
     session.onActivity((activity) => activities.push(activity));
 
     let inspection = await session.inspect();
-    await expect(session.click(target(inspection, "Show alert"))).resolves.toMatchObject({
+    await expect(
+      session.click(target(inspection, "Show alert")),
+    ).resolves.toMatchObject({
       ok: true,
       action: "click",
     });
 
     inspection = await session.inspect();
-    await expect(session.click(target(inspection, "Show confirm"))).resolves.toMatchObject({
+    await expect(
+      session.click(target(inspection, "Show confirm")),
+    ).resolves.toMatchObject({
       ok: true,
       action: "click",
     });
     expect((await session.inspect()).metadata).toBeDefined();
 
     inspection = await session.inspect();
-    await expect(session.click(target(inspection, "Show prompt"))).resolves.toMatchObject({
+    await expect(
+      session.click(target(inspection, "Show prompt")),
+    ).resolves.toMatchObject({
       ok: true,
       action: "click",
     });

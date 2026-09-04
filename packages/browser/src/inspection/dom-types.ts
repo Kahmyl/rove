@@ -10,6 +10,7 @@ export interface DomCandidate {
   disabled: boolean;
   contentEditable: boolean;
   tabIndex: number;
+  shadowRootDepth?: number;
 
   ariaLabel?: string;
   ariaLabelledbyText?: string;

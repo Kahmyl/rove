@@ -33,7 +33,9 @@ export class BrowserController {
       includeText: parseBoolean(query.includeText),
       includeTargets: parseBoolean(query.includeTargets),
       includeViewport: parseBoolean(query.includeViewport),
+      includeStructure: parseBoolean(query.includeStructure),
       maxTextChars: parseNumber(query.maxTextChars),
+      maxStructureChars: parseNumber(query.maxStructureChars),
       targetLimit: parseNumber(query.targetLimit),
     }));
   }

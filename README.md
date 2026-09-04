@@ -101,7 +101,7 @@ Command Prompt without shell-specific environment syntax.
 
 ## Browser verification
 
-Rove supports real headed Playwright browser sessions with Rove-managed persistent or explicitly requested temporary profiles, stable page IDs, active-page lifecycle, semantic inspection, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and PNG screenshots with sensitive-field masking. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive restarts. Ordinary/default Chrome profiles are intentionally unsupported.
+Rove supports real headed Playwright browser sessions with Rove-managed persistent or explicitly requested temporary profiles, stable page/revision authority, bounded visible text, redacted Playwright ARIA hierarchy, frame/open-shadow target provenance, target geometry and basic occlusion evidence, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and masked PNG capture. Viewport and region screenshots can be returned to MCP callers as actual image content while remaining durable evidence; observation-bound capture rejects stale revision, mutation, URL, scroll, viewport, or device-scale state. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive restarts. Ordinary/default Chrome profiles are intentionally unsupported.
 
 ### Responsible browsing boundary
 

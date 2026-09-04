@@ -50,6 +50,9 @@ import {
 import { SessionService } from "./session/session.service.js";
 import { ROVE_CONFIG } from "./tokens.js";
 
+const MAX_INLINE_SCREENSHOT_BYTES =
+  2 * 1024 * 1024;
+
 @Injectable()
 export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
@@ -243,6 +246,7 @@ export class RuntimeService implements RoveRuntime {
 
         return {
           ...inspection,
+          sessionId,
           metadata: {
             ...(inspection.metadata ?? {}),
             pagePolicy: assessment.policyDecision,
@@ -449,38 +453,97 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     options: ScreenshotOptions = {},
   ): Promise<Evidence> {
-    return this.mutateValue(sessionId, async (lease) => {
-      const artifact = await this.browser.get(sessionId).screenshot(options);
+    return this.mutateValue(
+      sessionId,
+      async (lease) => {
+        const artifact =
+          await this.browser
+            .get(sessionId)
+            .screenshot(options);
 
-      lease.assertCurrent();
+        lease.assertCurrent();
 
-      const item = await this.evidence.saveScreenshot(
-        sessionId,
-        artifact,
-        options,
-      );
+        const item =
+          await this.evidence
+            .saveScreenshot(
+              sessionId,
+              artifact,
+              options,
+            );
 
-      lease.assertCurrent();
+        lease.assertCurrent();
 
-      await this.observations.append(sessionId, {
-        actor: "agent",
-        type: "screenshot_captured",
-        data: {
-          evidenceId: item.id,
-          label: item.label,
-        },
-        ...(item.pageId === undefined ? {} : { pageId: item.pageId }),
-        ...(item.pageRevision === undefined
-          ? {}
-          : {
-              pageRevision: item.pageRevision,
-            }),
-      });
+        await this.observations.append(
+          sessionId,
+          {
+            actor: "agent",
+            type:
+              "screenshot_captured",
+            data: {
+              evidenceId:
+                item.id,
+              label:
+                item.label,
+              ...(typeof artifact.metadata
+                ?.observationId === "string"
+                ? {
+                    observationId:
+                      artifact.metadata
+                        .observationId,
+                  }
+                : {}),
+            },
+            ...(item.pageId === undefined
+              ? {}
+              : {
+                  pageId:
+                    item.pageId,
+                }),
+            ...(item.pageRevision === undefined
+              ? {}
+              : {
+                  pageRevision:
+                    item.pageRevision,
+                }),
+          },
+        );
 
-      lease.assertCurrent();
+        lease.assertCurrent();
 
-      return item;
-    });
+        const mode =
+          options.mode ?? "viewport";
+
+        const inline =
+          mode !== "full-page" &&
+          artifact.bytes.byteLength <=
+            MAX_INLINE_SCREENSHOT_BYTES;
+
+        return {
+          ...item,
+          ...(inline
+            ? {
+                image: {
+                  mimeType:
+                    "image/png",
+                  data:
+                    Buffer.from(
+                      artifact.bytes,
+                    ).toString(
+                      "base64",
+                    ),
+                  byteLength:
+                    artifact.bytes.byteLength,
+                },
+              }
+            : {
+                imageOmitted:
+                  mode === "full-page"
+                    ? "full_page"
+                    : "size_limit",
+              }),
+        };
+      },
+    );
   }
 
   async getControlStatus(sessionId: string): Promise<ControlStatus> {
@@ -724,6 +787,8 @@ export class RuntimeService implements RoveRuntime {
     const inspection = await browser.inspect({
       includeText: false,
       includeTargets: false,
+      includeViewport: false,
+      includeStructure: false,
     });
 
     lease?.assertCurrent();

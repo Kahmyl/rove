@@ -9,6 +9,7 @@ import {
 import {
   installMutationTracker,
   readMaterialMutationVersion,
+  setTransientTargetStyleMutationSuppression,
 } from "./mutation-tracker.js";
 
 let browser: Browser;
@@ -73,4 +74,142 @@ describe("material mutation tracker lifecycle", () => {
 
     expect(after).toBeGreaterThan(before);
   });
+  it("keeps ordinary marked-target style changes material", async () => {
+    const testPage =
+      await context.newPage();
+
+    try {
+      await testPage.setContent(`
+        <!doctype html>
+        <html>
+          <body>
+            <button
+              data-rove-target="r1"
+              style="display: block"
+            >
+              Action
+            </button>
+          </body>
+        </html>
+      `);
+
+      await installMutationTracker(
+        testPage,
+      );
+
+      const before =
+        await readMaterialMutationVersion(
+          testPage,
+        );
+
+      await testPage.evaluate(() => {
+        document
+          .querySelector<HTMLElement>(
+            '[data-rove-target="r1"]',
+          )!
+          .style.display = "none";
+      });
+
+      await testPage.waitForTimeout(20);
+
+      expect(
+        await readMaterialMutationVersion(
+          testPage,
+        ),
+      ).toBeGreaterThan(before);
+    } finally {
+      await testPage.close();
+    }
+  });
+
+  it("suppresses target style churn only inside the explicit capture scope", async () => {
+    const testPage =
+      await context.newPage();
+
+    try {
+      await testPage.setContent(`
+        <!doctype html>
+        <html>
+          <body>
+            <button
+              data-rove-target="r1"
+              style="display: block"
+            >
+              Action
+            </button>
+          </body>
+        </html>
+      `);
+
+      await installMutationTracker(
+        testPage,
+      );
+
+      const before =
+        await readMaterialMutationVersion(
+          testPage,
+        );
+
+      await setTransientTargetStyleMutationSuppression(
+        testPage,
+        true,
+      );
+
+      try {
+        await testPage.evaluate(() => {
+          const element =
+            document.querySelector<HTMLElement>(
+              '[data-rove-target="r1"]',
+            )!;
+
+          const original =
+            element.getAttribute(
+              "style",
+            );
+
+          element.style.opacity =
+            "0";
+
+          element.setAttribute(
+            "style",
+            original!,
+          );
+        });
+
+        await testPage.waitForTimeout(
+          20,
+        );
+      } finally {
+        await setTransientTargetStyleMutationSuppression(
+          testPage,
+          false,
+        );
+      }
+
+      expect(
+        await readMaterialMutationVersion(
+          testPage,
+        ),
+      ).toBe(before);
+
+      await testPage.evaluate(() => {
+        document
+          .querySelector<HTMLElement>(
+            '[data-rove-target="r1"]',
+          )!
+          .style.display = "none";
+      });
+
+      await testPage.waitForTimeout(20);
+
+      expect(
+        await readMaterialMutationVersion(
+          testPage,
+        ),
+      ).toBeGreaterThan(before);
+    } finally {
+      await testPage.close();
+    }
+  });
+
 });

@@ -40,20 +40,75 @@ export class EvidenceService {
     return item;
   }
 
-  async saveScreenshot(sessionId: string, artifact: Artifact, options: ScreenshotOptions = {}): Promise<Evidence> {
-    const metadata = artifact.metadata ?? {};
+  async saveScreenshot(
+    sessionId: string,
+    artifact: Artifact,
+    options: ScreenshotOptions = {},
+  ): Promise<Evidence> {
+    const metadata =
+      artifact.metadata ?? {};
+
     const item: Evidence = {
-      id: `ev_${randomUUID().replaceAll("-", "")}`,
+      id:
+        `ev_${randomUUID().replaceAll("-", "")}`,
       sessionId,
       type: "screenshot",
-      createdAt: typeof metadata.timestamp === "string" ? metadata.timestamp : new Date().toISOString(),
-      ...(options.label === undefined ? {} : { label: options.label }),
-      ...(typeof metadata.pageId === "string" ? { pageId: metadata.pageId } : {}),
-      ...(typeof metadata.revision === "number" ? { pageRevision: metadata.revision } : {}),
-      ...(typeof metadata.url === "string" ? { url: metadata.url } : {}),
-      metadata: { mimeType: artifact.mimeType, mode: options.mode ?? "viewport" },
+      createdAt:
+        typeof metadata.timestamp === "string"
+          ? metadata.timestamp
+          : new Date().toISOString(),
+      ...(options.label === undefined
+        ? {}
+        : { label: options.label }),
+      ...(typeof metadata.pageId === "string"
+        ? { pageId: metadata.pageId }
+        : {}),
+      ...(typeof metadata.revision === "number"
+        ? {
+            pageRevision:
+              metadata.revision,
+          }
+        : {}),
+      ...(typeof metadata.url === "string"
+        ? { url: metadata.url }
+        : {}),
+      metadata: {
+        mimeType:
+          artifact.mimeType,
+        mode:
+          options.mode ?? "viewport",
+        ...(typeof metadata.observationId === "string"
+          ? {
+              observationId:
+                metadata.observationId,
+            }
+          : {}),
+        ...(metadata.viewport === undefined
+          ? {}
+          : {
+              viewport:
+                metadata.viewport,
+            }),
+        ...(metadata.region === undefined
+          ? {}
+          : {
+              region:
+                metadata.region,
+            }),
+        ...(metadata.targetBounds === undefined
+          ? {}
+          : {
+              targetBounds:
+                metadata.targetBounds,
+            }),
+      },
     };
-    await this.persist(item, artifact.bytes);
+
+    await this.persist(
+      item,
+      artifact.bytes,
+    );
+
     return item;
   }
 

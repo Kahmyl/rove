@@ -75,7 +75,9 @@ describe("resolveInspectOptions", () => {
       includeText: true,
       includeTargets: true,
       includeViewport: true,
+      includeStructure: true,
       maxTextChars: 20_000,
+      maxStructureChars: 12_000,
       targetLimit: 200,
     });
   });
@@ -205,6 +207,7 @@ describe("PageInspector", () => {
         includeText: false,
         includeTargets: false,
         includeViewport: false,
+        includeStructure: false,
       },
     );
 

@@ -65,14 +65,15 @@ The browser package currently implements:
 - one BrowserContext per BrowserSession;
 - stable `page_01`, `page_02`, ... page identities and active-page management;
 - navigation with material page revision updates;
-- semantic inspection using visible body text and one-pass DOM target discovery;
+- one canonical browser observation containing bounded visible text, redacted Playwright ARIA hierarchy, viewport/scroll/device-scale state, and existing Runtime perception metadata;
 - deterministic accessible-name approximation and target classification;
+- open-shadow-aware target discovery with frame provenance, Playwright geometry, clipping, and basic hit-test occlusion evidence;
 - sensitivity detection through the existing `isSensitiveTarget()` contract;
 - revision-scoped `tN` target references backed by one current TargetRegistry per page;
 - centralized action-time target resolution with page/revision, marker, semantic identity, visibility, enabled, and interactivity validation;
 - material DOM mutation tracking that preserves safe references across unrelated changes and invalidates missing/replaced targets;
 - `click`, sequential-key `type` for normal-sized input, targeted/page `press`, viewport `scroll`, `back`, and `forward`;
-- viewport, full-page, and target PNG screenshots with temporary sensitive-field masking;
+- viewport, full-page, target, and viewport-relative region PNG screenshots with sensitive-field masking across frames/open shadow roots, durable evidence, exact-observation validation, and bounded MCP image presentation;
 - popup discovery and shared post-action page/revision synchronization;
 - normalized human browser activity for navigation, titles, meaningful interaction, form submission, fixed scroll milestones, selections, page creation, and page switching;
 - browser-level Chromium tab reconciliation using CDP `tab` target `embedderData.tabActive`, mapped back to stable Rove page IDs without persisting CDP target identity;
@@ -96,7 +97,7 @@ Authentication and presented human verification may automatically request human 
 
 The architecture explicitly excludes fingerprint spoofing, automation concealment, proxy rotation, CAPTCHA solving, and other access-control evasion. Rove cannot promise that a third-party site will permit automation, even when the task itself is legitimate.
 
-Inspection does not increment the page revision. Revisions change on main-frame navigation/document change, explicit invalidation, and material action results.
+Inspection does not increment page revision. Existing revision authority remains the document/target freshness boundary. `BrowserObservation` additionally binds revision to URL, material mutation version, viewport, scroll position, and device scale so visual capture can reject stale observations without introducing a second page-version counter.
 
 ## Runtime integration
 

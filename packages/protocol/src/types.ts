@@ -91,6 +91,57 @@ export interface Viewport {
   height: number;
 }
 
+export interface BrowserViewport extends Viewport {
+  scrollX: number;
+  scrollY: number;
+  deviceScaleFactor: number;
+}
+
+export interface BrowserBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface BrowserFrameReference {
+  index: number;
+  url: string;
+  name?: string;
+  main: boolean;
+}
+
+export interface BrowserTargetGeometry {
+  bounds: BrowserBounds | null;
+  inViewport: boolean;
+  clipped: boolean;
+  occluded: boolean;
+}
+
+export interface BrowserSemanticFrame extends BrowserFrameReference {
+  snapshot: string;
+  truncated: boolean;
+}
+
+export interface BrowserSemanticStructure {
+  source: "playwright_aria_snapshot";
+  frames: BrowserSemanticFrame[];
+  truncated: boolean;
+  characterLimit: number;
+}
+
+export interface BrowserObservationCapabilities {
+  connection: "playwright" | "cdp";
+  semanticHierarchy: boolean;
+  targetGeometry: boolean;
+  occlusion: boolean;
+  frameProvenance: boolean;
+  openShadowDom: boolean;
+  screenshotModes: Array<
+    "viewport" | "full-page" | "target" | "region"
+  >;
+}
+
 export interface PageTarget {
   ref: string;
   kind: TargetKind;
@@ -99,6 +150,9 @@ export interface PageTarget {
   visible: boolean;
   enabled: boolean;
   sensitive?: boolean;
+  frame?: BrowserFrameReference;
+  shadowRootDepth?: number;
+  geometry?: BrowserTargetGeometry;
 }
 
 export interface PageInspection {
@@ -110,6 +164,20 @@ export interface PageInspection {
   text?: string;
   targets?: PageTarget[];
   metadata?: Record<string, unknown>;
+}
+
+export interface BrowserObservation extends PageInspection {
+  observationId: string;
+  observedAt: string;
+  mutationVersion: number;
+  sessionId?: string;
+  document: {
+    url: string;
+    revision: number;
+  };
+  viewport?: BrowserViewport;
+  structure?: BrowserSemanticStructure;
+  capabilities?: BrowserObservationCapabilities;
 }
 
 export type BrowserNavigationProvenance =

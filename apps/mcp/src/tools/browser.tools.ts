@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
 import type { ToolDefinition } from "../server/register-tools.js";
+import { toolSuccessWithImage } from "../server/tool-result.js";
 import {
   sessionIdJsonSchema,
   sessionIdSchema,
@@ -53,11 +54,19 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           pageId: { type: "string" },
           includeText: { type: "boolean", default: true },
           includeTargets: { type: "boolean", default: true },
+          includeViewport: { type: "boolean", default: true },
+          includeStructure: { type: "boolean", default: true },
           maxTextChars: {
             type: "integer",
             minimum: 1,
             maximum: 50000,
             default: 20000,
+          },
+          maxStructureChars: {
+            type: "integer",
+            minimum: 1,
+            maximum: 30000,
+            default: 12000,
           },
           targetLimit: {
             type: "integer",
@@ -76,6 +85,8 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             pageId: z.string().optional(),
             includeText: z.boolean().optional().default(true),
             includeTargets: z.boolean().optional().default(true),
+            includeViewport: z.boolean().optional().default(true),
+            includeStructure: z.boolean().optional().default(true),
             maxTextChars: z
               .number()
               .int()
@@ -83,6 +94,13 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
               .max(50_000)
               .optional()
               .default(20_000),
+            maxStructureChars: z
+              .number()
+              .int()
+              .positive()
+              .max(30_000)
+              .optional()
+              .default(12_000),
             targetLimit: z
               .number()
               .int()
@@ -218,36 +236,128 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     },
     {
       name: "browser.screenshot",
-      description: "Capture a screenshot and return evidence metadata.",
+      description:
+        "Capture browser visual evidence. Viewport and region captures can include bounded inline PNG content while preserving durable screenshot evidence. Pass observationId to bind capture to an exact current observation.",
       inputSchema: {
         type: "object",
         properties: {
-          sessionId: { type: "string", minLength: 1 },
+          sessionId: {
+            type: "string",
+            minLength: 1,
+          },
           mode: {
             type: "string",
-            enum: ["viewport", "full-page"],
+            enum: [
+              "viewport",
+              "full-page",
+              "target",
+              "region",
+            ],
             default: "viewport",
           },
-          label: { type: "string", maxLength: 200 },
+          target:
+            targetJsonSchema,
+
+          region: {
+            type: "object",
+            properties: {
+              x: {
+                type: "number",
+                minimum: 0,
+              },
+              y: {
+                type: "number",
+                minimum: 0,
+              },
+              width: {
+                type: "number",
+                exclusiveMinimum: 0,
+              },
+              height: {
+                type: "number",
+                exclusiveMinimum: 0,
+              },
+            },
+            required: [
+              "x",
+              "y",
+              "width",
+              "height",
+            ],
+            additionalProperties: false,
+          },
+          observationId: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          label: {
+            type: "string",
+            maxLength: 200,
+          },
         },
         required: ["sessionId"],
         additionalProperties: false,
       },
+      present:
+        toolSuccessWithImage,
       handler: (input) => {
-        const parsed = z
-          .object({
-            sessionId: sessionIdSchema,
-            mode: z
-              .enum(["viewport", "full-page"])
-              .optional()
-              .default("viewport"),
-            label: z.string().max(200).optional(),
-          })
-          .parse(input);
+        const parsed =
+          z.object({
+            sessionId:
+              sessionIdSchema,
+            mode:
+              z.enum([
+                "viewport",
+                "full-page",
+                "target",
+                "region",
+              ])
+                .optional()
+                .default(
+                  "viewport",
+                ),
+            target:
+              targetSchema.optional(),
+
+            region:
+              z.object({
+                x:
+                  z.number()
+                    .finite()
+                    .nonnegative(),
+                y:
+                  z.number()
+                    .finite()
+                    .nonnegative(),
+                width:
+                  z.number()
+                    .finite()
+                    .positive(),
+                height:
+                  z.number()
+                    .finite()
+                    .positive(),
+              }).optional(),
+            observationId:
+              z.string()
+                .min(1)
+                .max(200)
+                .optional(),
+            label:
+              z.string()
+                .max(200)
+                .optional(),
+          }).parse(input);
+
         return runtime.screenshot(
           parsed.sessionId,
           screenshotRequestSchema.parse({
             mode: parsed.mode,
+            target: parsed.target,
+            region: parsed.region,
+            observationId:
+              parsed.observationId,
             label: parsed.label,
           }),
         );
