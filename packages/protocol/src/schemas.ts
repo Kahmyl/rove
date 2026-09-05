@@ -16,10 +16,16 @@ export const humanHandoffSchema = z.object({
   requestedAt: z.string().datetime(),
 });
 
-export const temporaryProfileSchema = z.object({ mode: z.literal("temporary") });
+export const temporaryProfileSchema = z.object({
+  mode: z.literal("temporary"),
+});
 export const persistentProfileSchema = z.object({
   mode: z.literal("persistent"),
-  name: z.string().min(1).max(80).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
+  name: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
 });
 export const existingProfileSchema = z.object({
   mode: z.literal("existing"),
@@ -31,6 +37,11 @@ export const browserProfileSchema = z.discriminatedUnion("mode", [
   persistentProfileSchema,
   existingProfileSchema,
 ]);
+
+export const browserHostIdentitySchema = z.object({
+  kind: z.literal("owned_process"),
+  processId: z.number().int().positive(),
+});
 
 export const browserRuntimeCapabilitiesSchema = z.object({
   browserFamily: z.literal("chromium"),
@@ -66,11 +77,13 @@ export const browserRuntimeCapabilitiesSchema = z.object({
     verificationMethod: z.string().optional(),
     diagnostic: z.string().optional(),
   }),
-  diagnostics: z.array(z.object({
-    level: z.enum(["info", "warning"]),
-    code: z.string(),
-    message: z.string(),
-  })),
+  diagnostics: z.array(
+    z.object({
+      level: z.enum(["info", "warning"]),
+      code: z.string(),
+      message: z.string(),
+    }),
+  ),
 });
 
 export const sessionSchema = z.object({
@@ -203,7 +216,13 @@ export const observationQuerySchema = z.object({
   limit: z.number().int().positive().max(1_000).optional().default(100),
 });
 
-export const evidenceTypeSchema = z.enum(["screenshot", "text", "page", "record", "file"]);
+export const evidenceTypeSchema = z.enum([
+  "screenshot",
+  "text",
+  "page",
+  "record",
+  "file",
+]);
 export const evidenceSchema = z.object({
   id: z.string().startsWith("ev_"),
   sessionId: z.string().startsWith("ses_"),
@@ -236,7 +255,9 @@ export const evidenceReadResultSchema = evidenceSchema.extend({
     .optional(),
 });
 
-export const requestHumanRequestSchema = z.object({ reason: z.string().trim().min(1).max(500) });
+export const requestHumanRequestSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
 export const controlWaitRequestSchema = z.object({
   afterSeq: z.number().int().nonnegative().optional(),
   timeoutMs: z.number().int().nonnegative().max(60_000).optional(),

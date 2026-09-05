@@ -38,6 +38,7 @@ export interface ExternalChromeRuntime {
   readonly endpoint: string;
   readonly port: number;
   readonly processId?: number;
+  currentProcessId(): number | undefined;
   readonly userDataDir: string;
   readonly temporaryProfile: boolean;
   close(): Promise<void>;
@@ -465,6 +466,14 @@ export async function launchExternalChrome(
 
   const closeGracefully = (): Promise<void> => closeWithGracePeriod(true);
 
+  const currentProcessId = (): number | undefined => {
+    if (processExited(child)) {
+      return undefined;
+    }
+
+    return child.pid;
+  };
+
   try {
     await waitForDevTools(
       endpoint,
@@ -487,6 +496,7 @@ export async function launchExternalChrome(
       : {
           processId: child.pid,
         }),
+    currentProcessId,
     userDataDir,
     temporaryProfile,
     close,

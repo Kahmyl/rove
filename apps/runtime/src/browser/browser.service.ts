@@ -1,6 +1,14 @@
 import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
-import { BROWSER_ENGINE, type BrowserEngine, type BrowserSession } from "@rove/browser";
-import { RoveError, type BrowserLaunchConfig } from "@rove/protocol";
+import {
+  BROWSER_ENGINE,
+  type BrowserEngine,
+  type BrowserSession,
+} from "@rove/browser";
+import {
+  RoveError,
+  type BrowserHostIdentity,
+  type BrowserLaunchConfig,
+} from "@rove/protocol";
 
 @Injectable()
 export class BrowserService implements OnModuleDestroy {
@@ -8,9 +16,15 @@ export class BrowserService implements OnModuleDestroy {
 
   constructor(@Inject(BROWSER_ENGINE) private readonly engine: BrowserEngine) {}
 
-  async start(sessionId: string, config: BrowserLaunchConfig): Promise<BrowserSession> {
+  async start(
+    sessionId: string,
+    config: BrowserLaunchConfig,
+  ): Promise<BrowserSession> {
     if (this.sessions.has(sessionId)) {
-      throw new RoveError({ code: "INVALID_CONFIGURATION", message: "A browser is already attached to this session." });
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "A browser is already attached to this session.",
+      });
     }
     const browser = await this.engine.start(config);
     this.sessions.set(sessionId, browser);
@@ -20,9 +34,16 @@ export class BrowserService implements OnModuleDestroy {
   get(sessionId: string): BrowserSession {
     const browser = this.sessions.get(sessionId);
     if (!browser) {
-      throw new RoveError({ code: "BROWSER_CLOSED", message: "No browser is attached to this session." });
+      throw new RoveError({
+        code: "BROWSER_CLOSED",
+        message: "No browser is attached to this session.",
+      });
     }
     return browser;
+  }
+
+  hostIdentity(sessionId: string): BrowserHostIdentity | null {
+    return this.get(sessionId).hostIdentity();
   }
 
   async close(sessionId: string): Promise<void> {
@@ -44,9 +65,7 @@ export class BrowserService implements OnModuleDestroy {
     const sessionIds = this.sessionIds();
 
     await Promise.allSettled(
-      sessionIds.map((sessionId) =>
-        this.close(sessionId),
-      ),
+      sessionIds.map((sessionId) => this.close(sessionId)),
     );
   }
 }

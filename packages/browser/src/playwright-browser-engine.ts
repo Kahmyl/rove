@@ -189,7 +189,9 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
             }),
       });
 
-      browser = await chromium.connectOverCDP(external.endpoint, {
+      const externalRuntime = external;
+
+      browser = await chromium.connectOverCDP(externalRuntime.endpoint, {
         ...(plan.timeoutMs === undefined
           ? {}
           : {
@@ -215,7 +217,17 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         },
         downloadRuntime,
         sessionId,
-        external.closeGracefully,
+        externalRuntime.closeGracefully,
+        () => {
+          const processId = externalRuntime.currentProcessId();
+
+          return processId === undefined
+            ? null
+            : {
+                kind: "owned_process" as const,
+                processId,
+              };
+        },
       );
     } catch (error) {
       await browser?.close().catch(() => undefined);

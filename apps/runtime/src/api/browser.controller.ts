@@ -36,6 +36,11 @@ export class BrowserController {
     @Inject(RuntimeService) private readonly runtime: RuntimeService,
   ) {}
 
+  @Get("host")
+  host(@Param("id") id: string) {
+    return this.runtime.getBrowserHostIdentity(id);
+  }
+
   @Post("navigate")
   navigate(@Param("id") id: string, @Body() body: NavigateRequest) {
     return this.runtime.navigate(id, navigateRequestSchema.parse(body));

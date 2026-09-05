@@ -3,6 +3,7 @@ import type {
   Artifact,
   BrowserLaunchConfig,
   BrowserObservation,
+  BrowserHostIdentity,
   BrowserRuntimeCapabilities,
   InspectOptions,
   PageStateIdentity,
@@ -29,6 +30,7 @@ export interface BrowserInteractionContext {
 export interface BrowserSession {
   readonly id: string;
   readonly capabilities: BrowserRuntimeCapabilities;
+  hostIdentity(): BrowserHostIdentity | null;
   onActivity(listener: BrowserActivityListener): () => void;
   inspect(options?: InspectOptions): Promise<BrowserObservation>;
   resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;

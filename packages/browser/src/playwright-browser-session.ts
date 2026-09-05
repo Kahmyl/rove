@@ -13,6 +13,7 @@ import {
   type Artifact,
   type BrowserLaunchConfig,
   type BrowserObservation,
+  type BrowserHostIdentity,
   type BrowserRuntimeCapabilities,
   type BrowserViewport,
   type InspectOptions,
@@ -159,6 +160,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     private readonly headless: boolean,
     private readonly downloadRuntime?: ResolvedDownloadRuntime,
     private readonly ownedRuntimeCleanup?: () => Promise<void>,
+    private readonly hostIdentityProvider?: () => BrowserHostIdentity | null,
   ) {
     this.pageRegistry.setOnPageClosed((pageId, wasActive) => {
       this.inspector.forgetPage(pageId);
@@ -231,6 +233,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
     ownedRuntimeCleanup?: () => Promise<void>,
+    hostIdentityProvider?: () => BrowserHostIdentity | null,
   ): Promise<PlaywrightBrowserSession> {
     const browser = context.browser();
 
@@ -253,6 +256,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       downloadRuntime,
       sessionId,
       ownedRuntimeCleanup,
+      hostIdentityProvider,
     );
   }
 
@@ -266,6 +270,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     downloadRuntime?: ResolvedDownloadRuntime,
     sessionId = `browser_${randomUUID()}`,
     ownedRuntimeCleanup?: () => Promise<void>,
+    hostIdentityProvider?: () => BrowserHostIdentity | null,
   ): Promise<PlaywrightBrowserSession> {
     const session = new PlaywrightBrowserSession(
       sessionId,
@@ -278,6 +283,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       config.headless,
       downloadRuntime,
       ownedRuntimeCleanup,
+      hostIdentityProvider,
     );
 
     await session.installDomActivityBridge();
@@ -2219,6 +2225,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
         force: true,
       }).catch(() => undefined);
     }
+  }
+
+  hostIdentity(): BrowserHostIdentity | null {
+    if (this.closed || !this.browser.isConnected()) {
+      return null;
+    }
+
+    return this.hostIdentityProvider?.() ?? null;
   }
 
   private toSummary(state: PageState): PageSummary {

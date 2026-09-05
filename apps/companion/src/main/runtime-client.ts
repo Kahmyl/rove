@@ -1,4 +1,9 @@
-import type { Evidence, ObservationPage, Session } from "@rove/protocol";
+import type {
+  BrowserHostIdentity,
+  Evidence,
+  ObservationPage,
+  Session,
+} from "@rove/protocol";
 
 import type { CompanionSnapshot } from "../shared/desktop-api.js";
 
@@ -24,6 +29,14 @@ export class CompanionRuntimeClient {
 
   async getActiveSession(): Promise<Session | null> {
     return this.resolveSession();
+  }
+
+  async getBrowserHostIdentity(
+    sessionId: string,
+  ): Promise<BrowserHostIdentity | null> {
+    return this.request<BrowserHostIdentity | null>(
+      `/sessions/${encodeURIComponent(sessionId)}/browser/host`,
+    );
   }
 
   async getSnapshot(): Promise<CompanionSnapshot | null> {

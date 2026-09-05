@@ -60,6 +60,7 @@ describe("external Chrome engine integration", () => {
         endpoint: "http://127.0.0.1:9222",
         port: 9222,
         processId: 1234,
+        currentProcessId: () => 1234,
         userDataDir,
         temporaryProfile: false,
         close,
@@ -269,4 +270,71 @@ describe("external Chrome engine integration", () => {
 
     expect(cleanup).toHaveBeenCalledTimes(1);
   }, 15_000);
+});
+
+describe("external Chrome host identity propagation", () => {
+  it("exposes the exact spawned Chrome PID only while the owned process is live", async () => {
+    const fakeContext = {} as BrowserContext;
+
+    const fakeBrowser = {
+      contexts: () => [fakeContext],
+    } as unknown as Browser;
+
+    const fakeSession = {} as unknown as PlaywrightBrowserSession;
+
+    const close = vi.fn(async () => undefined);
+
+    const closeGracefully = vi.fn(async () => undefined);
+
+    let processAlive = true;
+
+    const currentProcessId = vi.fn(() => (processAlive ? 4321 : undefined));
+
+    vi.spyOn(
+      externalChromeRuntime,
+      "discoverExternalChromeExecutable",
+    ).mockResolvedValue("/custom/chrome");
+
+    vi.spyOn(externalChromeRuntime, "launchExternalChrome").mockResolvedValue({
+      endpoint: "http:" + "//" + "127.0.0.1:9222",
+      port: 9222,
+      processId: 4321,
+      currentProcessId,
+      userDataDir: "/tmp/rove-host-identity-profile",
+      temporaryProfile: false,
+      close,
+      closeGracefully,
+    });
+
+    vi.spyOn(chromium, "connectOverCDP").mockResolvedValue(fakeBrowser);
+
+    const create = vi
+      .spyOn(PlaywrightBrowserSession, "createPersistent")
+      .mockResolvedValue(fakeSession);
+
+    const engine = new PlaywrightBrowserEngine();
+
+    await engine.start({
+      headless: true,
+      browser: "chrome",
+      profile: {
+        mode: "temporary",
+      },
+    });
+
+    const hostIdentityProvider = create.mock.calls[0]?.[6];
+
+    expect(hostIdentityProvider).toBeTypeOf("function");
+
+    expect(hostIdentityProvider?.()).toEqual({
+      kind: "owned_process",
+      processId: 4321,
+    });
+
+    processAlive = false;
+
+    expect(hostIdentityProvider?.()).toBeNull();
+
+    expect(currentProcessId).toHaveBeenCalled();
+  });
 });
