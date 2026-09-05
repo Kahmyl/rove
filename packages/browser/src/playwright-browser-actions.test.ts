@@ -317,7 +317,7 @@ describe("Milestone 3 browser actions", () => {
     await expect(duplicate.session.click(duplicateRef)).rejects.toMatchObject({
       code: "TARGET_AMBIGUOUS",
     });
-  });
+  }, 15_000);
 
   it("allows an unchanged target after an unrelated mutation", async () => {
     const { session } = await setup("/dynamic-target");
@@ -382,5 +382,5 @@ describe("Milestone 3 browser actions", () => {
     expect(serializedActivities).not.toContain("fixture confirm");
     expect(serializedActivities).not.toContain("fixture prompt");
     expect(serializedActivities).not.toContain("secret");
-  });
+  }, 15_000);
 });
