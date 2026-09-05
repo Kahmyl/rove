@@ -1,5 +1,6 @@
 import type {
   BrowserHostIdentity,
+  BrowserWindowState,
   Evidence,
   ObservationPage,
   Session,
@@ -36,6 +37,14 @@ export class CompanionRuntimeClient {
   ): Promise<BrowserHostIdentity | null> {
     return this.request<BrowserHostIdentity | null>(
       `/sessions/${encodeURIComponent(sessionId)}/browser/host`,
+    );
+  }
+
+  async getBrowserWindowState(
+    sessionId: string,
+  ): Promise<BrowserWindowState | null> {
+    return this.request<BrowserWindowState | null>(
+      `/sessions/${encodeURIComponent(sessionId)}/browser/window`,
     );
   }
 

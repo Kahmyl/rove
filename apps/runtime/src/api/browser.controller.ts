@@ -41,6 +41,11 @@ export class BrowserController {
     return this.runtime.getBrowserHostIdentity(id);
   }
 
+  @Get("window")
+  window(@Param("id") id: string) {
+    return this.runtime.getBrowserWindowState(id);
+  }
+
   @Post("navigate")
   navigate(@Param("id") id: string, @Body() body: NavigateRequest) {
     return this.runtime.navigate(id, navigateRequestSchema.parse(body));

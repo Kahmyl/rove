@@ -43,6 +43,19 @@ export const browserHostIdentitySchema = z.object({
   processId: z.number().int().positive(),
 });
 
+export const browserWindowStateSchema = z.object({
+  windowId: z.number().int().positive(),
+  pageId: z.string().startsWith("page_"),
+  windowState: z.enum(["normal", "minimized", "maximized", "fullscreen"]),
+  bounds: z.object({
+    left: z.number().finite(),
+    top: z.number().finite(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+  }),
+  documentFocused: z.boolean(),
+});
+
 export const browserRuntimeCapabilitiesSchema = z.object({
   browserFamily: z.literal("chromium"),
   distribution: z.enum(["chrome", "chromium"]),

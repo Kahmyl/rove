@@ -14,6 +14,7 @@ import {
   type BrowserLaunchConfig,
   type BrowserObservation,
   type BrowserHostIdentity,
+  type BrowserWindowState,
   type BrowserRuntimeCapabilities,
   type BrowserViewport,
   type InspectOptions,
@@ -2224,6 +2225,130 @@ export class PlaywrightBrowserSession implements BrowserSession {
         recursive: true,
         force: true,
       }).catch(() => undefined);
+    }
+  }
+
+  async browserWindowState(): Promise<BrowserWindowState | null> {
+    if (
+      this.closed ||
+      this.headless ||
+      !this.browser.isConnected() ||
+      this.browserCdp === undefined
+    ) {
+      return null;
+    }
+
+    try {
+      const targets = (await this.browserCdp.send("Target.getTargets", {
+        filter: [
+          {
+            type: "tab",
+            exclude: false,
+          },
+          {
+            exclude: true,
+          },
+        ],
+      })) as {
+        targetInfos: Array<{
+          targetId: string;
+          type: string;
+          title: string;
+          url: string;
+          embedderData?: {
+            tabActive?: boolean;
+            tabStripIndex?: number;
+          };
+        }>;
+      };
+
+      const activeTargets = targets.targetInfos.filter(
+        (target) =>
+          target.type === "tab" && target.embedderData?.tabActive === true,
+      );
+
+      if (activeTargets.length !== 1) {
+        return null;
+      }
+
+      const activeTarget = activeTargets[0]!;
+      const pageId = this.resolveTabTargetPageId(activeTarget);
+
+      if (pageId === undefined || !this.pageRegistry.has(pageId)) {
+        return null;
+      }
+
+      const page = this.pageRegistry.pageFor(pageId);
+
+      const [windowResult, documentFocused] = await Promise.all([
+        this.browserCdp.send("Browser.getWindowForTarget", {
+          targetId: activeTarget.targetId,
+        }) as Promise<{
+          windowId?: unknown;
+          bounds?: {
+            left?: unknown;
+            top?: unknown;
+            width?: unknown;
+            height?: unknown;
+            windowState?: unknown;
+          };
+        }>,
+        page.evaluate(() => document.hasFocus()),
+      ]);
+
+      const windowId = windowResult.windowId;
+
+      const bounds = windowResult.bounds;
+
+      if (
+        typeof windowId !== "number" ||
+        !Number.isInteger(windowId) ||
+        windowId <= 0 ||
+        bounds === undefined
+      ) {
+        return null;
+      }
+
+      const { left, top, width, height, windowState } = bounds;
+
+      if (
+        typeof left !== "number" ||
+        !Number.isFinite(left) ||
+        typeof top !== "number" ||
+        !Number.isFinite(top) ||
+        typeof width !== "number" ||
+        !Number.isFinite(width) ||
+        width <= 0 ||
+        typeof height !== "number" ||
+        !Number.isFinite(height) ||
+        height <= 0
+      ) {
+        return null;
+      }
+
+      if (
+        windowState !== "normal" &&
+        windowState !== "minimized" &&
+        windowState !== "maximized" &&
+        windowState !== "fullscreen"
+      ) {
+        return null;
+      }
+
+      return {
+        windowId,
+        pageId,
+        windowState,
+        bounds: {
+          left,
+          top,
+          width,
+          height,
+        },
+        documentFocused,
+      };
+    } catch {
+      return null;
     }
   }
 

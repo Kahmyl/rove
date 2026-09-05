@@ -7,6 +7,7 @@ import {
 import {
   RoveError,
   type BrowserHostIdentity,
+  type BrowserWindowState,
   type BrowserLaunchConfig,
 } from "@rove/protocol";
 
@@ -44,6 +45,10 @@ export class BrowserService implements OnModuleDestroy {
 
   hostIdentity(sessionId: string): BrowserHostIdentity | null {
     return this.get(sessionId).hostIdentity();
+  }
+
+  windowState(sessionId: string): Promise<BrowserWindowState | null> {
+    return this.get(sessionId).browserWindowState();
   }
 
   async close(sessionId: string): Promise<void> {

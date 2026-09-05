@@ -225,6 +225,16 @@ export class RuntimeService implements RoveRuntime {
     return this.browser.hostIdentity(sessionId);
   }
 
+  async getBrowserWindowState(sessionId: string) {
+    await this.sessions.get(sessionId);
+
+    if (!this.browser.has(sessionId)) {
+      return null;
+    }
+
+    return this.browser.windowState(sessionId);
+  }
+
   async listActiveSessions(mode?: SessionMode): Promise<Session[]> {
     const sessions = await Promise.all(
       this.browser

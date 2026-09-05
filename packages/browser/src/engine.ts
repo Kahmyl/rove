@@ -4,6 +4,7 @@ import type {
   BrowserLaunchConfig,
   BrowserObservation,
   BrowserHostIdentity,
+  BrowserWindowState,
   BrowserRuntimeCapabilities,
   InspectOptions,
   PageStateIdentity,
@@ -31,6 +32,7 @@ export interface BrowserSession {
   readonly id: string;
   readonly capabilities: BrowserRuntimeCapabilities;
   hostIdentity(): BrowserHostIdentity | null;
+  browserWindowState(): Promise<BrowserWindowState | null>;
   onActivity(listener: BrowserActivityListener): () => void;
   inspect(options?: InspectOptions): Promise<BrowserObservation>;
   resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;
