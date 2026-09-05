@@ -686,7 +686,9 @@ Phase 3 is accepted when:
 ### Outcome
 
 At completion, the user can take, return, pause, stop, or expand Rove beside the
-Rove-owned browser without locating a separate companion window.
+Rove-owned browser without locating a separate companion window. This includes
+the owned browser's native fullscreen working context: fullscreen must not hide
+Rove or require a macOS Space/window switch for immediate control.
 
 ### Production scope
 
@@ -694,6 +696,7 @@ Phase 4 includes:
 
 - frameless compact Electron surface;
 - collapsed and expanded states;
+- fullscreen micro and fullscreen-expanded states;
 - association with the active Rove browser window;
 - browser movement and resize following;
 - monitor changes;
@@ -724,15 +727,21 @@ A disposable Electron and Chrome experiment must prove:
 - multiple monitors;
 - focus preservation;
 - foreground hiding;
+- fullscreen-Space visibility scoped to the exact owned browser's fullscreen
+  state;
 - restart recovery;
 - graceful fallback when platform window tracking is unavailable.
 
 ### Status
 
-Implementation complete on 2026-09-05. The production design retains CDP as
+Implementation complete on 2026-09-05, with a post-acceptance fullscreen
+product-requirement correction the same day. The production design retains CDP as
 the browser-window authority and Electron `screen` as the display-topology
-authority. The native follower, ownership controls, desktop packaging, and the
-available macOS and Linux/X11 live paths are qualified in
+authority. The macOS follower uses a `64 x 56` micro presentation in the owned
+browser's native fullscreen Space and expands in place to `360 x 240`; leaving
+fullscreen restores compact sizing from a fresh controller decision. The
+native follower, ownership controls, desktop packaging, and available live
+paths are qualified in
 [`browser-perception-and-interaction-phase4-qualification.md`](./browser-perception-and-interaction-phase4-qualification.md).
 
 Windows live desktop execution, Linux/Wayland execution, and physical

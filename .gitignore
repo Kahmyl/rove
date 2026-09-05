@@ -11,3 +11,4 @@ release/
 .rove/*
 !.rove/.gitkeep
 apps/runtime/.rove/
+apps/companion/.rove/

@@ -5,6 +5,7 @@ import type { Session } from "@rove/protocol";
 import type {
   CompanionSnapshot,
   DesktopNotice,
+  FollowerPresentationMode,
   RoveDesktopApi,
 } from "../shared/desktop-api.js";
 
@@ -17,6 +18,11 @@ const api: RoveDesktopApi = {
 
   getLiveSession: () =>
     ipcRenderer.invoke("rove:live-session") as Promise<Session | null>,
+
+  getFollowerPresentation: () =>
+    ipcRenderer.invoke(
+      "rove:follower-presentation",
+    ) as Promise<FollowerPresentationMode>,
 
   takeControl: () =>
     ipcRenderer.invoke(
@@ -35,7 +41,10 @@ const api: RoveDesktopApi = {
     ipcRenderer.invoke("rove:finish") as Promise<CompanionSnapshot | null>,
 
   setFollowerExpanded: (expanded) =>
-    ipcRenderer.invoke("rove:follower-expanded", expanded) as Promise<void>,
+    ipcRenderer.invoke(
+      "rove:follower-expanded",
+      expanded,
+    ) as Promise<FollowerPresentationMode>,
 
   openRove: () => ipcRenderer.invoke("rove:open") as Promise<void>,
 };

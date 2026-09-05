@@ -4,6 +4,7 @@ import {
   companionIpcChannels,
   type CompanionSnapshot,
   type DesktopNotice,
+  type FollowerPresentationMode,
   type RoveDesktopApi,
 } from "../shared/desktop-api.js";
 
@@ -23,6 +24,11 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
 
     getLiveSession: () =>
       ipc.invoke(companionIpcChannels.liveSession) as Promise<Session | null>,
+
+    getFollowerPresentation: () =>
+      ipc.invoke(
+        companionIpcChannels.followerPresentation,
+      ) as Promise<FollowerPresentationMode>,
 
     takeControl: () =>
       ipc.invoke(
@@ -48,7 +54,7 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
       ipc.invoke(
         companionIpcChannels.followerExpanded,
         expanded,
-      ) as Promise<void>,
+      ) as Promise<FollowerPresentationMode>,
 
     openRove: () => ipc.invoke(companionIpcChannels.openRove) as Promise<void>,
   };

@@ -10,6 +10,14 @@ Phase 4 delivers the compact native browser-following control surface while
 preserving the existing full Companion, browser ownership, and interaction
 authority boundaries.
 
+This document was corrected after direct user acceptance testing on 2026-09-05.
+The original qualification treated native fullscreen as an ineligible state
+and recorded "fullscreen -> hidden" as a pass. That was the wrong product
+requirement: Rove's control surface must remain immediately reachable in the
+owned browser's fullscreen working context. The correction started from
+`f0eb800f257396113dabcbf1115fa86402b34f9e` and does not rewrite the earlier
+Phase 4 history.
+
 ## Repository state qualified
 
 The work was qualified on branch `feature/browser-perception-interaction`,
@@ -70,10 +78,23 @@ Observed maximized macOS result:
 
 ## Surface product behavior
 
-The follower uses the shared renderer with `surface=follower` and starts
-collapsed at `240 x 96`. Expanded mode is `360 x 240`. Renderer IPC requests
-only the semantic collapsed/expanded state; main process owns both legal sizes,
-revokes the previous placement, and requires a fresh controller decision.
+The follower uses the shared renderer with `surface=follower`. Windowed and
+maximized compact mode is `240 x 96`; expanded mode is `360 x 240`. Native
+fullscreen defaults to a deliberately small `64 x 56` micro affordance and
+expands in place to `360 x 240`. Renderer IPC requests only semantic
+expand/collapse. The main process owns all legal sizes and native presentation
+policy, and the controller requires a fresh authoritative browser/display
+decision for every presentation transition.
+
+On macOS, the follower is created as Electron's documented `panel` window type,
+which is capable of appearing above fullscreen applications. Its all-workspaces
+behavior is explicitly disabled while not fullscreen. Only while the exact
+Rove-owned browser reports authoritative CDP state `fullscreen`, the surface
+enables `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true,
+skipTransformProcessType: true })` and a floating level. Both are revoked on
+fullscreen exit, browser loss, suppression, or disable. `panel` was necessary
+in live testing: workspace visibility on a normal Electron window produced the
+correct geometry but remained offscreen in the native Chrome Space.
 
 The renderer covers agent-working, human-required, human-controlling, paused,
 and ready-for-review presentations. Available actions are Take Control, Return
@@ -102,30 +123,30 @@ clears the controller, terminates the owned browser, and hides the follower.
 The macOS run used real Runtime, Electron Companion, headed system Google
 Chrome, and the exact Rove-owned Chrome PID from `/browser/host`.
 
-| Behavior                         | Result                        | Evidence                                                                                                                                 |
-| -------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Startup/full Companion hidden    | Pass                          | No native full window opened before intentional restore                                                                                  |
-| Exact owned-browser identity     | Pass                          | Runtime exposed the launched Chrome PID; no title identity used                                                                          |
-| Normal right placement           | Pass                          | Browser `22,55,1200,851`; follower `1232,55,240,96`                                                                                      |
-| Left placement                   | Pass                          | Browser moved to `x=600,width=800`; follower converged to `x=350`                                                                        |
-| Move and resize convergence      | Pass                          | Fresh CDP bounds produced stable new placements without focus-taking show                                                                |
-| Maximized overlay                | Pass                          | Scoped z-order remediation kept the `240 x 96` overlay visible                                                                           |
-| Minimized                        | Pass                          | CDP state `minimized`; follower hidden                                                                                                   |
-| Fullscreen                       | Pass                          | CDP state `fullscreen`; follower hidden fail-closed                                                                                      |
-| Full Companion arbitration       | Pass                          | Open Rove suppressed follower; close restored it after a fresh poll                                                                      |
-| Collapsed/expanded               | Pass                          | Native bounds changed `240 x 96 -> 360 x 240 -> 240 x 96`                                                                                |
-| Pause/resume                     | Pass                          | Paused controller cleared; agent navigation rejected; Resume restored agent                                                              |
-| Stop/browser loss                | Pass                          | Session completed, owned Chrome exited, follower hidden                                                                                  |
-| New-PID reassociation            | Pass                          | New session used a different exact owned PID; follower tracked only the new process                                                      |
-| Tracking/display failure policy  | Pass (automated)              | Missing, stale, invalid, zero-intersection, and ambiguous state hide fail-closed                                                         |
-| Foreground/follower focus policy | Pass (automated); live caveat | Controller hides on `documentFocused=false` and exempts follower focus; synthetic native app activation did not make Chrome report false |
+| Behavior                         | Result           | Evidence                                                                                                                           |
+| -------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Startup/full Companion hidden    | Pass             | No native full window opened before intentional restore                                                                            |
+| Exact owned-browser identity     | Pass             | Runtime exposed the launched Chrome PID; no title identity used                                                                    |
+| Normal right placement           | Pass             | Browser `22,55,1200,851`; follower `1232,55,240,96`                                                                                |
+| Left placement                   | Pass             | Browser moved to `x=600,width=800`; follower converged to `x=350`                                                                  |
+| Move and resize convergence      | Pass             | Fresh CDP bounds produced stable new placements without focus-taking show                                                          |
+| Maximized overlay                | Pass             | Scoped z-order remediation kept the `240 x 96` overlay visible                                                                     |
+| Minimized                        | Pass             | CDP state `minimized`; follower hidden                                                                                             |
+| Native fullscreen micro          | Pass             | CDP `fullscreen`; `64 x 56` panel onscreen at `1438,901` in the Chrome fullscreen Space                                            |
+| Fullscreen expand/collapse       | Pass             | Real click focused micro without leaving the Space; `64 x 56 -> 360 x 240 -> 64 x 56`                                              |
+| Fullscreen exit recovery         | Pass             | Expanded exit recomputed `240 x 96` maximized/windowed presentation; no stale fullscreen bounds                                    |
+| Repeated fullscreen transitions  | Pass             | Two additional enter/exit cycles returned to `240 x 96`, native layer 0, with no stranded or globally pinned follower              |
+| Full Companion arbitration       | Pass             | Open Rove suppressed follower; close restored it after a fresh poll                                                                |
+| Collapsed/expanded               | Pass             | Native bounds changed `240 x 96 -> 360 x 240 -> 240 x 96`                                                                          |
+| Pause/resume                     | Pass             | Paused controller cleared; agent navigation rejected; Resume restored agent                                                        |
+| Stop/browser loss                | Pass             | Session completed, owned Chrome exited, follower hidden                                                                            |
+| New-PID reassociation            | Pass             | New session used a different exact owned PID; follower tracked only the new process                                                |
+| Tracking/display failure policy  | Pass (automated) | Missing, stale, invalid, zero-intersection, and ambiguous state hide fail-closed                                                   |
+| Foreground/follower focus policy | Pass             | Real micro click reported follower `document.hasFocus() = true`; surface stayed onscreen and expanded in the same fullscreen Space |
 
-The live foreground caveat is recorded rather than overstated: on both macOS
-and the Xvfb host, Chrome's `document.hasFocus()` remained true during a
-qualification-only switch to another native application. The follower's
-overlay lift was already removed, so it was not globally pinned, but an
-explicit live `browser_not_foreground` hide transition was not observed. The
-controller policy and follower-focus exception are covered by automated tests.
+The browser-not-foreground policy remains fail closed and exact browser
+identity is unchanged. The follower-focus exception is covered by automated
+tests and by the live real-click fullscreen expansion above.
 
 ## Linux qualification
 
@@ -134,17 +155,17 @@ desktop package with Xvfb, Openbox, system Google Chrome 152, real Electron, and
 real Runtime. `xdotool` and `wmctrl` were used only as disposable qualification
 instrumentation.
 
-| Behavior                         | Result       | Evidence                                                                  |
-| -------------------------------- | ------------ | ------------------------------------------------------------------------- |
-| Linux x64 unpacked package       | Pass         | electron-builder produced `linux-unpacked`                                |
-| Packaged desktop/Runtime startup | Pass         | Packaged Electron launched its managed Runtime and resolved system Chrome |
-| Normal right placement           | Pass         | Browser `10,10,1050,880`; follower `1070,10,240,96`                       |
-| Move/resize right placement      | Pass         | Browser `200,80,900,650`; follower `1110,80,240,96`                       |
-| Left fallback                    | Pass         | Browser `600,120,900,650`; follower `350,120,240,96`                      |
-| Maximized overlay                | Pass         | Browser `0,0,1600,900`; follower `1350,10,240,96`                         |
-| Minimized hide                   | Pass         | CDP state `minimized`; follower absent from visible X11 windows           |
-| Fullscreen hide                  | Pass         | Native F11 produced CDP `fullscreen`; follower absent                     |
-| Wayland live runtime             | Not executed | No Wayland compositor/session was available                               |
+| Behavior                         | Result       | Evidence                                                                                                         |
+| -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Linux x64 unpacked package       | Pass         | electron-builder produced `linux-unpacked`                                                                       |
+| Packaged desktop/Runtime startup | Pass         | Packaged Electron launched its managed Runtime and resolved system Chrome                                        |
+| Normal right placement           | Pass         | Browser `10,10,1050,880`; follower `1070,10,240,96`                                                              |
+| Move/resize right placement      | Pass         | Browser `200,80,900,650`; follower `1110,80,240,96`                                                              |
+| Left fallback                    | Pass         | Browser `600,120,900,650`; follower `350,120,240,96`                                                             |
+| Maximized overlay                | Pass         | Browser `0,0,1600,900`; follower `1350,10,240,96`                                                                |
+| Minimized hide                   | Pass         | CDP state `minimized`; follower absent from visible X11 windows                                                  |
+| Fullscreen micro/expanded        | Not re-run   | Corrected common implementation and automated/package tests pass; the prior fullscreen-hide result is superseded |
+| Wayland live runtime             | Not executed | No Wayland compositor/session was available                                                                      |
 
 The container required a qualification-only relaxed Docker seccomp profile for
 Chrome namespaces. Chrome reported its sandbox disabled in that emulated
@@ -186,13 +207,16 @@ Qualification results:
 
 - TypeScript workspace typecheck: pass;
 - repository lint: pass;
-- full repository suite: 107 files, 611 tests passed;
+- full repository suite: 107 files, 622 tests passed;
 - Companion production build: pass;
 - macOS arm64 unpacked desktop package: pass;
 - packaged macOS Runtime/MCP smoke test: pass;
-- Windows x64 unpacked desktop package: pass (static/package only);
-- Linux x64 unpacked desktop package: pass;
-- Linux/X11 packaged live run: pass.
+- Windows x64 unpacked desktop package: pass (rebuilt after the fullscreen
+  correction; static/package only);
+- Linux x64 unpacked desktop package: pass (rebuilt after the fullscreen
+  correction);
+- Linux/X11 packaged live run: prior non-fullscreen behaviors passed; the
+  corrected fullscreen presentation was not re-run live.
 
 ## External qualification gaps
 
@@ -200,6 +224,7 @@ The following require environments or hardware absent from the qualification
 host:
 
 - native Windows desktop live execution;
+- corrected Linux/X11 fullscreen live execution;
 - Linux/Wayland desktop live execution;
 - physical multi-monitor execution.
 

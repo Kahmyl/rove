@@ -14,15 +14,22 @@ export interface DesktopNotice {
   supportingText: string;
 }
 
+export type FollowerPresentationMode =
+  | "windowed_compact"
+  | "windowed_expanded"
+  | "fullscreen_micro"
+  | "fullscreen_expanded";
+
 export interface RoveDesktopApi {
   getSnapshot(): Promise<CompanionSnapshot | null>;
   getNotice(): Promise<DesktopNotice | null>;
   getLiveSession(): Promise<Session | null>;
+  getFollowerPresentation(): Promise<FollowerPresentationMode>;
   takeControl(): Promise<CompanionSnapshot | null>;
   returnControl(): Promise<CompanionSnapshot | null>;
   pauseSession(): Promise<CompanionSnapshot | null>;
   finishSession(): Promise<CompanionSnapshot | null>;
-  setFollowerExpanded(expanded: boolean): Promise<void>;
+  setFollowerExpanded(expanded: boolean): Promise<FollowerPresentationMode>;
   openRove(): Promise<void>;
 }
 
@@ -30,6 +37,7 @@ export const companionIpcChannels = {
   snapshot: "rove:snapshot",
   notice: "rove:notice",
   liveSession: "rove:live-session",
+  followerPresentation: "rove:follower-presentation",
   takeControl: "rove:take-control",
   returnControl: "rove:return-control",
   pauseSession: "rove:pause",

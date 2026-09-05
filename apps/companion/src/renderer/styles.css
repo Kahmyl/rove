@@ -748,6 +748,46 @@ html[data-rove-surface="follower"] body {
   overflow: hidden;
 }
 
+.follower-micro {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid rgb(23 63 51 / 0.18);
+  border-radius: 18px;
+  place-items: center;
+  color: var(--forest);
+  background: rgb(243 245 241 / 0.96);
+  box-shadow: 0 5px 18px rgb(12 35 29 / 0.22);
+  cursor: pointer;
+}
+
+.follower-micro img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.follower-micro span {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #f3f5f1;
+  border-radius: 999px;
+  background: #4f8a72;
+}
+
+.follower-micro.follower-human_required span {
+  background: var(--warning);
+}
+
+.follower-micro.follower-paused span {
+  background: #76837b;
+}
+
 .follower-app {
   display: grid;
   width: 100%;

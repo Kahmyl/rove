@@ -26,6 +26,8 @@ import {
   COMPACT_FOLLOWER_WIDTH,
   EXPANDED_FOLLOWER_HEIGHT,
   EXPANDED_FOLLOWER_WIDTH,
+  FULLSCREEN_MICRO_FOLLOWER_HEIGHT,
+  FULLSCREEN_MICRO_FOLLOWER_WIDTH,
   compactFollowerWindowOptions,
 } from "./compact-follower-window-options.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
@@ -118,6 +120,14 @@ function createCompactFollowerWindow(): BrowserWindow {
     compactFollowerWindowOptions(import.meta.dirname),
   );
 
+  if (process.platform === "darwin") {
+    // A panel can join native fullscreen Spaces, but normal following must
+    // remain scoped to the browser's current desktop context.
+    window.setVisibleOnAllWorkspaces(false, {
+      skipTransformProcessType: true,
+    });
+  }
+
   window.webContents.on("render-process-gone", (_event, details) => {
     if (allowQuit || window.isDestroyed()) {
       return;
@@ -175,16 +185,19 @@ function registerIpc(runtime: CompanionRuntimeClient): void {
     runtime.pauseSession(),
   );
 
+  ipcMain.handle(
+    companionIpcChannels.followerPresentation,
+    () => compactFollowerSurface?.presentationMode() ?? "windowed_compact",
+  );
+
   ipcMain.handle(companionIpcChannels.followerExpanded, (_event, expanded) => {
     if (typeof expanded !== "boolean") {
       throw new Error("Follower expansion must be a boolean.");
     }
 
-    compactFollowerSurface?.setFollowSize(
-      expanded
-        ? { width: EXPANDED_FOLLOWER_WIDTH, height: EXPANDED_FOLLOWER_HEIGHT }
-        : { width: COMPACT_FOLLOWER_WIDTH, height: COMPACT_FOLLOWER_HEIGHT },
-    );
+    compactFollowerSurface?.setExpanded(expanded);
+
+    return compactFollowerSurface?.presentationMode() ?? "windowed_compact";
   });
 
   ipcMain.handle(companionIpcChannels.finishSession, async () => {
@@ -584,6 +597,10 @@ async function startDesktop(): Promise<void> {
     {
       width: COMPACT_FOLLOWER_WIDTH,
       height: COMPACT_FOLLOWER_HEIGHT,
+      expandedWidth: EXPANDED_FOLLOWER_WIDTH,
+      expandedHeight: EXPANDED_FOLLOWER_HEIGHT,
+      fullscreenMicroWidth: FULLSCREEN_MICRO_FOLLOWER_WIDTH,
+      fullscreenMicroHeight: FULLSCREEN_MICRO_FOLLOWER_HEIGHT,
     },
   );
 
@@ -594,9 +611,10 @@ async function startDesktop(): Promise<void> {
       followerSurface.isFollowEnabled() && !surface.isVisible(),
     isFocused: () => followerSurface.isFocused(),
     isVisible: () => followerSurface.isVisible(),
-    followSize: () => followerSurface.followSize(),
-    showInactiveAt: (bounds, placement) =>
-      followerSurface.showInactiveAt(bounds, placement),
+    followPresentation: (windowState) =>
+      followerSurface.followPresentation(windowState),
+    showInactiveAt: (bounds, placement, presentation) =>
+      followerSurface.showInactiveAt(bounds, placement, presentation),
     hideFollower: () => followerSurface.hideFollower(),
   };
 

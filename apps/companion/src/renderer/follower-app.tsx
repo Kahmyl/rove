@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Session } from "@rove/protocol";
 
+import type { FollowerPresentationMode } from "../shared/desktop-api.js";
+
 import roveMarkUrl from "./assets/rove-mark.svg";
 
 import {
@@ -18,11 +20,18 @@ export function FollowerApp() {
 
   const [offline, setOffline] = useState(false);
 
-  const [expanded, setExpanded] = useState(false);
+  const [presentation, setPresentation] =
+    useState<FollowerPresentationMode>("windowed_compact");
 
   const refresh = useCallback(async () => {
     try {
-      setSession(await window.rove.getLiveSession());
+      const [nextSession, nextPresentation] = await Promise.all([
+        window.rove.getLiveSession(),
+        window.rove.getFollowerPresentation(),
+      ]);
+
+      setSession(nextSession);
+      setPresentation(nextPresentation);
 
       setOffline(false);
     } catch {
@@ -43,6 +52,10 @@ export function FollowerApp() {
   }, [refresh]);
 
   const view = toCompactFollowerViewModel(session);
+
+  const expanded = presentation.endsWith("_expanded");
+
+  const fullscreenMicro = presentation === "fullscreen_micro";
 
   const runPrimary = async (action: CompactFollowerPrimaryAction) => {
     if (action === null) {
@@ -76,12 +89,26 @@ export function FollowerApp() {
 
   const setExpansion = async (next: boolean) => {
     try {
-      await window.rove.setFollowerExpanded(next);
-      setExpanded(next);
+      setPresentation(await window.rove.setFollowerExpanded(next));
     } catch {
       setOffline(true);
     }
   };
+
+  if (fullscreenMicro) {
+    return (
+      <button
+        className={`follower-micro follower-${view.experience}`}
+        type="button"
+        aria-label={`Expand Rove controls. ${view.kicker}: ${view.title}`}
+        title="Expand Rove controls"
+        onClick={() => void setExpansion(true)}
+      >
+        <img src={roveMarkUrl} alt="" aria-hidden="true" />
+        <span aria-hidden="true" />
+      </button>
+    );
+  }
 
   const runSecondary = async (action: "pause" | "stop") => {
     setBusy(true);
@@ -100,6 +127,7 @@ export function FollowerApp() {
     <div
       className={[
         "follower-app",
+        presentation,
         expanded ? "follower-expanded" : "follower-collapsed",
         `follower-${view.experience}`,
       ].join(" ")}

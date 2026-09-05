@@ -37,15 +37,34 @@ export interface BrowserFollowSurface {
   isFollowEnabled(): boolean;
   isFocused(): boolean;
   isVisible(): boolean;
-  followSize(): BrowserFollowSize;
+  followPresentation(
+    windowState: BrowserWindowState["windowState"] | null,
+  ): BrowserFollowPresentation;
   showInactiveAt(
     bounds: BrowserFollowRectangle,
     placement: BrowserFollowPlacement,
+    presentation: BrowserFollowPresentationMode,
   ): void;
   hideFollower(): void;
 }
 
-export type BrowserFollowPlacement = "right" | "left" | "overlay_top_right";
+export type BrowserFollowPlacement =
+  "right" | "left" | "overlay_top_right" | "fullscreen_bottom_right";
+
+export type BrowserFollowPresentationMode =
+  | "windowed_compact"
+  | "windowed_expanded"
+  | "fullscreen_micro"
+  | "fullscreen_expanded";
+
+export interface BrowserFollowPresentation {
+  mode: BrowserFollowPresentationMode;
+  size: BrowserFollowSize;
+  fallback?: {
+    mode: BrowserFollowPresentationMode;
+    size: BrowserFollowSize;
+  };
+}
 
 export type BrowserFollowHiddenReason =
   | "no_live_session"
@@ -53,7 +72,6 @@ export type BrowserFollowHiddenReason =
   | "invalid_surface_size"
   | "window_state_unavailable"
   | "window_minimized"
-  | "window_fullscreen_unqualified"
   | "browser_not_foreground"
   | "invalid_browser_bounds"
   | "browser_off_display"
@@ -76,6 +94,7 @@ export type BrowserFollowDecision =
       pageId: string;
       displayId: number;
       placement: BrowserFollowPlacement;
+      presentation: BrowserFollowPresentationMode;
       bounds: BrowserFollowRectangle;
     };
 
@@ -86,6 +105,9 @@ export interface BrowserFollowDecisionInput {
   surfaceEnabled: boolean;
   surfaceFocused: boolean;
   surfaceSize: BrowserFollowSize;
+  presentation?: BrowserFollowPresentationMode;
+  fallbackSurfaceSize?: BrowserFollowSize;
+  fallbackPresentation?: BrowserFollowPresentationMode;
   gap?: number;
 }
 
@@ -324,6 +346,45 @@ function placeFollower(
   };
 }
 
+function placeFullscreenFollower(
+  browserBounds: BrowserFollowRectangle,
+  display: BrowserFollowDisplay,
+  size: BrowserFollowSize,
+  gap: number,
+): {
+  placement: BrowserFollowPlacement;
+  bounds: BrowserFollowRectangle;
+} | null {
+  const browserDisplay = intersection(browserBounds, display.bounds);
+
+  if (
+    browserDisplay === null ||
+    size.width + gap * 2 > browserDisplay.width ||
+    size.height + gap * 2 > browserDisplay.height
+  ) {
+    return null;
+  }
+
+  const bounds = {
+    x: right(browserDisplay) - size.width - gap,
+    y: bottom(browserDisplay) - size.height - gap,
+    width: size.width,
+    height: size.height,
+  };
+
+  if (
+    !fitsInside(browserDisplay, bounds) ||
+    !fitsInside(display.bounds, bounds)
+  ) {
+    return null;
+  }
+
+  return {
+    placement: "fullscreen_bottom_right",
+    bounds,
+  };
+}
+
 export function decideBrowserFollow(
   input: BrowserFollowDecisionInput,
 ): BrowserFollowDecision {
@@ -354,13 +415,6 @@ export function decideBrowserFollow(
     return {
       kind: "hidden",
       reason: "window_minimized",
-    };
-  }
-
-  if (state.windowState === "fullscreen") {
-    return {
-      kind: "hidden",
-      reason: "window_fullscreen_unqualified",
     };
   }
 
@@ -401,12 +455,44 @@ export function decideBrowserFollow(
     };
   }
 
-  const placement = placeFollower(
-    browserBounds,
-    selected.display,
-    input.surfaceSize,
-    input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
-  );
+  let effectiveSize = input.surfaceSize;
+  let effectivePresentation =
+    input.presentation ??
+    (state.windowState === "fullscreen"
+      ? "fullscreen_micro"
+      : "windowed_compact");
+
+  let placement =
+    state.windowState === "fullscreen"
+      ? placeFullscreenFollower(
+          browserBounds,
+          selected.display,
+          input.surfaceSize,
+          input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+        )
+      : placeFollower(
+          browserBounds,
+          selected.display,
+          input.surfaceSize,
+          input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+        );
+
+  if (
+    placement === null &&
+    state.windowState === "fullscreen" &&
+    input.fallbackSurfaceSize !== undefined &&
+    input.fallbackPresentation !== undefined &&
+    validSize(input.fallbackSurfaceSize)
+  ) {
+    effectiveSize = input.fallbackSurfaceSize;
+    effectivePresentation = input.fallbackPresentation;
+    placement = placeFullscreenFollower(
+      browserBounds,
+      selected.display,
+      effectiveSize,
+      input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+    );
+  }
 
   if (placement === null) {
     return {
@@ -422,6 +508,7 @@ export function decideBrowserFollow(
     pageId: state.pageId,
     displayId: selected.display.id,
     placement: placement.placement,
+    presentation: effectivePresentation,
     bounds: placement.bounds,
   };
 }
@@ -435,7 +522,15 @@ function effectKey(decision: BrowserFollowDecision): string {
 
   const { bounds } = decision;
 
-  return ["visible", bounds.x, bounds.y, bounds.width, bounds.height].join(":");
+  return [
+    "visible",
+    decision.presentation,
+    decision.placement,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+  ].join(":");
 }
 
 export class BrowserFollowController {
@@ -603,13 +698,24 @@ export class BrowserFollowController {
         return;
       }
 
+      const presentation = this.surface.followPresentation(
+        result?.windowState ?? null,
+      );
+
       const decision = decideBrowserFollow({
         sessionId,
         state: result,
         displays: this.displays.getAllDisplays(),
         surfaceEnabled: this.surface.isFollowEnabled(),
         surfaceFocused: this.surface.isFocused(),
-        surfaceSize: this.surface.followSize(),
+        surfaceSize: presentation.size,
+        presentation: presentation.mode,
+        ...(presentation.fallback === undefined
+          ? {}
+          : {
+              fallbackSurfaceSize: presentation.fallback.size,
+              fallbackPresentation: presentation.fallback.mode,
+            }),
         gap: this.gap,
       });
 
@@ -663,6 +769,10 @@ export class BrowserFollowController {
       return;
     }
 
-    this.surface.showInactiveAt(decision.bounds, decision.placement);
+    this.surface.showInactiveAt(
+      decision.bounds,
+      decision.placement,
+      decision.presentation,
+    );
   }
 }

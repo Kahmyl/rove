@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BrowserFollowController,
   type BrowserFollowDisplay,
+  type BrowserFollowPlacement,
+  type BrowserFollowPresentationMode,
   type BrowserFollowRectangle,
   type BrowserFollowSurface,
   decideBrowserFollow,
@@ -68,6 +70,11 @@ class FakeSurface implements BrowserFollowSurface {
 
   shown: BrowserFollowRectangle[] = [];
 
+  presentations: {
+    placement: BrowserFollowPlacement;
+    presentation: BrowserFollowPresentationMode;
+  }[] = [];
+
   hideCount = 0;
 
   isFollowEnabled(): boolean {
@@ -82,14 +89,27 @@ class FakeSurface implements BrowserFollowSurface {
     return this.visible;
   }
 
-  followSize() {
-    return this.size;
+  followPresentation(windowState: BrowserWindowState["windowState"] | null) {
+    return windowState === "fullscreen"
+      ? {
+          mode: "fullscreen_micro" as const,
+          size: { width: 64, height: 56 },
+        }
+      : {
+          mode: "windowed_compact" as const,
+          size: this.size,
+        };
   }
 
-  showInactiveAt(bounds: BrowserFollowRectangle): void {
+  showInactiveAt(
+    bounds: BrowserFollowRectangle,
+    placement: BrowserFollowPlacement,
+    presentation: BrowserFollowPresentationMode,
+  ): void {
     this.visible = true;
 
     this.shown.push(bounds);
+    this.presentations.push({ placement, presentation });
   }
 
   hideFollower(): void {
@@ -270,7 +290,7 @@ describe("decideBrowserFollow", () => {
     });
   });
 
-  it("hides minimized, fullscreen, and unrelated-background browser state", () => {
+  it("hides minimized and unrelated-background browser state", () => {
     expect(
       decideBrowserFollow({
         sessionId: session.id,
@@ -294,25 +314,6 @@ describe("decideBrowserFollow", () => {
       decideBrowserFollow({
         sessionId: session.id,
         state: windowState({
-          windowState: "fullscreen",
-        }),
-        displays: [display],
-        surfaceEnabled: true,
-        surfaceFocused: false,
-        surfaceSize: {
-          width: 240,
-          height: 96,
-        },
-      }),
-    ).toEqual({
-      kind: "hidden",
-      reason: "window_fullscreen_unqualified",
-    });
-
-    expect(
-      decideBrowserFollow({
-        sessionId: session.id,
-        state: windowState({
           documentFocused: false,
         }),
         displays: [display],
@@ -326,6 +327,102 @@ describe("decideBrowserFollow", () => {
     ).toEqual({
       kind: "hidden",
       reason: "browser_not_foreground",
+    });
+  });
+
+  it("places the fullscreen micro follower inside the display bottom-right", () => {
+    expect(
+      decideBrowserFollow({
+        sessionId: session.id,
+        state: windowState({
+          windowState: "fullscreen",
+          bounds: {
+            left: 0,
+            top: 0,
+            width: 1440,
+            height: 900,
+          },
+        }),
+        displays: [display],
+        surfaceEnabled: true,
+        surfaceFocused: false,
+        surfaceSize: {
+          width: 64,
+          height: 56,
+        },
+        presentation: "fullscreen_micro",
+      }),
+    ).toMatchObject({
+      kind: "visible",
+      placement: "fullscreen_bottom_right",
+      presentation: "fullscreen_micro",
+      bounds: {
+        x: 1366,
+        y: 834,
+        width: 64,
+        height: 56,
+      },
+    });
+  });
+
+  it("fails closed when the fullscreen presentation cannot fit", () => {
+    expect(
+      decideBrowserFollow({
+        sessionId: session.id,
+        state: windowState({
+          windowState: "fullscreen",
+          bounds: {
+            left: -1000,
+            top: 0,
+            width: 40,
+            height: 40,
+          },
+        }),
+        displays: [
+          {
+            id: 2,
+            bounds: { x: -1000, y: 0, width: 40, height: 40 },
+            workArea: { x: -1000, y: 0, width: 40, height: 40 },
+          },
+        ],
+        surfaceEnabled: true,
+        surfaceFocused: false,
+        surfaceSize: { width: 64, height: 56 },
+        presentation: "fullscreen_micro",
+      }),
+    ).toEqual({
+      kind: "hidden",
+      reason: "placement_unavailable",
+    });
+  });
+
+  it("falls back from fullscreen expanded to micro on a constrained display", () => {
+    expect(
+      decideBrowserFollow({
+        sessionId: session.id,
+        state: windowState({
+          windowState: "fullscreen",
+          bounds: { left: -800, top: 0, width: 300, height: 200 },
+        }),
+        displays: [
+          {
+            id: 2,
+            bounds: { x: -800, y: 0, width: 300, height: 200 },
+            workArea: { x: -800, y: 0, width: 300, height: 200 },
+          },
+        ],
+        surfaceEnabled: true,
+        surfaceFocused: true,
+        surfaceSize: { width: 360, height: 240 },
+        presentation: "fullscreen_expanded",
+        fallbackSurfaceSize: { width: 64, height: 56 },
+        fallbackPresentation: "fullscreen_micro",
+      }),
+    ).toMatchObject({
+      kind: "visible",
+      placement: "fullscreen_bottom_right",
+      presentation: "fullscreen_micro",
+      bounds: { x: -574, y: 134, width: 64, height: 56 },
     });
   });
 
@@ -389,6 +486,50 @@ describe("BrowserFollowController", () => {
     expect(surface.shown[1]).toMatchObject({
       x: 930,
       y: 120,
+    });
+  });
+
+  it("recomputes fresh presentation across normal and fullscreen transitions", async () => {
+    let state = windowState();
+
+    const source = {
+      getBrowserWindowState: vi.fn(async () => state),
+    };
+
+    const surface = new FakeSurface();
+    const controller = new BrowserFollowController(
+      source,
+      { getAllDisplays: () => [display] },
+      surface,
+    );
+
+    controller.setSession(session);
+    await controller.reconcileNow();
+
+    state = windowState({
+      windowState: "fullscreen",
+      bounds: { left: 0, top: 0, width: 1440, height: 900 },
+    });
+    await controller.reconcileNow();
+
+    state = windowState({
+      bounds: { left: 120, top: 120, width: 800, height: 600 },
+    });
+    await controller.reconcileNow();
+
+    expect(surface.presentations).toEqual([
+      { placement: "right", presentation: "windowed_compact" },
+      {
+        placement: "fullscreen_bottom_right",
+        presentation: "fullscreen_micro",
+      },
+      { placement: "right", presentation: "windowed_compact" },
+    ]);
+    expect(surface.shown[2]).toEqual({
+      x: 930,
+      y: 120,
+      width: 240,
+      height: 96,
     });
   });
 

@@ -18,6 +18,7 @@ describe("Companion preload API", () => {
 
     expect(Object.keys(api).sort()).toEqual([
       "finishSession",
+      "getFollowerPresentation",
       "getLiveSession",
       "getNotice",
       "getSnapshot",
@@ -31,6 +32,7 @@ describe("Companion preload API", () => {
     await api.getSnapshot();
     await api.getNotice();
     await api.getLiveSession();
+    await api.getFollowerPresentation();
     await api.takeControl();
     await api.returnControl();
     await api.pauseSession();
@@ -42,6 +44,7 @@ describe("Companion preload API", () => {
       companionIpcChannels.snapshot,
       companionIpcChannels.notice,
       companionIpcChannels.liveSession,
+      companionIpcChannels.followerPresentation,
       companionIpcChannels.takeControl,
       companionIpcChannels.returnControl,
       companionIpcChannels.pauseSession,
