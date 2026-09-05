@@ -681,7 +681,6 @@ Phase 3 is accepted when:
 - production changes, if any, are limited to gaps actually demonstrated by the
   experiment.
 
-
 ## Phase 4 — Browser-following compact control surface
 
 ### Outcome
@@ -727,6 +726,19 @@ A disposable Electron and Chrome experiment must prove:
 - foreground hiding;
 - restart recovery;
 - graceful fallback when platform window tracking is unavailable.
+
+### Status
+
+Implementation complete on 2026-09-05. The production design retains CDP as
+the browser-window authority and Electron `screen` as the display-topology
+authority. The native follower, ownership controls, desktop packaging, and the
+available macOS and Linux/X11 live paths are qualified in
+[`browser-perception-and-interaction-phase4-qualification.md`](./browser-perception-and-interaction-phase4-qualification.md).
+
+Windows live desktop execution, Linux/Wayland execution, and physical
+multi-monitor execution remain external qualification gaps because those
+environments were not available on the qualification host. They are not
+recorded as passes.
 
 ## Phase 5 — Codex App Server integration
 
