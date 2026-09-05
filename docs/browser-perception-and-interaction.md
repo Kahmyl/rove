@@ -332,6 +332,21 @@ Phase 2 is accepted only when:
 
 ### Status
 
+Accepted on 2026-09-05 after the mandatory isolated caller-visible visual
+evidence experiment passed every frozen success threshold.
+
+The existing Phase 1 screenshot path is adopted as Phase 3's visual-evidence
+transport. Phase 2 remains the browser action authority. No additional Phase 3
+production browser implementation is required for caller-visible visual
+perception.
+
+The durable qualification record is:
+
+`docs/browser-perception-and-interaction-phase3-qualification.md`
+
+OCR, an internal multimodal model and a second visual-perception subsystem
+remain outside Phase 3.
+
 Research-realigned after completion of Phases 1 and 2.
 
 Phase 3 does not create a second browser perception system. Phase 1 already
