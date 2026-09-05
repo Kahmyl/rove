@@ -22,6 +22,7 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
 
   showInactiveCount = 0;
   hideCount = 0;
+  alwaysOnTopCalls: { flag: boolean; level?: "floating" }[] = [];
 
   private closedListener: (() => void) | undefined;
 
@@ -49,6 +50,13 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
     this.setBoundsCalls.push({
       bounds,
       animate,
+    });
+  }
+
+  setAlwaysOnTop(flag: boolean, level?: "floating"): void {
+    this.alwaysOnTopCalls.push({
+      flag,
+      ...(level === undefined ? {} : { level }),
     });
   }
 
@@ -157,6 +165,28 @@ describe("CompactFollowerSurface", () => {
     expect(window.setBoundsCalls).toHaveLength(2);
 
     expect(window.showInactiveCount).toBe(1);
+  });
+
+  it("uses a presentation-scoped floating lift only for overlay placement", () => {
+    const window = new FakeFollowerWindow();
+    const follower = surface(window, true);
+
+    follower.showInactiveAt(
+      { x: 1190, y: 43, width: 240, height: 96 },
+      "overlay_top_right",
+    );
+
+    expect(window.alwaysOnTopCalls).toEqual([
+      { flag: true, level: "floating" },
+      { flag: false },
+    ]);
+
+    follower.showInactiveAt(
+      { x: 910, y: 100, width: 240, height: 96 },
+      "right",
+    );
+
+    expect(window.alwaysOnTopCalls.at(-1)).toEqual({ flag: false });
   });
 
   it("reports focus only from its own live native follower window", () => {

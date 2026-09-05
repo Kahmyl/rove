@@ -38,7 +38,10 @@ export interface BrowserFollowSurface {
   isFocused(): boolean;
   isVisible(): boolean;
   followSize(): BrowserFollowSize;
-  showInactiveAt(bounds: BrowserFollowRectangle): void;
+  showInactiveAt(
+    bounds: BrowserFollowRectangle,
+    placement: BrowserFollowPlacement,
+  ): void;
   hideFollower(): void;
 }
 
@@ -100,7 +103,9 @@ interface DisplayIntersection {
 function isLiveSession(session: Session | null): session is Session {
   return (
     session !== null &&
-    (session.status === "active" || session.status === "awaiting_human")
+    (session.status === "active" ||
+      session.status === "paused" ||
+      session.status === "awaiting_human")
   );
 }
 
@@ -658,6 +663,6 @@ export class BrowserFollowController {
       return;
     }
 
-    this.surface.showInactiveAt(decision.bounds);
+    this.surface.showInactiveAt(decision.bounds, decision.placement);
   }
 }

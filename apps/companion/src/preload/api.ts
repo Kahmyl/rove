@@ -1,3 +1,5 @@
+import type { Session } from "@rove/protocol";
+
 import {
   companionIpcChannels,
   type CompanionSnapshot,
@@ -6,7 +8,7 @@ import {
 } from "../shared/desktop-api.js";
 
 export interface IpcInvoker {
-  invoke(channel: string): Promise<unknown>;
+  invoke(channel: string, ...args: unknown[]): Promise<unknown>;
 }
 
 export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
@@ -19,6 +21,9 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
     getNotice: () =>
       ipc.invoke(companionIpcChannels.notice) as Promise<DesktopNotice | null>,
 
+    getLiveSession: () =>
+      ipc.invoke(companionIpcChannels.liveSession) as Promise<Session | null>,
+
     takeControl: () =>
       ipc.invoke(
         companionIpcChannels.takeControl,
@@ -29,9 +34,22 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
         companionIpcChannels.returnControl,
       ) as Promise<CompanionSnapshot | null>,
 
+    pauseSession: () =>
+      ipc.invoke(
+        companionIpcChannels.pauseSession,
+      ) as Promise<CompanionSnapshot | null>,
+
     finishSession: () =>
       ipc.invoke(
         companionIpcChannels.finishSession,
       ) as Promise<CompanionSnapshot | null>,
+
+    setFollowerExpanded: (expanded) =>
+      ipc.invoke(
+        companionIpcChannels.followerExpanded,
+        expanded,
+      ) as Promise<void>,
+
+    openRove: () => ipc.invoke(companionIpcChannels.openRove) as Promise<void>,
   };
 }

@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -49,6 +57,13 @@ async function assertFile(path) {
   if (!details.isFile()) {
     throw new Error(`Expected packaged file is missing: ${path}`);
   }
+}
+
+async function assertModuleResolvable(packageRoot, specifier) {
+  const canonicalRoot = await realpath(packageRoot);
+  const require = createRequire(join(canonicalRoot, "package.json"));
+
+  await assertFile(require.resolve(specifier));
 }
 
 async function pruneService(serviceRoot) {
@@ -135,7 +150,12 @@ async function prepare() {
     assertFile(join(desktopRoot, "dist", "main", "main", "main.js")),
     assertFile(join(desktopRoot, "dist", "renderer", "index.html")),
     assertFile(join(runtimeRoot, "dist", "main.js")),
-    assertFile(join(runtimeRoot, "node_modules", "playwright", "package.json")),
+    // pnpm's isolated deploy layout keeps transitive dependencies beside the
+    // deployed workspace package rather than hoisting them to the service root.
+    assertModuleResolvable(
+      join(runtimeRoot, "node_modules", "@rove", "browser"),
+      "playwright/package.json",
+    ),
     assertFile(join(mcpRoot, "dist", "main.js")),
     assertFile(
       join(

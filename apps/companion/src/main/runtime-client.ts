@@ -42,9 +42,13 @@ export class CompanionRuntimeClient {
 
   async getBrowserWindowState(
     sessionId: string,
+    signal: AbortSignal,
   ): Promise<BrowserWindowState | null> {
     return this.request<BrowserWindowState | null>(
       `/sessions/${encodeURIComponent(sessionId)}/browser/window`,
+      {
+        signal,
+      },
     );
   }
 
@@ -81,6 +85,16 @@ export class CompanionRuntimeClient {
     const sessionId = await this.requireSessionId();
 
     await this.request(`/sessions/${sessionId}/control/return`, {
+      method: "POST",
+    });
+
+    return this.getSnapshot();
+  }
+
+  async pauseSession(): Promise<CompanionSnapshot | null> {
+    const sessionId = await this.requireSessionId();
+
+    await this.request(`/sessions/${sessionId}/control/pause`, {
       method: "POST",
     });
 

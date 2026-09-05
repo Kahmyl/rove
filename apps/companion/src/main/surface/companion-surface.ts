@@ -5,6 +5,7 @@ export interface PreventableCloseEvent {
 export interface CompanionWindowHandle {
   isDestroyed(): boolean;
   isMinimized(): boolean;
+  isVisible(): boolean;
   restore(): void;
   reload(): void;
   show(): void;
@@ -51,6 +52,12 @@ export class CompanionSurface {
     return window;
   }
 
+  isVisible(): boolean {
+    const window = this.window;
+
+    return window !== undefined && !window.isDestroyed() && window.isVisible();
+  }
+
   show(): void {
     const window = this.ensure();
 
@@ -80,6 +87,7 @@ export class CompanionSurface {
     const window = this.ensure();
 
     window.reload();
+
     this.show();
   }
 

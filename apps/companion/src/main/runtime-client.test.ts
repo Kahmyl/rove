@@ -238,7 +238,11 @@ describe("CompanionRuntimeClient", () => {
           return jsonResponse([]);
         }
 
-        if (url.endsWith("/control/take") || url.endsWith("/control/return")) {
+        if (
+          url.endsWith("/control/take") ||
+          url.endsWith("/control/pause") ||
+          url.endsWith("/control/return")
+        ) {
           return jsonResponse({
             sessionId: session.id,
             status: "active",
@@ -276,11 +280,16 @@ describe("CompanionRuntimeClient", () => {
     });
 
     await client.takeControl();
+    await client.pauseSession();
     await client.returnControl();
     await client.finishSession();
 
     expect(requests).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          url: expect.stringContaining("/control/pause"),
+          method: "POST",
+        }),
         expect.objectContaining({
           url: expect.stringContaining("/control/take"),
           method: "POST",

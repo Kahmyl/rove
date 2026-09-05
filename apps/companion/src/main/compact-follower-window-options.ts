@@ -6,6 +6,10 @@ export const COMPACT_FOLLOWER_WIDTH = 240;
 
 export const COMPACT_FOLLOWER_HEIGHT = 96;
 
+export const EXPANDED_FOLLOWER_WIDTH = 360;
+
+export const EXPANDED_FOLLOWER_HEIGHT = 240;
+
 export function compactFollowerWindowOptions(
   dirname: string,
 ): BrowserWindowConstructorOptions {

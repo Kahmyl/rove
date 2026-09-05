@@ -28,7 +28,10 @@ export interface RoveRuntime {
   startSession(request: StartSessionRequest): Promise<SessionSnapshot>;
   getSession(sessionId: string): Promise<SessionSnapshot>;
   endSession(sessionId: string): Promise<SessionSnapshot>;
-  inspectBrowser(sessionId: string, options?: InspectOptions): Promise<PageInspection>;
+  inspectBrowser(
+    sessionId: string,
+    options?: InspectOptions,
+  ): Promise<PageInspection>;
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult>;
   click(sessionId: string, request: ClickRequest): Promise<ActionResult>;
   type(sessionId: string, request: TypeRequest): Promise<ActionResult>;
@@ -39,14 +42,33 @@ export interface RoveRuntime {
   pages(sessionId: string): Promise<PageSummary[]>;
   switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
   closePage(sessionId: string, pageId: string): Promise<void>;
-  captureScreenshot(sessionId: string, options?: ScreenshotOptions): Promise<Evidence>;
+  captureScreenshot(
+    sessionId: string,
+    options?: ScreenshotOptions,
+  ): Promise<Evidence>;
   getControlStatus(sessionId: string): Promise<ControlStatus>;
-  requestHuman(sessionId: string, request: RequestHumanRequest): Promise<ControlStatus>;
+  requestHuman(
+    sessionId: string,
+    request: RequestHumanRequest,
+  ): Promise<ControlStatus>;
   takeHumanControl(sessionId: string): Promise<ControlStatus>;
+  pauseAgentControl(sessionId: string): Promise<ControlStatus>;
   returnAgentControl(sessionId: string): Promise<ControlStatus>;
-  waitForControl(sessionId: string, request?: ControlWaitRequest): Promise<ControlWaitResult>;
-  saveEvidence(sessionId: string, request: SaveEvidenceRequest): Promise<Evidence>;
+  waitForControl(
+    sessionId: string,
+    request?: ControlWaitRequest,
+  ): Promise<ControlWaitResult>;
+  saveEvidence(
+    sessionId: string,
+    request: SaveEvidenceRequest,
+  ): Promise<Evidence>;
   listEvidence(sessionId: string): Promise<Evidence[]>;
-  readEvidence(sessionId: string, evidenceId: string): Promise<EvidenceReadResult>;
-  getObservations(sessionId: string, query?: ObservationQuery): Promise<ObservationPage>;
+  readEvidence(
+    sessionId: string,
+    evidenceId: string,
+  ): Promise<EvidenceReadResult>;
+  getObservations(
+    sessionId: string,
+    query?: ObservationQuery,
+  ): Promise<ObservationPage>;
 }

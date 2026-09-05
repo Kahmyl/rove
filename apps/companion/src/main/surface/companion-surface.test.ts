@@ -9,6 +9,7 @@ import {
 class FakeWindow implements CompanionWindowHandle {
   destroyed = false;
   minimized = false;
+  visible = false;
 
   showCount = 0;
   hideCount = 0;
@@ -28,6 +29,10 @@ class FakeWindow implements CompanionWindowHandle {
     return this.minimized;
   }
 
+  isVisible(): boolean {
+    return this.visible;
+  }
+
   restore(): void {
     this.minimized = false;
     this.restoreCount += 1;
@@ -38,10 +43,12 @@ class FakeWindow implements CompanionWindowHandle {
   }
 
   show(): void {
+    this.visible = true;
     this.showCount += 1;
   }
 
   hide(): void {
+    this.visible = false;
     this.hideCount += 1;
   }
 
@@ -74,7 +81,9 @@ class FakeWindow implements CompanionWindowHandle {
   }
 
   emitClosed(): void {
+    this.visible = false;
     this.destroyed = true;
+
     this.closedListener?.();
   }
 }
@@ -91,7 +100,9 @@ describe("CompanionSurface", () => {
     surface.show();
 
     expect(window.emitClose()).toBe(true);
+
     expect(window.hideCount).toBe(1);
+
     expect(window.destroyed).toBe(false);
   });
 
@@ -106,6 +117,7 @@ describe("CompanionSurface", () => {
     surface.show();
 
     expect(window.emitClose()).toBe(false);
+
     expect(window.hideCount).toBe(0);
   });
 
@@ -122,7 +134,9 @@ describe("CompanionSurface", () => {
     surface.restore();
 
     expect(window.restoreCount).toBe(1);
+
     expect(window.showCount).toBe(1);
+
     expect(window.focusCount).toBe(1);
   });
 
@@ -138,7 +152,43 @@ describe("CompanionSurface", () => {
     surface.recover();
 
     expect(window.reloadCount).toBe(1);
+
     expect(window.showCount).toBe(2);
+
     expect(window.focusCount).toBe(2);
+  });
+
+  it("reports native visibility without creating the Companion merely to inspect it", () => {
+    const window = new FakeWindow();
+
+    let created = 0;
+
+    const surface = new CompanionSurface(
+      () => {
+        created += 1;
+
+        return window;
+      },
+      () => false,
+    );
+
+    expect(surface.isVisible()).toBe(false);
+
+    expect(created).toBe(0);
+
+    surface.show();
+
+    expect(surface.isVisible()).toBe(true);
+
+    expect(created).toBe(1);
+
+    surface.hide();
+
+    expect(surface.isVisible()).toBe(false);
+
+    surface.show();
+    window.emitClosed();
+
+    expect(surface.isVisible()).toBe(false);
   });
 });

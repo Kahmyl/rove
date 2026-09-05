@@ -1,4 +1,5 @@
 import type {
+  BrowserFollowPlacement,
   BrowserFollowRectangle,
   BrowserFollowSize,
   BrowserFollowSurface,
@@ -9,6 +10,7 @@ export interface CompactFollowerWindowHandle {
   isFocused(): boolean;
   isVisible(): boolean;
   setBounds(bounds: BrowserFollowRectangle, animate?: boolean): void;
+  setAlwaysOnTop(flag: boolean, level?: "floating"): void;
   showInactive(): void;
   hide(): void;
   once(event: "closed", listener: () => void): void;
@@ -114,7 +116,10 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
     };
   }
 
-  showInactiveAt(bounds: BrowserFollowRectangle): void {
+  showInactiveAt(
+    bounds: BrowserFollowRectangle,
+    placement: BrowserFollowPlacement = "right",
+  ): void {
     if (!this.enabled) {
       this.hideFollower();
 
@@ -135,8 +140,19 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
 
     window.setBounds(bounds, false);
 
+    const overlay = placement === "overlay_top_right";
+
+    // A maximized cross-process Chrome window otherwise covers a regular
+    // Electron window. Lift only for the presentation operation, then return
+    // immediately to the normal level so Rove is not globally pinned.
+    window.setAlwaysOnTop(overlay, overlay ? "floating" : undefined);
+
     if (!window.isVisible()) {
       window.showInactive();
+    }
+
+    if (overlay) {
+      window.setAlwaysOnTop(false);
     }
   }
 

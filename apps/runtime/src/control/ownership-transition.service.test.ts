@@ -307,6 +307,35 @@ describe("OwnershipTransitionService", () => {
     );
   });
 
+  it("pauses only after draining agent authority and resumes through fresh target invalidation", async () => {
+    const test = harness(makeSession({ mode: "companion" }));
+    const lease = test.ownershipFence.acquire("ses_test", "agent");
+    const pausing = test.service.pauseAgent("ses_test");
+
+    await Promise.resolve();
+    expect(test.update).not.toHaveBeenCalled();
+
+    lease.release();
+    const paused = await pausing;
+
+    expect(paused).toMatchObject({ status: "paused", controller: null });
+    expectControlNotOwned(() =>
+      test.ownershipFence.acquire("ses_test", "agent"),
+    );
+    expect(test.append).toHaveBeenCalledWith(
+      "ses_test",
+      expect.objectContaining({ actor: "human", type: "session_paused" }),
+    );
+
+    const resumed = await test.service.returnAgent(
+      "ses_test",
+      async () => undefined,
+    );
+    expect(resumed).toMatchObject({ status: "active", controller: "agent" });
+    expect(test.invalidateAllTargets).toHaveBeenCalledTimes(1);
+    test.ownershipFence.acquire("ses_test", "agent").release();
+  });
+
   it("drains obsolete browser work before terminal shutdown", async () => {
     const test = harness(makeSession());
 

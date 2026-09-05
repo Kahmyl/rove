@@ -214,6 +214,41 @@ export class OwnershipTransitionService {
     }
   }
 
+  async pauseAgent(sessionId: string): Promise<ControlStatus> {
+    const session = await this.sessions.get(sessionId);
+
+    this.control.assertCanPauseAgent(session);
+
+    if (session.status === "paused") {
+      return this.toControlStatus(session);
+    }
+
+    const transition = this.ownershipFence.beginTransition(sessionId);
+
+    await transition.waitForDrain();
+
+    let next: Session;
+
+    try {
+      next = { ...session, status: "paused", controller: null };
+      delete next.handoff;
+      next = await this.sessions.update(next);
+    } catch (error) {
+      this.ownershipFence.completeTransition(transition, session.controller);
+      throw error;
+    }
+
+    this.ownershipFence.completeTransition(transition, null);
+
+    const observation = await this.observations.append(sessionId, {
+      actor: "human",
+      type: "session_paused",
+      data: {},
+    });
+
+    return this.toControlStatus(next, observation.seq);
+  }
+
   async endSession(
     sessionId: string,
     hooks: EndSessionHooks,

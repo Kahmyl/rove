@@ -244,7 +244,9 @@ export class RuntimeService implements RoveRuntime {
 
     return sessions.filter(
       (session) =>
-        (session.status === "active" || session.status === "awaiting_human") &&
+        (session.status === "active" ||
+          session.status === "paused" ||
+          session.status === "awaiting_human") &&
         (mode === undefined || session.mode === mode),
     );
   }
@@ -849,6 +851,12 @@ export class RuntimeService implements RoveRuntime {
   async takeHumanControl(sessionId: string): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.takeHuman(sessionId),
+    );
+  }
+
+  async pauseAgentControl(sessionId: string): Promise<ControlStatus> {
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.pauseAgent(sessionId),
     );
   }
 

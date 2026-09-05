@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  screen,
   Tray,
   type MenuItemConstructorOptions,
 } from "electron";
@@ -20,8 +21,21 @@ import {
 import { DesktopHost } from "./host/desktop-host.js";
 import { HubConnector } from "./host/hub-connector.js";
 import { resolveDesktopServiceLayout } from "./host/service-layout.js";
+import {
+  COMPACT_FOLLOWER_HEIGHT,
+  COMPACT_FOLLOWER_WIDTH,
+  EXPANDED_FOLLOWER_HEIGHT,
+  EXPANDED_FOLLOWER_WIDTH,
+  compactFollowerWindowOptions,
+} from "./compact-follower-window-options.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
+import {
+  BrowserFollowController,
+  type BrowserFollowSurface,
+} from "./surface/browser-follow-controller.js";
+import { CompactFollowerSurface } from "./surface/compact-follower-surface.js";
 import { CompanionSurface } from "./surface/companion-surface.js";
+import { createElectronBrowserFollowDisplaySource } from "./surface/electron-browser-follow-display-source.js";
 import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
 import { toTrayStatusLabel } from "./surface/tray-state.js";
 import { companionWindowOptions } from "./window-options.js";
@@ -44,6 +58,10 @@ let desktopHost: DesktopHost | undefined;
 let hubConnector: HubConnector | undefined;
 
 let companionSurface: CompanionSurface | undefined;
+
+let browserFollowController: BrowserFollowController | undefined;
+
+let compactFollowerSurface: CompactFollowerSurface | undefined;
 
 let desktopTray: Tray | undefined;
 
@@ -95,16 +113,79 @@ function createCompanionWindow(): BrowserWindow {
   return window;
 }
 
+function createCompactFollowerWindow(): BrowserWindow {
+  const window = new BrowserWindow(
+    compactFollowerWindowOptions(import.meta.dirname),
+  );
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (allowQuit || window.isDestroyed()) {
+      return;
+    }
+
+    console.error(
+      `[desktop] Compact follower renderer exited (${details.reason}). Recreating.`,
+    );
+
+    window.destroy();
+  });
+
+  const developmentUrl = process.env.ROVE_COMPANION_DEV_URL;
+
+  if (developmentUrl !== undefined) {
+    const followerUrl = new URL(developmentUrl);
+
+    followerUrl.searchParams.set("surface", "follower");
+
+    void window.loadURL(followerUrl.toString());
+  } else {
+    void window.loadFile(
+      join(import.meta.dirname, "../../renderer/index.html"),
+      {
+        query: {
+          surface: "follower",
+        },
+      },
+    );
+  }
+
+  return window;
+}
+
 function registerIpc(runtime: CompanionRuntimeClient): void {
   ipcMain.handle(companionIpcChannels.snapshot, () => runtime.getSnapshot());
 
   ipcMain.handle(companionIpcChannels.notice, () => desktopNotice);
+
+  ipcMain.handle(companionIpcChannels.liveSession, () =>
+    desktopNotice === null ? lastLiveSession : null,
+  );
+
+  ipcMain.handle(companionIpcChannels.openRove, () => {
+    companionSurface?.restore();
+  });
 
   ipcMain.handle(companionIpcChannels.takeControl, () => runtime.takeControl());
 
   ipcMain.handle(companionIpcChannels.returnControl, () =>
     runtime.returnControl(),
   );
+
+  ipcMain.handle(companionIpcChannels.pauseSession, () =>
+    runtime.pauseSession(),
+  );
+
+  ipcMain.handle(companionIpcChannels.followerExpanded, (_event, expanded) => {
+    if (typeof expanded !== "boolean") {
+      throw new Error("Follower expansion must be a boolean.");
+    }
+
+    compactFollowerSurface?.setFollowSize(
+      expanded
+        ? { width: EXPANDED_FOLLOWER_WIDTH, height: EXPANDED_FOLLOWER_HEIGHT }
+        : { width: COMPACT_FOLLOWER_WIDTH, height: COMPACT_FOLLOWER_HEIGHT },
+    );
+  });
 
   ipcMain.handle(companionIpcChannels.finishSession, async () => {
     const snapshot = await runtime.finishSession();
@@ -313,8 +394,6 @@ function startSessionSurfaceMonitor(
     try {
       const session = await runtime.getActiveSession();
 
-      onSession?.(session);
-
       const signal = toCompanionSurfaceSignal(session);
 
       if (signal !== null && signal.key !== previousSignalKey) {
@@ -324,6 +403,8 @@ function startSessionSurfaceMonitor(
           surface.show();
         }
       }
+
+      onSession?.(session);
 
       previousSignalKey = signal?.key;
     } catch {
@@ -452,7 +533,6 @@ async function startDesktop(): Promise<void> {
         companionSurface?.requestAttention();
         return;
       }
-
     });
 
     const connection = await desktopHost.start();
@@ -499,11 +579,40 @@ async function startDesktop(): Promise<void> {
 
   companionSurface = surface;
 
+  const followerSurface = new CompactFollowerSurface(
+    createCompactFollowerWindow,
+    {
+      width: COMPACT_FOLLOWER_WIDTH,
+      height: COMPACT_FOLLOWER_HEIGHT,
+    },
+  );
+
+  compactFollowerSurface = followerSurface;
+
+  const controlledFollowerSurface: BrowserFollowSurface = {
+    isFollowEnabled: () =>
+      followerSurface.isFollowEnabled() && !surface.isVisible(),
+    isFocused: () => followerSurface.isFocused(),
+    isVisible: () => followerSurface.isVisible(),
+    followSize: () => followerSurface.followSize(),
+    showInactiveAt: (bounds, placement) =>
+      followerSurface.showInactiveAt(bounds, placement),
+    hideFollower: () => followerSurface.hideFollower(),
+  };
+
+  const followController = new BrowserFollowController(
+    runtime,
+    createElectronBrowserFollowDisplaySource(screen),
+    controlledFollowerSurface,
+  );
+
+  browserFollowController = followController;
+
   installApplicationMenu(surface);
 
   desktopTray = installTray(surface);
 
-  surface.show();
+  followController.start();
 
   startSessionSurfaceMonitor(runtime, surface, (session) => {
     if (session !== null) {
@@ -519,6 +628,21 @@ async function startDesktop(): Promise<void> {
     if (desktopTray !== undefined) {
       updateTrayMenu(desktopTray, surface, session);
     }
+
+    const followerSession =
+      session !== null &&
+      (session.status === "active" ||
+        session.status === "paused" ||
+        session.status === "awaiting_human") &&
+      session.mode !== "capture"
+        ? session
+        : null;
+
+    followerSurface.setFollowEnabled(
+      followerSession !== null && desktopNotice === null,
+    );
+
+    followController.setSession(followerSession);
   });
 }
 
@@ -545,6 +669,10 @@ app.on("activate", () => {
 
 app.on("before-quit", (event) => {
   stopSessionSurfaceMonitor();
+
+  browserFollowController?.stop();
+  browserFollowController = undefined;
+  compactFollowerSurface = undefined;
 
   desktopTray?.destroy();
   desktopTray = undefined;
