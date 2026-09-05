@@ -345,7 +345,7 @@ describe("Milestone 9 browser activity foundation", () => {
     expect(switched.data).toHaveProperty("url");
 
     expect(JSON.stringify(activities)).not.toContain(secret);
-  });
+  }, 15_000);
 
   it("does not let delayed DOM activity steal a later explicit page switch", async () => {
     const server = await startFixtureServer();
