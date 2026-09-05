@@ -59,6 +59,7 @@ function windowState(
 class FakeSurface implements BrowserFollowSurface {
   enabled = true;
   focused = false;
+  visible = false;
 
   size = {
     width: 240,
@@ -77,15 +78,22 @@ class FakeSurface implements BrowserFollowSurface {
     return this.focused;
   }
 
+  isVisible(): boolean {
+    return this.visible;
+  }
+
   followSize() {
     return this.size;
   }
 
   showInactiveAt(bounds: BrowserFollowRectangle): void {
+    this.visible = true;
+
     this.shown.push(bounds);
   }
 
   hideFollower(): void {
+    this.visible = false;
     this.hideCount += 1;
   }
 }
@@ -711,5 +719,71 @@ describe("BrowserFollowController authority revocation", () => {
     await controller.reconcileNow();
 
     expect(surface.hideCount).toBe(1);
+  });
+});
+
+describe("BrowserFollowController surface synchronization", () => {
+  it("reapplies identical authorized geometry when the native follower is no longer visible", async () => {
+    const source = {
+      getBrowserWindowState: vi.fn(async () => windowState()),
+    };
+
+    const surface = new FakeSurface();
+
+    const controller = new BrowserFollowController(
+      source,
+      {
+        getAllDisplays: () => [display],
+      },
+      surface,
+    );
+
+    controller.setSession(session);
+
+    await controller.reconcileNow();
+
+    expect(surface.shown).toHaveLength(1);
+
+    expect(surface.visible).toBe(true);
+
+    surface.visible = false;
+
+    await controller.reconcileNow();
+
+    expect(surface.shown).toHaveLength(2);
+
+    expect(surface.visible).toBe(true);
+  });
+
+  it("reapplies an unchanged hidden decision if the native follower becomes unexpectedly visible", async () => {
+    const source = {
+      getBrowserWindowState: vi.fn(async () => null),
+    };
+
+    const surface = new FakeSurface();
+
+    const controller = new BrowserFollowController(
+      source,
+      {
+        getAllDisplays: () => [display],
+      },
+      surface,
+    );
+
+    controller.setSession(session);
+
+    expect(surface.hideCount).toBe(1);
+
+    await controller.reconcileNow();
+
+    expect(surface.hideCount).toBe(1);
+
+    surface.visible = true;
+
+    await controller.reconcileNow();
+
+    expect(surface.hideCount).toBe(2);
+
+    expect(surface.visible).toBe(false);
   });
 });

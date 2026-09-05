@@ -36,6 +36,7 @@ export interface BrowserFollowDisplaySource {
 export interface BrowserFollowSurface {
   isFollowEnabled(): boolean;
   isFocused(): boolean;
+  isVisible(): boolean;
   followSize(): BrowserFollowSize;
   showInactiveAt(bounds: BrowserFollowRectangle): void;
   hideFollower(): void;
@@ -639,7 +640,13 @@ export class BrowserFollowController {
   private apply(decision: BrowserFollowDecision): void {
     const key = effectKey(decision);
 
-    if (key === this.lastEffectKey) {
+    const surfaceVisible = this.surface.isVisible();
+
+    const effectAlreadyApplied =
+      key === this.lastEffectKey &&
+      (decision.kind === "hidden" ? !surfaceVisible : surfaceVisible);
+
+    if (effectAlreadyApplied) {
       return;
     }
 
