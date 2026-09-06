@@ -291,6 +291,38 @@ describe("Milestone 4 runtime integration", () => {
     ).toEqual(["session_failed"]);
   });
 
+  it("starts successfully when optional initial assessment sees page churn", async () => {
+    const liveBrowser = readyBrowserSession("browser_startup_churn");
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async () => {
+        throw new RoveError({
+          code: "PAGE_CHANGED",
+          message: "forced startup page churn",
+          retryable: true,
+        });
+      },
+    });
+    const engine: BrowserEngine = {
+      start: async () => liveBrowser,
+    };
+    const { runtime } = await harness(engine);
+
+    const session = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: session.id });
+
+    expect(session).toMatchObject({
+      status: "active",
+      controller: "agent",
+      activePageId: "page_01",
+    });
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(["session_started"]);
+  });
+
   it("creates Rove-managed persistent profile metadata before browser launch", async () => {
     const { runtime, home } = await harness();
     const session = await runtime.startSession({

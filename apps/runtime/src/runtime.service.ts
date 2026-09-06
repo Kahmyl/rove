@@ -171,7 +171,15 @@ export class RuntimeService implements RoveRuntime {
       const activePageId = (await browser.pages()).find(
         (page) => page.active,
       )?.id;
-      const assessment = await this.assessBrowser(session.id, browser);
+      let assessment: PageInspectionPolicyRecord | undefined;
+
+      try {
+        assessment = await this.assessBrowser(session.id, browser);
+      } catch (error) {
+        if (!(error instanceof RoveError) || error.code !== "PAGE_CHANGED") {
+          throw error;
+        }
+      }
 
       session = await this.sessions.update({
         ...session,
@@ -186,12 +194,14 @@ export class RuntimeService implements RoveRuntime {
         data: { mode: session.mode, controller: session.controller },
       });
 
-      await this.pagePolicyOrchestrator.orchestrate(
-        session.id,
-        assessment.policyDecision,
-        assessment.pageState,
-        "session_start",
-      );
+      if (assessment !== undefined) {
+        await this.pagePolicyOrchestrator.orchestrate(
+          session.id,
+          assessment.policyDecision,
+          assessment.pageState,
+          "session_start",
+        );
+      }
 
       return this.sessions.get(session.id);
     } catch (error) {
