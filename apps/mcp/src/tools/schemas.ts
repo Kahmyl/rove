@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const sessionIdSchema = z.string().min(1);
 export const targetSchema = z.object({
+  sessionId: z.string().min(1).optional(),
   pageId: z.string().min(1),
   revision: z.number().int().nonnegative(),
   ref: z.string().min(1),
@@ -23,6 +24,7 @@ export const sessionIdJsonSchema = {
 export const targetJsonSchema = {
   type: "object",
   properties: {
+    sessionId: { type: "string", minLength: 1 },
     pageId: { type: "string", minLength: 1 },
     revision: { type: "integer", minimum: 0 },
     ref: { type: "string", minLength: 1 },

@@ -2,24 +2,29 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import {
+  ROVE_PROTOCOL_VERSION,
   ROVE_HUB_PROTOCOL_VERSION,
+  componentCompatibilityError,
+  componentInstanceIdentitySchema,
   hubCommandResultSchema,
   submitHubCommandSchema,
+  type ComponentCompatibilityRequirement,
+  type ComponentInstanceIdentity,
   type HubCommand,
   type HubCommandResult,
 } from "@rove/protocol";
+import { CONTROL_PLANE_PROVENANCE } from "./component-provenance.js";
 
 const BODY_LIMIT = 2 * 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT_MS = 35_000;
 const POLL_TIMEOUT_MS = 25_000;
-const CONTROL_PLANE_INSTANCE_ID = `control_${randomUUID().replaceAll("-", "")}`;
-const CONTROL_PLANE_STARTED_AT = new Date().toISOString();
 
 export interface RelayServerOptions {
   host: string;
   port: number;
   hubToken: string;
   serviceToken: string;
+  expectedRuntime?: ComponentCompatibilityRequirement;
 }
 
 interface PendingCommand {
@@ -39,6 +44,8 @@ interface ActiveHub {
   runtimeInstanceId: string;
   startedAt: number;
   lastSeenAt: number;
+  runtime: ComponentInstanceIdentity;
+  companion: ComponentInstanceIdentity;
 }
 
 export class RelayServer {
@@ -105,9 +112,10 @@ export class RelayServer {
       writeJson(response, 200, {
         ok: true,
         service: "rove-control-plane",
-        controlPlaneInstanceId: CONTROL_PLANE_INSTANCE_ID,
-        startedAt: CONTROL_PLANE_STARTED_AT,
-        processId: process.pid,
+        component: CONTROL_PLANE_PROVENANCE,
+        controlPlaneInstanceId: CONTROL_PLANE_PROVENANCE.instanceId,
+        startedAt: CONTROL_PLANE_PROVENANCE.startedAt,
+        processId: CONTROL_PLANE_PROVENANCE.processId,
         protocolVersion: ROVE_HUB_PROTOCOL_VERSION,
       });
       return;
@@ -139,6 +147,9 @@ export class RelayServer {
         connected: seenAt !== undefined && Date.now() - seenAt < POLL_TIMEOUT_MS + 10_000,
         lastSeenAt: seenAt === undefined ? null : new Date(seenAt).toISOString(),
         queuedCommands: this.queues.get(deviceId)?.length ?? 0,
+        controlPlane: CONTROL_PLANE_PROVENANCE,
+        selectedRuntime: this.activeHubs.get(deviceId)?.runtime ?? null,
+        companion: this.activeHubs.get(deviceId)?.companion ?? null,
         runtimeInstanceId: this.activeHubs.get(deviceId)?.runtimeInstanceId ?? null,
         runtimeStartedAt:
           this.activeHubs.get(deviceId) === undefined
@@ -190,10 +201,60 @@ export class RelayServer {
 
   private async poll(deviceId: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
     const incoming = hubIdentity(request);
+    const requirement = this.options.expectedRuntime ?? {
+      runtimeApi: ROVE_PROTOCOL_VERSION,
+      hub: ROVE_HUB_PROTOCOL_VERSION,
+    };
+    const incompatibility = componentCompatibilityError(
+      incoming.runtime,
+      requirement,
+    );
+    const companionIncompatibility = componentCompatibilityError(
+      incoming.companion,
+      requirement,
+    );
+    if (
+      incompatibility !== undefined ||
+      companionIncompatibility !== undefined
+    ) {
+      writeJson(response, 409, {
+        error: {
+          code: "RUNTIME_PROVENANCE_MISMATCH",
+          message: "Runtime authority is incompatible with this control plane.",
+          details: {
+            runtime: incompatibility,
+            companion: companionIncompatibility,
+          },
+        },
+      });
+      return;
+    }
     const active = this.activeHubs.get(deviceId);
     if (
       active !== undefined &&
       active.runtimeInstanceId !== incoming.runtimeInstanceId &&
+      this.hubIsLive(active) &&
+      (active.runtime.buildIdentity !== incoming.runtime.buildIdentity ||
+        active.runtime.developmentGitCommit !==
+          incoming.runtime.developmentGitCommit ||
+        active.companion.buildIdentity !==
+          incoming.companion.buildIdentity ||
+        active.companion.developmentGitCommit !==
+          incoming.companion.developmentGitCommit)
+    ) {
+      writeJson(response, 409, {
+        error: {
+          code: "RUNTIME_AUTHORITY_AMBIGUOUS",
+          message:
+            "A live Runtime from a different build already owns this device route.",
+        },
+      });
+      return;
+    }
+    if (
+      active !== undefined &&
+      active.runtimeInstanceId !== incoming.runtimeInstanceId &&
+      this.hubIsLive(active) &&
       active.startedAt >= incoming.startedAt
     ) {
       writeJson(response, 409, {
@@ -276,6 +337,20 @@ export class RelayServer {
       operation: input.operation,
       payload: input.payload,
     };
+    const active = this.activeHubs.get(deviceId);
+    if (active === undefined || !this.hubIsLive(active)) {
+      return Promise.resolve({
+        protocolVersion: ROVE_HUB_PROTOCOL_VERSION,
+        commandId,
+        deviceId,
+        ok: false,
+        error: {
+          code: "RUNTIME_UNAVAILABLE",
+          message: "No live compatible Runtime authority owns this device route.",
+          retryable: true,
+        },
+      });
+    }
 
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -312,23 +387,68 @@ export class RelayServer {
       }
     });
   }
+
+  private hubIsLive(hub: ActiveHub): boolean {
+    return Date.now() - hub.lastSeenAt < POLL_TIMEOUT_MS + 10_000;
+  }
 }
 
 function hubIdentity(request: IncomingMessage): {
   runtimeInstanceId: string;
   startedAt: number;
+  runtime: ComponentInstanceIdentity;
+  companion: ComponentInstanceIdentity;
 } {
   const runtimeInstanceId = request.headers["x-rove-runtime-instance-id"];
   const startedAt = request.headers["x-rove-runtime-started-at"];
+  const runtime = encodedIdentity(
+    request.headers["x-rove-runtime-provenance"],
+    "runtime",
+  );
+  const companion = encodedIdentity(
+    request.headers["x-rove-companion-provenance"],
+    "companion",
+  );
   if (
     typeof runtimeInstanceId === "string" &&
     /^runtime_[a-f0-9]{32}$/.test(runtimeInstanceId) &&
     typeof startedAt === "string" &&
-    !Number.isNaN(Date.parse(startedAt))
+    !Number.isNaN(Date.parse(startedAt)) &&
+    runtime.instanceId === runtimeInstanceId &&
+    runtime.startedAt === new Date(startedAt).toISOString()
   ) {
-    return { runtimeInstanceId, startedAt: Date.parse(startedAt) };
+    return {
+      runtimeInstanceId,
+      startedAt: Date.parse(startedAt),
+      runtime,
+      companion,
+    };
   }
-  return { runtimeInstanceId: "legacy", startedAt: 0 };
+  throw Object.assign(new Error("Runtime provenance headers are invalid."), {
+    statusCode: 409,
+  });
+}
+
+function encodedIdentity(
+  value: string | string[] | undefined,
+  component: ComponentInstanceIdentity["component"],
+): ComponentInstanceIdentity {
+  if (typeof value !== "string" || value.length > 2_048) {
+    throw Object.assign(new Error(`${component} provenance is required.`), {
+      statusCode: 409,
+    });
+  }
+  try {
+    const identity = componentInstanceIdentitySchema.parse(
+      JSON.parse(Buffer.from(value, "base64url").toString("utf8")),
+    );
+    if (identity.component !== component) throw new Error("component mismatch");
+    return identity;
+  } catch {
+    throw Object.assign(new Error(`${component} provenance is invalid.`), {
+      statusCode: 409,
+    });
+  }
 }
 
 function requireBearer(request: IncomingMessage, expected: string): void {

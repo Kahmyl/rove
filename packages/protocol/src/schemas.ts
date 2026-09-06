@@ -148,6 +148,7 @@ export const targetKindSchema = z.enum([
 ]);
 
 export const targetReferenceSchema = z.object({
+  sessionId: z.string().min(1).optional(),
   pageId: z.string().min(1),
   revision: z.number().int().nonnegative(),
   ref: z.string().min(1),

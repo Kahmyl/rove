@@ -6,20 +6,18 @@ import type { BearerTokenVerifier } from "../auth/bearer-auth.js";
 import { unauthorizedBody } from "../auth/bearer-auth.js";
 import type { McpLogger } from "../logging/logger.js";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
-import packageJson from "../../package.json" with { type: "json" };
+import { MCP_PROVENANCE } from "../component-provenance.js";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const SESSION_TTL_MS = 30 * 60 * 1000;
-const MCP_INSTANCE_ID = `mcp_${randomUUID().replaceAll("-", "")}`;
-const MCP_STARTED_AT = new Date().toISOString();
-
 function serviceProvenance() {
   return {
     service: "rove-mcp",
-    version: packageJson.version,
-    mcpInstanceId: MCP_INSTANCE_ID,
-    startedAt: MCP_STARTED_AT,
-    processId: process.pid,
+    component: MCP_PROVENANCE,
+    version: MCP_PROVENANCE.version,
+    mcpInstanceId: MCP_PROVENANCE.instanceId,
+    startedAt: MCP_PROVENANCE.startedAt,
+    processId: MCP_PROVENANCE.processId,
     transport: "http",
   } as const;
 }

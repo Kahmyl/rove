@@ -155,7 +155,7 @@ interface RuntimeFailure {
   details?: unknown;
 }
 
-async function runtimeRequest(
+export async function runtimeRequest(
   runtime: LocalRuntimeConnection,
   method: "GET" | "POST",
   path: string,

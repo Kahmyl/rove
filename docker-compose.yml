@@ -12,6 +12,10 @@ services:
       ROVE_CONTROL_PLANE_PORT: 47830
       ROVE_HUB_TOKEN: ${ROVE_HUB_TOKEN:-rove-local-hub-token-change-me}
       ROVE_CONTROL_PLANE_SERVICE_TOKEN: ${ROVE_CONTROL_PLANE_SERVICE_TOKEN:-rove-local-service-token-change-me}
+      ROVE_BUILD_ID: ${ROVE_BUILD_ID:-rove@0.1.0}
+      ROVE_BUILD_GIT_COMMIT: ${ROVE_BUILD_GIT_COMMIT:-}
+      ROVE_EXPECTED_BUILD_ID: ${ROVE_EXPECTED_BUILD_ID:-rove@0.1.0}
+      ROVE_EXPECTED_DEVELOPMENT_COMMIT: ${ROVE_EXPECTED_DEVELOPMENT_COMMIT:-}
     command: ["pnpm", "--filter", "@rove/control-plane", "start"]
     ports:
       - "127.0.0.1:${ROVE_CONTROL_PLANE_PORT:-47830}:47830"
@@ -56,6 +60,10 @@ services:
       ROVE_MCP_PATH: /mcp
       ROVE_MCP_TOKEN: ${ROVE_MCP_TOKEN:-rove-local-development-token-123456}
       ROVE_MCP_ALLOWED_HOSTS: 127.0.0.1:47821,localhost:47821,0.0.0.0:47821,mcp:47821
+      ROVE_BUILD_ID: ${ROVE_BUILD_ID:-rove@0.1.0}
+      ROVE_BUILD_GIT_COMMIT: ${ROVE_BUILD_GIT_COMMIT:-}
+      ROVE_EXPECTED_BUILD_ID: ${ROVE_EXPECTED_BUILD_ID:-rove@0.1.0}
+      ROVE_EXPECTED_DEVELOPMENT_COMMIT: ${ROVE_EXPECTED_DEVELOPMENT_COMMIT:-}
     command: ["pnpm", "--filter", "@rove/mcp", "start"]
     ports:
       - "127.0.0.1:${ROVE_MCP_PORT:-47821}:47821"

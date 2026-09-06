@@ -123,11 +123,22 @@ effect evidence, policy recording, or receipt persistence degrades, the
 separately. Consequential unknown outcomes are never recommended for blind
 replay; inspection is required to reconcile them.
 
-Each managed Runtime publishes an instance ID, start time, PID, package version,
-and development commit when safely discoverable. Browser-host identity and
-session generation link browser authority to that Runtime. MCP and Control Plane
-health expose their own process instance identities, and the Control Plane
-fences older Hub pollers per device. Companion records restricted ownership
+Each Companion, MCP, Control Plane, and managed Runtime publishes a bounded
+component identity: component kind, instance and process identity, package
+version, start time, stable build identity, supported Runtime/Hub protocols,
+and a development commit when safely discoverable. A production route is
+selected by protocol and build compatibility; it never depends on a Git commit.
+A controlled development environment may additionally configure an expected
+development commit, in which case every repository-built component and the
+selected Runtime must match it. MCP health distinguishes its own identity from
+the Control Plane, Companion, and selected Runtime identities.
+
+Browser-host identity and session generation link browser authority to the
+selected Runtime. The Control Plane rejects missing or malformed provenance,
+fails immediately when no live compatible Runtime owns a route, and permits a
+new instance to replace a live one only when their build identities and
+development commits agree. `startedAt` is a lifecycle tie-breaker within that
+compatible build, never a substitute for compatibility. Companion records restricted ownership
 metadata and only replaces an orphaned managed Runtime after the record,
 process-start identity, command marker, loopback health response, PID, and
 Runtime instance all agree. Unknown processes are never attached to or killed.

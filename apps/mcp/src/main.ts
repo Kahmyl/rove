@@ -1,4 +1,10 @@
 import { loadConfig } from "@rove/config";
+import {
+  ROVE_HUB_PROTOCOL_VERSION,
+  ROVE_PROTOCOL_VERSION,
+  componentCompatibilityError,
+} from "@rove/protocol";
+import { MCP_PROVENANCE } from "./component-provenance.js";
 import { BearerTokenVerifier } from "./auth/bearer-auth.js";
 import { stderrLogger } from "./logging/logger.js";
 import { RuntimeHttpClient } from "./runtime/runtime-client.js";
@@ -10,15 +16,45 @@ import { startStreamableHttpServer } from "./transports/streamable-http.js";
 async function main(): Promise<void> {
   const config = loadConfig();
   const controlPlaneUrl = process.env.ROVE_CONTROL_PLANE_URL;
+  const expectedBuildIdentity = process.env.ROVE_EXPECTED_BUILD_ID?.trim();
+  const expectedDevelopmentCommit =
+    process.env.ROVE_EXPECTED_DEVELOPMENT_COMMIT?.trim();
+  const expectedRuntime = {
+    runtimeApi: ROVE_PROTOCOL_VERSION,
+    hub: ROVE_HUB_PROTOCOL_VERSION,
+    ...(expectedBuildIdentity === undefined || expectedBuildIdentity === ""
+      ? {}
+      : { buildIdentity: expectedBuildIdentity }),
+    ...(expectedDevelopmentCommit === undefined ||
+    expectedDevelopmentCommit === ""
+      ? {}
+      : {
+          developmentGitCommit: expectedDevelopmentCommit,
+        }),
+  };
+  const ownMismatch = componentCompatibilityError(
+    MCP_PROVENANCE,
+    expectedRuntime,
+  );
+  if (ownMismatch !== undefined) {
+    throw new Error(
+      `MCP build does not satisfy its configured compatibility requirement: ${ownMismatch}.`,
+    );
+  }
   const runtime =
     controlPlaneUrl === undefined
-      ? new RuntimeHttpClient(config.runtime.url, config.runtime.token)
+      ? new RuntimeHttpClient(
+          config.runtime.url,
+          config.runtime.token,
+          expectedRuntime,
+        )
       : new ControlPlaneRuntimeClient({
           controlPlaneUrl,
           deviceId: process.env.ROVE_HUB_DEVICE_ID ?? "local-dev",
           serviceToken:
             process.env.ROVE_CONTROL_PLANE_SERVICE_TOKEN ??
             "rove-local-service-token-change-me",
+          expectedRuntime,
         });
   // A deployed MCP service must remain available while a user's Hub is
   // offline. Direct development still fails fast when its local Runtime is

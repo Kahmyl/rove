@@ -1,11 +1,14 @@
 import {
   ROVE_HUB_PROTOCOL_VERSION,
+  componentInstanceIdentitySchema,
   hubCommandSchema,
+  type ComponentInstanceIdentity,
   type HubCommandResult,
 } from "@rove/protocol";
 
 import {
   executeHubCommand,
+  runtimeRequest,
   toHubCommandError,
   type LocalRuntimeConnection,
 } from "./hub-command-executor.js";
@@ -17,6 +20,7 @@ export interface HubConnectorOptions {
   runtime: LocalRuntimeConnection;
   runtimeInstanceId: string;
   runtimeStartedAt: string;
+  companionIdentity: ComponentInstanceIdentity;
   retryDelayMs?: number;
 }
 
@@ -25,6 +29,7 @@ class StaleRuntimeInstanceError extends Error {}
 export class HubConnector {
   private controller: AbortController | undefined;
   private loop: Promise<void> | undefined;
+  private runtimeIdentity: ComponentInstanceIdentity | undefined;
 
   constructor(private readonly options: HubConnectorOptions) {}
 
@@ -82,7 +87,7 @@ export class HubConnector {
       new URL(`/v1/devices/${encodeURIComponent(this.options.deviceId)}/poll`, this.options.controlPlaneUrl),
       {
         method: "POST",
-        headers: this.localHubHeaders(),
+        headers: await this.localHubHeaders(),
         signal,
       },
     );
@@ -104,7 +109,7 @@ export class HubConnector {
       {
         method: "POST",
         headers: {
-          ...this.localHubHeaders(),
+          ...(await this.localHubHeaders()),
           "content-type": "application/json",
         },
         body: JSON.stringify(result),
@@ -130,7 +135,7 @@ export class HubConnector {
     }
   }
 
-  private localHubHeaders(): Record<string, string> {
+  private async localHubHeaders(): Promise<Record<string, string>> {
     const destination = new URL(this.options.controlPlaneUrl);
     if (
       destination.hostname !== "127.0.0.1" &&
@@ -141,12 +146,46 @@ export class HubConnector {
         "Runtime provenance may only be sent to a loopback Rove control plane.",
       );
     }
+    this.runtimeIdentity ??= await this.readRuntimeIdentity();
     return {
       authorization: `Bearer ${this.options.token}`,
       "x-rove-runtime-instance-id": this.options.runtimeInstanceId,
       "x-rove-runtime-started-at": this.options.runtimeStartedAt,
+      "x-rove-runtime-provenance": encodeIdentity(this.runtimeIdentity),
+      "x-rove-companion-provenance": encodeIdentity(
+        this.options.companionIdentity,
+      ),
     };
   }
+
+  private async readRuntimeIdentity(): Promise<ComponentInstanceIdentity> {
+    const health = await runtimeRequest(
+      this.options.runtime,
+      "GET",
+      "/health",
+      undefined,
+      5_000,
+    );
+    const record =
+      typeof health === "object" && health !== null
+        ? (health as Record<string, unknown>)
+        : {};
+    const identity = componentInstanceIdentitySchema.parse(record.runtime);
+    if (
+      identity.component !== "runtime" ||
+      identity.instanceId !== this.options.runtimeInstanceId ||
+      identity.startedAt !== this.options.runtimeStartedAt
+    ) {
+      throw new Error(
+        "Runtime health identity does not match the managed Runtime process.",
+      );
+    }
+    return identity;
+  }
+}
+
+function encodeIdentity(identity: ComponentInstanceIdentity): string {
+  return Buffer.from(JSON.stringify(identity), "utf8").toString("base64url");
 }
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {

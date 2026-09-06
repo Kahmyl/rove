@@ -1,25 +1,29 @@
-import type {
-  ActionResult,
-  ControlStatus,
-  ControlWaitRequest,
-  ControlWaitResult,
-  Evidence,
-  EvidenceReadResult,
-  InspectOptions,
-  NavigateRequest,
-  ObservationPage,
-  ObservationQuery,
-  PageInspection,
-  PressRequest,
-  ScreenshotOptions,
-  SessionSnapshot,
-  StartSessionRequest,
-  TargetReference,
-  TypeRequest,
-  ActionReceipt,
-  TargetResolution,
-  TargetResolutionRequest,
-  VerifiedInteractionRequest,
+import {
+  ROVE_PROTOCOL_VERSION,
+  componentCompatibilityError,
+  componentInstanceIdentitySchema,
+  type ComponentCompatibilityRequirement,
+  type ActionResult,
+  type ControlStatus,
+  type ControlWaitRequest,
+  type ControlWaitResult,
+  type Evidence,
+  type EvidenceReadResult,
+  type InspectOptions,
+  type NavigateRequest,
+  type ObservationPage,
+  type ObservationQuery,
+  type PageInspection,
+  type PressRequest,
+  type ScreenshotOptions,
+  type SessionSnapshot,
+  type StartSessionRequest,
+  type TargetReference,
+  type TypeRequest,
+  type ActionReceipt,
+  type TargetResolution,
+  type TargetResolutionRequest,
+  type VerifiedInteractionRequest,
 } from "@rove/protocol";
 import { RuntimeClientError } from "./runtime-client.error.js";
 import type {
@@ -36,15 +40,52 @@ export class RuntimeHttpClient implements RuntimeClient {
   constructor(
     runtimeUrl: string,
     private readonly runtimeToken?: string,
+    private readonly expectedRuntime: ComponentCompatibilityRequirement = {
+      runtimeApi: ROVE_PROTOCOL_VERSION,
+    },
   ) {
     this.runtimeUrl = new URL(runtimeUrl);
   }
 
-  healthCheck(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
-    return this.request<unknown>("GET", "/health", undefined, timeoutMs, true);
+  async healthCheck(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
+    const health = await this.request<unknown>(
+      "GET",
+      "/health",
+      undefined,
+      timeoutMs,
+      true,
+    );
+    const record =
+      typeof health === "object" && health !== null
+        ? (health as Record<string, unknown>)
+        : {};
+    let runtime;
+    try {
+      runtime = componentInstanceIdentitySchema.parse(record.runtime);
+      if (runtime.component !== "runtime") {
+        throw new Error("component kind mismatch");
+      }
+    } catch {
+      throw new RuntimeClientError(
+        "RUNTIME_PROVENANCE_MISMATCH",
+        "Runtime health did not provide valid component provenance.",
+        false,
+      );
+    }
+    const mismatch = componentCompatibilityError(runtime, this.expectedRuntime);
+    if (mismatch !== undefined) {
+      throw new RuntimeClientError(
+        "RUNTIME_PROVENANCE_MISMATCH",
+        "Runtime does not satisfy the configured compatibility requirement.",
+        false,
+        { reason: mismatch },
+      );
+    }
+    return health;
   }
 
-  startSession(input: StartSessionRequest): Promise<SessionSnapshot> {
+  async startSession(input: StartSessionRequest): Promise<SessionSnapshot> {
+    await this.healthCheck(Math.min(DEFAULT_TIMEOUT_MS, 2_000));
     return this.request("POST", "/sessions", input);
   }
 

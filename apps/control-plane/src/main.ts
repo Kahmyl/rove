@@ -1,4 +1,33 @@
 import { RelayServer } from "./relay-server.js";
+import {
+  ROVE_HUB_PROTOCOL_VERSION,
+  ROVE_PROTOCOL_VERSION,
+  componentCompatibilityError,
+} from "@rove/protocol";
+import { CONTROL_PLANE_PROVENANCE } from "./component-provenance.js";
+
+const expectedBuildIdentity = process.env.ROVE_EXPECTED_BUILD_ID?.trim();
+const expectedDevelopmentCommit =
+  process.env.ROVE_EXPECTED_DEVELOPMENT_COMMIT?.trim();
+const expectedRuntime = {
+  runtimeApi: ROVE_PROTOCOL_VERSION,
+  hub: ROVE_HUB_PROTOCOL_VERSION,
+  ...(expectedBuildIdentity === undefined || expectedBuildIdentity === ""
+    ? {}
+    : { buildIdentity: expectedBuildIdentity }),
+  ...(expectedDevelopmentCommit === undefined || expectedDevelopmentCommit === ""
+    ? {}
+    : { developmentGitCommit: expectedDevelopmentCommit }),
+};
+const ownMismatch = componentCompatibilityError(
+  CONTROL_PLANE_PROVENANCE,
+  expectedRuntime,
+);
+if (ownMismatch !== undefined) {
+  throw new Error(
+    `Control Plane build does not satisfy its configured compatibility requirement: ${ownMismatch}.`,
+  );
+}
 
 const server = new RelayServer({
   host: process.env.ROVE_CONTROL_PLANE_HOST ?? "127.0.0.1",
@@ -7,6 +36,7 @@ const server = new RelayServer({
   serviceToken:
     process.env.ROVE_CONTROL_PLANE_SERVICE_TOKEN ??
     "rove-local-service-token-change-me",
+  expectedRuntime,
 });
 
 await server.start();

@@ -1,4 +1,12 @@
-import { hubCommandResultSchema } from "@rove/protocol";
+import {
+  ROVE_HUB_PROTOCOL_VERSION,
+  ROVE_PROTOCOL_VERSION,
+  componentCompatibilityError,
+  componentInstanceIdentitySchema,
+  hubCommandResultSchema,
+  type ComponentCompatibilityRequirement,
+  type ComponentInstanceIdentity,
+} from "@rove/protocol";
 import type {
   ActionResult,
   ControlStatus,
@@ -36,6 +44,7 @@ export interface ControlPlaneRuntimeClientOptions {
   controlPlaneUrl: string;
   deviceId: string;
   serviceToken: string;
+  expectedRuntime?: ComponentCompatibilityRequirement;
 }
 
 export class ControlPlaneRuntimeClient implements RuntimeClient {
@@ -45,8 +54,15 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     this.controlPlaneUrl = new URL(options.controlPlaneUrl);
   }
 
-  healthCheck(timeoutMs = 10_000): Promise<unknown> {
-    return this.call("runtime.health", {}, timeoutMs);
+  async healthCheck(timeoutMs = 10_000): Promise<unknown> {
+    const route = await this.routeStatus(Math.min(timeoutMs, 2_000));
+    const runtime = await this.call("runtime.health", {}, timeoutMs, undefined, true);
+    return {
+      controlPlane: route.controlPlane,
+      selectedRuntime: route.selectedRuntime,
+      companion: route.companion,
+      runtime,
+    };
   }
 
   startSession(input: StartSessionRequest): Promise<SessionSnapshot> {
@@ -158,7 +174,9 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     payload: unknown,
     timeoutMs = 40_000,
     signal?: AbortSignal,
+    skipReadiness = false,
   ): Promise<T> {
+    if (!skipReadiness) await this.routeStatus(Math.min(timeoutMs, 2_000));
     let response: Response;
     try {
       response = await fetch(
@@ -226,5 +244,90 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
       );
     }
     return result.result as T;
+  }
+
+  private async routeStatus(timeoutMs: number): Promise<{
+    controlPlane: ComponentInstanceIdentity;
+    selectedRuntime: ComponentInstanceIdentity;
+    companion: ComponentInstanceIdentity;
+  }> {
+    let response: Response;
+    try {
+      response = await fetch(
+        new URL(
+          `/v1/devices/${encodeURIComponent(this.options.deviceId)}`,
+          this.controlPlaneUrl,
+        ),
+        {
+          headers: {
+            authorization: `Bearer ${this.options.serviceToken}`,
+          },
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+      );
+    } catch {
+      throw new RuntimeClientError(
+        "CONTROL_PLANE_UNAVAILABLE",
+        "Control plane route readiness is unavailable.",
+        true,
+      );
+    }
+    if (!response.ok) {
+      throw new RuntimeClientError(
+        "CONTROL_PLANE_PROTOCOL_ERROR",
+        `Control plane readiness failed with HTTP ${response.status}.`,
+        response.status >= 500,
+      );
+    }
+    const record = (await response.json()) as Record<string, unknown>;
+    if (record.connected !== true || record.selectedRuntime === null) {
+      throw new RuntimeClientError(
+        "RUNTIME_UNAVAILABLE",
+        "No live compatible Runtime authority owns the configured route.",
+        true,
+      );
+    }
+    let controlPlane: ComponentInstanceIdentity;
+    let selectedRuntime: ComponentInstanceIdentity;
+    let companion: ComponentInstanceIdentity;
+    try {
+      controlPlane = componentInstanceIdentitySchema.parse(record.controlPlane);
+      selectedRuntime = componentInstanceIdentitySchema.parse(
+        record.selectedRuntime,
+      );
+      companion = componentInstanceIdentitySchema.parse(record.companion);
+      if (
+        controlPlane.component !== "control_plane" ||
+        selectedRuntime.component !== "runtime" ||
+        companion.component !== "companion"
+      ) {
+        throw new Error("component kind mismatch");
+      }
+    } catch {
+      throw new RuntimeClientError(
+        "RUNTIME_PROVENANCE_MISMATCH",
+        "The selected route did not provide valid component provenance.",
+        false,
+      );
+    }
+    const requirement = this.options.expectedRuntime ?? {
+      runtimeApi: ROVE_PROTOCOL_VERSION,
+      hub: ROVE_HUB_PROTOCOL_VERSION,
+    };
+    const mismatches = [controlPlane, selectedRuntime, companion]
+      .map((identity) => ({
+        component: identity.component,
+        reason: componentCompatibilityError(identity, requirement),
+      }))
+      .filter((item) => item.reason !== undefined);
+    if (mismatches.length > 0) {
+      throw new RuntimeClientError(
+        "RUNTIME_PROVENANCE_MISMATCH",
+        "The selected serving route does not satisfy the configured compatibility requirement.",
+        false,
+        { mismatches },
+      );
+    }
+    return { controlPlane, selectedRuntime, companion };
   }
 }

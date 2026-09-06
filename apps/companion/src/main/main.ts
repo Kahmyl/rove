@@ -42,6 +42,7 @@ import { NativeBrowserFollowForegroundSource } from "./surface/native-browser-fo
 import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
 import { toTrayStatusLabel } from "./surface/tray-state.js";
 import { companionWindowOptions } from "./window-options.js";
+import { COMPANION_PROVENANCE } from "./component-provenance.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 
@@ -636,6 +637,7 @@ async function startDesktop(): Promise<void> {
         },
         runtimeInstanceId: connection.runtime.runtimeInstanceId,
         runtimeStartedAt: connection.runtime.startedAt,
+        companionIdentity: COMPANION_PROVENANCE,
       });
       hubConnector.start();
       console.info("[hub] Outbound control-plane connector started.");

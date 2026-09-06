@@ -151,6 +151,7 @@ export interface PageTargetState {
 }
 
 export interface PageTarget {
+  sessionId?: string;
   ref: string;
   kind: TargetKind;
   role?: string;

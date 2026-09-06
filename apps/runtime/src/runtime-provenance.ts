@@ -3,13 +3,14 @@ import { execFileSync } from "node:child_process";
 import process from "node:process";
 
 import packageJson from "../package.json" with { type: "json" };
+import {
+  ROVE_HUB_PROTOCOL_VERSION,
+  ROVE_PROTOCOL_VERSION,
+  type ComponentInstanceIdentity,
+} from "@rove/protocol";
 
-export interface RuntimeProvenance {
+export interface RuntimeProvenance extends ComponentInstanceIdentity {
   runtimeInstanceId: string;
-  version: string;
-  startedAt: string;
-  processId: number;
-  developmentGitCommit?: string;
 }
 
 function validRuntimeInstanceId(value: string | undefined): string | undefined {
@@ -44,11 +45,14 @@ function developmentGitCommit(): string | undefined {
 }
 
 const gitCommit = developmentGitCommit();
+const runtimeInstanceId =
+  validRuntimeInstanceId(process.env.ROVE_RUNTIME_INSTANCE_ID) ??
+  `runtime_${randomUUID().replaceAll("-", "")}`;
 
 export const RUNTIME_PROVENANCE: RuntimeProvenance = {
-  runtimeInstanceId:
-    validRuntimeInstanceId(process.env.ROVE_RUNTIME_INSTANCE_ID) ??
-    `runtime_${randomUUID().replaceAll("-", "")}`,
+  component: "runtime",
+  instanceId: runtimeInstanceId,
+  runtimeInstanceId,
   version: packageJson.version,
   startedAt:
     process.env.ROVE_RUNTIME_STARTED_AT !== undefined &&
@@ -56,5 +60,11 @@ export const RUNTIME_PROVENANCE: RuntimeProvenance = {
       ? new Date(process.env.ROVE_RUNTIME_STARTED_AT).toISOString()
       : new Date().toISOString(),
   processId: process.pid,
+  buildIdentity:
+    process.env.ROVE_BUILD_ID?.trim() || `rove@${packageJson.version}`,
+  protocols: {
+    runtimeApi: ROVE_PROTOCOL_VERSION,
+    hub: ROVE_HUB_PROTOCOL_VERSION,
+  },
   ...(gitCommit === undefined ? {} : { developmentGitCommit: gitCommit }),
 };

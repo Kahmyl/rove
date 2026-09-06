@@ -923,6 +923,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     const observation: BrowserObservation = {
       ...inspection,
+      sessionId: this.id,
+      ...(inspection.targets === undefined
+        ? {}
+        : {
+            targets: inspection.targets.map((target) => ({
+              ...target,
+              sessionId: this.id,
+            })),
+          }),
 
       capabilities: {
         connection:
@@ -964,10 +973,19 @@ export class PlaywrightBrowserSession implements BrowserSession {
       observation.observationId,
     );
 
-    return groundTarget(
+    const authoritativeObservation =
       canonicalTargets === undefined
         ? observation
-        : { ...observation, targets: canonicalTargets },
+        : {
+            ...observation,
+            targets: canonicalTargets.map((target) => ({
+              ...target,
+              sessionId: this.id,
+            })),
+          };
+
+    return groundTarget(
+      authoritativeObservation,
       request.intent,
     );
   }
@@ -2016,6 +2034,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
   private async resolveActionTarget(
     target: TargetReference,
   ): Promise<ResolvedTarget> {
+    if (target.sessionId !== undefined && target.sessionId !== this.id) {
+      throw new RoveError({
+        code: "TARGET_STALE",
+        message: "Target belongs to a superseded browser session.",
+        retryable: true,
+      });
+    }
     const page = this.pageRegistry.pageFor(target.pageId);
     await installMutationTracker(page);
     let state = this.pageRegistry.stateFor(target.pageId);

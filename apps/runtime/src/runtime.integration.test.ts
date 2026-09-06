@@ -351,6 +351,43 @@ describe("Milestone 4 runtime integration", () => {
     expect(starts).toBe(1);
   });
 
+  it("does not create a duplicate writable host when a session-start response is still uncertain", async () => {
+    let releaseLaunch!: () => void;
+    const launchGate = new Promise<void>((resolve) => {
+      releaseLaunch = resolve;
+    });
+    let launchStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      launchStarted = resolve;
+    });
+    let starts = 0;
+    const engine: BrowserEngine = {
+      start: async () => {
+        starts += 1;
+        launchStarted();
+        await launchGate;
+        return readyBrowserSession(`browser_${starts}`);
+      },
+    };
+    const { runtime } = await harness(engine);
+    const request = {
+      mode: "agent" as const,
+      profile: { mode: "persistent" as const, name: "default" },
+    };
+
+    const firstResponse = runtime.startSession(request);
+    await started;
+    await expect(runtime.startSession(request)).rejects.toMatchObject({
+      code: "PROFILE_LOCKED",
+    });
+    releaseLaunch();
+    const first = await firstResponse;
+    active.push({ runtime, id: first.id });
+
+    expect(starts).toBe(1);
+    await expect(runtime.listActiveSessions()).resolves.toHaveLength(1);
+  });
+
   it("keeps repeated direct inspection observational while returning page policy", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
@@ -490,7 +527,13 @@ describe("Milestone 4 runtime integration", () => {
 
     let records = await runtime.listEvidence(session.id);
     const deadline = Date.now() + 3_000;
-    while (records.length < 4 && Date.now() < deadline) {
+    while (
+      (!records.some((item) => item.metadata?.kind === "navigation") ||
+        !records.some(
+          (item) => item.metadata?.kind === "request_failure",
+        )) &&
+      Date.now() < deadline
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 20));
       records = await runtime.listEvidence(session.id);
     }

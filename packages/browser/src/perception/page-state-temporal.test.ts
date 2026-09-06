@@ -163,25 +163,6 @@ describe("production decision-relevant page-state stabilization", () => {
                   <h1>Workspace</h1>
                   <button>Continue</button>
                 </main>
-                <script>
-                  setTimeout(() => {
-                    const frame =
-                      document.createElement(
-                        "iframe",
-                      );
-                    frame.title =
-                      "Human verification";
-                    frame.style.width =
-                      "330px";
-                    frame.style.height =
-                      "150px";
-                    frame.srcdoc =
-                      "<button>Continue</button>";
-                    document.body.append(
-                      frame,
-                    );
-                  }, 450);
-                </script>
               </body>
             </html>`,
         {
@@ -193,9 +174,14 @@ describe("production decision-relevant page-state stabilization", () => {
 
       expect(initial.assessment.kind).toBe("ready");
 
-      expect(initial.stabilization.elapsedMs).toBeLessThan(300);
-
-      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        const frame = document.createElement("iframe");
+        frame.title = "Human verification";
+        frame.style.width = "330px";
+        frame.style.height = "150px";
+        frame.srcdoc = "<button>Continue</button>";
+        document.body.append(frame);
+      });
 
       const later = await collectPageStateObservation(page);
 

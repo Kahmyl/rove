@@ -664,4 +664,51 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     });
   });
 
+  it("rejects pre-recovery visual and target authority in a fresh browser session", async () => {
+    const server = await startServer();
+    const beforeRecovery = await startSession();
+    const staleVisualObservation = await beforeRecovery.inspect();
+    await expect(
+      beforeRecovery.screenshot({
+        mode: "viewport",
+        observationId: staleVisualObservation.observationId,
+      }),
+    ).resolves.toMatchObject({ mimeType: "image/png" });
+
+    await beforeRecovery.navigate(server.url);
+    const staleObservation = await beforeRecovery.inspect();
+    const staleTarget = staleObservation.targets?.[0];
+    expect(staleTarget).toBeDefined();
+
+    await beforeRecovery.close();
+
+    const afterRecovery = await startSession();
+
+    await expect(
+      afterRecovery.readObservation(staleVisualObservation.observationId),
+    ).rejects.toMatchObject({ code: "OBSERVATION_STALE" });
+    await expect(
+      afterRecovery.screenshot({
+        mode: "viewport",
+        observationId: staleVisualObservation.observationId,
+      }),
+    ).rejects.toMatchObject({ code: "OBSERVATION_STALE" });
+    await expect(
+      afterRecovery.click({
+        sessionId: staleObservation.sessionId,
+        pageId: staleObservation.pageId,
+        revision: staleObservation.revision,
+        ref: staleTarget!.ref,
+      }),
+    ).rejects.toMatchObject({ code: "TARGET_STALE" });
+
+    const freshObservation = await afterRecovery.inspect();
+    await expect(
+      afterRecovery.screenshot({
+        mode: "viewport",
+        observationId: freshObservation.observationId,
+      }),
+    ).resolves.toMatchObject({ mimeType: "image/png" });
+  });
+
 });

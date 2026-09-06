@@ -364,23 +364,102 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
   });
 
   it("increments every page exactly once and synchronizes the active page before return", async () => {
-    const fixture = await startFixtureServer();
-    servers.push(fixture);
-    const { runtime, browser } = await harness();
-    const session = await runtime.startSession({
-      mode: "companion",
-      startUrl: `${fixture.url}/actions`,
+    let activePageId = "page_01";
+    const revisions = new Map([
+      ["page_01", 0],
+      ["page_02", 0],
+    ]);
+    const summary = (pageId: string) => ({
+      id: pageId,
+      url: `https://example.test/${pageId}`,
+      active: pageId === activePageId,
+      revision: revisions.get(pageId)!,
     });
+    const fake: BrowserSession = {
+      id: "browser_multi_page_handoff",
+      capabilities: testCapabilities,
+      onActivity: () => () => undefined,
+      inspect: async () => ({
+        pageId: activePageId,
+        revision: revisions.get(activePageId)!,
+        url: `https://example.test/${activePageId}`,
+        title: activePageId,
+        metadata: {
+          pageState: {
+            kind: "ready",
+            confidence: "high",
+            signals: ["document:stable"],
+            recommendedAction: "continue",
+          },
+          pageStatePropositions: {
+            primaryContentAvailable: true,
+            documentUnstable: false,
+            authenticationRequired: false,
+            humanVerificationPresented: false,
+            accessRestricted: false,
+            errorPresented: false,
+            interstitialPresented: false,
+          },
+          pageStateFingerprint:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        },
+        targets: [
+          {
+            ref: "t1",
+            kind: "button",
+            name: activePageId === "page_01" ? "Change state" : "Update",
+            visible: true,
+            enabled: true,
+          },
+        ],
+      }),
+      pageStateIdentity: async () => ({
+        pageId: activePageId,
+        fingerprint:
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      }),
+      pages: async () => [summary("page_01"), summary("page_02")],
+      switchPage: async (pageId) => {
+        if (!revisions.has(pageId)) throw new Error(`Unknown page: ${pageId}`);
+        activePageId = pageId;
+        return summary(pageId);
+      },
+      click: async (reference) => {
+        const currentRevision = revisions.get(reference.pageId)!;
+        if (reference.revision !== currentRevision) {
+          throw new RoveError({
+            code: "TARGET_STALE",
+            message: "Old target.",
+            retryable: true,
+          });
+        }
+        return {
+          ok: true,
+          action: "click",
+          sessionId: "browser_multi_page_handoff",
+          pageId: reference.pageId,
+          pageChanged: false,
+          previousRevision: currentRevision,
+          currentRevision,
+          url: `https://example.test/${reference.pageId}`,
+        };
+      },
+      invalidateAllTargets: async () => {
+        for (const [pageId, revision] of revisions) {
+          revisions.set(pageId, revision + 1);
+        }
+        return revisions.size;
+      },
+      close: async () => undefined,
+    } as BrowserSession;
+    const { runtime, browser } = await harness({ start: async () => fake });
+    const session = await runtime.startSession({ mode: "companion" });
     active.push({ runtime, id: session.id });
-    let inspection1 = await runtime.inspectBrowser(session.id);
-    await runtime.click(session.id, {
-      target: target(inspection1, "Open popup"),
-    });
-    await browser.get(session.id).navigate(`${fixture.url}/handoff`);
+    await browser.get(session.id).switchPage("page_02");
     const inspection2 = await runtime.inspectBrowser(session.id);
     const ref2 = target(inspection2, "Update");
     await browser.get(session.id).switchPage("page_01");
-    inspection1 = await runtime.inspectBrowser(session.id);
+    const inspection1 = await runtime.inspectBrowser(session.id);
     const ref1 = target(inspection1, "Change state");
     const before = await runtime.pages(session.id);
 
