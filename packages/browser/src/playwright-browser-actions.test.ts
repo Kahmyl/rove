@@ -205,6 +205,19 @@ describe("Milestone 3 browser actions", () => {
     });
   });
 
+  it("preserves target identity when CSS supplies spacing between label fragments", async () => {
+    const { session } = await setup("/styled-label-identity");
+    const inspection = await session.inspect();
+    const repositoryName = target(inspection, "Repository name *");
+
+    await expect(
+      session.type(repositoryName, "rove-live-acceptance"),
+    ).resolves.toMatchObject({ ok: true, action: "type" });
+
+    const verified = await session.inspect();
+    expect(target(verified, "Repository name *")).toBeDefined();
+  });
+
   it("preserves literal Markdown under deterministic replacement", async () => {
     const { session } = await setup("/reactive-editor");
     const requested = "- [ ] one\n- [ ] two\n- [ ] three";

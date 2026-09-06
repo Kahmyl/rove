@@ -78,11 +78,13 @@ export async function readTargetState(locator: Locator): Promise<TargetState> {
       labelable && html.id
         ? Array.from(
             queryRoot.querySelectorAll<HTMLLabelElement>("label"),
-          ).find((label) => label.htmlFor === html.id)?.textContent
+          ).find((label) => label.htmlFor === html.id)?.innerText
         : undefined;
     const labelText =
       explicitLabel ??
-      (labelable ? html.closest("label")?.textContent : undefined);
+      (labelable
+        ? (html.closest("label") as HTMLElement | null)?.innerText
+        : undefined);
     const name = [
       element.getAttribute("aria-label"),
       labelledby,

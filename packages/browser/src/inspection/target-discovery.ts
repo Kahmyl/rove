@@ -167,7 +167,9 @@ export async function discoverTargetCandidates(
         ].includes(element.tagName.toLowerCase());
 
         if (labelText === undefined && labelable) {
-          labelText = normalize(element.closest("label")?.textContent);
+          labelText = normalize(
+            (element.closest("label") as HTMLElement | null)?.innerText,
+          );
         }
 
         const attributes: Record<string, string> = {};

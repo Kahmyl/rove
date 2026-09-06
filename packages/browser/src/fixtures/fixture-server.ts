@@ -271,6 +271,16 @@ const HYDRATION_CHURN_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
+const STYLED_LABEL_IDENTITY_HTML = `<!doctype html>
+<html><head><title>Styled label identity</title></head><body>
+  <form>
+    <label for="repository-name" style="display:flex;gap:4px">
+      <span>Repository name</span><span>*</span>
+    </label>
+    <input id="repository-name" type="text" />
+  </form>
+</body></html>`;
+
 /**
  * Tiny deterministic fixture server for tests and manual demos.
  * Binds to 127.0.0.1 on an ephemeral port and serves the inspection fixture.
@@ -352,6 +362,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/interactive-reconciliation": INTERACTIVE_RECONCILIATION_HTML,
         "/reactive-editor": REACTIVE_EDITOR_HTML,
         "/hydration-churn": HYDRATION_CHURN_HTML,
+        "/styled-label-identity": STYLED_LABEL_IDENTITY_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;
     response.writeHead(typeof fixture === "string" ? 200 : fixture.status, {
