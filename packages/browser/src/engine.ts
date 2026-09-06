@@ -34,7 +34,10 @@ export interface BrowserSession {
   hostIdentity(): BrowserHostIdentity | null;
   browserWindowState(): Promise<BrowserWindowState | null>;
   onActivity(listener: BrowserActivityListener): () => void;
-  inspect(options?: InspectOptions): Promise<BrowserObservation>;
+  inspect(
+    options?: InspectOptions,
+    signal?: AbortSignal,
+  ): Promise<BrowserObservation>;
   resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;
   readObservation(observationId: string): Promise<BrowserObservation>;
   interact(

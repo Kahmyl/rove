@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  Res,
 } from "@nestjs/common";
 import {
   clickRequestSchema,
@@ -55,8 +56,10 @@ export class BrowserController {
   inspectGet(
     @Param("id") id: string,
     @Query() query: Record<string, string | undefined>,
+    @Res({ passthrough: true }) response: InspectResponse,
   ) {
-    return this.runtime.inspectBrowser(
+    return this.inspectWithDisconnectFence(
+      response,
       id,
       inspectOptionsSchema.parse({
         pageId: query.pageId,
@@ -72,8 +75,37 @@ export class BrowserController {
   }
 
   @Post("inspect")
-  inspectPost(@Param("id") id: string, @Body() body: InspectOptions = {}) {
-    return this.runtime.inspectBrowser(id, inspectOptionsSchema.parse(body));
+  inspectPost(
+    @Param("id") id: string,
+    @Body() body: InspectOptions = {},
+    @Res({ passthrough: true }) response: InspectResponse,
+  ) {
+    return this.inspectWithDisconnectFence(
+      response,
+      id,
+      inspectOptionsSchema.parse(body),
+    );
+  }
+
+  private async inspectWithDisconnectFence(
+    response: InspectResponse,
+    sessionId: string,
+    options: InspectOptions,
+  ) {
+    const abort = new AbortController();
+    const onClose = () => {
+      if (!response.writableEnded) abort.abort();
+    };
+    response.once("close", onClose);
+    try {
+      return await this.runtime.inspectBrowser(
+        sessionId,
+        options,
+        abort.signal,
+      );
+    } finally {
+      response.off("close", onClose);
+    }
   }
 
   @Post("resolve-target")
@@ -147,6 +179,12 @@ export class BrowserController {
   closePage(@Param("id") id: string, @Param("pageId") pageId: string) {
     return this.runtime.closePage(id, pageId);
   }
+}
+
+interface InspectResponse {
+  writableEnded: boolean;
+  once(event: "close", listener: () => void): void;
+  off(event: "close", listener: () => void): void;
 }
 
 function parseBoolean(value: string | undefined): boolean | undefined {

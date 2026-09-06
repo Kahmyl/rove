@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import type {
   BrowserObservation,
-  BrowserTargetGeometry,
+  PerceivedControl,
   BrowserViewport,
   InspectOptions,
   PageTarget,
   TargetKind,
 } from "@rove/protocol";
 
-import type { Frame, Locator, Page } from "playwright";
+import type { Frame, Page } from "playwright";
 
 import type { PageState } from "../pages/page-state.js";
 
@@ -33,10 +33,7 @@ import {
   type TargetHandle,
 } from "./target-registration.js";
 
-import {
-  readPerceivedControl,
-  readVerificationState,
-} from "./perceived-control.js";
+import { readTargetSnapshots } from "./perceived-control.js";
 
 import { extractVisibleText } from "./text-extractor.js";
 
@@ -126,12 +123,15 @@ export class PageInspector {
     page: Page,
     pageState: PageState,
     options: InspectOptions = {},
+    assertCurrent: () => void = () => undefined,
   ): Promise<BrowserObservation> {
+    assertCurrent();
     const resolved = resolveInspectOptions(options);
 
     const frames = inspectableFrames(page);
 
     const viewport = await readBrowserViewport(page);
+    assertCurrent();
 
     const result: BrowserObservation = {
       observationId: `bobs_${randomUUID().replaceAll("-", "")}`,
@@ -146,6 +146,7 @@ export class PageInspector {
       url: page.url(),
       title: await page.title(),
     };
+    assertCurrent();
 
     const metadata: Record<string, unknown> = {};
 
@@ -164,6 +165,7 @@ export class PageInspector {
 
     if (resolved.includeText) {
       const extracted = await extractFrameText(frames, resolved.maxTextChars);
+      assertCurrent();
 
       result.text = extracted.text;
       metadata.textTruncated = extracted.truncated;
@@ -174,12 +176,8 @@ export class PageInspector {
         frames,
         resolved.maxStructureChars,
       );
+      assertCurrent();
     }
-
-    const registry = this.registries.beginInspection(
-      pageState.id,
-      pageState.revision,
-    );
 
     if (resolved.includeTargets) {
       const acquired = await Promise.all(
@@ -190,6 +188,7 @@ export class PageInspector {
               return undefined;
             },
           );
+          assertCurrent();
           const acquisitionErrors: string[] = [];
           if (primary === undefined) {
             primary = [];
@@ -206,11 +205,23 @@ export class PageInspector {
             semanticPrimaryMarkers: [],
             failed: true as const,
           }));
+          assertCurrent();
           if ("failed" in recovery) {
             acquisitionErrors.push("accessibility_recovery_failed");
           }
 
-          const candidates = [...primary, ...recovery.recovered];
+          const discoveredCandidates = [...primary, ...recovery.recovered];
+          const targetSnapshots = await readTargetSnapshots(
+            frame.frame,
+            viewport,
+          ).catch(() => undefined);
+          assertCurrent();
+          if (targetSnapshots === undefined) {
+            acquisitionErrors.push("target_state_acquisition_failed");
+          }
+          const candidates = discoveredCandidates.filter((candidate) =>
+            targetSnapshots?.has(candidate.marker),
+          );
           const semanticMarkers = new Set([
             ...recovery.semanticPrimaryMarkers,
             ...recovery.recovered.map((candidate) => candidate.marker),
@@ -243,9 +254,11 @@ export class PageInspector {
             excludedByReason,
             acquisitionErrors,
             semanticMarkers,
+            targetSnapshots: targetSnapshots ?? new Map(),
           };
         }),
       );
+      assertCurrent();
 
       const identified = acquired.flatMap(({ frame, identified }) =>
         identified.map((candidate) => ({
@@ -263,6 +276,12 @@ export class PageInspector {
 
       const targetsTruncated = presentedEligible.length > resolved.targetLimit;
 
+      assertCurrent();
+      const registry = this.registries.beginInspection(
+        pageState.id,
+        pageState.revision,
+      );
+
       const registered = registerIdentifiedTargets(
         registry,
         identified.map(({ frame, candidate }) => ({
@@ -274,56 +293,56 @@ export class PageInspector {
         })),
       );
 
-      const canonicalTargets = await Promise.all(
-        registered.map(
-          async ({ registered: target }, index): Promise<PageTarget> => {
-            const item = identified[index]!;
+      const canonicalTargets = registered.map(
+        ({ registered: target }, index): PageTarget => {
+          const item = identified[index]!;
+          const frameResult = acquired.find(
+            (candidate) => candidate.frame.index === item.frame.index,
+          )!;
+          const snapshot = frameResult.targetSnapshots.get(
+            item.candidate.marker,
+          )!;
+          const perceived = enrichPerceivedControl(
+            snapshot.perceived,
+            item.candidate.semanticRole,
+          );
+          const state = item.candidate.sensitive
+            ? { ...snapshot.state, selectedValues: undefined }
+            : snapshot.state;
 
-            const locator = item.frame.frame.locator(
-              `[data-rove-target="${target.handle.marker}"]`,
-            );
-
-            const [geometry, rawPerceived, state] = await Promise.all([
-              readGeometry(locator, viewport),
-              readPerceivedControl(locator),
-              readVerificationState(locator, item.candidate.sensitive),
-            ]);
-            const perceived = enrichPerceivedControl(
-              rawPerceived,
-              item.candidate.semanticRole,
-            );
-
-            return {
-              ref: target.reference.ref,
-              kind: item.candidate.kind,
-              ...(item.candidate.role === undefined &&
-              item.candidate.semanticRole === undefined
+          return {
+            ref: target.reference.ref,
+            kind: item.candidate.kind,
+            ...(item.candidate.role === undefined &&
+            item.candidate.semanticRole === undefined
+              ? {}
+              : {
+                  role: item.candidate.role ?? item.candidate.semanticRole,
+                }),
+            ...(item.candidate.name === undefined
+              ? {}
+              : { name: item.candidate.name }),
+            visible: true,
+            enabled: item.candidate.enabled,
+            ...(item.candidate.sensitive ? { sensitive: true } : {}),
+            frame: {
+              index: item.frame.index,
+              url: item.frame.url,
+              ...(item.frame.name.length === 0
                 ? {}
-                : {
-                    role: item.candidate.role ?? item.candidate.semanticRole,
-                  }),
-              ...(item.candidate.name === undefined
-                ? {}
-                : { name: item.candidate.name }),
-              visible: true,
-              enabled: item.candidate.enabled,
-              ...(item.candidate.sensitive ? { sensitive: true } : {}),
-              frame: {
-                index: item.frame.index,
-                url: item.frame.url,
-                ...(item.frame.name.length === 0
-                  ? {}
-                  : { name: item.frame.name }),
-                main: item.frame.main,
-              },
-              shadowRootDepth: item.candidate.shadowRootDepth ?? 0,
-              geometry,
-              perceived,
-              ...(Object.keys(state).length === 0 ? {} : { state }),
-            };
-          },
-        ),
+                : { name: item.frame.name }),
+              main: item.frame.main,
+            },
+            shadowRootDepth: item.candidate.shadowRootDepth ?? 0,
+            geometry: snapshot.geometry,
+            perceived,
+            ...(Object.values(state).every((value) => value === undefined)
+              ? {}
+              : { state }),
+          };
+        },
       );
+      assertCurrent();
 
       this.canonicalTargets.set(result.observationId, {
         pageId: result.pageId,
@@ -455,12 +474,17 @@ export class PageInspector {
         },
       };
     } else {
+      assertCurrent();
+      this.registries.beginInspection(pageState.id, pageState.revision);
       await clearTargetMarkers(page);
+      assertCurrent();
     }
 
     if (Object.keys(metadata).length > 0) {
       result.metadata = metadata;
     }
+
+    assertCurrent();
 
     return result;
   }
@@ -518,75 +542,6 @@ function inspectableFrames(page: Page): InspectableFrame[] {
   }));
 }
 
-async function readGeometry(
-  locator: Locator,
-  viewport: BrowserViewport,
-): Promise<BrowserTargetGeometry> {
-  const raw = await locator.boundingBox().catch(() => null);
-
-  if (raw === null) {
-    return {
-      bounds: null,
-      inViewport: false,
-      clipped: true,
-      occluded: false,
-    };
-  }
-
-  const bounds = {
-    x: round(raw.x),
-    y: round(raw.y),
-    width: round(raw.width),
-    height: round(raw.height),
-  };
-
-  const right = bounds.x + bounds.width;
-
-  const bottom = bounds.y + bounds.height;
-
-  const inViewport =
-    right > 0 &&
-    bottom > 0 &&
-    bounds.x < viewport.width &&
-    bounds.y < viewport.height;
-
-  const clipped =
-    bounds.x < 0 ||
-    bounds.y < 0 ||
-    right > viewport.width ||
-    bottom > viewport.height;
-
-  const occluded = await locator
-    .evaluate((element) => {
-      const rect = (element as HTMLElement).getBoundingClientRect();
-
-      const x = rect.left + rect.width / 2;
-
-      const y = rect.top + rect.height / 2;
-
-      const root = element.getRootNode();
-
-      const hit =
-        root instanceof ShadowRoot
-          ? root.elementFromPoint(x, y)
-          : document.elementFromPoint(x, y);
-
-      if (!(hit instanceof Element)) {
-        return false;
-      }
-
-      return hit !== element && !element.contains(hit);
-    })
-    .catch(() => false);
-
-  return {
-    bounds,
-    inViewport,
-    clipped,
-    occluded,
-  };
-}
-
 async function extractFrameText(
   frames: InspectableFrame[],
   maxTextChars: number,
@@ -638,14 +593,10 @@ async function extractFrameText(
   };
 }
 
-function round(value: number): number {
-  return Number(value.toFixed(3));
-}
-
 function enrichPerceivedControl(
-  perceived: Awaited<ReturnType<typeof readPerceivedControl>>,
+  perceived: PerceivedControl,
   semanticRole: string | undefined,
-): Awaited<ReturnType<typeof readPerceivedControl>> {
+): PerceivedControl {
   if (semanticRole === undefined) return perceived;
   const capabilities = [...perceived.capabilities];
   const add = (capability: (typeof capabilities)[number]) => {

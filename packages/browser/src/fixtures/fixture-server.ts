@@ -252,6 +252,25 @@ const REACTIVE_EDITOR_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
+const HYDRATION_CHURN_HTML = `<!doctype html>
+<html><head><title>Hydration churn</title></head><body>
+  <main id="root"></main>
+  <script>
+    const markup = Array.from(
+      { length: 300 },
+      (_, index) => '<button>Action ' + index + '</button>',
+    ).join('');
+    document.querySelector('#root').innerHTML = markup;
+    const timer = setInterval(() => {
+      const next = document.createElement('main');
+      next.id = 'root';
+      next.innerHTML = markup;
+      document.querySelector('#root').replaceWith(next);
+    }, 5);
+    setTimeout(() => clearInterval(timer), 1500);
+  </script>
+</body></html>`;
+
 /**
  * Tiny deterministic fixture server for tests and manual demos.
  * Binds to 127.0.0.1 on an ephemeral port and serves the inspection fixture.
@@ -332,6 +351,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/dynamic-target": DYNAMIC_TARGET_HTML,
         "/interactive-reconciliation": INTERACTIVE_RECONCILIATION_HTML,
         "/reactive-editor": REACTIVE_EDITOR_HTML,
+        "/hydration-churn": HYDRATION_CHURN_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;
     response.writeHead(typeof fixture === "string" ? 200 : fixture.status, {

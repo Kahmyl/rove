@@ -293,213 +293,206 @@ export async function recoverAccessibilityCandidates(
   const roleResults = await Promise.all(
     ACCESSIBILITY_INTERACTIVE_ROLES.map(async (semanticRole, roleIndex) => {
       const byRole = frame.getByRole(semanticRole);
-      const count = await byRole.count();
-      const results = await Promise.all(
-        Array.from({ length: count }, async (_, index) => {
-          const locator = byRole.nth(index);
-          return locator
-            .evaluate(
-              (element, input) => {
-                const existingMarker = element.getAttribute(
-                  input.markerAttribute,
-                );
-                if (existingMarker !== null) {
-                  return {
-                    status: "existing" as const,
-                    marker: existingMarker,
-                  };
-                }
-
-                const normalize = (value: string | null | undefined) => {
-                  const normalized = value?.replace(/\s+/g, " ").trim();
-                  return normalized || undefined;
-                };
-                const html =
-                  element instanceof HTMLElement ? element : undefined;
-                const field =
-                  element instanceof HTMLInputElement ? element : undefined;
-                const visibilityElement =
-                  element instanceof HTMLOptionElement
-                    ? (element.closest("select") ?? element)
-                    : element;
-                const style = window.getComputedStyle(visibilityElement);
-                const rect = visibilityElement.getBoundingClientRect();
-                const visible =
-                  element.isConnected &&
-                  visibilityElement.isConnected &&
-                  style.display !== "none" &&
-                  style.visibility !== "hidden" &&
-                  style.visibility !== "collapse" &&
-                  Number.parseFloat(style.opacity || "1") !== 0 &&
-                  rect.width > 0 &&
-                  rect.height > 0;
-
-                const semanticRoot = element.getRootNode();
-                const queryRoot =
-                  semanticRoot instanceof Document ||
-                  semanticRoot instanceof ShadowRoot
-                    ? semanticRoot
-                    : document;
-                const labelledbyIds = element
-                  .getAttribute("aria-labelledby")
-                  ?.split(/\s+/)
-                  .filter(Boolean);
-                const ariaLabelledbyText = labelledbyIds?.length
-                  ? normalize(
-                      labelledbyIds
-                        .map(
-                          (id) =>
-                            queryRoot.getElementById(id)?.textContent ?? "",
-                        )
-                        .join(" "),
-                    )
-                  : undefined;
-                let labelText: string | undefined;
-                if (html?.id) {
-                  labelText = normalize(
-                    Array.from(
-                      queryRoot.querySelectorAll<HTMLLabelElement>("label"),
-                    ).find((label) => label.htmlFor === html.id)?.textContent,
-                  );
-                }
-                const labelable = [
-                  "button",
-                  "input",
-                  "meter",
-                  "output",
-                  "progress",
-                  "select",
-                  "textarea",
-                ].includes(element.tagName.toLowerCase());
-                if (labelable) {
-                  labelText ??= normalize(
-                    element.closest("label")?.textContent,
-                  );
-                }
-
-                const attributes: Record<string, string> = {};
-                for (const name of input.identityAttributes) {
-                  const value = normalize(element.getAttribute(name));
-                  if (value !== undefined) attributes[name] = value;
-                }
-
-                const pathSegments: string[] = [];
-                let current: Element | null = element;
-                while (current !== null) {
-                  let segment = current.tagName.toLowerCase();
-                  const parent: Element | null = current.parentElement;
-                  if (parent !== null) {
-                    const siblings: Element[] = Array.from(
-                      parent.children,
-                    ).filter((sibling) => sibling.tagName === current!.tagName);
-                    if (siblings.length > 1) {
-                      segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
-                    }
-                  }
-                  pathSegments.unshift(segment);
-                  current = parent;
-                }
-
-                element.setAttribute(input.markerAttribute, input.marker);
-                const nativeDisabled =
-                  (element instanceof HTMLButtonElement ||
-                    element instanceof HTMLInputElement ||
-                    element instanceof HTMLTextAreaElement ||
-                    element instanceof HTMLSelectElement) &&
-                  element.disabled;
-                const buttonLike =
-                  field !== undefined &&
-                  ["button", "submit", "reset", "image"].includes(field.type);
-
+      const results = await byRole
+        .evaluateAll(
+          (elements, input) =>
+            elements.map((element, index) => {
+              const marker = `${input.markerPrefix}${index + 1}`;
+              const existingMarker = element.getAttribute(
+                input.markerAttribute,
+              );
+              if (existingMarker !== null) {
                 return {
-                  status: "recovered" as const,
-                  candidate: {
-                    marker: input.marker,
-                    tag: element.tagName.toLowerCase(),
-                    ...(field === undefined
-                      ? {}
-                      : { type: field.type.toLowerCase() }),
-                    semanticRole: input.semanticRole,
-                    text: (html?.innerText ?? element.textContent ?? "")
-                      .replace(/\s+/g, " ")
-                      .trim(),
-                    visible,
-                    disabled:
-                      nativeDisabled ||
-                      element
-                        .getAttribute("aria-disabled")
-                        ?.trim()
-                        .toLowerCase() === "true",
-                    contentEditable: html?.isContentEditable === true,
-                    tabIndex: html?.tabIndex ?? -1,
-                    shadowRootDepth: (() => {
-                      let depth = 0;
-                      let root: Node = element;
-                      while (root.getRootNode() instanceof ShadowRoot) {
-                        depth += 1;
-                        root = (root.getRootNode() as ShadowRoot).host;
-                      }
-                      return depth;
-                    })(),
-                    ...(normalize(element.getAttribute("aria-label")) ===
-                    undefined
-                      ? {}
-                      : {
-                          ariaLabel: normalize(
-                            element.getAttribute("aria-label"),
-                          ),
-                        }),
-                    ...(ariaLabelledbyText === undefined
-                      ? {}
-                      : { ariaLabelledbyText }),
-                    ...(labelText === undefined ? {} : { labelText }),
-                    ...(normalize(element.getAttribute("alt")) === undefined
-                      ? {}
-                      : { alt: normalize(element.getAttribute("alt")) }),
-                    ...(normalize(element.getAttribute("title")) === undefined
-                      ? {}
-                      : { title: normalize(element.getAttribute("title")) }),
-                    ...(normalize(element.getAttribute("placeholder")) ===
-                    undefined
-                      ? {}
-                      : {
-                          placeholder: normalize(
-                            element.getAttribute("placeholder"),
-                          ),
-                        }),
-                    ...(buttonLike && normalize(field.value) !== undefined
-                      ? { buttonValue: normalize(field.value) }
-                      : {}),
-                    ...(normalize(html?.id) === undefined
-                      ? {}
-                      : { id: normalize(html?.id) }),
-                    ...(normalize(element.getAttribute("data-testid")) ===
-                    undefined
-                      ? {}
-                      : {
-                          testId: normalize(
-                            element.getAttribute("data-testid"),
-                          ),
-                        }),
-                    ...(Object.keys(attributes).length === 0
-                      ? {}
-                      : { attributes }),
-                    domPathHint: pathSegments.join(">"),
-                    provenance: "accessibility_recovery" as const,
-                  },
+                  status: "existing" as const,
+                  marker: existingMarker,
                 };
-              },
-              {
-                markerAttribute: TARGET_MARKER_ATTRIBUTE,
-                marker: `a${markerStart}_${roleIndex}_${index + 1}`,
-                semanticRole,
-                identityAttributes: [...IDENTITY_ATTRIBUTES],
-              },
-            )
-            .catch(() => ({ status: "ambiguous" as const }));
-        }),
-      );
-      return { count, results };
+              }
+
+              const normalize = (value: string | null | undefined) => {
+                const normalized = value?.replace(/\s+/g, " ").trim();
+                return normalized || undefined;
+              };
+              const html = element instanceof HTMLElement ? element : undefined;
+              const field =
+                element instanceof HTMLInputElement ? element : undefined;
+              const visibilityElement =
+                element instanceof HTMLOptionElement
+                  ? (element.closest("select") ?? element)
+                  : element;
+              const style = window.getComputedStyle(visibilityElement);
+              const rect = visibilityElement.getBoundingClientRect();
+              const visible =
+                element.isConnected &&
+                visibilityElement.isConnected &&
+                style.display !== "none" &&
+                style.visibility !== "hidden" &&
+                style.visibility !== "collapse" &&
+                Number.parseFloat(style.opacity || "1") !== 0 &&
+                rect.width > 0 &&
+                rect.height > 0;
+
+              const semanticRoot = element.getRootNode();
+              const queryRoot =
+                semanticRoot instanceof Document ||
+                semanticRoot instanceof ShadowRoot
+                  ? semanticRoot
+                  : document;
+              const labelledbyIds = element
+                .getAttribute("aria-labelledby")
+                ?.split(/\s+/)
+                .filter(Boolean);
+              const ariaLabelledbyText = labelledbyIds?.length
+                ? normalize(
+                    labelledbyIds
+                      .map(
+                        (id) => queryRoot.getElementById(id)?.textContent ?? "",
+                      )
+                      .join(" "),
+                  )
+                : undefined;
+              let labelText: string | undefined;
+              if (html?.id) {
+                labelText = normalize(
+                  Array.from(
+                    queryRoot.querySelectorAll<HTMLLabelElement>("label"),
+                  ).find((label) => label.htmlFor === html.id)?.textContent,
+                );
+              }
+              const labelable = [
+                "button",
+                "input",
+                "meter",
+                "output",
+                "progress",
+                "select",
+                "textarea",
+              ].includes(element.tagName.toLowerCase());
+              if (labelable) {
+                labelText ??= normalize(element.closest("label")?.textContent);
+              }
+
+              const attributes: Record<string, string> = {};
+              for (const name of input.identityAttributes) {
+                const value = normalize(element.getAttribute(name));
+                if (value !== undefined) attributes[name] = value;
+              }
+
+              const pathSegments: string[] = [];
+              let current: Element | null = element;
+              while (current !== null) {
+                let segment = current.tagName.toLowerCase();
+                const parent: Element | null = current.parentElement;
+                if (parent !== null) {
+                  const siblings: Element[] = Array.from(
+                    parent.children,
+                  ).filter((sibling) => sibling.tagName === current!.tagName);
+                  if (siblings.length > 1) {
+                    segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+                  }
+                }
+                pathSegments.unshift(segment);
+                current = parent;
+              }
+
+              element.setAttribute(input.markerAttribute, marker);
+              const nativeDisabled =
+                (element instanceof HTMLButtonElement ||
+                  element instanceof HTMLInputElement ||
+                  element instanceof HTMLTextAreaElement ||
+                  element instanceof HTMLSelectElement) &&
+                element.disabled;
+              const buttonLike =
+                field !== undefined &&
+                ["button", "submit", "reset", "image"].includes(field.type);
+
+              return {
+                status: "recovered" as const,
+                candidate: {
+                  marker,
+                  tag: element.tagName.toLowerCase(),
+                  ...(field === undefined
+                    ? {}
+                    : { type: field.type.toLowerCase() }),
+                  semanticRole: input.semanticRole,
+                  text: (html?.innerText ?? element.textContent ?? "")
+                    .replace(/\s+/g, " ")
+                    .trim(),
+                  visible,
+                  disabled:
+                    nativeDisabled ||
+                    element
+                      .getAttribute("aria-disabled")
+                      ?.trim()
+                      .toLowerCase() === "true",
+                  contentEditable: html?.isContentEditable === true,
+                  tabIndex: html?.tabIndex ?? -1,
+                  shadowRootDepth: (() => {
+                    let depth = 0;
+                    let root: Node = element;
+                    while (root.getRootNode() instanceof ShadowRoot) {
+                      depth += 1;
+                      root = (root.getRootNode() as ShadowRoot).host;
+                    }
+                    return depth;
+                  })(),
+                  ...(normalize(element.getAttribute("aria-label")) ===
+                  undefined
+                    ? {}
+                    : {
+                        ariaLabel: normalize(
+                          element.getAttribute("aria-label"),
+                        ),
+                      }),
+                  ...(ariaLabelledbyText === undefined
+                    ? {}
+                    : { ariaLabelledbyText }),
+                  ...(labelText === undefined ? {} : { labelText }),
+                  ...(normalize(element.getAttribute("alt")) === undefined
+                    ? {}
+                    : { alt: normalize(element.getAttribute("alt")) }),
+                  ...(normalize(element.getAttribute("title")) === undefined
+                    ? {}
+                    : { title: normalize(element.getAttribute("title")) }),
+                  ...(normalize(element.getAttribute("placeholder")) ===
+                  undefined
+                    ? {}
+                    : {
+                        placeholder: normalize(
+                          element.getAttribute("placeholder"),
+                        ),
+                      }),
+                  ...(buttonLike && normalize(field.value) !== undefined
+                    ? { buttonValue: normalize(field.value) }
+                    : {}),
+                  ...(normalize(html?.id) === undefined
+                    ? {}
+                    : { id: normalize(html?.id) }),
+                  ...(normalize(element.getAttribute("data-testid")) ===
+                  undefined
+                    ? {}
+                    : {
+                        testId: normalize(element.getAttribute("data-testid")),
+                      }),
+                  ...(Object.keys(attributes).length === 0
+                    ? {}
+                    : { attributes }),
+                  domPathHint: pathSegments.join(">"),
+                  provenance: "accessibility_recovery" as const,
+                },
+              };
+            }),
+          {
+            markerAttribute: TARGET_MARKER_ATTRIBUTE,
+            markerPrefix: `a${markerStart}_${roleIndex}_`,
+            semanticRole,
+            identityAttributes: [...IDENTITY_ATTRIBUTES],
+          },
+        )
+        .catch(() => [{ status: "ambiguous" as const }]);
+      return {
+        count: results.filter((result) => result.status !== "ambiguous").length,
+        results,
+      };
     }),
   );
 

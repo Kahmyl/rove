@@ -198,6 +198,65 @@ describe("PlaywrightBrowserSession inspection", () => {
     expect(second.targets?.[0]?.ref).toBe("t1");
   });
 
+  it("bounds inspection while a high-cardinality interactive tree is hydrating", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(`${server.url}/hydration-churn`);
+
+    const startedAt = performance.now();
+    await expect(session.inspect()).rejects.toMatchObject({
+      code: "PAGE_CHANGED",
+      retryable: true,
+    });
+    expect(performance.now() - startedAt).toBeLessThan(3_000);
+
+    await new Promise((resolve) => setTimeout(resolve, 1_600));
+    const stable = await session.inspect();
+    expect(stable.targets).toHaveLength(200);
+    expect(stable.metadata).toMatchObject({
+      targetsTruncated: true,
+      targetCoverage: {
+        semanticInteractiveCount: 300,
+        registeredTargetCount: 300,
+        exposedTargetCount: 200,
+      },
+    });
+  });
+
+  it("fences an aborted inspection before it can publish late target authority", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(`${server.url}/hydration-churn`);
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 25);
+    try {
+      await expect(session.inspect({}, abort.signal)).rejects.toMatchObject({
+        name: "AbortError",
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1_600));
+    const current = await session.inspect();
+    const target = current.targets?.[0];
+    expect(target).toBeDefined();
+    await expect(
+      session.readObservation(current.observationId),
+    ).resolves.toMatchObject({
+      observationId: current.observationId,
+    });
+    await expect(
+      session.click({
+        pageId: current.pageId,
+        revision: current.revision,
+        ref: target!.ref,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("allows inspected targets to drive Milestone 3 actions", async () => {
     const server = await startServer();
     const session = await startSession();
@@ -585,80 +644,50 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     ).toMatch(/^[a-f0-9]{64}$/);
   });
   it("returns redacted hierarchy, geometry, frames, and open-shadow controls", async () => {
-    const server =
-      await startServer();
+    const server = await startServer();
 
-    const session =
-      await startSession();
+    const session = await startSession();
 
-    await session.navigate(
-      server.url,
-    );
+    await session.navigate(server.url);
 
-    const inspection =
-      await session.inspect();
+    const inspection = await session.inspect();
 
-    expect(
-      inspection.observationId,
-    ).toMatch(
-      /^bobs_[a-f0-9]+$/,
-    );
+    expect(inspection.observationId).toMatch(/^bobs_[a-f0-9]+$/);
 
-    expect(
-      inspection.document,
-    ).toEqual({
-      url:
-        inspection.url,
-      revision:
-        inspection.revision,
+    expect(inspection.document).toEqual({
+      url: inspection.url,
+      revision: inspection.revision,
     });
 
-    const structure =
-      JSON.stringify(
-        inspection.structure,
-      );
+    const structure = JSON.stringify(inspection.structure);
 
-    expect(structure).toContain(
-      "Alpha",
+    expect(structure).toContain("Alpha");
+
+    expect(structure).toContain("Beta");
+
+    expect(structure).toContain("Shadow action");
+
+    expect(structure).not.toContain("private-query-value");
+
+    const shadow = inspection.targets?.find(
+      (item) => item.name === "Shadow action",
     );
-
-    expect(structure).toContain(
-      "Beta",
-    );
-
-    expect(structure).toContain(
-      "Shadow action",
-    );
-
-    expect(structure).not.toContain(
-      "private-query-value",
-    );
-
-    const shadow =
-      inspection.targets?.find(
-        (item) =>
-          item.name === "Shadow action",
-      );
 
     expect(shadow).toMatchObject({
       shadowRootDepth: 1,
       geometry: {
-        bounds:
-          expect.any(Object),
+        bounds: expect.any(Object),
         occluded: false,
       },
     });
 
-    const covered =
-      inspection.targets?.find(
-        (item) =>
-          item.name === "Covered action",
-      );
+    const covered = inspection.targets?.find(
+      (item) => item.name === "Covered action",
+    );
 
     expect(covered).toMatchObject({
       geometry: {
-        bounds:
-          expect.any(Object),
+        bounds: expect.any(Object),
         occluded: true,
       },
     });
@@ -710,5 +739,4 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       }),
     ).resolves.toMatchObject({ mimeType: "image/png" });
   });
-
 });

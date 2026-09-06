@@ -119,6 +119,7 @@ function browserClosedError(): RoveError {
 
 export class PlaywrightBrowserSession implements BrowserSession {
   private closed = false;
+  private inspectionGeneration = 0;
   private readonly pageRegistry = new PlaywrightPageRegistry();
   private readonly inspector = new PageInspector();
   private readonly observationSnapshots = new Map<string, BrowserObservation>();
@@ -845,8 +846,24 @@ export class PlaywrightBrowserSession implements BrowserSession {
     await this.recoverActivePage();
   }
 
-  async inspect(options: InspectOptions = {}): Promise<BrowserObservation> {
+  async inspect(
+    options: InspectOptions = {},
+    signal?: AbortSignal,
+  ): Promise<BrowserObservation> {
     this.ensureOpen();
+
+    const inspectionGeneration = ++this.inspectionGeneration;
+    const assertCurrent = () => {
+      signal?.throwIfAborted();
+      if (inspectionGeneration !== this.inspectionGeneration) {
+        throw new RoveError({
+          code: "PAGE_CHANGED",
+          message: "A newer browser inspection superseded this request.",
+          retryable: true,
+        });
+      }
+    };
+    assertCurrent();
 
     const pageId = options.pageId ?? this.requireActivePageId();
 
@@ -863,12 +880,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
       throw error;
     }
+    assertCurrent();
 
     await installMutationTracker(page);
+    assertCurrent();
 
     state = this.pageRegistry.update(pageId, {
       mutationVersion: await readMaterialMutationVersion(page),
     });
+    assertCurrent();
 
     const browserEvidence = this.evidenceRecorder.snapshot(pageId);
 
@@ -876,22 +896,32 @@ export class PlaywrightBrowserSession implements BrowserSession {
       page,
       browserEvidence.latestMainDocumentStatus,
     );
+    assertCurrent();
 
     state = this.pageRegistry.update(pageId, {
       mutationVersion: await readMaterialMutationVersion(page),
     });
+    assertCurrent();
 
-    const inspection = await this.inspector.inspect(page, state, options);
+    const inspection = await this.inspector.inspect(
+      page,
+      state,
+      options,
+      assertCurrent,
+    );
+    assertCurrent();
 
     const finalState = this.pageRegistry.stateFor(pageId);
 
     const finalMutationVersion = await readMaterialMutationVersion(page);
+    assertCurrent();
 
     if (
       finalState.revision !== state.revision ||
       finalMutationVersion !== state.mutationVersion ||
       page.url() !== inspection.url
     ) {
+      this.inspector.forgetObservation(inspection.observationId);
       await this.inspector
         .invalidatePage(page, pageId, finalState.revision)
         .catch(() => undefined);
@@ -958,8 +988,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
         ...(accessRestriction === undefined ? {} : { accessRestriction }),
       },
     };
+    assertCurrent();
 
     await this.rememberObservation(page, observation);
+    assertCurrent();
 
     return observation;
   }
@@ -984,10 +1016,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
             })),
           };
 
-    return groundTarget(
-      authoritativeObservation,
-      request.intent,
-    );
+    return groundTarget(authoritativeObservation, request.intent);
   }
 
   async readObservation(observationId: string): Promise<BrowserObservation> {

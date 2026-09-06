@@ -274,13 +274,16 @@ export class RuntimeService implements RoveRuntime {
   async inspectBrowser(
     sessionId: string,
     options?: InspectOptions,
+    signal?: AbortSignal,
   ): Promise<PageInspection> {
     await this.requireActive(sessionId);
 
     return this.ownershipFence.runAgentBrowserOperation(
       sessionId,
       async (lease) => {
-        const inspection = await this.browser.get(sessionId).inspect(options);
+        const inspection = await this.browser
+          .get(sessionId)
+          .inspect(options, signal);
 
         // A stale inspection must never enter InteractionPolicy.
         lease.assertCurrent();
@@ -371,9 +374,7 @@ export class RuntimeService implements RoveRuntime {
         let dispatched = false;
 
         let dispatchFailure: unknown;
-        let dispatchFailureStage:
-          | InteractionDispatchError["stage"]
-          | undefined;
+        let dispatchFailureStage: InteractionDispatchError["stage"] | undefined;
         const degradations: NonNullable<ActionReceipt["degradations"]> = [];
 
         try {
@@ -548,53 +549,55 @@ export class RuntimeService implements RoveRuntime {
 
         lease.assertCurrent();
 
-        await this.observations.append(sessionId, {
-          actor: "agent",
-          type: "agent_interaction_receipt",
-          data: {
-            receiptId: receipt.receiptId,
-            action: receipt.action,
-            dispatched: receipt.dispatched,
-            outcome: receipt.outcome,
-            consequential: receipt.consequential,
-            ...(target === undefined
-              ? {}
+        await this.observations
+          .append(sessionId, {
+            actor: "agent",
+            type: "agent_interaction_receipt",
+            data: {
+              receiptId: receipt.receiptId,
+              action: receipt.action,
+              dispatched: receipt.dispatched,
+              outcome: receipt.outcome,
+              consequential: receipt.consequential,
+              ...(target === undefined
+                ? {}
+                : {
+                    targetRef: target.ref,
+                  }),
+              ...(successor === undefined
+                ? {}
+                : {
+                    successorObservationId: successor.observationId,
+                  }),
+              effects: effects.map((effect) => ({
+                kind: effect.effect.kind,
+                state: effect.state,
+              })),
+            },
+            ...(result?.pageId === undefined
+              ? target === undefined
+                ? {}
+                : {
+                    pageId: target.pageId,
+                  }
               : {
-                  targetRef: target.ref,
+                  pageId: result.pageId,
                 }),
-            ...(successor === undefined
+            ...(result?.currentRevision === undefined
               ? {}
               : {
-                  successorObservationId: successor.observationId,
+                  pageRevision: result.currentRevision,
                 }),
-            effects: effects.map((effect) => ({
-              kind: effect.effect.kind,
-              state: effect.state,
-            })),
-          },
-          ...(result?.pageId === undefined
-            ? target === undefined
-              ? {}
-              : {
-                  pageId: target.pageId,
-                }
-            : {
-                pageId: result.pageId,
-              }),
-          ...(result?.currentRevision === undefined
-            ? {}
-            : {
-                pageRevision: result.currentRevision,
-              }),
-        }).catch((error: unknown) => {
-          degradations.push({
-            stage: "receipt_persistence",
-            code:
-              error instanceof RoveError
-                ? error.code
-                : "EVIDENCE_WRITE_FAILED",
+          })
+          .catch((error: unknown) => {
+            degradations.push({
+              stage: "receipt_persistence",
+              code:
+                error instanceof RoveError
+                  ? error.code
+                  : "EVIDENCE_WRITE_FAILED",
+            });
           });
-        });
 
         lease.assertCurrent();
 
@@ -629,20 +632,22 @@ export class RuntimeService implements RoveRuntime {
           return;
         }
 
-        await this.pagePolicyOrchestrator.orchestrate(
-          sessionId,
-          assessment.policyDecision,
-          assessment.pageState,
-          "post_action",
-        ).catch((error: unknown) => {
-          receipt.degradations?.push({
-            stage: "page_policy",
-            code:
-              error instanceof RoveError
-                ? error.code
-                : "RUNTIME_PROTOCOL_ERROR",
+        await this.pagePolicyOrchestrator
+          .orchestrate(
+            sessionId,
+            assessment.policyDecision,
+            assessment.pageState,
+            "post_action",
+          )
+          .catch((error: unknown) => {
+            receipt.degradations?.push({
+              stage: "page_policy",
+              code:
+                error instanceof RoveError
+                  ? error.code
+                  : "RUNTIME_PROTOCOL_ERROR",
+            });
           });
-        });
       },
     );
 
