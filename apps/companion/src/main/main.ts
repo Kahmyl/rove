@@ -38,6 +38,7 @@ import {
 import { CompactFollowerSurface } from "./surface/compact-follower-surface.js";
 import { CompanionSurface } from "./surface/companion-surface.js";
 import { createElectronBrowserFollowDisplaySource } from "./surface/electron-browser-follow-display-source.js";
+import { NativeBrowserFollowForegroundSource } from "./surface/native-browser-follow-foreground-source.js";
 import { toCompanionSurfaceSignal } from "./surface/session-surface-signal.js";
 import { toTrayStatusLabel } from "./surface/tray-state.js";
 import { companionWindowOptions } from "./window-options.js";
@@ -77,9 +78,56 @@ let sessionSurfaceMonitor: NodeJS.Timeout | undefined;
 
 let sessionSurfaceMonitorBusy = false;
 
+let followerDragTracker: NodeJS.Timeout | undefined;
+
 let allowQuit = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+function stopFollowerDragTracking(): void {
+  if (followerDragTracker !== undefined) {
+    clearInterval(followerDragTracker);
+    followerDragTracker = undefined;
+  }
+
+  compactFollowerSurface?.endDrag();
+}
+
+function startFollowerDragTracking(initial: { x: number; y: number }): void {
+  if (followerDragTracker !== undefined) {
+    clearInterval(followerDragTracker);
+    followerDragTracker = undefined;
+  }
+
+  let lastCursor = initial;
+  let lastMovementAt = Date.now();
+  let moved = false;
+  const startedAt = lastMovementAt;
+
+  followerDragTracker = setInterval(() => {
+    const follower = compactFollowerSurface;
+    if (follower === undefined || !follower.isVisible()) {
+      stopFollowerDragTracking();
+      return;
+    }
+
+    const cursor = screen.getCursorScreenPoint();
+    if (cursor.x !== lastCursor.x || cursor.y !== lastCursor.y) {
+      moved = true;
+      lastCursor = cursor;
+      lastMovementAt = Date.now();
+      follower.updateDrag(cursor);
+      return;
+    }
+
+    const now = Date.now();
+    if ((moved && now - lastMovementAt >= 750) || now - startedAt >= 30_000) {
+      stopFollowerDragTracking();
+    }
+  }, 16);
+
+  followerDragTracker.unref();
+}
 
 function createCompanionWindow(): BrowserWindow {
   const window = new BrowserWindow(companionWindowOptions(import.meta.dirname));
@@ -117,7 +165,10 @@ function createCompanionWindow(): BrowserWindow {
 
 function createCompactFollowerWindow(): BrowserWindow {
   const window = new BrowserWindow(
-    compactFollowerWindowOptions(import.meta.dirname),
+    compactFollowerWindowOptions(
+      import.meta.dirname,
+      process.platform,
+    ),
   );
 
   if (process.platform === "darwin") {
@@ -198,6 +249,28 @@ function registerIpc(runtime: CompanionRuntimeClient): void {
     compactFollowerSurface?.setExpanded(expanded);
 
     return compactFollowerSurface?.presentationMode() ?? "windowed_compact";
+  });
+
+  ipcMain.handle(companionIpcChannels.followerDragBegin, () => {
+    const follower = compactFollowerSurface;
+    if (follower === undefined) return;
+
+    const cursor = screen.getCursorScreenPoint();
+    const regions = follower.presentationMode().startsWith("fullscreen_")
+      ? [screen.getDisplayNearestPoint(cursor).bounds]
+      : screen.getAllDisplays().map((display) => display.workArea);
+
+    follower.beginDrag(cursor, regions);
+    startFollowerDragTracking(cursor);
+  });
+
+  ipcMain.handle(companionIpcChannels.followerDragUpdate, () => {
+    compactFollowerSurface?.updateDrag(screen.getCursorScreenPoint());
+  });
+
+  ipcMain.handle(companionIpcChannels.followerDragEnd, () => {
+    compactFollowerSurface?.updateDrag(screen.getCursorScreenPoint());
+    stopFollowerDragTracking();
   });
 
   ipcMain.handle(companionIpcChannels.finishSession, async () => {
@@ -613,6 +686,9 @@ async function startDesktop(): Promise<void> {
     isVisible: () => followerSurface.isVisible(),
     followPresentation: (windowState) =>
       followerSurface.followPresentation(windowState),
+    preferredPosition: (windowState) =>
+      followerSurface.preferredPosition(windowState),
+    resetUserPlacement: () => followerSurface.resetUserPlacement(),
     showInactiveAt: (bounds, placement, presentation) =>
       followerSurface.showInactiveAt(bounds, placement, presentation),
     hideFollower: () => followerSurface.hideFollower(),
@@ -622,6 +698,11 @@ async function startDesktop(): Promise<void> {
     runtime,
     createElectronBrowserFollowDisplaySource(screen),
     controlledFollowerSurface,
+    {
+      browserIdentity: runtime,
+      foreground: new NativeBrowserFollowForegroundSource(),
+      followerProcessId: process.pid,
+    },
   );
 
   browserFollowController = followController;
@@ -686,6 +767,7 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", (event) => {
+  stopFollowerDragTracking();
   stopSessionSurfaceMonitor();
 
   browserFollowController?.stop();

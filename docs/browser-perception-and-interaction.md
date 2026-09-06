@@ -685,8 +685,8 @@ Phase 3 is accepted when:
 
 ### Outcome
 
-At completion, the user can take, return, pause, stop, or expand Rove beside the
-Rove-owned browser without locating a separate companion window. This includes
+At completion, the user can take, return, pause, stop, expand, or reposition
+Rove on the Rove-owned browser without locating a separate companion window. This includes
 the owned browser's native fullscreen working context: fullscreen must not hide
 Rove or require a macOS Space/window switch for immediate control.
 
@@ -695,12 +695,15 @@ Rove or require a macOS Space/window switch for immediate control.
 Phase 4 includes:
 
 - frameless compact Electron surface;
-- collapsed and expanded states;
+- universal `64 x 56` micro and `360 x 240` expanded states;
 - fullscreen micro and fullscreen-expanded states;
 - association with the active Rove browser window;
 - browser movement and resize following;
 - monitor changes;
 - minimized and foreground behavior;
+- semantic main-process-validated dragging within eligible display bounds;
+- exact owned-browser foreground PID arbitration on macOS, Windows, and
+  Linux/X11;
 - agent-working state;
 - human-required state;
 - human-controlling state;
@@ -735,16 +738,20 @@ A disposable Electron and Chrome experiment must prove:
 ### Status
 
 Implementation complete on 2026-09-05, with a post-acceptance fullscreen
-product-requirement correction the same day. The production design retains CDP as
+product-requirement correction and a direct-testing universal-micro correction
+the same day. The production design retains CDP as
 the browser-window authority and Electron `screen` as the display-topology
-authority. The macOS follower uses a `64 x 56` micro presentation in the owned
-browser's native fullscreen Space and expands in place to `360 x 240`; leaving
-fullscreen restores compact sizing from a fresh controller decision. The
+authority. All desktop platforms use a `64 x 56` top-right micro presentation,
+expand in place to `360 x 240`, accept only main-process native cursor geometry,
+and hide whenever the exact owned browser is not the native foreground process.
+macOS additionally scopes fullscreen-Space visibility to authoritative
+fullscreen state. Leaving fullscreen restores micro sizing from a fresh
+controller decision. The
 native follower, ownership controls, desktop packaging, and available live
 paths are qualified in
 [`browser-perception-and-interaction-phase4-qualification.md`](./browser-perception-and-interaction-phase4-qualification.md).
 
-Windows live desktop execution, Linux/Wayland execution, and physical
+Windows live desktop execution, Linux Wayland execution, and physical
 multi-monitor execution remain external qualification gaps because those
 environments were not available on the qualification host. They are not
 recorded as passes.

@@ -46,7 +46,7 @@ describe("compactFollowerWindowOptions", () => {
         FULLSCREEN_MICRO_FOLLOWER_HEIGHT,
       ],
     }).toEqual({
-      compact: [240, 96],
+      compact: [64, 56],
       expanded: [360, 240],
       fullscreenMicro: [64, 56],
     });
@@ -66,7 +66,7 @@ describe("compactFollowerWindowOptions", () => {
     expect(options.alwaysOnTop).toBeUndefined();
   });
 
-  it("uses a macOS panel only where native fullscreen presentation requires it", () => {
+  it("uses platform-native utility types where fullscreen presentation requires them", () => {
     expect(compactFollowerWindowOptions("/tmp/rove/main", "darwin").type).toBe(
       "panel",
     );
@@ -75,6 +75,16 @@ describe("compactFollowerWindowOptions", () => {
     ).toBeUndefined();
     expect(
       compactFollowerWindowOptions("/tmp/rove/main", "linux").type,
+    ).toBe("dock");
+    expect(
+      compactFollowerWindowOptions("/tmp/rove/main", "linux").focusable,
+    ).toBe(false);
+    expect(
+      compactFollowerWindowOptions("/tmp/rove/main", "linux").alwaysOnTop,
     ).toBeUndefined();
+    expect(
+      compactFollowerWindowOptions("/tmp/rove/main", "darwin").focusable,
+    ).toBeUndefined();
+
   });
 });

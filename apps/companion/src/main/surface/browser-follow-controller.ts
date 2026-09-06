@@ -1,4 +1,8 @@
-import type { BrowserWindowState, Session } from "@rove/protocol";
+import type {
+  BrowserHostIdentity,
+  BrowserWindowState,
+  Session,
+} from "@rove/protocol";
 
 export const DEFAULT_BROWSER_FOLLOW_INTERVAL_MS = 100;
 export const DEFAULT_BROWSER_FOLLOW_FRESHNESS_MS = 500;
@@ -29,6 +33,14 @@ export interface BrowserFollowWindowStateSource {
   ): Promise<BrowserWindowState | null>;
 }
 
+export interface BrowserFollowBrowserIdentitySource {
+  getBrowserHostIdentity(sessionId: string): Promise<BrowserHostIdentity | null>;
+}
+
+export interface BrowserFollowForegroundSource {
+  getForegroundProcessId(signal: AbortSignal): Promise<number | null>;
+}
+
 export interface BrowserFollowDisplaySource {
   getAllDisplays(): readonly BrowserFollowDisplay[];
 }
@@ -40,6 +52,10 @@ export interface BrowserFollowSurface {
   followPresentation(
     windowState: BrowserWindowState["windowState"] | null,
   ): BrowserFollowPresentation;
+  preferredPosition(
+    windowState: BrowserWindowState["windowState"] | null,
+  ): BrowserFollowPosition | null;
+  resetUserPlacement(): void;
   showInactiveAt(
     bounds: BrowserFollowRectangle,
     placement: BrowserFollowPlacement,
@@ -49,7 +65,12 @@ export interface BrowserFollowSurface {
 }
 
 export type BrowserFollowPlacement =
-  "right" | "left" | "overlay_top_right" | "fullscreen_bottom_right";
+  | "right"
+  | "left"
+  | "browser_top_right"
+  | "overlay_top_right"
+  | "user_positioned"
+  | "fullscreen_bottom_right";
 
 export type BrowserFollowPresentationMode =
   | "windowed_compact"
@@ -66,12 +87,19 @@ export interface BrowserFollowPresentation {
   };
 }
 
+export interface BrowserFollowPosition {
+  x: number;
+  y: number;
+}
+
 export type BrowserFollowHiddenReason =
   | "no_live_session"
   | "surface_disabled"
   | "invalid_surface_size"
   | "window_state_unavailable"
   | "window_minimized"
+  | "browser_identity_unavailable"
+  | "foreground_unavailable"
   | "browser_not_foreground"
   | "invalid_browser_bounds"
   | "browser_off_display"
@@ -108,6 +136,11 @@ export interface BrowserFollowDecisionInput {
   presentation?: BrowserFollowPresentationMode;
   fallbackSurfaceSize?: BrowserFollowSize;
   fallbackPresentation?: BrowserFollowPresentationMode;
+  preferredPosition?: BrowserFollowPosition | null;
+  ownedBrowserProcessId?: number | null;
+  followerProcessId?: number | null;
+  foregroundProcessId?: number | null;
+  enforceNativeForeground?: boolean;
   gap?: number;
 }
 
@@ -115,6 +148,9 @@ export interface BrowserFollowControllerOptions {
   intervalMs?: number;
   freshnessMs?: number;
   gap?: number;
+  browserIdentity?: BrowserFollowBrowserIdentitySource;
+  foreground?: BrowserFollowForegroundSource;
+  followerProcessId?: number;
 }
 
 interface DisplayIntersection {
@@ -153,6 +189,10 @@ function validSize(size: BrowserFollowSize): boolean {
     size.width > 0 &&
     size.height > 0
   );
+}
+
+function validPosition(position: BrowserFollowPosition): boolean {
+  return finiteNumber(position.x) && finiteNumber(position.y);
 }
 
 function right(rectangle: BrowserFollowRectangle): number {
@@ -287,38 +327,6 @@ function placeFollower(
     return null;
   }
 
-  const verticalMaximum = bottom(workArea) - size.height;
-
-  const y = clamp(browserBounds.y, workArea.y, verticalMaximum);
-
-  const rightPlacement: BrowserFollowRectangle = {
-    x: right(browserBounds) + gap,
-    y,
-    width: size.width,
-    height: size.height,
-  };
-
-  if (fitsInside(workArea, rightPlacement)) {
-    return {
-      placement: "right",
-      bounds: rightPlacement,
-    };
-  }
-
-  const leftPlacement: BrowserFollowRectangle = {
-    x: browserBounds.x - gap - size.width,
-    y,
-    width: size.width,
-    height: size.height,
-  };
-
-  if (fitsInside(workArea, leftPlacement)) {
-    return {
-      placement: "left",
-      bounds: leftPlacement,
-    };
-  }
-
   const browserWorkArea = intersection(browserBounds, workArea);
 
   if (
@@ -329,21 +337,24 @@ function placeFollower(
     return null;
   }
 
-  const overlay: BrowserFollowRectangle = {
+  const topRightPlacement: BrowserFollowRectangle = {
     x: right(browserWorkArea) - size.width - gap,
     y: browserWorkArea.y + gap,
     width: size.width,
     height: size.height,
   };
 
-  if (!fitsInside(browserWorkArea, overlay) || !fitsInside(workArea, overlay)) {
-    return null;
+  if (
+    fitsInside(browserWorkArea, topRightPlacement) &&
+    fitsInside(workArea, topRightPlacement)
+  ) {
+    return {
+      placement: "browser_top_right",
+      bounds: topRightPlacement,
+    };
   }
 
-  return {
-    placement: "overlay_top_right",
-    bounds: overlay,
-  };
+  return null;
 }
 
 function placeFullscreenFollower(
@@ -367,7 +378,7 @@ function placeFullscreenFollower(
 
   const bounds = {
     x: right(browserDisplay) - size.width - gap,
-    y: bottom(browserDisplay) - size.height - gap,
+    y: browserDisplay.y + gap,
     width: size.width,
     height: size.height,
   };
@@ -380,9 +391,69 @@ function placeFullscreenFollower(
   }
 
   return {
-    placement: "fullscreen_bottom_right",
+    placement: "browser_top_right",
     bounds,
   };
+}
+
+function placeAtUserPosition(
+  preferredPosition: BrowserFollowPosition,
+  displays: readonly BrowserFollowDisplay[],
+  size: BrowserFollowSize,
+  fullscreenConstraint: BrowserFollowRectangle | null,
+): { displayId: number; bounds: BrowserFollowRectangle } | null {
+  if (!validPosition(preferredPosition)) return null;
+
+  const candidates = displays
+    .map((display) => ({
+      display,
+      constraint:
+        fullscreenConstraint === null
+          ? display.workArea
+          : intersection(fullscreenConstraint, display.bounds),
+    }))
+    .filter(
+      (candidate): candidate is {
+        display: BrowserFollowDisplay;
+        constraint: BrowserFollowRectangle;
+      } =>
+        candidate.constraint !== null &&
+        validRectangle(candidate.constraint) &&
+        size.width <= candidate.constraint.width &&
+        size.height <= candidate.constraint.height,
+    );
+
+  if (candidates.length === 0) return null;
+
+  const ranked = candidates
+    .map(({ display, constraint }) => {
+      const x = clamp(
+        preferredPosition.x,
+        constraint.x,
+        right(constraint) - size.width,
+      );
+      const y = clamp(
+        preferredPosition.y,
+        constraint.y,
+        bottom(constraint) - size.height,
+      );
+      return {
+        display,
+        bounds: { x, y, width: size.width, height: size.height },
+        distance:
+          (x - preferredPosition.x) ** 2 + (y - preferredPosition.y) ** 2,
+      };
+    })
+    .sort(
+      (leftCandidate, rightCandidate) =>
+        leftCandidate.distance - rightCandidate.distance ||
+        leftCandidate.display.id - rightCandidate.display.id,
+    );
+
+  const winner = ranked[0];
+  return winner === undefined
+    ? null
+    : { displayId: winner.display.id, bounds: winner.bounds };
 }
 
 export function decideBrowserFollow(
@@ -418,7 +489,35 @@ export function decideBrowserFollow(
     };
   }
 
-  if (!state.documentFocused && !input.surfaceFocused) {
+  const followerIsNativeForeground =
+    input.enforceNativeForeground === true &&
+    input.followerProcessId !== null &&
+    input.followerProcessId !== undefined &&
+    input.foregroundProcessId === input.followerProcessId;
+
+  if (input.enforceNativeForeground === true) {
+    if (input.ownedBrowserProcessId === null) {
+      return { kind: "hidden", reason: "browser_identity_unavailable" };
+    }
+
+    if (input.foregroundProcessId === null) {
+      return { kind: "hidden", reason: "foreground_unavailable" };
+    }
+
+    if (
+      !input.surfaceFocused &&
+      input.foregroundProcessId !== input.ownedBrowserProcessId &&
+      !followerIsNativeForeground
+    ) {
+      return { kind: "hidden", reason: "browser_not_foreground" };
+    }
+  }
+
+  if (
+    !state.documentFocused &&
+    !input.surfaceFocused &&
+    !followerIsNativeForeground
+  ) {
     return {
       kind: "hidden",
       reason: "browser_not_foreground",
@@ -462,20 +561,40 @@ export function decideBrowserFollow(
       ? "fullscreen_micro"
       : "windowed_compact");
 
-  let placement =
+  const fullscreenConstraint =
     state.windowState === "fullscreen"
-      ? placeFullscreenFollower(
-          browserBounds,
-          selected.display,
+      ? intersection(browserBounds, selected.display.bounds)
+      : null;
+
+  const preferredPlacement =
+    input.preferredPosition === undefined || input.preferredPosition === null
+      ? null
+      : placeAtUserPosition(
+          input.preferredPosition,
+          input.displays,
           input.surfaceSize,
-          input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
-        )
-      : placeFollower(
-          browserBounds,
-          selected.display,
-          input.surfaceSize,
-          input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+          fullscreenConstraint,
         );
+
+  let placement =
+    preferredPlacement === null
+      ? state.windowState === "fullscreen"
+        ? placeFullscreenFollower(
+            browserBounds,
+            selected.display,
+            input.surfaceSize,
+            input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+          )
+        : placeFollower(
+            browserBounds,
+            selected.display,
+            input.surfaceSize,
+            input.gap ?? DEFAULT_BROWSER_FOLLOW_GAP,
+          )
+      : {
+          placement: "user_positioned" as const,
+          bounds: preferredPlacement.bounds,
+        };
 
   if (
     placement === null &&
@@ -506,7 +625,7 @@ export function decideBrowserFollow(
     sessionId: input.sessionId,
     browserWindowId: state.windowId,
     pageId: state.pageId,
-    displayId: selected.display.id,
+    displayId: preferredPlacement?.displayId ?? selected.display.id,
     placement: placement.placement,
     presentation: effectivePresentation,
     bounds: placement.bounds,
@@ -547,6 +666,9 @@ export class BrowserFollowController {
   private readonly intervalMs: number;
   private readonly freshnessMs: number;
   private readonly gap: number;
+  private readonly browserIdentity: BrowserFollowBrowserIdentitySource | undefined;
+  private readonly foreground: BrowserFollowForegroundSource | undefined;
+  private readonly followerProcessId: number | null;
 
   constructor(
     private readonly windowState: BrowserFollowWindowStateSource,
@@ -560,6 +682,15 @@ export class BrowserFollowController {
       options.freshnessMs ?? DEFAULT_BROWSER_FOLLOW_FRESHNESS_MS;
 
     this.gap = options.gap ?? DEFAULT_BROWSER_FOLLOW_GAP;
+    this.browserIdentity = options.browserIdentity;
+    this.foreground = options.foreground;
+    this.followerProcessId = options.followerProcessId ?? null;
+
+    if ((this.browserIdentity === undefined) !== (this.foreground === undefined)) {
+      throw new Error(
+        "Browser identity and foreground sources must be configured together.",
+      );
+    }
 
     if (!Number.isInteger(this.intervalMs) || this.intervalMs <= 0) {
       throw new Error("Browser follow interval must be a positive integer.");
@@ -590,6 +721,8 @@ export class BrowserFollowController {
     this.generation += 1;
 
     this.activeRequestAbort?.abort();
+
+    this.surface.resetUserPlacement();
 
     this.apply({
       kind: "hidden",
@@ -668,10 +801,13 @@ export class BrowserFollowController {
     let freshnessTimer: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      const request = this.windowState.getBrowserWindowState(
-        sessionId,
-        requestAbort.signal,
-      );
+      const request = Promise.all([
+        this.windowState.getBrowserWindowState(sessionId, requestAbort.signal),
+        this.browserIdentity?.getBrowserHostIdentity(sessionId) ??
+          Promise.resolve(null),
+        this.foreground?.getForegroundProcessId(requestAbort.signal) ??
+          Promise.resolve(null),
+      ]);
 
       const timeout = new Promise<typeof WINDOW_STATE_TIMEOUT>((resolve) => {
         freshnessTimer = setTimeout(() => {
@@ -698,18 +834,27 @@ export class BrowserFollowController {
         return;
       }
 
+      const [windowResult, browserIdentity, foregroundProcessId] = result;
+
       const presentation = this.surface.followPresentation(
-        result?.windowState ?? null,
+        windowResult?.windowState ?? null,
       );
 
       const decision = decideBrowserFollow({
         sessionId,
-        state: result,
+        state: windowResult,
         displays: this.displays.getAllDisplays(),
         surfaceEnabled: this.surface.isFollowEnabled(),
         surfaceFocused: this.surface.isFocused(),
         surfaceSize: presentation.size,
         presentation: presentation.mode,
+        preferredPosition: this.surface.preferredPosition(
+          windowResult?.windowState ?? null,
+        ),
+        enforceNativeForeground: this.foreground !== undefined,
+        ownedBrowserProcessId: browserIdentity?.processId ?? null,
+        followerProcessId: this.followerProcessId,
+        foregroundProcessId,
         ...(presentation.fallback === undefined
           ? {}
           : {

@@ -30,6 +30,9 @@ export interface RoveDesktopApi {
   pauseSession(): Promise<CompanionSnapshot | null>;
   finishSession(): Promise<CompanionSnapshot | null>;
   setFollowerExpanded(expanded: boolean): Promise<FollowerPresentationMode>;
+  beginFollowerDrag(): Promise<void>;
+  updateFollowerDrag(): Promise<void>;
+  endFollowerDrag(): Promise<void>;
   openRove(): Promise<void>;
 }
 
@@ -43,5 +46,8 @@ export const companionIpcChannels = {
   pauseSession: "rove:pause",
   finishSession: "rove:finish",
   followerExpanded: "rove:follower-expanded",
+  followerDragBegin: "rove:follower-drag-begin",
+  followerDragUpdate: "rove:follower-drag-update",
+  followerDragEnd: "rove:follower-drag-end",
   openRove: "rove:open",
 } as const;

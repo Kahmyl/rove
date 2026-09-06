@@ -5,4 +5,5 @@ packages:
 onlyBuiltDependencies:
   - electron
   - esbuild
+  - get-windows
   - playwright

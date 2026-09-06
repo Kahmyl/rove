@@ -56,6 +56,15 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
         expanded,
       ) as Promise<FollowerPresentationMode>,
 
+    beginFollowerDrag: () =>
+      ipc.invoke(companionIpcChannels.followerDragBegin) as Promise<void>,
+
+    updateFollowerDrag: () =>
+      ipc.invoke(companionIpcChannels.followerDragUpdate) as Promise<void>,
+
+    endFollowerDrag: () =>
+      ipc.invoke(companionIpcChannels.followerDragEnd) as Promise<void>,
+
     openRove: () => ipc.invoke(companionIpcChannels.openRove) as Promise<void>,
   };
 }

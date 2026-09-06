@@ -9,6 +9,8 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
   destroyed = false;
   focused = false;
   visible = false;
+  bounds = { x: 0, y: 0, width: 64, height: 56 };
+  moveListener: (() => void) | undefined;
 
   setBoundsCalls: {
     bounds: {
@@ -22,7 +24,10 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
 
   showInactiveCount = 0;
   hideCount = 0;
-  alwaysOnTopCalls: { flag: boolean; level?: "floating" }[] = [];
+  alwaysOnTopCalls: {
+    flag: boolean;
+    level?: "floating" | "screen-saver";
+  }[] = [];
   workspaceCalls: {
     visible: boolean;
     options?: {
@@ -54,13 +59,25 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
     },
     animate?: boolean,
   ): void {
+    this.bounds = { ...bounds };
     this.setBoundsCalls.push({
       bounds,
       animate,
     });
   }
 
-  setAlwaysOnTop(flag: boolean, level?: "floating"): void {
+  getBounds() {
+    return { ...this.bounds };
+  }
+
+  on(event: "move", listener: () => void): void {
+    if (event === "move") this.moveListener = listener;
+  }
+
+  setAlwaysOnTop(
+    flag: boolean,
+    level?: "floating" | "screen-saver",
+  ): void {
     this.alwaysOnTopCalls.push({
       flag,
       ...(level === undefined ? {} : { level }),
@@ -196,7 +213,105 @@ describe("CompactFollowerSurface", () => {
     expect(window.showInactiveCount).toBe(1);
   });
 
-  it("uses a presentation-scoped floating lift only for overlay placement", () => {
+  it("captures native dragging as semantic user placement and resets it per session", () => {
+    const window = new FakeFollowerWindow();
+    const follower = surface(window, true);
+
+    follower.showInactiveAt({ x: 910, y: 100, width: 240, height: 96 });
+    window.moveListener?.();
+    expect(follower.preferredPosition("normal")).toBeNull();
+
+    window.bounds = { x: -500, y: 220, width: 240, height: 96 };
+    window.moveListener?.();
+    expect(follower.preferredPosition("maximized")).toEqual({
+      x: -500,
+      y: 220,
+    });
+
+    follower.setExpanded(true);
+    expect(follower.preferredPosition("normal")).toEqual({
+      x: -620,
+      y: 220,
+    });
+
+    follower.resetUserPlacement();
+    expect(follower.preferredPosition("normal")).toBeNull();
+    expect(follower.followPresentation("normal")).toEqual({
+      mode: "windowed_compact",
+      size: { width: 240, height: 96 },
+    });
+  });
+
+  it("moves from semantic pointer gestures using only main-owned legal regions", () => {
+    const window = new FakeFollowerWindow();
+    const follower = new CompactFollowerSurface(() => window, {
+      width: 64,
+      height: 56,
+      expandedWidth: 360,
+      expandedHeight: 240,
+      fullscreenMicroWidth: 64,
+      fullscreenMicroHeight: 56,
+      enabled: true,
+      platform: "linux",
+    });
+
+    follower.showInactiveAt(
+      { x: 900, y: 20, width: 64, height: 56 },
+      "browser_top_right",
+      "windowed_compact",
+    );
+    follower.beginDrag(
+      { x: 920, y: 40 },
+      [{ x: 0, y: 0, width: 1_000, height: 700 }],
+    );
+    follower.updateDrag({ x: 600, y: 300 });
+
+    expect(window.bounds).toEqual({ x: 900, y: 20, width: 64, height: 56 });
+    expect(follower.preferredPosition("normal")).toBeNull();
+
+    follower.updateDrag({ x: 2_000, y: 2_000 });
+    expect(window.bounds).toEqual({ x: 900, y: 20, width: 64, height: 56 });
+
+    follower.endDrag();
+    expect(window.bounds).toEqual({ x: 936, y: 644, width: 64, height: 56 });
+    expect(follower.preferredPosition("normal")).toEqual({ x: 936, y: 644 });
+    follower.updateDrag({ x: 100, y: 100 });
+    expect(window.bounds.x).toBe(936);
+  });
+
+  it("moves live during pointer gestures where native capture survives bounds updates", () => {
+    const window = new FakeFollowerWindow();
+    const follower = new CompactFollowerSurface(() => window, {
+      width: 64,
+      height: 56,
+      expandedWidth: 360,
+      expandedHeight: 240,
+      fullscreenMicroWidth: 64,
+      fullscreenMicroHeight: 56,
+      enabled: true,
+      platform: "win32",
+    });
+
+    follower.showInactiveAt(
+      { x: 900, y: 20, width: 64, height: 56 },
+      "browser_top_right",
+      "windowed_compact",
+    );
+    follower.beginDrag(
+      { x: 920, y: 40 },
+      [{ x: 0, y: 0, width: 1_000, height: 700 }],
+    );
+    follower.updateDrag({ x: 600, y: 300 });
+
+    expect(window.bounds).toEqual({
+      x: 580,
+      y: 280,
+      width: 64,
+      height: 56,
+    });
+  });
+
+  it("keeps elevation scoped to the eligible follower presentation", () => {
     const window = new FakeFollowerWindow();
     const follower = surface(window, true);
 
@@ -207,13 +322,49 @@ describe("CompactFollowerSurface", () => {
 
     expect(window.alwaysOnTopCalls).toEqual([
       { flag: true, level: "floating" },
-      { flag: false },
     ]);
 
     follower.showInactiveAt(
       { x: 910, y: 100, width: 240, height: 96 },
       "right",
     );
+
+    expect(window.alwaysOnTopCalls.at(-1)).toEqual({
+      flag: true,
+      level: "floating",
+    });
+  });
+
+  it("reasserts Windows fullscreen elevation without leaking it after hide", () => {
+    const window = new FakeFollowerWindow();
+    const follower = new CompactFollowerSurface(() => window, {
+      width: 64,
+      height: 56,
+      expandedWidth: 360,
+      expandedHeight: 240,
+      fullscreenMicroWidth: 64,
+      fullscreenMicroHeight: 56,
+      enabled: true,
+      platform: "win32",
+    });
+
+    follower.showInactiveAt(
+      { x: 900, y: 20, width: 64, height: 56 },
+      "browser_top_right",
+      "windowed_compact",
+    );
+    follower.showInactiveAt(
+      { x: 1450, y: 10, width: 64, height: 56 },
+      "browser_top_right",
+      "fullscreen_micro",
+    );
+
+    expect(window.alwaysOnTopCalls).toEqual([
+      { flag: true, level: "floating" },
+      { flag: true, level: "screen-saver" },
+    ]);
+
+    follower.hideFollower();
 
     expect(window.alwaysOnTopCalls.at(-1)).toEqual({ flag: false });
   });
@@ -487,7 +638,10 @@ describe("CompactFollowerSurface", () => {
     );
 
     expect(window.workspaceCalls.at(-1)).toEqual({ visible: false });
-    expect(window.alwaysOnTopCalls.at(-1)).toEqual({ flag: false });
+    expect(window.alwaysOnTopCalls.at(-1)).toEqual({
+      flag: true,
+      level: "floating",
+    });
   });
 
   it("revokes fullscreen presentation when hidden or disabled", () => {
@@ -506,4 +660,39 @@ describe("CompactFollowerSurface", () => {
     expect(window.alwaysOnTopCalls.at(-1)).toEqual({ flag: false });
     expect(window.visible).toBe(false);
   });
+
+  it.each(["win32", "linux"] as const)(
+    "uses shared overlay lifecycle without macOS workspace leakage on %s",
+    (platform) => {
+      const window = new FakeFollowerWindow();
+      const follower = new CompactFollowerSurface(() => window, {
+        width: 64,
+        height: 56,
+        expandedWidth: 360,
+        expandedHeight: 240,
+        fullscreenMicroWidth: 64,
+        fullscreenMicroHeight: 56,
+        enabled: true,
+        platform,
+      });
+
+      follower.showInactiveAt(
+        { x: 1366, y: 10, width: 64, height: 56 },
+        "browser_top_right",
+        "fullscreen_micro",
+      );
+      expect(window.workspaceCalls).toEqual([]);
+      expect(window.alwaysOnTopCalls).toEqual(
+        platform === "linux"
+          ? [
+              { flag: true, level: "floating" },
+              { flag: true, level: "floating" },
+            ]
+          : [{ flag: true, level: "screen-saver" }],
+      );
+
+      follower.hideFollower();
+      expect(window.alwaysOnTopCalls.at(-1)).toEqual({ flag: false });
+    },
+  );
 });

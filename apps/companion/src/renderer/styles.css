@@ -753,14 +753,42 @@ html[data-rove-surface="follower"] body {
   display: grid;
   width: 100%;
   height: 100%;
-  padding: 0;
   border: 1px solid rgb(23 63 51 / 0.18);
   border-radius: 18px;
   place-items: center;
   color: var(--forest);
   background: rgb(243 245 241 / 0.96);
   box-shadow: 0 5px 18px rgb(12 35 29 / 0.22);
+  cursor: grab;
+  user-select: none;
+}
+
+.follower-micro-expand {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgb(23 63 51 / 0.14);
+  border-radius: 6px;
+  place-items: center;
+  color: var(--forest);
+  background: rgb(255 255 255 / 0.82);
   cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.follower-micro-expand svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
 }
 
 .follower-micro img {
@@ -769,7 +797,7 @@ html[data-rove-surface="follower"] body {
   border-radius: 8px;
 }
 
-.follower-micro span {
+.follower-micro .follower-state-dot {
   position: absolute;
   right: 7px;
   bottom: 7px;
@@ -780,12 +808,17 @@ html[data-rove-surface="follower"] body {
   background: #4f8a72;
 }
 
-.follower-micro.follower-human_required span {
+.follower-micro.follower-human_required .follower-state-dot {
   background: var(--warning);
 }
 
-.follower-micro.follower-paused span {
+.follower-micro.follower-paused .follower-state-dot {
   background: #76837b;
+}
+
+.follower-actions,
+.follower-actions button {
+  -webkit-app-region: no-drag;
 }
 
 .follower-app {
@@ -802,6 +835,8 @@ html[data-rove-surface="follower"] body {
     rgb(255 255 255 / 0.72),
     rgb(243 245 241 / 0.96)
   );
+  cursor: grab;
+  user-select: none;
 }
 
 .follower-status {

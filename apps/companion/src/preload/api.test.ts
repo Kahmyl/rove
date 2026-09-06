@@ -17,6 +17,8 @@ describe("Companion preload API", () => {
     });
 
     expect(Object.keys(api).sort()).toEqual([
+      "beginFollowerDrag",
+      "endFollowerDrag",
       "finishSession",
       "getFollowerPresentation",
       "getLiveSession",
@@ -27,6 +29,7 @@ describe("Companion preload API", () => {
       "returnControl",
       "setFollowerExpanded",
       "takeControl",
+      "updateFollowerDrag",
     ]);
 
     await api.getSnapshot();
@@ -38,6 +41,9 @@ describe("Companion preload API", () => {
     await api.pauseSession();
     await api.finishSession();
     await api.setFollowerExpanded(true);
+    await api.beginFollowerDrag();
+    await api.updateFollowerDrag();
+    await api.endFollowerDrag();
     await api.openRove();
 
     expect(channels).toEqual([
@@ -50,6 +56,9 @@ describe("Companion preload API", () => {
       companionIpcChannels.pauseSession,
       companionIpcChannels.finishSession,
       companionIpcChannels.followerExpanded,
+      companionIpcChannels.followerDragBegin,
+      companionIpcChannels.followerDragUpdate,
+      companionIpcChannels.followerDragEnd,
       companionIpcChannels.openRove,
     ]);
   });

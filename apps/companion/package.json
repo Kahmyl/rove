@@ -18,6 +18,7 @@
   "dependencies": {
     "@rove/config": "workspace:*",
     "@rove/protocol": "workspace:*",
+    "get-windows": "9.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
@@ -33,6 +34,11 @@
     "appId": "com.rove.desktop",
     "productName": "Rove",
     "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/get-windows/main",
+      "node_modules/get-windows/lib/binding/**/*"
+    ],
     "files": [
       "dist/main/**/*",
       "dist/renderer/**/*",

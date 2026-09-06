@@ -18,14 +18,19 @@ owned browser's fullscreen working context. The correction started from
 `f0eb800f257396113dabcbf1115fa86402b34f9e` and does not rewrite the earlier
 Phase 4 history.
 
+A second direct-testing correction on the same date made the micro follower the
+single collapsed presentation on every platform, moved its automatic anchor to
+the browser's top-right interior, added main-process-validated semantic dragging,
+and made exact native foreground-process arbitration part of the shared macOS,
+Windows, and Linux/X11 design.
+
 ## Repository state qualified
 
-The work was qualified on branch `feature/browser-perception-interaction`,
-starting from committed HEAD `43ac2cc5fc2998f944863a7083a82151a1b2c28c` and
-the intentional Phase 4 handoff changes. The qualified implementation is commit
-`5cb02afcd8ee00a5d5ae0a7b092585a39eb48790`. Recovery copies of both tracked
-and untracked handoff state were created under `/private/tmp` before
-modification.
+The universal-micro correction was qualified on branch
+`feature/browser-perception-interaction`, starting from committed HEAD
+`bc7700566917fcfc534f0115b395b83a004c8790`. A recovery bundle and patch were
+created under `/private/tmp` before modification. The final correction remains
+a separate local commit in this branch's history.
 
 No qualification credentials or disposable native helpers are part of the
 repository.
@@ -46,7 +51,10 @@ exact Rove-owned Chrome process
 CDP remains the browser bounds and state authority. Electron supplies only
 display bounds and work areas. The controller retains its 100 ms reconciliation
 interval, 500 ms freshness deadline, generation fencing, single in-flight
-request, fail-closed behavior, and right/left/overlay placement priority.
+request, and fail-closed behavior. Automatic placement is the browser's
+top-right interior. A native user move may be retained anywhere inside a valid
+display work area (and inside the owned fullscreen display while fullscreen);
+the controller clamps it against authoritative Electron display topology.
 
 No page UI injection, title-based browser discovery, durable PID authority,
 platform-specific production geometry tracker, OCR, or alternate browser
@@ -56,35 +64,38 @@ The existing 750 ms session monitor continues to own session discovery, tray
 state, handoff attention, and Capture signals. The follower consumes
 main-process session memory and never polls Runtime independently.
 
-## Maximized-window remediation
+## Shared overlay and foreground policy
 
-Live inspection proved that maximized Chrome still returned valid CDP state and
-that the controller computed the expected top-right overlay. The native
-follower existed at the correct `240 x 96` bounds, but macOS placed it behind
-the maximized Chrome window.
+Because the micro follower now sits inside Chrome rather than beside it, the
+surface uses floating level only for the lifetime of an eligible presentation.
+Every reconciliation compares the Runtime's exact owned browser PID with the
+native foreground window owner PID. Moving to another application, browser
+window, or desktop hides the follower and immediately revokes elevation and
+fullscreen-workspace visibility; returning to the owned browser requires a
+fresh controller decision. Follower focus remains the sole exception so a user
+can click, expand, and operate Rove without making it disappear.
 
-The compact surface now receives the controller's placement classification.
-For overlay placement only, it performs a transient floating-level lift around
-`showInactive`, then immediately removes always-on-top. Right and left
-placement never request the lift. This kept the follower above maximized Chrome
-without making it globally pinned or stealing browser document focus.
-
-Observed maximized macOS result:
-
-- browser: `x=0, y=33, width=1512, height=893`, state `maximized`;
-- follower: `x=1262, y=43, width=240, height=96`;
-- follower native z-order ahead of Chrome after the scoped lift;
-- permanent always-on-top disabled.
+The native PID source is shared through `get-windows`: NSWorkspace-backed on
+macOS, Win32 on Windows, and `_NET_ACTIVE_WINDOW`/X11 on Linux. Linux Wayland is
+unsupported by that authority and therefore fails closed instead of leaking a
+global overlay.
 
 ## Surface product behavior
 
-The follower uses the shared renderer with `surface=follower`. Windowed and
-maximized compact mode is `240 x 96`; expanded mode is `360 x 240`. Native
-fullscreen defaults to a deliberately small `64 x 56` micro affordance and
-expands in place to `360 x 240`. Renderer IPC requests only semantic
-expand/collapse. The main process owns all legal sizes and native presentation
-policy, and the controller requires a fresh authoritative browser/display
-decision for every presentation transition.
+The follower uses the shared renderer with `surface=follower`. Windowed,
+maximized, and fullscreen all default to the same deliberately small `64 x 56`
+micro affordance and expand in place to `360 x 240`. The micro includes a
+small, explicit expand icon; every other part of the micro surface starts a
+semantic drag. In expanded mode, every non-action area is draggable while the
+controls remain excluded. Renderer IPC requests only begin/update/end and
+expand/collapse; it never sends coordinates. The main process samples the
+native cursor, owns the legal display regions, validates/clamps movement, and
+captures Electron's portable `move` event to retain user placement. On X11 a
+non-focus-taking `dock` surface is repositioned while hidden and remapped once,
+which keeps it above native fullscreen without reserving a desktop strut. The
+controller requires
+a fresh authoritative browser/display decision for every presentation
+transition.
 
 On macOS, the follower is created as Electron's documented `panel` window type,
 which is capable of appearing above fullscreen applications. Its all-workspaces
@@ -127,22 +138,24 @@ Chrome, and the exact Rove-owned Chrome PID from `/browser/host`.
 | -------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Startup/full Companion hidden    | Pass             | No native full window opened before intentional restore                                                                            |
 | Exact owned-browser identity     | Pass             | Runtime exposed the launched Chrome PID; no title identity used                                                                    |
-| Normal right placement           | Pass             | Browser `22,55,1200,851`; follower `1232,55,240,96`                                                                                |
-| Left placement                   | Pass             | Browser moved to `x=600,width=800`; follower converged to `x=350`                                                                  |
-| Move and resize convergence      | Pass             | Fresh CDP bounds produced stable new placements without focus-taking show                                                          |
-| Maximized overlay                | Pass             | Scoped z-order remediation kept the `240 x 96` overlay visible                                                                     |
+| Universal windowed micro         | Pass             | Browser `22,55,1200,849`; `64 x 56` follower inside top-right at `1148,65`                                                        |
+| Windowed expand/collapse         | Pass             | Real click changed `64 x 56 @ 1148,65` to `360 x 240 @ 852,65`, preserving the right edge                                         |
+| Native user positioning          | Pass             | Windowed follower remained at user position `500,400`; invalid `-1000,-1000` was main-process-clamped to work-area `0,33`          |
+| Maximized overlay                | Pass             | Shared eligible-lifetime elevation keeps the micro above owned Chrome and is revoked on background                                 |
 | Minimized                        | Pass             | CDP state `minimized`; follower hidden                                                                                             |
-| Native fullscreen micro          | Pass             | CDP `fullscreen`; `64 x 56` panel onscreen at `1438,901` in the Chrome fullscreen Space                                            |
-| Fullscreen expand/collapse       | Pass             | Real click focused micro without leaving the Space; `64 x 56 -> 360 x 240 -> 64 x 56`                                              |
-| Fullscreen exit recovery         | Pass             | Expanded exit recomputed `240 x 96` maximized/windowed presentation; no stale fullscreen bounds                                    |
-| Repeated fullscreen transitions  | Pass             | Two additional enter/exit cycles returned to `240 x 96`, native layer 0, with no stranded or globally pinned follower              |
+| Native fullscreen micro          | Pass             | CDP `fullscreen` at `0,121,1512,861`; top-right `64 x 56` panel onscreen at `1438,131` in the Chrome fullscreen Space              |
+| Fullscreen expand/collapse       | Pass             | Real click focused micro without leaving the Space; expanded at `1142,131,360,240`; collapse preserved a moved right-edge anchor   |
+| Fullscreen user positioning      | Pass             | Expanded controls remained at user position `500,500`, inside the authoritative fullscreen region                                 |
+| Other app/Space suppression      | Pass             | Terminal foreground hid the follower and revoked layer `3 -> 0`; returning to owned Chrome restored only from a fresh decision    |
+| Fullscreen exit recovery         | Pass             | CDP returned `normal`; normal `64 x 56` mode resumed from its separately validated windowed position, not stale fullscreen geometry |
+| Repeated fullscreen transitions  | Pass             | Prior repeated native cycles plus this top-right/drag correction produced no stranded or globally leaked follower                 |
 | Full Companion arbitration       | Pass             | Open Rove suppressed follower; close restored it after a fresh poll                                                                |
-| Collapsed/expanded               | Pass             | Native bounds changed `240 x 96 -> 360 x 240 -> 240 x 96`                                                                          |
+| Collapsed/expanded               | Pass             | Native bounds changed `64 x 56 -> 360 x 240 -> 64 x 56`                                                                            |
 | Pause/resume                     | Pass             | Paused controller cleared; agent navigation rejected; Resume restored agent                                                        |
 | Stop/browser loss                | Pass             | Session completed, owned Chrome exited, follower hidden                                                                            |
-| New-PID reassociation            | Pass             | New session used a different exact owned PID; follower tracked only the new process                                                |
+| New-PID reassociation            | Pass             | New session used a different exact owned PID, reset to micro, and tracked only the new process                                     |
 | Tracking/display failure policy  | Pass (automated) | Missing, stale, invalid, zero-intersection, and ambiguous state hide fail-closed                                                   |
-| Foreground/follower focus policy | Pass             | Real micro click reported follower `document.hasFocus() = true`; surface stayed onscreen and expanded in the same fullscreen Space |
+| Foreground/follower focus policy | Pass             | Exact foreground PID hid on Terminal; real micro click retained follower focus and expanded in the same fullscreen Space          |
 
 The browser-not-foreground policy remains fail closed and exact browser
 identity is unchanged. The follower-focus exception is covered by automated
@@ -159,12 +172,16 @@ instrumentation.
 | -------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Linux x64 unpacked package       | Pass         | electron-builder produced `linux-unpacked`                                                                       |
 | Packaged desktop/Runtime startup | Pass         | Packaged Electron launched its managed Runtime and resolved system Chrome                                        |
-| Normal right placement           | Pass         | Browser `10,10,1050,880`; follower `1070,10,240,96`                                                              |
-| Move/resize right placement      | Pass         | Browser `200,80,900,650`; follower `1110,80,240,96`                                                              |
-| Left fallback                    | Pass         | Browser `600,120,900,650`; follower `350,120,240,96`                                                             |
-| Maximized overlay                | Pass         | Browser `0,0,1600,900`; follower `1350,10,240,96`                                                                |
+| Windowed micro                   | Pass         | Browser `10,10,1050,880`; top-right follower `986,20,64,56`                                                       |
+| Micro drag and expand            | Pass         | Full-surface drag moved to `671,260`; explicit icon expanded in place to `375,260,360,240`                        |
+| Expanded non-action drag         | Pass         | Background drag moved expanded controls to `725,400`; action buttons remained clickable                          |
+| Maximized overlay                | Pass         | Shared controller/elevation policy retained the `64 x 56` micro above owned Chrome                               |
 | Minimized hide                   | Pass         | CDP state `minimized`; follower absent from visible X11 windows                                                  |
-| Fullscreen micro/expanded        | Not re-run   | Corrected common implementation and automated/package tests pass; the prior fullscreen-hide result is superseded |
+| True F11 fullscreen micro        | Pass         | Chrome `_NET_WM_STATE_FULLSCREEN`; `64 x 56` dock visible at top-right                                           |
+| Fullscreen micro drag            | Pass         | Main-owned cursor tracking moved micro to `788,460`; it remained visible above fullscreen                        |
+| Fullscreen expand/collapse       | Pass         | Explicit icon expanded; non-action background dragged; collapse restored micro                                  |
+| Other-app suppression/recovery   | Pass         | `xmessage` foreground made the dock `IsUnMapped`; owned Chrome restored `IsViewable`                             |
+| Fullscreen exit recovery         | Pass         | F11 exit restored fresh automatic windowed position `986,20,64,56`                                               |
 | Wayland live runtime             | Not executed | No Wayland compositor/session was available                                                                      |
 
 The container required a qualification-only relaxed Docker seccomp profile for
@@ -188,8 +205,8 @@ live behavior is therefore not claimed as a pass.
 
 ## Display topology
 
-Automated tests cover positive and negative display coordinates, right/left and
-overlay selection, work-area constraints, display transitions, invalid
+Automated tests cover positive and negative display coordinates, top-right and
+user-positioned selection, cross-display work-area constraints, display transitions, invalid
 geometry, zero intersection, and equal-intersection ambiguity.
 
 The macOS host reported one physical display (`1512 x 982`, work area
@@ -207,7 +224,7 @@ Qualification results:
 
 - TypeScript workspace typecheck: pass;
 - repository lint: pass;
-- full repository suite: 107 files, 622 tests passed;
+- full repository suite: 108 files and 635 tests passed;
 - Companion production build: pass;
 - macOS arm64 unpacked desktop package: pass;
 - packaged macOS Runtime/MCP smoke test: pass;
@@ -215,8 +232,8 @@ Qualification results:
   correction; static/package only);
 - Linux x64 unpacked desktop package: pass (rebuilt after the fullscreen
   correction);
-- Linux/X11 packaged live run: prior non-fullscreen behaviors passed; the
-  corrected fullscreen presentation was not re-run live.
+- Linux/X11 packaged live run: windowed, native fullscreen, micro/expanded
+  dragging, foreground suppression, and fullscreen-exit recovery passed.
 
 ## External qualification gaps
 
@@ -224,7 +241,6 @@ The following require environments or hardware absent from the qualification
 host:
 
 - native Windows desktop live execution;
-- corrected Linux/X11 fullscreen live execution;
 - Linux/Wayland desktop live execution;
 - physical multi-monitor execution.
 

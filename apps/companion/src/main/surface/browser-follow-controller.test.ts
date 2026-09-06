@@ -64,8 +64,8 @@ class FakeSurface implements BrowserFollowSurface {
   visible = false;
 
   size = {
-    width: 240,
-    height: 96,
+    width: 64,
+    height: 56,
   };
 
   shown: BrowserFollowRectangle[] = [];
@@ -101,6 +101,12 @@ class FakeSurface implements BrowserFollowSurface {
         };
   }
 
+  preferredPosition(): null {
+    return null;
+  }
+
+  resetUserPlacement(): void {}
+
   showInactiveAt(
     bounds: BrowserFollowRectangle,
     placement: BrowserFollowPlacement,
@@ -123,7 +129,7 @@ afterEach(() => {
 });
 
 describe("decideBrowserFollow", () => {
-  it("places beside the browser on the right when work area allows it", () => {
+  it("places the universal micro follower inside the browser top-right", () => {
     expect(
       decideBrowserFollow({
         sessionId: session.id,
@@ -132,24 +138,24 @@ describe("decideBrowserFollow", () => {
         surfaceEnabled: true,
         surfaceFocused: false,
         surfaceSize: {
-          width: 240,
-          height: 96,
+          width: 64,
+          height: 56,
         },
       }),
     ).toMatchObject({
       kind: "visible",
       displayId: 1,
-      placement: "right",
+      placement: "browser_top_right",
       bounds: {
-        x: 910,
-        y: 100,
-        width: 240,
-        height: 96,
+        x: 826,
+        y: 110,
+        width: 64,
+        height: 56,
       },
     });
   });
 
-  it("falls back to the left and then to an in-browser overlay", () => {
+  it("anchors inside the browser regardless of outside desktop space", () => {
     const left = decideBrowserFollow({
       sessionId: session.id,
       state: windowState({
@@ -171,9 +177,9 @@ describe("decideBrowserFollow", () => {
 
     expect(left).toMatchObject({
       kind: "visible",
-      placement: "left",
+      placement: "browser_top_right",
       bounds: {
-        x: 250,
+        x: 1050,
       },
     });
 
@@ -198,7 +204,7 @@ describe("decideBrowserFollow", () => {
 
     expect(overlay).toMatchObject({
       kind: "visible",
-      placement: "overlay_top_right",
+      placement: "browser_top_right",
       bounds: {
         x: 1090,
         y: 110,
@@ -330,7 +336,7 @@ describe("decideBrowserFollow", () => {
     });
   });
 
-  it("places the fullscreen micro follower inside the display bottom-right", () => {
+  it("places the fullscreen micro follower inside the display top-right", () => {
     expect(
       decideBrowserFollow({
         sessionId: session.id,
@@ -354,11 +360,11 @@ describe("decideBrowserFollow", () => {
       }),
     ).toMatchObject({
       kind: "visible",
-      placement: "fullscreen_bottom_right",
+      placement: "browser_top_right",
       presentation: "fullscreen_micro",
       bounds: {
         x: 1366,
-        y: 834,
+        y: 10,
         width: 64,
         height: 56,
       },
@@ -420,9 +426,9 @@ describe("decideBrowserFollow", () => {
       }),
     ).toMatchObject({
       kind: "visible",
-      placement: "fullscreen_bottom_right",
+      placement: "browser_top_right",
       presentation: "fullscreen_micro",
-      bounds: { x: -574, y: 134, width: 64, height: 56 },
+      bounds: { x: -574, y: 10, width: 64, height: 56 },
     });
   });
 
@@ -484,8 +490,8 @@ describe("BrowserFollowController", () => {
     expect(surface.shown).toHaveLength(2);
 
     expect(surface.shown[1]).toMatchObject({
-      x: 930,
-      y: 120,
+      x: 846,
+      y: 130,
     });
   });
 
@@ -518,18 +524,18 @@ describe("BrowserFollowController", () => {
     await controller.reconcileNow();
 
     expect(surface.presentations).toEqual([
-      { placement: "right", presentation: "windowed_compact" },
+      { placement: "browser_top_right", presentation: "windowed_compact" },
       {
-        placement: "fullscreen_bottom_right",
+        placement: "browser_top_right",
         presentation: "fullscreen_micro",
       },
-      { placement: "right", presentation: "windowed_compact" },
+      { placement: "browser_top_right", presentation: "windowed_compact" },
     ]);
     expect(surface.shown[2]).toEqual({
-      x: 930,
-      y: 120,
-      width: 240,
-      height: 96,
+      x: 846,
+      y: 130,
+      width: 64,
+      height: 56,
     });
   });
 
@@ -646,6 +652,42 @@ describe("BrowserFollowController", () => {
 });
 
 describe("BrowserFollowController authority revocation", () => {
+  it("hides on an unrelated native foreground process and restores from a fresh decision", async () => {
+    let foregroundProcessId = 4321;
+    const source = {
+      getBrowserWindowState: vi.fn(async () => windowState()),
+      getBrowserHostIdentity: vi.fn(async () => ({
+        kind: "owned_process" as const,
+        processId: 4321,
+      })),
+    };
+    const surface = new FakeSurface();
+    const controller = new BrowserFollowController(
+      source,
+      { getAllDisplays: () => [display] },
+      surface,
+      {
+        browserIdentity: source,
+        foreground: {
+          getForegroundProcessId: vi.fn(async () => foregroundProcessId),
+        },
+      },
+    );
+
+    controller.setSession(session);
+    await controller.reconcileNow();
+    expect(surface.visible).toBe(true);
+
+    foregroundProcessId = 9876;
+    await controller.reconcileNow();
+    expect(surface.visible).toBe(false);
+
+    foregroundProcessId = 4321;
+    await controller.reconcileNow();
+    expect(surface.visible).toBe(true);
+    expect(source.getBrowserHostIdentity).toHaveBeenCalledTimes(3);
+  });
+
   it("hides old follower geometry immediately when the live session changes", async () => {
     let resolvePending:
       ((value: BrowserWindowState | null) => void) | undefined;
@@ -790,8 +832,100 @@ describe("BrowserFollowController authority revocation", () => {
     expect(surface.shown).toHaveLength(2);
 
     expect(surface.shown[1]).toMatchObject({
-      x: 950,
-      y: 140,
+      x: 866,
+      y: 150,
+    });
+  });
+
+  it("uses exact native foreground PID authority and keeps the follower-focus exception", () => {
+    const base = {
+      sessionId: session.id,
+      state: windowState(),
+      displays: [display],
+      surfaceEnabled: true,
+      surfaceSize: { width: 64, height: 56 },
+      enforceNativeForeground: true,
+      ownedBrowserProcessId: 4321,
+    };
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        surfaceFocused: false,
+        foregroundProcessId: 9876,
+      }),
+    ).toEqual({ kind: "hidden", reason: "browser_not_foreground" });
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        surfaceFocused: false,
+        foregroundProcessId: null,
+      }),
+    ).toEqual({ kind: "hidden", reason: "foreground_unavailable" });
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        state: windowState({ documentFocused: false }),
+        surfaceFocused: true,
+        foregroundProcessId: 9876,
+      }),
+    ).toMatchObject({ kind: "visible" });
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        state: windowState({ documentFocused: false }),
+        surfaceFocused: false,
+        followerProcessId: 2468,
+        foregroundProcessId: 2468,
+      }),
+    ).toMatchObject({ kind: "visible" });
+  });
+
+  it("accepts main-owned user placement across displays and clamps fullscreen placement", () => {
+    const secondDisplay: BrowserFollowDisplay = {
+      id: 2,
+      bounds: { x: -1200, y: -100, width: 1200, height: 900 },
+      workArea: { x: -1200, y: -100, width: 1200, height: 860 },
+    };
+
+    expect(
+      decideBrowserFollow({
+        sessionId: session.id,
+        state: windowState(),
+        displays: [display, secondDisplay],
+        surfaceEnabled: true,
+        surfaceFocused: false,
+        surfaceSize: { width: 64, height: 56 },
+        preferredPosition: { x: -700, y: 300 },
+      }),
+    ).toMatchObject({
+      kind: "visible",
+      displayId: 2,
+      placement: "user_positioned",
+      bounds: { x: -700, y: 300 },
+    });
+
+    expect(
+      decideBrowserFollow({
+        sessionId: session.id,
+        state: windowState({
+          windowState: "fullscreen",
+          bounds: { left: 0, top: 0, width: 1440, height: 900 },
+        }),
+        displays: [display, secondDisplay],
+        surfaceEnabled: true,
+        surfaceFocused: true,
+        surfaceSize: { width: 64, height: 56 },
+        preferredPosition: { x: -700, y: 900 },
+      }),
+    ).toMatchObject({
+      kind: "visible",
+      displayId: 1,
+      placement: "user_positioned",
+      bounds: { x: 0, y: 844 },
     });
   });
 

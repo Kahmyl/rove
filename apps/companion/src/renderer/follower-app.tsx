@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 
 import type { Session } from "@rove/protocol";
 
@@ -22,6 +28,35 @@ export function FollowerApp() {
 
   const [presentation, setPresentation] =
     useState<FollowerPresentationMode>("windowed_compact");
+
+  const dragPointer = useRef<number | null>(null);
+
+  const beginDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest("button") !== null) return;
+
+    dragPointer.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    void window.rove.beginFollowerDrag();
+  };
+
+  const updateDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragPointer.current !== event.pointerId) return;
+    void window.rove.updateFollowerDrag();
+  };
+
+  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragPointer.current !== event.pointerId) return;
+
+    dragPointer.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    void window.rove.endFollowerDrag();
+  };
+
+  const cancelDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (dragPointer.current === event.pointerId) dragPointer.current = null;
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -54,8 +89,6 @@ export function FollowerApp() {
   const view = toCompactFollowerViewModel(session);
 
   const expanded = presentation.endsWith("_expanded");
-
-  const fullscreenMicro = presentation === "fullscreen_micro";
 
   const runPrimary = async (action: CompactFollowerPrimaryAction) => {
     if (action === null) {
@@ -95,18 +128,30 @@ export function FollowerApp() {
     }
   };
 
-  if (fullscreenMicro) {
+  if (!expanded) {
     return (
-      <button
+      <div
         className={`follower-micro follower-${view.experience}`}
-        type="button"
-        aria-label={`Expand Rove controls. ${view.kicker}: ${view.title}`}
-        title="Expand Rove controls"
-        onClick={() => void setExpansion(true)}
+        title="Drag Rove"
+        onPointerDown={beginDrag}
+        onPointerMove={updateDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={cancelDrag}
       >
         <img src={roveMarkUrl} alt="" aria-hidden="true" />
-        <span aria-hidden="true" />
-      </button>
+        <span className="follower-state-dot" aria-hidden="true" />
+        <button
+          className="follower-micro-expand"
+          type="button"
+          aria-label={`Expand Rove controls. ${view.kicker}: ${view.title}`}
+          title="Expand Rove controls"
+          onClick={() => void setExpansion(true)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M6.25 3.25h-3v3M9.75 3.25h3v3M6.25 12.75h-3v-3M9.75 12.75h3v-3" />
+          </svg>
+        </button>
+      </div>
     );
   }
 
@@ -131,6 +176,10 @@ export function FollowerApp() {
         expanded ? "follower-expanded" : "follower-collapsed",
         `follower-${view.experience}`,
       ].join(" ")}
+      onPointerDown={beginDrag}
+      onPointerMove={updateDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={cancelDrag}
     >
       <div className="follower-status">
         <img

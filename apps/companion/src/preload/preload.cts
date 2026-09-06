@@ -46,6 +46,15 @@ const api: RoveDesktopApi = {
       expanded,
     ) as Promise<FollowerPresentationMode>,
 
+  beginFollowerDrag: () =>
+    ipcRenderer.invoke("rove:follower-drag-begin") as Promise<void>,
+
+  updateFollowerDrag: () =>
+    ipcRenderer.invoke("rove:follower-drag-update") as Promise<void>,
+
+  endFollowerDrag: () =>
+    ipcRenderer.invoke("rove:follower-drag-end") as Promise<void>,
+
   openRove: () => ipcRenderer.invoke("rove:open") as Promise<void>,
 };
 
