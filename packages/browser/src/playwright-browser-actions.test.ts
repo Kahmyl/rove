@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { Page } from "playwright";
+import { errors as playwrightErrors, type Page } from "playwright";
 
 import {
   RoveError,
@@ -365,6 +365,50 @@ describe("Milestone 3 browser actions", () => {
     await expect(fresh.back()).resolves.toMatchObject({
       ok: true,
       pageChanged: false,
+    });
+  });
+
+  it("returns completed history truth when Playwright times out after navigation", async () => {
+    const { server, session } = await setup("/history-a");
+    await session.navigate(`${server.url}/history-b`);
+    const page = testPage(session);
+    const goBack = page.goBack.bind(page);
+
+    Object.defineProperty(page, "goBack", {
+      configurable: true,
+      value: async (options?: Parameters<Page["goBack"]>[0]) => {
+        await goBack(options);
+        throw new playwrightErrors.TimeoutError(
+          "forced timeout after completed history navigation",
+        );
+      },
+    });
+
+    await expect(session.back()).resolves.toMatchObject({
+      action: "back",
+      pageChanged: true,
+      url: `${server.url}/history-a`,
+    });
+  });
+
+  it("fences history replay when a dispatched timeout has no successor truth", async () => {
+    const { session } = await setup("/history-a");
+    const page = testPage(session);
+
+    Object.defineProperty(page, "goBack", {
+      configurable: true,
+      value: async () => {
+        throw new playwrightErrors.TimeoutError("forced history timeout");
+      },
+    });
+
+    await expect(session.back()).rejects.toMatchObject({
+      dispatched: true,
+      stage: "dispatch",
+      original: {
+        code: "ACTION_TIMEOUT",
+        retryable: true,
+      },
     });
   });
 

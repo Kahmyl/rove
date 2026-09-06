@@ -1048,10 +1048,6 @@ export class RuntimeService implements RoveRuntime {
 
         lease.assertCurrent();
 
-        await this.syncActivePage(sessionId, lease);
-
-        lease.assertCurrent();
-
         const event = observation(result);
 
         await this.observations.append(sessionId, {
@@ -1068,11 +1064,25 @@ export class RuntimeService implements RoveRuntime {
 
         lease.assertCurrent();
 
-        const assessment = await this.assessBrowser(
-          sessionId,
-          this.browser.get(sessionId),
-          lease,
-        );
+        await this.syncActivePage(sessionId, lease);
+
+        lease.assertCurrent();
+
+        let assessment: PageInspectionPolicyRecord | undefined;
+
+        try {
+          assessment = await this.assessBrowser(
+            sessionId,
+            this.browser.get(sessionId),
+            lease,
+          );
+        } catch (error) {
+          lease.assertCurrent();
+
+          if (!(error instanceof RoveError) || error.code !== "PAGE_CHANGED") {
+            throw error;
+          }
+        }
 
         lease.assertCurrent();
 
@@ -1082,6 +1092,10 @@ export class RuntimeService implements RoveRuntime {
         };
       },
       async ({ assessment }) => {
+        if (assessment === undefined) {
+          return;
+        }
+
         // IMPORTANT:
         // mutateValue releases the browser ownership lease before
         // invoking this callback. Automatic F2 handoff can therefore

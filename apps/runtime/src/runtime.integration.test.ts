@@ -529,9 +529,7 @@ describe("Milestone 4 runtime integration", () => {
     const deadline = Date.now() + 3_000;
     while (
       (!records.some((item) => item.metadata?.kind === "navigation") ||
-        !records.some(
-          (item) => item.metadata?.kind === "request_failure",
-        )) &&
+        !records.some((item) => item.metadata?.kind === "request_failure")) &&
       Date.now() < deadline
     ) {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1069,6 +1067,52 @@ describe("Milestone 4 runtime integration", () => {
       },
     });
     expect(server.mutationCount()).toBe(1);
+  });
+
+  it("keeps a completed action when optional post-action inspection sees page churn", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    let rejectNextInspection = true;
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (...args: Parameters<typeof inspect>) => {
+        if (rejectNextInspection) {
+          rejectNextInspection = false;
+          throw new RoveError({
+            code: "PAGE_CHANGED",
+            message: "forced post-action page churn",
+            retryable: true,
+          });
+        }
+        return inspect(...args);
+      },
+    });
+
+    await expect(
+      runtime.click(session.id, {
+        target: target(inspection, "Apply consequential mutation"),
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      action: "click",
+      pageChanged: true,
+      url: `${server.url}/consequential-result`,
+    });
+    expect(server.mutationCount()).toBe(1);
+    expect(
+      (await runtime.getObservations(session.id)).items.some(
+        (item) => item.type === "agent_clicked",
+      ),
+    ).toBe(true);
   });
 
   it("returns applied with explicit degradation after a completed consequential mutation", async () => {

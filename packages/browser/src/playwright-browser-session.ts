@@ -2177,19 +2177,36 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const page = this.pageRegistry.pageFor(pageId);
     const previous = this.pageRegistry.stateFor(pageId);
     const beforePages = this.pageRegistry.summaries();
+    let dispatched = false;
     try {
-      const response = await this.evidenceRecorder.withAgentAction(page, () =>
-        action === "back"
-          ? page.goBack({
-              waitUntil: "domcontentloaded",
-              timeout: this.navigationTimeoutMs,
-            })
-          : page.goForward({
-              waitUntil: "domcontentloaded",
-              timeout: this.navigationTimeoutMs,
-            }),
+      const response = await this.evidenceRecorder.withAgentAction(
+        page,
+        () => {
+          dispatched = true;
+          return action === "back"
+            ? page.goBack({
+                waitUntil: "commit",
+                timeout: this.actionTimeoutMs,
+              })
+            : page.goForward({
+                waitUntil: "commit",
+                timeout: this.actionTimeoutMs,
+              });
+        },
       );
       if (response === null) {
+        const observed = this.pageRegistry.stateFor(pageId);
+        if (
+          observed.revision !== previous.revision ||
+          page.url() !== previous.url
+        ) {
+          return await this.synchronizeAfterAction(
+            action,
+            pageId,
+            previous,
+            beforePages,
+          );
+        }
         return {
           ok: true,
           action,
@@ -2201,20 +2218,45 @@ export class PlaywrightBrowserSession implements BrowserSession {
           url: previous.url,
         };
       }
-      return this.synchronizeAfterAction(action, pageId, previous, beforePages);
+      return await this.synchronizeAfterAction(
+        action,
+        pageId,
+        previous,
+        beforePages,
+      );
     } catch (error) {
-      if (error instanceof playwrightErrors.TimeoutError) {
-        throw new RoveError({
-          code: "ACTION_TIMEOUT",
-          message: `Browser ${action} timed out.`,
-          retryable: true,
-        });
+      const observed = this.pageRegistry.stateFor(pageId);
+      if (
+        observed.revision !== previous.revision ||
+        page.url() !== previous.url
+      ) {
+        return await this.synchronizeAfterAction(
+          action,
+          pageId,
+          previous,
+          beforePages,
+        );
       }
-      if (isBrowserClosedError(error)) throw browserClosedError();
-      throw new RoveError({
-        code: "NAVIGATION_FAILED",
-        message: `Browser ${action} failed.`,
-      });
+
+      const mapped =
+        error instanceof playwrightErrors.TimeoutError
+          ? new RoveError({
+              code: "ACTION_TIMEOUT",
+              message: `Browser ${action} timed out.`,
+              retryable: true,
+            })
+          : isBrowserClosedError(error)
+            ? browserClosedError()
+            : new RoveError({
+                code: "NAVIGATION_FAILED",
+                message: `Browser ${action} failed.`,
+              });
+
+      if (dispatched) {
+        throw new InteractionDispatchError(mapped, undefined, "dispatch");
+      }
+
+      throw mapped;
     }
   }
 
