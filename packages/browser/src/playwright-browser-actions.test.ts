@@ -192,6 +192,57 @@ describe("Milestone 3 browser actions", () => {
     });
   });
 
+  it("preserves direct-click certainty when post-action synchronization fails", async () => {
+    const { server, session } = await setup("/consequential-action");
+    const inspection = await session.inspect();
+    const internal = session as unknown as {
+      synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
+    };
+    const synchronize = internal.synchronizeAfterAction.bind(session);
+    let synchronizationCalls = 0;
+
+    internal.synchronizeAfterAction = async (...args: unknown[]) => {
+      synchronizationCalls += 1;
+      if (synchronizationCalls === 1) {
+        throw new Error("forced post-action synchronization failure");
+      }
+      return synchronize(...args);
+    };
+
+    await expect(
+      session.click(target(inspection, "Apply consequential mutation")),
+    ).rejects.toMatchObject({
+      dispatched: true,
+      stage: "post_action_synchronization",
+      result: {
+        ok: true,
+        url: `${server.url}/consequential-result`,
+      },
+    });
+    expect(server.mutationCount()).toBe(1);
+  });
+
+  it("keeps proven navigation when optional metadata synchronization races", async () => {
+    const { server, session } = await setup();
+    const inspection = await session.inspect();
+    const internal = session as unknown as {
+      pageRegistry: {
+        syncMetadata: (pageId: string) => Promise<unknown>;
+      };
+    };
+    internal.pageRegistry.syncMetadata = async () => {
+      throw new Error("Execution context was destroyed during navigation");
+    };
+
+    await expect(
+      session.click(target(inspection, "Navigate result")),
+    ).resolves.toMatchObject({
+      ok: true,
+      pageChanged: true,
+      url: `${server.url}/result`,
+    });
+  });
+
   it("fills instead of appending and supports targeted and page keyboard presses", async () => {
     const { session } = await setup();
     const inspection = await session.inspect();

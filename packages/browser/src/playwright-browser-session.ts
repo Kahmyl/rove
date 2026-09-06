@@ -1716,27 +1716,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   async click(target: TargetReference): Promise<ActionResult> {
     this.ensureOpen();
-    const page = this.pageRegistry.pageFor(target.pageId);
-    const beforePages = this.pageRegistry.summaries();
-    const resolved = await this.resolveActionTarget(target);
-    const previous = this.pageRegistry.stateFor(target.pageId);
-    const popup = this.context
-      .waitForEvent("page", { timeout: POPUP_GRACE_MS })
-      .catch(() => null);
-    try {
-      await this.evidenceRecorder.withAgentAction(page, () =>
-        resolved.locator.click({ timeout: this.actionTimeoutMs }),
-      );
-      if (this.pageRegistry.summaries().length === beforePages.length)
-        await popup;
-    } catch (error) {
-      throw actionError(error, "Click");
-    }
-    return this.synchronizeAfterAction(
+    return this.runTargetInteraction(
       "click",
-      target.pageId,
-      previous,
-      beforePages,
+      target,
+      undefined,
+      "Click",
+      async (resolved) =>
+        resolved.locator.click({ timeout: this.actionTimeoutMs }),
     );
   }
 
@@ -2107,8 +2093,43 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const page = this.pageRegistry.pageFor(pageId);
     this.observationAuthorities.clear();
     this.observationSnapshots.clear();
-    let current = await this.pageRegistry.syncMetadata(pageId);
-    const mutationVersion = await readMaterialMutationVersion(page);
+    let current: PageState;
+    try {
+      current = await this.pageRegistry.syncMetadata(pageId);
+    } catch (error) {
+      if (isBrowserClosedError(error)) throw browserClosedError();
+      const observed = this.pageRegistry.stateFor(pageId);
+      const url = page.url();
+      if (observed.revision === previous.revision && url === previous.url) {
+        throw error;
+      }
+      current =
+        observed.url === url
+          ? observed
+          : this.pageRegistry.update(pageId, {
+              ...recordMutation(observed, true),
+              url,
+            });
+    }
+    let mutationVersion: number;
+    try {
+      mutationVersion = await readMaterialMutationVersion(page);
+    } catch (error) {
+      if (isBrowserClosedError(error)) throw browserClosedError();
+      const observed = this.pageRegistry.stateFor(pageId);
+      const url = page.url();
+      if (observed.revision === previous.revision && url === previous.url) {
+        throw error;
+      }
+      current =
+        observed.url === url
+          ? observed
+          : this.pageRegistry.update(pageId, {
+              ...recordMutation(observed, true),
+              url,
+            });
+      mutationVersion = current.mutationVersion;
+    }
     if (
       current.revision === previous.revision &&
       mutationVersion !== previous.mutationVersion

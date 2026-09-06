@@ -1028,6 +1028,49 @@ describe("Milestone 4 runtime integration", () => {
     );
   });
 
+  it("classifies direct-click post-action failure instead of leaking a protocol error", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const internal = liveBrowser as unknown as {
+      synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
+    };
+    const synchronize = internal.synchronizeAfterAction.bind(liveBrowser);
+    let synchronizationCalls = 0;
+
+    internal.synchronizeAfterAction = async (...args: unknown[]) => {
+      synchronizationCalls += 1;
+      if (synchronizationCalls === 1) {
+        throw new Error("forced post-action synchronization failure");
+      }
+      return synchronize(...args);
+    };
+
+    await expect(
+      runtime.click(session.id, {
+        target: target(inspection, "Apply consequential mutation"),
+      }),
+    ).rejects.toMatchObject({
+      code: "ACTION_OUTCOME_UNKNOWN",
+      retryable: false,
+      details: {
+        dispatched: true,
+        stage: "post_action_synchronization",
+        partialResult: {
+          ok: true,
+          url: `${server.url}/consequential-result`,
+        },
+      },
+    });
+    expect(server.mutationCount()).toBe(1);
+  });
+
   it("returns applied with explicit degradation after a completed consequential mutation", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
