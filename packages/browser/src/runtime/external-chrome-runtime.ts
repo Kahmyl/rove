@@ -41,8 +41,73 @@ export interface ExternalChromeRuntime {
   currentProcessId(): number | undefined;
   readonly userDataDir: string;
   readonly temporaryProfile: boolean;
+  readonly reused?: boolean;
   close(): Promise<void>;
   closeGracefully(): Promise<void>;
+}
+
+export interface ExternalChromeAttachOptions {
+  endpoint: string;
+  port: number;
+  processId: number;
+  userDataDir: string;
+}
+
+function processIdIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ESRCH"
+    );
+  }
+}
+
+async function waitForProcessIdExit(
+  pid: number,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && processIdIsAlive(pid)) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 50);
+      timer.unref();
+    });
+  }
+}
+
+/**
+ * Represent a previously launched, strongly verified Rove Chrome host.
+ * Shutdown remains CDP-driven by PlaywrightBrowserSession. This wrapper never
+ * signals a PID recovered from disk.
+ */
+export function attachExternalChrome(
+  options: ExternalChromeAttachOptions,
+): ExternalChromeRuntime {
+  let closePromise: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    closePromise ??= waitForProcessIdExit(
+      options.processId,
+      PROCESS_EXIT_TIMEOUT_MS,
+    );
+    return closePromise;
+  };
+
+  return {
+    endpoint: options.endpoint,
+    port: options.port,
+    processId: options.processId,
+    currentProcessId: () =>
+      processIdIsAlive(options.processId) ? options.processId : undefined,
+    userDataDir: options.userDataDir,
+    temporaryProfile: false,
+    reused: true,
+    close,
+    closeGracefully: close,
+  };
 }
 
 async function defaultPathExists(executablePath: string): Promise<boolean> {

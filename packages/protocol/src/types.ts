@@ -387,6 +387,10 @@ export interface BrowserLaunchConfig {
   executablePath?: string;
   launchArgs?: string[];
   profileUserDataDir?: string;
+  ownership?: {
+    runtimeInstanceId: string;
+    sessionId: string;
+  };
   timeouts?: {
     launchMs?: number;
     navigationMs?: number;

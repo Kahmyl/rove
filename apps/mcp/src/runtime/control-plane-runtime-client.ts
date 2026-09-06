@@ -45,8 +45,8 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     this.controlPlaneUrl = new URL(options.controlPlaneUrl);
   }
 
-  async healthCheck(timeoutMs = 10_000): Promise<void> {
-    await this.call("runtime.health", {}, timeoutMs);
+  healthCheck(timeoutMs = 10_000): Promise<unknown> {
+    return this.call("runtime.health", {}, timeoutMs);
   }
 
   startSession(input: StartSessionRequest): Promise<SessionSnapshot> {

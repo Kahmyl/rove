@@ -34,6 +34,7 @@ const STATUS_BY_CODE: Partial<Record<RoveError["code"], number>> = {
   BROWSER_LAUNCH_FAILED: 500,
   NAVIGATION_FAILED: 500,
   EVIDENCE_WRITE_FAILED: 500,
+  RUNTIME_PROTOCOL_ERROR: 500,
 };
 
 @Catch()
@@ -52,7 +53,7 @@ export class RoveErrorFilter implements ExceptionFilter {
       response.status(exception.getStatus()).json({
         ok: false,
         error: {
-          code: "INVALID_CONFIGURATION",
+          code: "RUNTIME_PROTOCOL_ERROR",
           message:
             exception.getStatus() === 401 ? "Unauthorized." : "Request failed.",
           retryable: false,
@@ -74,7 +75,7 @@ export class RoveErrorFilter implements ExceptionFilter {
     response.status(500).json({
       ok: false,
       error: {
-        code: "INVALID_CONFIGURATION",
+        code: "RUNTIME_PROTOCOL_ERROR",
         message: "Unexpected runtime failure.",
         retryable: false,
       },

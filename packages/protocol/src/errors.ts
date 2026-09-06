@@ -85,7 +85,7 @@ export function asRoveError(error: unknown): RoveError {
   return error instanceof RoveError
     ? error
     : new RoveError({
-        code: "INVALID_CONFIGURATION",
+        code: "RUNTIME_PROTOCOL_ERROR",
         message: "Unexpected Rove failure.",
       });
 }

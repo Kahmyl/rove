@@ -40,8 +40,8 @@ export class RuntimeHttpClient implements RuntimeClient {
     this.runtimeUrl = new URL(runtimeUrl);
   }
 
-  healthCheck(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
-    return this.request<void>("GET", "/health", undefined, timeoutMs, true);
+  healthCheck(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
+    return this.request<unknown>("GET", "/health", undefined, timeoutMs, true);
   }
 
   startSession(input: StartSessionRequest): Promise<SessionSnapshot> {

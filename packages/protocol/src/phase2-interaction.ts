@@ -273,6 +273,7 @@ export interface ActionReceipt {
   sessionId: string;
   action: BrowserInteractionRequest["kind"];
   dispatched: boolean;
+  dispatchStatus: "completed" | "uncertain";
   outcome: ActionOutcome;
   consequential: boolean;
   consequenceKey?: string;
@@ -294,5 +295,15 @@ export interface ActionReceipt {
     title?: string;
     active: boolean;
     revision: number;
+  }>;
+  degradations?: Array<{
+    stage:
+      | "action_dispatch"
+      | "page_synchronization"
+      | "successor_inspection"
+      | "page_inventory"
+      | "receipt_persistence"
+      | "page_policy";
+    code: string;
   }>;
 }

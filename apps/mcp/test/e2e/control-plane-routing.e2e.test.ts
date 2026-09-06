@@ -75,6 +75,8 @@ describe("control-plane Runtime routing", () => {
         baseUrl: `http://127.0.0.1:${runtimePort}`,
         token: RUNTIME_TOKEN,
       },
+      runtimeInstanceId: "runtime_11111111111111111111111111111111",
+      runtimeStartedAt: "2026-09-06T12:00:00.000Z",
       retryDelayMs: 1,
     });
     connector.start();
@@ -103,6 +105,57 @@ describe("control-plane Runtime routing", () => {
         body: { mode: "agent" },
       },
     ]);
+  });
+
+  it("fences an older Runtime poller after newer authority arrives", async () => {
+    const controlPlanePort = await availablePort();
+    const relay = new RelayServer({
+      host: "127.0.0.1",
+      port: controlPlanePort,
+      hubToken: HUB_TOKEN,
+      serviceToken: SERVICE_TOKEN,
+    });
+    await relay.start();
+    cleanup.push(() => relay.stop());
+    const baseUrl = `http://127.0.0.1:${controlPlanePort}`;
+    const poll = (runtimeInstanceId: string, runtimeStartedAt: string) =>
+      fetch(`${baseUrl}/v1/devices/${DEVICE_ID}/poll`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${HUB_TOKEN}`,
+          "x-rove-runtime-instance-id": runtimeInstanceId,
+          "x-rove-runtime-started-at": runtimeStartedAt,
+        },
+      });
+
+    const older = poll(
+      "runtime_11111111111111111111111111111111",
+      "2026-09-06T12:00:00.000Z",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const newer = poll(
+      "runtime_22222222222222222222222222222222",
+      "2026-09-06T13:00:00.000Z",
+    );
+
+    await expect(older.then((response) => response.status)).resolves.toBe(409);
+    await expect(
+      poll(
+        "runtime_11111111111111111111111111111111",
+        "2026-09-06T12:00:00.000Z",
+      ).then((response) => response.status),
+    ).resolves.toBe(409);
+
+    const status = await fetch(`${baseUrl}/v1/devices/${DEVICE_ID}`, {
+      headers: { authorization: `Bearer ${SERVICE_TOKEN}` },
+    });
+    await expect(status.json()).resolves.toMatchObject({
+      runtimeInstanceId: "runtime_22222222222222222222222222222222",
+      runtimeStartedAt: "2026-09-06T13:00:00.000Z",
+    });
+
+    await relay.stop();
+    await newer;
   });
 });
 

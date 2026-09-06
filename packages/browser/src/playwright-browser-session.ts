@@ -1362,6 +1362,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
       .catch(() => null);
 
     let dispatched = false;
+    let operationCompleted = false;
 
     try {
       await this.withDialogDirective(target.pageId, dialog, async () => {
@@ -1370,13 +1371,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
         await this.evidenceRecorder.withAgentAction(page, () =>
           operation(resolved),
         );
+        operationCompleted = true;
       });
 
       if (this.pageRegistry.summaries().length === beforePages.length) {
         await popup;
       }
 
-      return this.synchronizeAfterAction(
+      return await this.synchronizeAfterAction(
         action,
         target.pageId,
         previous,
@@ -1388,7 +1390,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
       }
 
       const mapped =
-        error instanceof RoveError ? error : actionError(error, actionName);
+        error instanceof RoveError
+          ? error
+          : operationCompleted
+            ? new RoveError({
+                code: "RUNTIME_PROTOCOL_ERROR",
+                message: "Post-action browser synchronization failed.",
+              })
+            : actionError(error, actionName);
 
       const result = await this.synchronizeAfterAction(
         action,
@@ -1397,7 +1406,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
         beforePages,
       ).catch(() => undefined);
 
-      throw new InteractionDispatchError(mapped, result);
+      throw new InteractionDispatchError(
+        mapped,
+        result,
+        operationCompleted ? "post_action_synchronization" : "dispatch",
+      );
     }
   }
 
@@ -1413,12 +1426,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const previous = this.pageRegistry.stateFor(pageId);
 
     let dispatched = false;
+    let operationCompleted = false;
 
     try {
       if (request.target === undefined) {
         dispatched = true;
 
         await page.mouse.wheel(request.deltaX, request.deltaY);
+        operationCompleted = true;
       } else {
         const resolved = await this.resolveActionTarget(request.target);
 
@@ -1437,9 +1452,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
             y: request.deltaY,
           },
         );
+        operationCompleted = true;
       }
 
-      return this.synchronizeAfterAction(
+      return await this.synchronizeAfterAction(
         "precise_scroll",
         pageId,
         previous,
@@ -1453,7 +1469,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
       const mapped =
         error instanceof RoveError
           ? error
-          : actionError(error, "Precise scroll");
+          : operationCompleted
+            ? new RoveError({
+                code: "RUNTIME_PROTOCOL_ERROR",
+                message: "Post-action browser synchronization failed.",
+              })
+            : actionError(error, "Precise scroll");
 
       const result = await this.synchronizeAfterAction(
         "precise_scroll",
@@ -1462,7 +1483,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
         beforePages,
       ).catch(() => undefined);
 
-      throw new InteractionDispatchError(mapped, result);
+      throw new InteractionDispatchError(
+        mapped,
+        result,
+        operationCompleted ? "post_action_synchronization" : "dispatch",
+      );
     }
   }
 
@@ -1504,6 +1529,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const previous = this.pageRegistry.stateFor(pageId);
 
     let dispatched = false;
+    let operationCompleted = false;
 
     try {
       await this.withDialogDirective(pageId, request.dialog, async () => {
@@ -1515,9 +1541,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
             bounds.y + request.offsetY,
           ),
         );
+        operationCompleted = true;
       });
 
-      return this.synchronizeAfterAction(
+      return await this.synchronizeAfterAction(
         "coordinate_click",
         pageId,
         previous,
@@ -1531,7 +1558,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
       const mapped =
         error instanceof RoveError
           ? error
-          : actionError(error, "Coordinate click");
+          : operationCompleted
+            ? new RoveError({
+                code: "RUNTIME_PROTOCOL_ERROR",
+                message: "Post-action browser synchronization failed.",
+              })
+            : actionError(error, "Coordinate click");
 
       const result = await this.synchronizeAfterAction(
         "coordinate_click",
@@ -1540,7 +1572,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
         beforePages,
       ).catch(() => undefined);
 
-      throw new InteractionDispatchError(mapped, result);
+      throw new InteractionDispatchError(
+        mapped,
+        result,
+        operationCompleted ? "post_action_synchronization" : "dispatch",
+      );
     }
   }
 

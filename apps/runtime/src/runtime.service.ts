@@ -67,6 +67,7 @@ import {
   verifyExpectedEffects,
 } from "./interaction/verified-interaction.js";
 import { ConsequenceReplayFence } from "./interaction/consequence-replay-fence.js";
+import { RUNTIME_PROVENANCE } from "./runtime-provenance.js";
 
 const MAX_INLINE_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 
@@ -126,6 +127,10 @@ export class RuntimeService implements RoveRuntime {
       if (persistentProfile !== undefined) {
         profileLock = await RoveProfileLock.acquire(
           persistentProfile.userDataDir,
+          {
+            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+            sessionId: session.id,
+          },
         );
       }
 
@@ -141,6 +146,10 @@ export class RuntimeService implements RoveRuntime {
         ...(persistentProfile === undefined
           ? {}
           : { profileUserDataDir: persistentProfile.userDataDir }),
+        ownership: {
+          runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+          sessionId: session.id,
+        },
         timeouts: {
           launchMs: this.config.timeouts.launchMs,
           navigationMs: this.config.timeouts.navigationMs,
@@ -362,6 +371,10 @@ export class RuntimeService implements RoveRuntime {
         let dispatched = false;
 
         let dispatchFailure: unknown;
+        let dispatchFailureStage:
+          | InteractionDispatchError["stage"]
+          | undefined;
+        const degradations: NonNullable<ActionReceipt["degradations"]> = [];
 
         try {
           result = await browser.interact(input.action, {
@@ -382,6 +395,17 @@ export class RuntimeService implements RoveRuntime {
           dispatched = true;
           result = error.result;
           dispatchFailure = error.original;
+          dispatchFailureStage = error.stage;
+          degradations.push({
+            stage:
+              error.stage === "post_action_synchronization"
+                ? "page_synchronization"
+                : "action_dispatch",
+            code:
+              error.original instanceof RoveError
+                ? error.original.code
+                : "ACTION_OUTCOME_UNKNOWN",
+          });
         }
 
         lease.assertCurrent();
@@ -390,9 +414,16 @@ export class RuntimeService implements RoveRuntime {
 
         try {
           await this.syncActivePage(sessionId, lease);
-        } catch {
+        } catch (error) {
           lease.assertCurrent();
           synchronizationFailed = true;
+          degradations.push({
+            stage: "page_synchronization",
+            code:
+              error instanceof RoveError
+                ? error.code
+                : "RUNTIME_PROTOCOL_ERROR",
+          });
         }
 
         lease.assertCurrent();
@@ -404,8 +435,15 @@ export class RuntimeService implements RoveRuntime {
             successor = await browser.inspect();
 
             lease.assertCurrent();
-          } catch {
+          } catch (error) {
             lease.assertCurrent();
+            degradations.push({
+              stage: "successor_inspection",
+              code:
+                error instanceof RoveError
+                  ? error.code
+                  : "RUNTIME_PROTOCOL_ERROR",
+            });
           }
         }
 
@@ -415,8 +453,15 @@ export class RuntimeService implements RoveRuntime {
           afterPages = await browser.pages();
 
           lease.assertCurrent();
-        } catch {
+        } catch (error) {
           lease.assertCurrent();
+          degradations.push({
+            stage: "page_inventory",
+            code:
+              error instanceof RoveError
+                ? error.code
+                : "RUNTIME_PROTOCOL_ERROR",
+          });
         }
 
         const effects = verifyExpectedEffects(
@@ -441,6 +486,8 @@ export class RuntimeService implements RoveRuntime {
           sessionId,
           action: input.action.kind,
           dispatched,
+          dispatchStatus:
+            dispatchFailureStage === "dispatch" ? "uncertain" : "completed",
           outcome,
           consequential: input.consequential,
           ...(input.consequenceKey === undefined
@@ -460,6 +507,7 @@ export class RuntimeService implements RoveRuntime {
                 target,
               }),
           effects,
+          degradations,
           ...(result?.pageChanged === undefined
             ? {}
             : {
@@ -538,14 +586,36 @@ export class RuntimeService implements RoveRuntime {
             : {
                 pageRevision: result.currentRevision,
               }),
+        }).catch((error: unknown) => {
+          degradations.push({
+            stage: "receipt_persistence",
+            code:
+              error instanceof RoveError
+                ? error.code
+                : "EVIDENCE_WRITE_FAILED",
+          });
         });
 
         lease.assertCurrent();
 
-        const assessment =
-          successor === undefined
-            ? undefined
-            : this.interactionPolicy.recordInspection(sessionId, successor);
+        let assessment: PageInspectionPolicyRecord | undefined;
+
+        if (successor !== undefined) {
+          try {
+            assessment = this.interactionPolicy.recordInspection(
+              sessionId,
+              successor,
+            );
+          } catch (error) {
+            degradations.push({
+              stage: "page_policy",
+              code:
+                error instanceof RoveError
+                  ? error.code
+                  : "RUNTIME_PROTOCOL_ERROR",
+            });
+          }
+        }
 
         lease.assertCurrent();
 
@@ -564,7 +634,15 @@ export class RuntimeService implements RoveRuntime {
           assessment.policyDecision,
           assessment.pageState,
           "post_action",
-        );
+        ).catch((error: unknown) => {
+          receipt.degradations?.push({
+            stage: "page_policy",
+            code:
+              error instanceof RoveError
+                ? error.code
+                : "RUNTIME_PROTOCOL_ERROR",
+          });
+        });
       },
     );
 
@@ -932,8 +1010,34 @@ export class RuntimeService implements RoveRuntime {
 
         await this.authorizeMutation(sessionId, signature, lease);
 
+        let actionResult: ActionResult;
+
+        try {
+          actionResult = await operation();
+        } catch (error) {
+          if (!(error instanceof InteractionDispatchError)) {
+            throw error;
+          }
+
+          throw new RoveError({
+            code: "ACTION_OUTCOME_UNKNOWN",
+            message:
+              error.stage === "post_action_synchronization"
+                ? "The browser action completed, but Rove could not finish post-action synchronization. Inspect before deciding whether any replay is safe."
+                : "The browser action may have been dispatched. Inspect before deciding whether any replay is safe.",
+            retryable: false,
+            details: {
+              dispatched: true,
+              stage: error.stage,
+              ...(error.result === undefined
+                ? {}
+                : { partialResult: error.result }),
+            },
+          });
+        }
+
         const result = {
-          ...(await operation()),
+          ...actionResult,
           sessionId,
         };
 

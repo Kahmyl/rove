@@ -6,9 +6,23 @@ import type { BearerTokenVerifier } from "../auth/bearer-auth.js";
 import { unauthorizedBody } from "../auth/bearer-auth.js";
 import type { McpLogger } from "../logging/logger.js";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
+import packageJson from "../../package.json" with { type: "json" };
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const SESSION_TTL_MS = 30 * 60 * 1000;
+const MCP_INSTANCE_ID = `mcp_${randomUUID().replaceAll("-", "")}`;
+const MCP_STARTED_AT = new Date().toISOString();
+
+function serviceProvenance() {
+  return {
+    service: "rove-mcp",
+    version: packageJson.version,
+    mcpInstanceId: MCP_INSTANCE_ID,
+    startedAt: MCP_STARTED_AT,
+    processId: process.pid,
+    transport: "http",
+  } as const;
+}
 
 export interface StreamableHttpOptions {
   host: string;
@@ -87,8 +101,7 @@ async function handleRequest(
   if (request.method === "GET" && url.pathname === "/live") {
     writeJson(response, 200, {
       status: "ok",
-      service: "rove-mcp",
-      transport: "http",
+      ...serviceProvenance(),
     });
     return;
   }
@@ -162,10 +175,14 @@ async function handleRequest(
 
 async function handleHealth(response: ServerResponse, runtime: RuntimeClient): Promise<void> {
   try {
-    await runtime.healthCheck(2_000);
-    writeJson(response, 200, { status: "ok", service: "rove-mcp", transport: "http" });
+    const runtimeHealth = await runtime.healthCheck(2_000);
+    writeJson(response, 200, {
+      status: "ok",
+      ...serviceProvenance(),
+      runtime: runtimeHealth ?? null,
+    });
   } catch {
-    writeJson(response, 503, { status: "unavailable", service: "rove-mcp", transport: "http", dependency: "runtime" });
+    writeJson(response, 503, { status: "unavailable", ...serviceProvenance(), dependency: "runtime" });
   }
 }
 

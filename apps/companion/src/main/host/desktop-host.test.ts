@@ -108,6 +108,7 @@ function createHarness(
     waitForRuntimeReady: async () => undefined,
     sleep: async () => undefined,
     token: () => `token-${++tokenIndex}`,
+    reconcileManagedRuntime: async () => undefined,
     ...dependencyOverrides,
   };
 

@@ -642,6 +642,16 @@ defined by Phase 2.
 Consequential unknown outcomes remain non-replayable under their stable
 `consequenceKey`.
 
+The mutation dispatch boundary is explicit. A failure before dispatch is a
+definite interaction failure. A dispatch that may have reached the page but
+cannot be established returns `ACTION_OUTCOME_UNKNOWN`, requires inspection,
+and cannot be blindly replayed when consequential. When the browser operation
+completed but successor synchronization or optional observation systems fail,
+the `ActionReceipt` retains `dispatchStatus: completed` and records bounded
+`degradations` for page synchronization, successor inspection, page inventory,
+receipt persistence, or page policy. Those observability failures do not turn a
+known external mutation into `INVALID_CONFIGURATION`.
+
 ### Security and privacy boundary
 
 Visual content is untrusted page evidence.

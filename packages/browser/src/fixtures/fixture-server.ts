@@ -6,6 +6,7 @@ import { LOCAL_PERCEPTION_FIXTURES } from "../perception/corpus/local-corpus.js"
 export interface FixtureServer {
   readonly port: number;
   readonly url: string;
+  mutationCount(): number;
   close(): Promise<void>;
 }
 
@@ -80,6 +81,12 @@ const ACTIONS_HTML = `<!doctype html>
 </html>`;
 
 const RESULT_HTML = `<!doctype html><html><head><title>Rove Result Fixture</title></head><body><h1>Result page</h1><a href="/actions">Back to actions</a></body></html>`;
+const CONSEQUENTIAL_ACTION_HTML = `<!doctype html><html><head><title>Consequential action</title></head><body>
+  <form action="/consequential-mutation" method="post">
+    <button type="submit">Apply consequential mutation</button>
+  </form>
+</body></html>`;
+const CONSEQUENTIAL_RESULT_HTML = `<!doctype html><html><head><title>Mutation applied</title></head><body><h1>Mutation applied</h1></body></html>`;
 const DOWNLOAD_HTML = `<!doctype html><html><head><title>Download fixture</title></head><body><a id="download-file" href="/download.txt">Download file</a></body></html>`;
 const HISTORY_A_HTML = `<!doctype html><html><head><title>History A</title></head><body><h1>History A</h1><a href="/history-b">History B</a></body></html>`;
 const HISTORY_B_HTML = `<!doctype html><html><head><title>History B</title></head><body><h1>History B</h1></body></html>`;
@@ -251,7 +258,18 @@ const REACTIVE_EDITOR_HTML = `<!doctype html>
  */
 export async function startFixtureServer(): Promise<FixtureServer> {
   const inspectionHtml = await readFile(INSPECTION_HTML_URL, "utf8");
+  let mutationCount = 0;
   const server = createServer((request, response) => {
+    if (
+      request.method === "POST" &&
+      request.url === "/consequential-mutation"
+    ) {
+      mutationCount += 1;
+      response.writeHead(303, { location: "/consequential-result" });
+      response.end();
+      return;
+    }
+
     if (request.url === "/evidence-redirect") {
       response.writeHead(302, {
         location: "/evidence-terminal?token=redirect-secret",
@@ -294,6 +312,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/popup": POPUP_HTML,
         "/actions": ACTIONS_HTML,
         "/result": RESULT_HTML,
+        "/consequential-action": CONSEQUENTIAL_ACTION_HTML,
+        "/consequential-result": CONSEQUENTIAL_RESULT_HTML,
         "/download": DOWNLOAD_HTML,
         "/history-a": HISTORY_A_HTML,
         "/history-b": HISTORY_B_HTML,
@@ -331,6 +351,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
   return {
     port: address.port,
     url: `http://127.0.0.1:${address.port}`,
+    mutationCount: () => mutationCount,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

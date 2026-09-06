@@ -985,6 +985,126 @@ describe("Milestone 4 runtime integration", () => {
     );
   });
 
+  it("returns applied with explicit degradation after a completed consequential mutation", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const internal = liveBrowser as unknown as {
+      synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
+    };
+    const synchronize = internal.synchronizeAfterAction.bind(liveBrowser);
+    let synchronizationCalls = 0;
+
+    internal.synchronizeAfterAction = async (...args: unknown[]) => {
+      synchronizationCalls += 1;
+      if (synchronizationCalls === 1) {
+        throw new Error("forced post-action synchronization failure");
+      }
+      return synchronize(...args);
+    };
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      consequential: true,
+      consequenceKey: "fixture:mutation:applied",
+    });
+
+    expect(server.mutationCount()).toBe(1);
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      dispatchStatus: "completed",
+      outcome: "applied",
+      degradations: [
+        {
+          stage: "page_synchronization",
+          code: "RUNTIME_PROTOCOL_ERROR",
+        },
+      ],
+    });
+  });
+
+  it("fences replay when dispatch completes but successor truth is unavailable", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const internal = liveBrowser as unknown as {
+      synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
+    };
+    const synchronize = internal.synchronizeAfterAction.bind(liveBrowser);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+
+    internal.synchronizeAfterAction = async () => {
+      throw new Error("forced post-action synchronization failure");
+    };
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async () => {
+        throw new Error("forced successor inspection failure");
+      },
+    });
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      consequential: true,
+      consequenceKey: "fixture:mutation:unknown",
+    });
+
+    expect(server.mutationCount()).toBe(1);
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      dispatchStatus: "completed",
+      outcome: "unknown",
+      degradations: expect.arrayContaining([
+        expect.objectContaining({ stage: "page_synchronization" }),
+        expect.objectContaining({ stage: "successor_inspection" }),
+      ]),
+    });
+
+    internal.synchronizeAfterAction = synchronize;
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: inspect,
+    });
+    await liveBrowser.navigate(`${server.url}/consequential-action`);
+    const reconciled = await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: reconciled.observationId,
+        action: {
+          kind: "click",
+          target: target(reconciled, "Apply consequential mutation"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:mutation:unknown",
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(server.mutationCount()).toBe(1);
+  });
+
   it("exposes managed browser downloads as file evidence", async () => {
     const server = await fixture();
     const { runtime } = await harness();

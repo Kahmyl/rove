@@ -4,6 +4,10 @@ import {
   shouldDetachManagedChild,
   terminateProcessTree,
 } from "./process-tree.js";
+import {
+  removeManagedRuntimeRecord,
+  writeManagedRuntimeRecord,
+} from "./managed-runtime-registry.js";
 
 export interface RuntimeProcessOptions {
   runtimeDirectory: string;
@@ -18,6 +22,8 @@ export interface RuntimeProcessOptions {
   nodeExecutable?: string;
   entrypoint?: string;
   electronRunAsNode?: boolean;
+  runtimeInstanceId?: string;
+  runtimeStartedAt?: string;
 }
 
 export function buildRuntimeProcessEnvironment(
@@ -35,6 +41,12 @@ export function buildRuntimeProcessEnvironment(
     ROVE_RUNTIME_TOKEN: options.token,
     ROVE_BROWSER_HEADLESS: String(options.browserHeadless),
     ROVE_BROWSER: options.browser,
+    ...(options.runtimeInstanceId === undefined
+      ? {}
+      : { ROVE_RUNTIME_INSTANCE_ID: options.runtimeInstanceId }),
+    ...(options.runtimeStartedAt === undefined
+      ? {}
+      : { ROVE_RUNTIME_STARTED_AT: options.runtimeStartedAt }),
     ...(options.browserExecutablePath === undefined
       ? {}
       : {
@@ -67,6 +79,7 @@ function appendOutputTail(existing: string, chunk: Buffer): string {
 
 export class RuntimeProcess {
   private child: ChildProcess | undefined;
+  private registryWrite: Promise<void> = Promise.resolve();
 
   private readonly exitListeners = new Set<(exit: RuntimeExit) => void>();
 
@@ -84,6 +97,9 @@ export class RuntimeProcess {
       this.options.entrypoint === undefined
         ? ["--import", "tsx", "src/main.ts"]
         : [this.options.entrypoint];
+    if (this.options.runtimeInstanceId !== undefined) {
+      args.push(`--rove-runtime-instance=${this.options.runtimeInstanceId}`);
+    }
 
     const child = spawn(nodeExecutable, args, {
       cwd: this.options.runtimeDirectory,
@@ -93,6 +109,23 @@ export class RuntimeProcess {
     });
 
     this.child = child;
+
+    if (
+      child.pid !== undefined &&
+      this.options.runtimeInstanceId !== undefined &&
+      this.options.runtimeStartedAt !== undefined
+    ) {
+      this.registryWrite = writeManagedRuntimeRecord({
+        home: this.options.home,
+        runtimeDirectory: this.options.runtimeDirectory,
+        baseUrl: `http://${this.options.host}:${this.options.port}`,
+        runtimeInstanceId: this.options.runtimeInstanceId,
+        runtimeProcessId: child.pid,
+        startedAt: this.options.runtimeStartedAt,
+      }).catch((error: unknown) => {
+        process.stderr.write(`[runtime] Failed to record managed Runtime ownership: ${error instanceof Error ? error.message : String(error)}\n`);
+      });
+    }
 
     let outputTail = "";
 
@@ -127,6 +160,14 @@ export class RuntimeProcess {
 
       if (pid !== undefined) {
         void terminateProcessTree(pid, "SIGKILL").catch(() => undefined);
+      }
+      if (this.options.runtimeInstanceId !== undefined) {
+        void this.registryWrite
+          .then(() => removeManagedRuntimeRecord(
+            this.options.home,
+            this.options.runtimeInstanceId!,
+          ))
+          .catch(() => undefined);
       }
 
       for (const listener of this.exitListeners) {

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import {
   discoverBrowser,
@@ -17,6 +17,7 @@ import {
   type RuntimeProcessOptions,
 } from "./runtime-process.js";
 import { waitForRuntimeReady } from "./runtime-readiness.js";
+import { reconcileManagedRuntime } from "./managed-runtime-registry.js";
 
 export type DesktopHostState =
   | "starting"
@@ -29,6 +30,8 @@ export interface DesktopServiceConnection {
   baseUrl: string;
   token: string;
   port: number;
+  runtimeInstanceId: string;
+  startedAt: string;
 }
 
 export interface DesktopHostConnection {
@@ -63,6 +66,7 @@ export interface DesktopHostDependencies {
   ): Promise<void>;
   sleep(ms: number): Promise<void>;
   token(): string;
+  reconcileManagedRuntime(options: { home: string; runtimeDirectory: string }): Promise<void>;
 }
 
 export interface DesktopHostOptions {
@@ -90,6 +94,7 @@ const defaultDependencies: DesktopHostDependencies = {
       setTimeout(resolve, ms);
     }),
   token: () => randomBytes(32).toString("hex"),
+  reconcileManagedRuntime,
 };
 
 function errorMessage(error: unknown): string {
@@ -157,6 +162,11 @@ export class DesktopHost {
     this.recoveryEnabled = false;
     this.runtimeRestartAttempts = 0;
 
+    await this.dependencies.reconcileManagedRuntime({
+      home: this.options.home,
+      runtimeDirectory: this.options.runtimeDirectory,
+    });
+
     const browser = await this.dependencies.discoverBrowser({
       preferredBrowser: this.options.browser,
       ...(this.options.browserExecutablePath === undefined
@@ -166,6 +176,8 @@ export class DesktopHost {
     const host = "127.0.0.1";
     const runtimePort = await this.dependencies.allocateLoopbackPort();
     const runtimeToken = this.dependencies.token();
+    const runtimeInstanceId = `runtime_${randomUUID().replaceAll("-", "")}`;
+    const runtimeStartedAt = new Date().toISOString();
     const runtimeBaseUrl = `http://${host}:${runtimePort}`;
     const connection: DesktopHostConnection = {
       browser,
@@ -173,6 +185,8 @@ export class DesktopHost {
         baseUrl: runtimeBaseUrl,
         token: runtimeToken,
         port: runtimePort,
+        runtimeInstanceId,
+        startedAt: runtimeStartedAt,
       },
     };
     const runtime = this.dependencies.createRuntimeProcess({
@@ -181,6 +195,8 @@ export class DesktopHost {
       host,
       port: runtimePort,
       token: runtimeToken,
+      runtimeInstanceId,
+      runtimeStartedAt,
       browserHeadless: this.options.browserHeadless,
       browser: browser.kind,
       ...(this.options.runtimeNodeExecutable === undefined

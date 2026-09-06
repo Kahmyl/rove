@@ -12,6 +12,8 @@ import {
 const BODY_LIMIT = 2 * 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT_MS = 35_000;
 const POLL_TIMEOUT_MS = 25_000;
+const CONTROL_PLANE_INSTANCE_ID = `control_${randomUUID().replaceAll("-", "")}`;
+const CONTROL_PLANE_STARTED_AT = new Date().toISOString();
 
 export interface RelayServerOptions {
   host: string;
@@ -22,6 +24,7 @@ export interface RelayServerOptions {
 
 interface PendingCommand {
   deviceId: string;
+  runtimeInstanceId?: string;
   resolve(result: HubCommandResult): void;
   timer: NodeJS.Timeout;
 }
@@ -29,6 +32,13 @@ interface PendingCommand {
 interface PollWaiter {
   response: ServerResponse;
   timer: NodeJS.Timeout;
+  runtimeInstanceId: string;
+}
+
+interface ActiveHub {
+  runtimeInstanceId: string;
+  startedAt: number;
+  lastSeenAt: number;
 }
 
 export class RelayServer {
@@ -36,6 +46,7 @@ export class RelayServer {
   private readonly pollers = new Map<string, PollWaiter>();
   private readonly pending = new Map<string, PendingCommand>();
   private readonly lastSeen = new Map<string, number>();
+  private readonly activeHubs = new Map<string, ActiveHub>();
   private server: Server | undefined;
 
   constructor(private readonly options: RelayServerOptions) {}
@@ -91,7 +102,14 @@ export class RelayServer {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
 
     if (method === "GET" && url.pathname === "/health") {
-      writeJson(response, 200, { ok: true, service: "rove-control-plane", protocolVersion: ROVE_HUB_PROTOCOL_VERSION });
+      writeJson(response, 200, {
+        ok: true,
+        service: "rove-control-plane",
+        controlPlaneInstanceId: CONTROL_PLANE_INSTANCE_ID,
+        startedAt: CONTROL_PLANE_STARTED_AT,
+        processId: process.pid,
+        protocolVersion: ROVE_HUB_PROTOCOL_VERSION,
+      });
       return;
     }
 
@@ -121,6 +139,11 @@ export class RelayServer {
         connected: seenAt !== undefined && Date.now() - seenAt < POLL_TIMEOUT_MS + 10_000,
         lastSeenAt: seenAt === undefined ? null : new Date(seenAt).toISOString(),
         queuedCommands: this.queues.get(deviceId)?.length ?? 0,
+        runtimeInstanceId: this.activeHubs.get(deviceId)?.runtimeInstanceId ?? null,
+        runtimeStartedAt:
+          this.activeHubs.get(deviceId) === undefined
+            ? null
+            : new Date(this.activeHubs.get(deviceId)!.startedAt).toISOString(),
       });
       return;
     }
@@ -142,6 +165,19 @@ export class RelayServer {
         writeJson(response, 403, { error: { code: "DEVICE_MISMATCH", message: "Result device does not own this command." } });
         return;
       }
+      const runtimeInstanceId = hubIdentity(request).runtimeInstanceId;
+      if (
+        pending.runtimeInstanceId !== undefined &&
+        pending.runtimeInstanceId !== runtimeInstanceId
+      ) {
+        writeJson(response, 409, {
+          error: {
+            code: "STALE_RUNTIME_INSTANCE",
+            message: "This result belongs to a superseded Runtime instance.",
+          },
+        });
+        return;
+      }
       clearTimeout(pending.timer);
       this.pending.delete(result.commandId);
       pending.resolve(result);
@@ -153,9 +189,33 @@ export class RelayServer {
   }
 
   private async poll(deviceId: string, request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const incoming = hubIdentity(request);
+    const active = this.activeHubs.get(deviceId);
+    if (
+      active !== undefined &&
+      active.runtimeInstanceId !== incoming.runtimeInstanceId &&
+      active.startedAt >= incoming.startedAt
+    ) {
+      writeJson(response, 409, {
+        error: {
+          code: "STALE_RUNTIME_INSTANCE",
+          message: "A newer Rove Runtime instance owns this device route.",
+        },
+      });
+      return;
+    }
+
+    this.activeHubs.set(deviceId, {
+      ...incoming,
+      lastSeenAt: Date.now(),
+    });
     this.lastSeen.set(deviceId, Date.now());
     const queued = this.queues.get(deviceId)?.shift();
     if (queued !== undefined) {
+      const pending = this.pending.get(queued.commandId);
+      if (pending !== undefined) {
+        pending.runtimeInstanceId = incoming.runtimeInstanceId;
+      }
       writeJson(response, 200, queued);
       return;
     }
@@ -163,7 +223,17 @@ export class RelayServer {
     const existing = this.pollers.get(deviceId);
     if (existing !== undefined) {
       clearTimeout(existing.timer);
-      if (!existing.response.writableEnded) existing.response.writeHead(409).end();
+      if (!existing.response.writableEnded) {
+        writeJson(existing.response, 409, {
+          error: {
+            code:
+              existing.runtimeInstanceId === incoming.runtimeInstanceId
+                ? "POLL_REPLACED"
+                : "STALE_RUNTIME_INSTANCE",
+            message: "The device poll was replaced by current Runtime authority.",
+          },
+        });
+      }
     }
 
     await new Promise<void>((resolve) => {
@@ -177,7 +247,11 @@ export class RelayServer {
         finish();
       }, POLL_TIMEOUT_MS);
       timer.unref();
-      this.pollers.set(deviceId, { response, timer });
+      this.pollers.set(deviceId, {
+        response,
+        timer,
+        runtimeInstanceId: incoming.runtimeInstanceId,
+      });
       request.once("aborted", () => {
         clearTimeout(timer);
         finish();
@@ -226,6 +300,10 @@ export class RelayServer {
       if (poller !== undefined) {
         this.pollers.delete(deviceId);
         clearTimeout(poller.timer);
+        const pending = this.pending.get(commandId);
+        if (pending !== undefined) {
+          pending.runtimeInstanceId = poller.runtimeInstanceId;
+        }
         writeJson(poller.response, 200, command);
       } else {
         const queue = this.queues.get(deviceId) ?? [];
@@ -234,6 +312,23 @@ export class RelayServer {
       }
     });
   }
+}
+
+function hubIdentity(request: IncomingMessage): {
+  runtimeInstanceId: string;
+  startedAt: number;
+} {
+  const runtimeInstanceId = request.headers["x-rove-runtime-instance-id"];
+  const startedAt = request.headers["x-rove-runtime-started-at"];
+  if (
+    typeof runtimeInstanceId === "string" &&
+    /^runtime_[a-f0-9]{32}$/.test(runtimeInstanceId) &&
+    typeof startedAt === "string" &&
+    !Number.isNaN(Date.parse(startedAt))
+  ) {
+    return { runtimeInstanceId, startedAt: Date.parse(startedAt) };
+  }
+  return { runtimeInstanceId: "legacy", startedAt: 0 };
 }
 
 function requireBearer(request: IncomingMessage, expected: string): void {

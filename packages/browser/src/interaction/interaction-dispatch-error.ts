@@ -6,6 +6,7 @@ export class InteractionDispatchError extends Error {
   constructor(
     readonly original: unknown,
     readonly result?: ActionResult,
+    readonly stage: "dispatch" | "post_action_synchronization" = "dispatch",
   ) {
     super(
       original instanceof Error

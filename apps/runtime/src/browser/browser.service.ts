@@ -14,6 +14,7 @@ import {
 @Injectable()
 export class BrowserService implements OnModuleDestroy {
   private readonly sessions = new Map<string, BrowserSession>();
+  private readonly persistentProfiles = new Map<string, string>();
 
   constructor(@Inject(BROWSER_ENGINE) private readonly engine: BrowserEngine) {}
 
@@ -27,8 +28,23 @@ export class BrowserService implements OnModuleDestroy {
         message: "A browser is already attached to this session.",
       });
     }
+    if (config.profile?.mode === "persistent") {
+      const owner = this.persistentProfiles.get(config.profile.name);
+      if (owner !== undefined) {
+        throw new RoveError({
+          code: "PROFILE_LOCKED",
+          message:
+            "The persistent browser workspace is in use by an active Rove session.",
+          retryable: true,
+          details: { state: "active_session", sessionId: owner },
+        });
+      }
+    }
     const browser = await this.engine.start(config);
     this.sessions.set(sessionId, browser);
+    if (config.profile?.mode === "persistent") {
+      this.persistentProfiles.set(config.profile.name, sessionId);
+    }
     return browser;
   }
 
@@ -55,6 +71,9 @@ export class BrowserService implements OnModuleDestroy {
     const browser = this.sessions.get(sessionId);
     if (!browser) return;
     this.sessions.delete(sessionId);
+    for (const [profileName, owner] of this.persistentProfiles) {
+      if (owner === sessionId) this.persistentProfiles.delete(profileName);
+    }
     await browser.close();
   }
 

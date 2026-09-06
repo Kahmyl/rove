@@ -81,6 +81,17 @@ The browser package currently implements:
 
 MCP defaults new sessions to the managed persistent `default` profile. Runtime applies a conservative minimum action interval in headed mode, while the browser uses configurable sequential key timing.
 
+The persistent profile is a durable Rove-owned browser workspace, not a Runtime
+or session. Cookies, site storage, service workers, and ordinary site
+preferences survive browser close. A separate browser-host record proves the
+single writable Chrome process using a host ID, nonce, process start identity,
+profile identity, loopback CDP endpoint, Runtime instance, session, and
+ownership generation. A dead Runtime may reconnect to a verified live host with
+a fresh page registry and fresh target authority. A concurrent active Runtime
+receives `PROFILE_LOCKED`; stale owned metadata is removed only after liveness
+and identity checks. Profile deletion remains an explicit operation, and Rove
+never substitutes a temporary profile unless the caller requested one.
+
 Page-state handling is split into three explicit layers:
 
 ```text
@@ -102,6 +113,24 @@ Inspection does not increment page revision. Existing revision authority remains
 ## Runtime integration
 
 The runtime owns the `ses_*` identity and maps each active session to one browser session. Startup persists `starting` before launch and transitions to `active` or `failed`; shutdown closes the browser before persisting `completed`. Browser-changing operations pass through the per-session command coordinator and agent-control guard. Runtime action results expose the Rove session ID, observations never persist raw typed values, and screenshot bytes are converted to filesystem evidence.
+
+Action truth is bounded at mutation dispatch. Failure before dispatch remains a
+definite action failure. Once dispatch may have occurred, failure is an
+`ACTION_OUTCOME_UNKNOWN` replay fence unless the browser confirms completion.
+When dispatch completed but successor synchronization, inspection, expected
+effect evidence, policy recording, or receipt persistence degrades, the
+`ActionReceipt` preserves the completed dispatch and reports the degradation
+separately. Consequential unknown outcomes are never recommended for blind
+replay; inspection is required to reconcile them.
+
+Each managed Runtime publishes an instance ID, start time, PID, package version,
+and development commit when safely discoverable. Browser-host identity and
+session generation link browser authority to that Runtime. MCP and Control Plane
+health expose their own process instance identities, and the Control Plane
+fences older Hub pollers per device. Companion records restricted ownership
+metadata and only replaces an orphaned managed Runtime after the record,
+process-start identity, command marker, loopback health response, PID, and
+Runtime instance all agree. Unknown processes are never attached to or killed.
 
 The private NestJS API exposes local session, browser, page, observation, and evidence routes. It is the Hub's private Runtime API, not the future deployed product API. A centralized bearer guard protects session routes when configured, non-loopback startup without a token is rejected, and structured Rove errors are mapped to stable HTTP responses.
 

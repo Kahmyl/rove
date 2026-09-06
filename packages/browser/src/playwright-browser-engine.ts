@@ -13,6 +13,7 @@ import {
   discoverExternalChromeExecutable,
   launchExternalChrome,
 } from "./runtime/external-chrome-runtime.js";
+import { acquirePersistentBrowserHost } from "./profiles/persistent-browser-host.js";
 import {
   type BrowserDistribution,
   type BrowserLaunchPlanDiagnostic,
@@ -165,29 +166,43 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
     }
 
     let external: Awaited<ReturnType<typeof launchExternalChrome>> | undefined;
+    let persistentHost:
+      | Awaited<ReturnType<typeof acquirePersistentBrowserHost>>
+      | undefined;
 
     let browser: Browser | undefined;
 
     try {
-      external = await launchExternalChrome({
-        executablePath,
-        headless: plan.headless,
-        ...(userDataDir === undefined
-          ? {}
-          : {
-              userDataDir,
-            }),
-        ...(plan.args.length === 0
-          ? {}
-          : {
-              launchArgs: plan.args,
-            }),
-        ...(plan.timeoutMs === undefined
-          ? {}
-          : {
-              timeoutMs: plan.timeoutMs,
-            }),
-      });
+      const launch = (ownershipArguments: string[] = []) =>
+        launchExternalChrome({
+          executablePath,
+          headless: plan.headless,
+          ...(userDataDir === undefined ? {} : { userDataDir }),
+          ...(plan.args.length === 0 && ownershipArguments.length === 0
+            ? {}
+            : { launchArgs: [...plan.args, ...ownershipArguments] }),
+          ...(plan.timeoutMs === undefined
+            ? {}
+            : { timeoutMs: plan.timeoutMs }),
+        });
+
+      if (
+        userDataDir !== undefined &&
+        config.profile.mode === "persistent" &&
+        config.ownership !== undefined
+      ) {
+        persistentHost = await acquirePersistentBrowserHost({
+          profileName: config.profile.name,
+          userDataDir,
+          runtimeInstanceId: config.ownership.runtimeInstanceId,
+          runtimeProcessId: process.pid,
+          sessionId: config.ownership.sessionId,
+          launch,
+        });
+        external = persistentHost.runtime;
+      } else {
+        external = await launch();
+      }
 
       const externalRuntime = external;
 
@@ -217,22 +232,32 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
         },
         downloadRuntime,
         sessionId,
-        externalRuntime.closeGracefully,
+        persistentHost === undefined
+          ? externalRuntime.closeGracefully
+          : async () => {
+              await externalRuntime.closeGracefully();
+              if (externalRuntime.currentProcessId() === undefined) {
+                await persistentHost?.release();
+              }
+            },
         () => {
           const processId = externalRuntime.currentProcessId();
 
           return processId === undefined
             ? null
-            : {
+            : (persistentHost?.identity ?? {
                 kind: "owned_process" as const,
                 processId,
-              };
+              });
         },
       );
     } catch (error) {
       await browser?.close().catch(() => undefined);
 
       await external?.close().catch(() => undefined);
+      if (external?.currentProcessId() === undefined) {
+        await persistentHost?.release().catch(() => undefined);
+      }
 
       throw toLaunchError(error);
     }

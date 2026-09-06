@@ -634,6 +634,8 @@ async function startDesktop(): Promise<void> {
           baseUrl: connection.runtime.baseUrl,
           token: connection.runtime.token,
         },
+        runtimeInstanceId: connection.runtime.runtimeInstanceId,
+        runtimeStartedAt: connection.runtime.startedAt,
       });
       hubConnector.start();
       console.info("[hub] Outbound control-plane connector started.");

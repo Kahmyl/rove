@@ -33,7 +33,7 @@ export interface SaveRecordInput {
 }
 
 export interface RuntimeClient {
-  healthCheck(timeoutMs?: number): Promise<void>;
+  healthCheck(timeoutMs?: number): Promise<unknown>;
   startSession(input: StartSessionRequest): Promise<SessionSnapshot>;
   getSession(sessionId: string): Promise<SessionSnapshot>;
   endSession(sessionId: string): Promise<SessionSnapshot>;

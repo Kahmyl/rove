@@ -41,6 +41,12 @@ export const browserProfileSchema = z.discriminatedUnion("mode", [
 export const browserHostIdentitySchema = z.object({
   kind: z.literal("owned_process"),
   processId: z.number().int().positive(),
+  browserHostId: z.string().startsWith("host_").optional(),
+  runtimeInstanceId: z.string().startsWith("runtime_").optional(),
+  sessionId: z.string().startsWith("ses_").optional(),
+  ownershipGeneration: z.number().int().positive().optional(),
+  profileName: z.string().optional(),
+  reused: z.boolean().optional(),
 });
 
 export const browserWindowStateSchema = z.object({

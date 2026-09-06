@@ -15,8 +15,12 @@ export interface HubConnectorOptions {
   deviceId: string;
   token: string;
   runtime: LocalRuntimeConnection;
+  runtimeInstanceId: string;
+  runtimeStartedAt: string;
   retryDelayMs?: number;
 }
+
+class StaleRuntimeInstanceError extends Error {}
 
 export class HubConnector {
   private controller: AbortController | undefined;
@@ -66,6 +70,7 @@ export class HubConnector {
         await this.sendResultWithRetry(result, signal);
       } catch (error) {
         if (signal.aborted) return;
+        if (error instanceof StaleRuntimeInstanceError) return;
         console.warn("[hub] Control-plane connection failed; retrying.", error);
         await delay(this.options.retryDelayMs ?? 1_000, signal);
       }
@@ -77,11 +82,16 @@ export class HubConnector {
       new URL(`/v1/devices/${encodeURIComponent(this.options.deviceId)}/poll`, this.options.controlPlaneUrl),
       {
         method: "POST",
-        headers: { authorization: `Bearer ${this.options.token}` },
+        headers: this.localHubHeaders(),
         signal,
       },
     );
     if (response.status === 204) return undefined;
+    if (response.status === 409) {
+      throw new StaleRuntimeInstanceError(
+        "This Hub is fenced as an older Runtime instance.",
+      );
+    }
     if (!response.ok) throw new Error(`Control-plane poll failed with HTTP ${response.status}.`);
     const command = hubCommandSchema.parse(await response.json());
     if (command.deviceId !== this.options.deviceId) throw new Error("Control plane returned a command for another device.");
@@ -94,7 +104,7 @@ export class HubConnector {
       {
         method: "POST",
         headers: {
-          authorization: `Bearer ${this.options.token}`,
+          ...this.localHubHeaders(),
           "content-type": "application/json",
         },
         body: JSON.stringify(result),
@@ -118,6 +128,24 @@ export class HubConnector {
         await delay(this.options.retryDelayMs ?? 1_000, signal);
       }
     }
+  }
+
+  private localHubHeaders(): Record<string, string> {
+    const destination = new URL(this.options.controlPlaneUrl);
+    if (
+      destination.hostname !== "127.0.0.1" &&
+      destination.hostname !== "localhost" &&
+      destination.hostname !== "::1"
+    ) {
+      throw new Error(
+        "Runtime provenance may only be sent to a loopback Rove control plane.",
+      );
+    }
+    return {
+      authorization: `Bearer ${this.options.token}`,
+      "x-rove-runtime-instance-id": this.options.runtimeInstanceId,
+      "x-rove-runtime-started-at": this.options.runtimeStartedAt,
+    };
   }
 }
 
