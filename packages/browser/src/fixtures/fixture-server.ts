@@ -204,6 +204,47 @@ const DYNAMIC_TARGET_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
+const INTERACTIVE_RECONCILIATION_HTML = `<!doctype html>
+<html><head><title>Interactive reconciliation</title></head><body>
+  <svg role="img" aria-label="Decorative status"><circle r="4"></circle></svg>
+  <label>Issue actions
+    <select><option>Record actions</option></select>
+  </label>
+  <button id="edit-body">Edit body</button>
+  <label><input type="checkbox" /> task one</label>
+  <label><input type="checkbox" /> task two</label>
+  <div id="editor"></div>
+  <script>
+    document.querySelector('#edit-body').addEventListener('click', () => {
+      document.querySelector('#editor').innerHTML =
+        '<label for="body-input">Body input</label><textarea id="body-input"></textarea>' +
+        '<button>Cancel</button><button>Save</button>';
+    });
+  </script>
+</body></html>`;
+
+const REACTIVE_EDITOR_HTML = `<!doctype html>
+<html><head><title>Reactive editor</title></head><body>
+  <label for="body">Body</label><textarea id="body"></textarea>
+  <label for="guarded-secret">Password</label>
+  <input id="guarded-secret" type="password" />
+  <script>
+    const body = document.querySelector('#body');
+    body.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const start = body.selectionStart;
+      body.setRangeText('\\n- [ ] ', start, body.selectionEnd, 'end');
+      body.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertLineBreak' }));
+    });
+    document.querySelector('#guarded-secret').addEventListener('input', event => {
+      if (event.currentTarget.value.includes('force-mismatch')) {
+        event.currentTarget.value = 'reactive-rewrite';
+      }
+    });
+  </script>
+</body></html>`;
+
 /**
  * Tiny deterministic fixture server for tests and manual demos.
  * Binds to 127.0.0.1 on an ephemeral port and serves the inspection fixture.
@@ -269,6 +310,8 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/server-error": { body: SERVER_ERROR_HTML, status: 503 },
         "/loading": F2_LOADING_HTML,
         "/dynamic-target": DYNAMIC_TARGET_HTML,
+        "/interactive-reconciliation": INTERACTIVE_RECONCILIATION_HTML,
+        "/reactive-editor": REACTIVE_EDITOR_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;
     response.writeHead(typeof fixture === "string" ? 200 : fixture.status, {

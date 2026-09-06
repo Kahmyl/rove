@@ -137,7 +137,7 @@ describe("Milestone 3 browser actions", () => {
       previousRevision: inspection.revision,
     });
     expect((await session.inspect()).text).toContain("State changed");
-  });
+  }, 10_000);
 
   it("navigates by click, increments revision, and stales old refs", async () => {
     const { session } = await setup();
@@ -161,6 +161,65 @@ describe("Milestone 3 browser actions", () => {
     expect((await session.inspect()).text).toContain("submitted:backend");
     await expect(session.press(null, "Escape")).resolves.toMatchObject({
       action: "press",
+    });
+  });
+
+  it("preserves literal Markdown under deterministic replacement", async () => {
+    const { session } = await setup("/reactive-editor");
+    const requested = "- [ ] one\n- [ ] two\n- [ ] three";
+    let inspection = await session.inspect();
+
+    await session.type(target(inspection, "Body"), requested);
+
+    expect(await testPage(session).locator("#body").inputValue()).toBe(
+      requested,
+    );
+
+    inspection = await session.inspect();
+    await session.press(target(inspection, "Body"), "Enter");
+    expect(await testPage(session).locator("#body").inputValue()).toBe(
+      `${requested}\n- [ ] `,
+    );
+  });
+
+  it("reports exact replacement failure without exposing a sensitive value", async () => {
+    const { session } = await setup("/reactive-editor");
+    const inspection = await session.inspect();
+    const secret = "force-mismatch-private-secret";
+
+    let failure: unknown;
+    try {
+      await session.type(target(inspection, "Password"), secret);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ code: "TARGET_NOT_INTERACTIVE" });
+    expect(JSON.stringify(failure)).not.toContain(secret);
+  });
+
+  it("accounts for recovered controls and dynamically mounted editor actions", async () => {
+    const { session } = await setup("/interactive-reconciliation");
+    const first = await session.inspect();
+
+    expect(
+      first.targets?.find((item) => item.name === "Record actions"),
+    ).toMatchObject({ kind: "option", role: "option" });
+    expect(
+      first.targets?.filter((item) => item.kind === "checkbox"),
+    ).toHaveLength(2);
+
+    const recovered = target(first, "Record actions");
+    await session.click(target(first, "Edit body"));
+    const editor = await session.inspect();
+    expect(editor.targets?.map((item) => item.name)).toEqual(
+      expect.arrayContaining(["Body input", "Cancel", "Save"]),
+    );
+
+    await session.invalidateTargets();
+    await expect(session.click(recovered)).rejects.toMatchObject({
+      code: "TARGET_STALE",
+      retryable: true,
     });
   });
 

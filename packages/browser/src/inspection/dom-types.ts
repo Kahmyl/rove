@@ -5,6 +5,8 @@ export interface DomCandidate {
   tag: string;
   type?: string;
   role?: string;
+  /** Playwright-computed role when the DOM does not carry an explicit role. */
+  semanticRole?: string;
   text: string;
   visible: boolean;
   disabled: boolean;
@@ -24,6 +26,7 @@ export interface DomCandidate {
   testId?: string;
   attributes?: Record<string, string>;
   domPathHint?: string;
+  provenance?: "primary_dom" | "accessibility_recovery";
 }
 
 export interface SemanticCandidate extends DomCandidate {

@@ -1,9 +1,6 @@
 import type { TargetKind } from "@rove/protocol";
 
-import type {
-  DomCandidate,
-  SemanticCandidate,
-} from "./dom-types.js";
+import type { DomCandidate, SemanticCandidate } from "./dom-types.js";
 
 const INTERACTIVE_ROLES = new Set([
   "button",
@@ -33,7 +30,7 @@ function normalizeName(value: string | undefined): string | undefined {
   return normalized.slice(0, 500);
 }
 
-function classifyKind(candidate: DomCandidate): TargetKind | undefined {
+export function classifyKind(candidate: DomCandidate): TargetKind | undefined {
   // Native semantics have priority.
   if (candidate.tag === "a") return "link";
   if (candidate.tag === "button") return "button";
@@ -49,7 +46,7 @@ function classifyKind(candidate: DomCandidate): TargetKind | undefined {
   if (candidate.tag === "option") return "option";
 
   // Then supported ARIA semantics.
-  switch (candidate.role) {
+  switch (candidate.role ?? candidate.semanticRole) {
     case "button":
       return "button";
     case "link":
@@ -67,8 +64,8 @@ function classifyKind(candidate: DomCandidate): TargetKind | undefined {
   }
 
   if (
-    candidate.role !== undefined &&
-    INTERACTIVE_ROLES.has(candidate.role)
+    (candidate.role !== undefined || candidate.semanticRole !== undefined) &&
+    INTERACTIVE_ROLES.has(candidate.role ?? candidate.semanticRole!)
   ) {
     return "control";
   }

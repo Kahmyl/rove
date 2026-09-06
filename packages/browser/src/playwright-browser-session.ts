@@ -5,6 +5,7 @@ import {
   type Browser,
   type BrowserContext,
   type CDPSession,
+  type Locator,
   type Page,
 } from "playwright";
 import {
@@ -157,7 +158,6 @@ export class PlaywrightBrowserSession implements BrowserSession {
     private readonly context: BrowserContext,
     private readonly actionTimeoutMs: number,
     private readonly navigationTimeoutMs: number,
-    private readonly typingDelayMs: number,
     private readonly headless: boolean,
     private readonly downloadRuntime?: ResolvedDownloadRuntime,
     private readonly ownedRuntimeCleanup?: () => Promise<void>,
@@ -280,7 +280,6 @@ export class PlaywrightBrowserSession implements BrowserSession {
       context,
       config.timeouts?.actionMs ?? DEFAULT_ACTION_TIMEOUT_MS,
       config.timeouts?.navigationMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
-      config.interaction?.typingDelayMs ?? 0,
       config.headless,
       downloadRuntime,
       ownedRuntimeCleanup,
@@ -961,7 +960,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ): Promise<TargetResolution> {
     const observation = await this.readObservation(request.observationId);
 
-    return groundTarget(observation, request.intent);
+    const canonicalTargets = this.inspector.targetsForObservation(
+      observation.observationId,
+    );
+
+    return groundTarget(
+      canonicalTargets === undefined
+        ? observation
+        : { ...observation, targets: canonicalTargets },
+      request.intent,
+    );
   }
 
   async readObservation(observationId: string): Promise<BrowserObservation> {
@@ -1022,6 +1030,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
       this.observationAuthorities.delete(oldest);
       this.observationSnapshots.delete(oldest);
+      this.inspector.forgetObservation(oldest);
     }
   }
 
@@ -1041,6 +1050,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     if (!this.pageRegistry.has(authority.pageId)) {
       this.observationAuthorities.delete(observationId);
       this.observationSnapshots.delete(observationId);
+      this.inspector.forgetObservation(observationId);
 
       throw new RoveError({
         code: "OBSERVATION_STALE",
@@ -1074,6 +1084,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     ) {
       this.observationAuthorities.delete(observationId);
       this.observationSnapshots.delete(observationId);
+      this.inspector.forgetObservation(observationId);
 
       throw new RoveError({
         code: "OBSERVATION_STALE",
@@ -1190,9 +1201,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
               });
             }
 
-            await resolved.locator.fill("", {
-              timeout: this.actionTimeoutMs,
-            });
+            await this.replaceEditableValue(resolved.locator, "");
           },
         );
 
@@ -1212,9 +1221,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
             void isSensitiveTarget(resolved.state.identity);
 
-            await resolved.locator.fill(request.value, {
-              timeout: this.actionTimeoutMs,
-            });
+            await this.replaceEditableValue(resolved.locator, request.value);
           },
         );
 
@@ -1663,15 +1670,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     void isSensitiveTarget(resolved.state.identity);
     const previous = this.pageRegistry.stateFor(target.pageId);
     try {
-      if (this.typingDelayMs > 0 && value.length <= 500) {
-        await resolved.locator.fill("", { timeout: this.actionTimeoutMs });
-        await resolved.locator.pressSequentially(value, {
-          delay: this.typingDelayMs,
-          timeout: this.actionTimeoutMs + value.length * this.typingDelayMs,
-        });
-      } else {
-        await resolved.locator.fill(value, { timeout: this.actionTimeoutMs });
-      }
+      await this.replaceEditableValue(resolved.locator, value);
     } catch (error) {
       throw actionError(error, "Type");
     }
@@ -1681,6 +1680,43 @@ export class PlaywrightBrowserSession implements BrowserSession {
       previous,
       beforePages,
     );
+  }
+
+  private async replaceEditableValue(
+    locator: Locator,
+    value: string,
+  ): Promise<void> {
+    await locator.fill(value, { timeout: this.actionTimeoutMs });
+
+    const exact = await locator.evaluate((element, expected) => {
+      if (
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        return element.value === expected;
+      }
+
+      if (element instanceof HTMLElement && element.isContentEditable) {
+        return element.textContent === expected;
+      }
+
+      return null;
+    }, value);
+
+    if (exact === null) {
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The target does not support deterministic text replacement.",
+      });
+    }
+
+    if (!exact) {
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message:
+          "The editable target did not retain the exact replacement value.",
+      });
+    }
   }
 
   async press(

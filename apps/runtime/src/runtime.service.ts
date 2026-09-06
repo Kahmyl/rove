@@ -147,9 +147,6 @@ export class RuntimeService implements RoveRuntime {
           actionMs: this.config.timeouts.actionMs,
           inspectMs: this.config.timeouts.inspectMs,
         },
-        interaction: {
-          typingDelayMs: this.config.browser.typingDelayMs,
-        },
       });
       if (profileLock !== undefined) {
         this.profileLocks.set(session.id, profileLock);

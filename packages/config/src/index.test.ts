@@ -8,7 +8,6 @@ describe("loadConfig", () => {
     expect(config.mcp.transport).toBe("stdio");
     expect(config.browser.headless).toBe(false);
     expect(config.browser.minimumActionIntervalMs).toBe(3_000);
-    expect(config.browser.typingDelayMs).toBe(35);
     expect(config.timeouts.launchMs).toBe(20_000);
   });
 
@@ -17,17 +16,17 @@ describe("loadConfig", () => {
       env: {
         ROVE_BROWSER_LAUNCH_TIMEOUT_MS: "15000",
         ROVE_BROWSER_MIN_ACTION_INTERVAL_MS: "750",
-        ROVE_BROWSER_TYPING_DELAY_MS: "50",
       },
     });
     expect(config.timeouts.launchMs).toBe(15_000);
     expect(config.browser.minimumActionIntervalMs).toBe(750);
-    expect(config.browser.typingDelayMs).toBe(50);
   });
 
   it("requires a strong-enough token for HTTP", () => {
     expect(() =>
-      loadConfig({ env: { ROVE_MCP_TRANSPORT: "http", ROVE_MCP_TOKEN: "short" } }),
+      loadConfig({
+        env: { ROVE_MCP_TRANSPORT: "http", ROVE_MCP_TOKEN: "short" },
+      }),
     ).toThrow();
   });
 

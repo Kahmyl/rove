@@ -19,10 +19,7 @@ import {
   startFixtureServer,
   type FixtureServer,
 } from "../fixtures/fixture-server.js";
-import {
-  PageInspector,
-  resolveInspectOptions,
-} from "./inspector.js";
+import { PageInspector, resolveInspectOptions } from "./inspector.js";
 
 let browser: Browser;
 let context: BrowserContext;
@@ -87,10 +84,7 @@ describe("PageInspector", () => {
   it("returns page metadata, viewport, text, and targets by default", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-    );
+    const inspection = await inspector.inspect(page, await state());
 
     expect(inspection).toMatchObject({
       pageId: "page_01",
@@ -107,13 +101,9 @@ describe("PageInspector", () => {
       },
     });
 
-    expect(inspection.text).toContain(
-      "Visible fixture description",
-    );
+    expect(inspection.text).toContain("Visible fixture description");
 
-    expect(inspection.text).not.toContain(
-      "Hidden fixture text",
-    );
+    expect(inspection.text).not.toContain("Hidden fixture text");
 
     expect(inspection.targets?.length).toBeGreaterThan(0);
 
@@ -123,13 +113,9 @@ describe("PageInspector", () => {
   it("applies maxTextChars after text normalization", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-      {
-        maxTextChars: 50,
-      },
-    );
+    const inspection = await inspector.inspect(page, await state(), {
+      maxTextChars: 50,
+    });
 
     expect(inspection.text).toHaveLength(50);
 
@@ -141,13 +127,9 @@ describe("PageInspector", () => {
   it("applies targetLimit after eligibility filtering", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-      {
-        targetLimit: 2,
-      },
-    );
+    const inspection = await inspector.inspect(page, await state(), {
+      targetLimit: 2,
+    });
 
     expect(inspection.targets).toHaveLength(2);
 
@@ -164,31 +146,21 @@ describe("PageInspector", () => {
   it("filters targetKinds without affecting text extraction", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-      {
-        targetKinds: ["button", "link"],
-      },
-    );
+    const inspection = await inspector.inspect(page, await state(), {
+      targetKinds: ["button", "link"],
+    });
 
-    expect(inspection.text).toContain(
-      "Visible fixture description",
-    );
+    expect(inspection.text).toContain("Visible fixture description");
 
     expect(
       inspection.targets?.every(
-        (target) =>
-          target.kind === "button" ||
-          target.kind === "link",
+        (target) => target.kind === "button" || target.kind === "link",
       ),
     ).toBe(true);
 
-    expect(
-      inspection.targets?.some(
-        (target) => target.kind === "input",
-      ),
-    ).toBe(false);
+    expect(inspection.targets?.some((target) => target.kind === "input")).toBe(
+      false,
+    );
   });
 
   it("omits disabled inspection sections when requested", async () => {
@@ -196,59 +168,41 @@ describe("PageInspector", () => {
 
     await inspector.inspect(page, await state());
 
-    expect(
-      await page.locator("[data-rove-target]").count(),
-    ).toBeGreaterThan(0);
+    expect(await page.locator("[data-rove-target]").count()).toBeGreaterThan(0);
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-      {
-        includeText: false,
-        includeTargets: false,
-        includeViewport: false,
-        includeStructure: false,
-      },
-    );
+    const inspection = await inspector.inspect(page, await state(), {
+      includeText: false,
+      includeTargets: false,
+      includeViewport: false,
+      includeStructure: false,
+    });
 
     expect(inspection).not.toHaveProperty("text");
     expect(inspection).not.toHaveProperty("targets");
     expect(inspection).not.toHaveProperty("viewport");
     expect(inspection).not.toHaveProperty("metadata");
 
-    expect(
-      await page.locator("[data-rove-target]").count(),
-    ).toBe(0);
+    expect(await page.locator("[data-rove-target]").count()).toBe(0);
   });
 
   it("exposes sensitive password targets without values", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(),
-    );
+    const inspection = await inspector.inspect(page, await state());
 
     const password = inspection.targets?.find(
-      (target) =>
-        target.kind === "input" &&
-        target.sensitive === true,
+      (target) => target.kind === "input" && target.sensitive === true,
     );
 
     expect(password).toBeDefined();
 
-    expect(JSON.stringify(inspection)).not.toContain(
-      "secret-current-value",
-    );
+    expect(JSON.stringify(inspection)).not.toContain("secret-current-value");
   });
 
   it("registers every exposed ref in the current page registry", async () => {
     const inspector = new PageInspector();
 
-    const inspection = await inspector.inspect(
-      page,
-      await state(4),
-    );
+    const inspection = await inspector.inspect(page, await state(4));
 
     const first = inspection.targets?.[0];
 
@@ -272,20 +226,67 @@ describe("PageInspector", () => {
     const inspector = new PageInspector();
     const pageState = await state(6);
 
-    const first = await inspector.inspect(
-      page,
-      pageState,
-    );
+    const first = await inspector.inspect(page, pageState);
 
-    const second = await inspector.inspect(
-      page,
-      pageState,
-    );
+    const second = await inspector.inspect(page, pageState);
 
     expect(first.revision).toBe(6);
     expect(second.revision).toBe(6);
 
     expect(first.targets?.[0]?.ref).toBe("t1");
     expect(second.targets?.[0]?.ref).toBe("t1");
+  });
+
+  it("reconciles semantic controls through one registered control index", async () => {
+    await page.goto(`${server.url}/interactive-reconciliation`);
+    const inspector = new PageInspector();
+
+    const inspection = await inspector.inspect(page, await state());
+    const coverage = inspection.metadata?.targetCoverage as {
+      semanticInteractiveCount: number;
+      primaryDiscoveredCount: number;
+      accessibilityRecoveredCount: number;
+      registeredTargetCount: number;
+      exposedTargetCount: number;
+      excludedByReason: Record<string, number>;
+      acquisitionErrors: string[];
+      semanticOutcomes: {
+        targeted: number;
+        hidden: number;
+        unsupported_role_or_capability: number;
+        invalid_geometry: number;
+        ambiguous_binding: number;
+        no_dom_binding: number;
+      };
+    };
+
+    expect(
+      inspection.targets?.some((target) => target.name === "Record actions"),
+    ).toBe(true);
+    expect(coverage).toMatchObject({
+      accessibilityRecoveredCount: 1,
+      registeredTargetCount: 5,
+      exposedTargetCount: 5,
+      acquisitionErrors: [],
+    });
+    expect(coverage.semanticInteractiveCount).toBe(5);
+    expect(coverage.primaryDiscoveredCount).toBe(5);
+    expect(coverage.excludedByReason).toMatchObject({
+      unsupported_role_or_capability: 1,
+    });
+    expect(coverage.semanticOutcomes).toEqual({
+      targeted: 4,
+      hidden: 0,
+      unsupported_role_or_capability: 0,
+      invalid_geometry: 1,
+      ambiguous_binding: 0,
+      no_dom_binding: 0,
+    });
+    expect(
+      Object.values(coverage.semanticOutcomes).reduce((a, b) => a + b),
+    ).toBe(coverage.semanticInteractiveCount);
+    expect(new Set(inspection.targets?.map((target) => target.ref)).size).toBe(
+      inspection.targets?.length,
+    );
   });
 });

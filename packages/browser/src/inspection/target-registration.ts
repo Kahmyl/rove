@@ -8,6 +8,7 @@ export interface TargetHandle {
   marker: string;
   frameIndex: number;
   frameUrl: string;
+  semanticRole?: string;
 }
 
 export interface RegisteredInspectionTarget {
@@ -24,19 +25,13 @@ export interface FramedIdentifiedTargetCandidate {
 }
 
 export class PageTargetRegistryStore {
-  private readonly registries = new Map<
-    string,
-    TargetRegistry<TargetHandle>
-  >();
+  private readonly registries = new Map<string, TargetRegistry<TargetHandle>>();
 
   beginInspection(
     pageId: string,
     revision: number,
   ): TargetRegistry<TargetHandle> {
-    const registry = new TargetRegistry<TargetHandle>(
-      pageId,
-      revision,
-    );
+    const registry = new TargetRegistry<TargetHandle>(pageId, revision);
 
     this.registries.set(pageId, registry);
 
@@ -65,6 +60,9 @@ export function registerIdentifiedTargets(
       marker: candidate.marker,
       frameIndex: frame.index,
       frameUrl: frame.url,
+      ...(candidate.semanticRole === undefined
+        ? {}
+        : { semanticRole: candidate.semanticRole }),
     });
 
     return {

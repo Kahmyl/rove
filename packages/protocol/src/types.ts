@@ -393,7 +393,4 @@ export interface BrowserLaunchConfig {
     actionMs?: number;
     inspectMs?: number;
   };
-  interaction?: {
-    typingDelayMs?: number;
-  };
 }

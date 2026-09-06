@@ -19,15 +19,26 @@ function normalizeLower(value: string | undefined): string | undefined {
   return normalize(value)?.toLowerCase();
 }
 
-export function sameStrongIdentity(expected: TargetIdentity, actual: TargetIdentity): boolean {
+export function sameStrongIdentity(
+  expected: TargetIdentity,
+  actual: TargetIdentity,
+): boolean {
   const normalizedFields: (keyof TargetIdentity)[] = ["tag", "type", "role"];
   for (const field of normalizedFields) {
-    if (expected[field] !== undefined && normalizeLower(expected[field] as string) !== normalizeLower(actual[field] as string | undefined)) {
+    if (
+      expected[field] !== undefined &&
+      normalizeLower(expected[field] as string) !==
+        normalizeLower(actual[field] as string | undefined)
+    ) {
       return false;
     }
   }
   for (const field of ["id", "testId", "name"] as const) {
-    if (expected[field] !== undefined && normalize(expected[field]) !== normalize(actual[field])) return false;
+    if (
+      expected[field] !== undefined &&
+      normalize(expected[field]) !== normalize(actual[field])
+    )
+      return false;
   }
   return true;
 }
@@ -36,19 +47,42 @@ export async function readTargetState(locator: Locator): Promise<TargetState> {
   return locator.evaluate((element) => {
     const html = element as HTMLElement;
     const input = element instanceof HTMLInputElement ? element : undefined;
-    const normalizeText = (value: string | null | undefined): string | undefined => {
+    const normalizeText = (
+      value: string | null | undefined,
+    ): string | undefined => {
       const normalized = value?.replace(/\s+/g, " ").trim();
       return normalized ? normalized : undefined;
     };
-    const labelledby = element.getAttribute("aria-labelledby")
+    const semanticRoot = element.getRootNode();
+    const queryRoot =
+      semanticRoot instanceof Document || semanticRoot instanceof ShadowRoot
+        ? semanticRoot
+        : document;
+    const labelledby = element
+      .getAttribute("aria-labelledby")
       ?.split(/\s+/)
       .filter(Boolean)
-      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .map((id) => queryRoot.getElementById(id)?.textContent ?? "")
       .join(" ");
-    const explicitLabel = html.id
-      ? Array.from(document.querySelectorAll<HTMLLabelElement>("label")).find((label) => label.htmlFor === html.id)?.innerText
-      : undefined;
-    const labelText = explicitLabel ?? html.closest("label")?.textContent;
+    const tag = html.tagName.toLowerCase();
+    const labelable = [
+      "button",
+      "input",
+      "meter",
+      "output",
+      "progress",
+      "select",
+      "textarea",
+    ].includes(tag);
+    const explicitLabel =
+      labelable && html.id
+        ? Array.from(
+            queryRoot.querySelectorAll<HTMLLabelElement>("label"),
+          ).find((label) => label.htmlFor === html.id)?.textContent
+        : undefined;
+    const labelText =
+      explicitLabel ??
+      (labelable ? html.closest("label")?.textContent : undefined);
     const name = [
       element.getAttribute("aria-label"),
       labelledby,
@@ -56,24 +90,53 @@ export async function readTargetState(locator: Locator): Promise<TargetState> {
       element.getAttribute("alt"),
       element.getAttribute("title"),
       element.getAttribute("placeholder"),
-      html.innerText,
-      input && ["button", "submit", "reset", "image"].includes(input.type) ? input.value : undefined,
-    ].map(normalizeText).find((value) => value !== undefined);
+      html.innerText ?? element.textContent,
+      input && ["button", "submit", "reset", "image"].includes(input.type)
+        ? input.value
+        : undefined,
+    ]
+      .map(normalizeText)
+      .find((value) => value !== undefined);
     const style = window.getComputedStyle(html);
     const rect = html.getBoundingClientRect();
-    const visible = html.isConnected && style.display !== "none" && style.visibility !== "hidden" &&
-      style.visibility !== "collapse" && Number.parseFloat(style.opacity || "1") !== 0 && rect.width > 0 && rect.height > 0;
+    const visible =
+      html.isConnected &&
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      style.visibility !== "collapse" &&
+      Number.parseFloat(style.opacity || "1") !== 0 &&
+      rect.width > 0 &&
+      rect.height > 0;
     const nativeDisabled =
-      (element instanceof HTMLButtonElement || element instanceof HTMLInputElement ||
-        element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) && element.disabled;
-    const enabled = !nativeDisabled && element.getAttribute("aria-disabled")?.toLowerCase() !== "true";
-    const tag = html.tagName.toLowerCase();
+      (element instanceof HTMLButtonElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement) &&
+      element.disabled;
+    const enabled =
+      !nativeDisabled &&
+      element.getAttribute("aria-disabled")?.toLowerCase() !== "true";
     const role = normalizeText(element.getAttribute("role"))?.toLowerCase();
-    const editable = tag === "input" || tag === "textarea" || html.isContentEditable;
-    const interactive = editable || tag === "button" || tag === "a" || tag === "select" ||
-      role !== undefined || html.tabIndex >= 0;
+    const editable =
+      tag === "input" || tag === "textarea" || html.isContentEditable;
+    const interactive =
+      editable ||
+      tag === "button" ||
+      tag === "a" ||
+      tag === "select" ||
+      role !== undefined ||
+      html.tabIndex >= 0;
     const attributes: Record<string, string> = {};
-    for (const attribute of ["name", "autocomplete", "aria-label", "aria-labelledby", "aria-disabled", "href", "placeholder", "data-testid"]) {
+    for (const attribute of [
+      "name",
+      "autocomplete",
+      "aria-label",
+      "aria-labelledby",
+      "aria-disabled",
+      "href",
+      "placeholder",
+      "data-testid",
+    ]) {
       const value = normalizeText(element.getAttribute(attribute));
       if (value !== undefined) attributes[attribute] = value;
     }

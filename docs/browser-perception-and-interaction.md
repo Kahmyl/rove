@@ -200,6 +200,17 @@ Phase 1 includes:
 - bounded text, structure, target, and image output;
 - preservation of page-state policy and human handoff.
 
+Interactive controls are acquired into one revision-scoped internal index.
+Fast DOM discovery remains the primary source; Playwright accessibility roles
+are recovery evidence for DOM-backed controls the primary source misses.
+Recovered controls do not create
+an action shortcut: they pass through the same classifier, identity builder,
+geometry validation, registry, and `TargetReference` resolver as primary
+controls. Inspection emits bounded coverage counts and bounded exclusion
+reasons so a visible supported semantic control cannot silently disappear.
+Presentation limits only truncate the returned inventory; grounding against the
+same exact observation continues to use its complete canonical index.
+
 ### Isolated experiment
 
 One experiment campaign compares:
@@ -299,6 +310,12 @@ Phase 2 includes:
 - action receipts;
 - applied, not-applied, and unknown outcomes;
 - prohibition of blind consequential-action replay.
+
+Ordinary `browser.type` and verified `fill` mean deterministic replacement of
+the complete contents of an input, textarea, or contenteditable. Rove uses
+Playwright `fill`, verifies the exact resulting editable value without
+serializing it, and reports failure rather than falling back to sequential key
+events. Explicit keyboard behavior is a separate `browser.press` operation.
 
 ### Isolated experiment
 

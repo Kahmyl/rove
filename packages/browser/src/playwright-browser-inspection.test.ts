@@ -535,6 +535,7 @@ describe("Milestone 2 semantic inspection acceptance", () => {
       "pageStateDiagnostics",
       "pageStateFingerprint",
       "pageStatePropositions",
+      "targetCoverage",
       "targetsTruncated",
       "textTruncated",
     ]);

@@ -17,11 +17,12 @@ import type { TargetRegistry } from "../targets/target-registry.js";
 
 import { collectAriaStructure } from "./aria-structure.js";
 
-import { classifyTargetCandidates } from "./target-classifier.js";
+import { classifyKind, classifyTargetCandidates } from "./target-classifier.js";
 
 import {
   clearTargetMarkers,
   discoverTargetCandidates,
+  recoverAccessibilityCandidates,
 } from "./target-discovery.js";
 
 import { identifyTargetCandidates } from "./target-identity-builder.js";
@@ -80,10 +81,23 @@ export function resolveInspectOptions(
 }
 
 export class PageInspector {
+  private readonly canonicalTargets = new Map<
+    string,
+    { pageId: string; targets: PageTarget[] }
+  >();
+
   constructor(private readonly registries = new PageTargetRegistryStore()) {}
 
   registryForPage(pageId: string): TargetRegistry<TargetHandle> | undefined {
     return this.registries.get(pageId);
+  }
+
+  targetsForObservation(observationId: string): PageTarget[] | undefined {
+    return this.canonicalTargets.get(observationId)?.targets;
+  }
+
+  forgetObservation(observationId: string): void {
+    this.canonicalTargets.delete(observationId);
   }
 
   async invalidatePage(
@@ -98,10 +112,14 @@ export class PageInspector {
 
   forgetPage(pageId: string): void {
     this.registries.delete(pageId);
+    for (const [observationId, entry] of this.canonicalTargets) {
+      if (entry.pageId === pageId) this.canonicalTargets.delete(observationId);
+    }
   }
 
   clear(): void {
     this.registries.clear();
+    this.canonicalTargets.clear();
   }
 
   async inspect(
@@ -164,42 +182,90 @@ export class PageInspector {
     );
 
     if (resolved.includeTargets) {
-      const identified = (
-        await Promise.all(
-          frames.map(async (frame) => {
-            const discovered = await discoverTargetCandidates(
-              frame.frame,
-            ).catch(() => []);
+      const acquired = await Promise.all(
+        frames.map(async (frame) => {
+          let primary = await discoverTargetCandidates(frame.frame).catch(
+            async () => {
+              await clearTargetMarkersInFrame(frame.frame);
+              return undefined;
+            },
+          );
+          const acquisitionErrors: string[] = [];
+          if (primary === undefined) {
+            primary = [];
+            acquisitionErrors.push("primary_discovery_failed");
+          }
 
-            return {
-              frame,
-              identified: identifyTargetCandidates(
-                classifyTargetCandidates(discovered),
-              ),
-            };
-          }),
-        )
-      ).flatMap(({ frame, identified }) =>
+          const recovery = await recoverAccessibilityCandidates(
+            frame.frame,
+            primary.length,
+          ).catch(() => ({
+            semanticInteractiveCount: 0,
+            recovered: [],
+            ambiguousBindingCount: 0,
+            semanticPrimaryMarkers: [],
+            failed: true as const,
+          }));
+          if ("failed" in recovery) {
+            acquisitionErrors.push("accessibility_recovery_failed");
+          }
+
+          const candidates = [...primary, ...recovery.recovered];
+          const semanticMarkers = new Set([
+            ...recovery.semanticPrimaryMarkers,
+            ...recovery.recovered.map((candidate) => candidate.marker),
+          ]);
+          const classified = classifyTargetCandidates(candidates);
+          const excludedByReason: Record<string, number> = {};
+          const addReason = (reason: string) => {
+            excludedByReason[reason] = (excludedByReason[reason] ?? 0) + 1;
+          };
+
+          for (const candidate of candidates) {
+            if (!candidate.visible) {
+              addReason("hidden");
+            } else if (classifyKind(candidate) === undefined) {
+              addReason("unsupported_role_or_capability");
+            }
+          }
+          if (recovery.ambiguousBindingCount > 0) {
+            excludedByReason.ambiguous_binding = recovery.ambiguousBindingCount;
+          }
+
+          return {
+            frame,
+            primaryCount: primary.length,
+            semanticInteractiveCount: recovery.semanticInteractiveCount,
+            recoveredCount: recovery.recovered.length,
+            candidates,
+            classified,
+            identified: identifyTargetCandidates(classified),
+            excludedByReason,
+            acquisitionErrors,
+            semanticMarkers,
+          };
+        }),
+      );
+
+      const identified = acquired.flatMap(({ frame, identified }) =>
         identified.map((candidate) => ({
           frame,
           candidate,
         })),
       );
 
-      const eligible =
+      const presentedEligible =
         resolved.targetKinds === undefined
           ? identified
           : identified.filter(({ candidate }) =>
               resolved.targetKinds!.includes(candidate.kind),
             );
 
-      const targetsTruncated = eligible.length > resolved.targetLimit;
-
-      const limited = eligible.slice(0, resolved.targetLimit);
+      const targetsTruncated = presentedEligible.length > resolved.targetLimit;
 
       const registered = registerIdentifiedTargets(
         registry,
-        limited.map(({ frame, candidate }) => ({
+        identified.map(({ frame, candidate }) => ({
           candidate,
           frame: {
             index: frame.index,
@@ -208,27 +274,34 @@ export class PageInspector {
         })),
       );
 
-      result.targets = await Promise.all(
+      const canonicalTargets = await Promise.all(
         registered.map(
           async ({ registered: target }, index): Promise<PageTarget> => {
-            const item = limited[index]!;
+            const item = identified[index]!;
 
             const locator = item.frame.frame.locator(
               `[data-rove-target="${target.handle.marker}"]`,
             );
 
-            const [geometry, perceived, state] = await Promise.all([
+            const [geometry, rawPerceived, state] = await Promise.all([
               readGeometry(locator, viewport),
               readPerceivedControl(locator),
               readVerificationState(locator, item.candidate.sensitive),
             ]);
+            const perceived = enrichPerceivedControl(
+              rawPerceived,
+              item.candidate.semanticRole,
+            );
 
             return {
               ref: target.reference.ref,
               kind: item.candidate.kind,
-              ...(item.candidate.role === undefined
+              ...(item.candidate.role === undefined &&
+              item.candidate.semanticRole === undefined
                 ? {}
-                : { role: item.candidate.role }),
+                : {
+                    role: item.candidate.role ?? item.candidate.semanticRole,
+                  }),
               ...(item.candidate.name === undefined
                 ? {}
                 : { name: item.candidate.name }),
@@ -252,7 +325,135 @@ export class PageInspector {
         ),
       );
 
+      this.canonicalTargets.set(result.observationId, {
+        pageId: result.pageId,
+        targets: canonicalTargets,
+      });
+
+      const presentedKinds =
+        resolved.targetKinds === undefined
+          ? undefined
+          : new Set(resolved.targetKinds);
+      result.targets = canonicalTargets
+        .filter(
+          (target) =>
+            presentedKinds === undefined || presentedKinds.has(target.kind),
+        )
+        .slice(0, resolved.targetLimit);
+
+      const excludedByReason = acquired.reduce<Record<string, number>>(
+        (output, frame) => {
+          for (const [reason, count] of Object.entries(
+            frame.excludedByReason,
+          )) {
+            output[reason] = (output[reason] ?? 0) + count;
+          }
+          return output;
+        },
+        {},
+      );
+      const invalidGeometry = canonicalTargets.filter(
+        (target) => target.geometry?.bounds === null,
+      ).length;
+      if (invalidGeometry > 0) {
+        excludedByReason.invalid_geometry = invalidGeometry;
+      }
+
+      const semanticMarkerKeys = new Set(
+        acquired.flatMap((frame) =>
+          [...frame.semanticMarkers].map(
+            (marker) => `${frame.frame.index}:${marker}`,
+          ),
+        ),
+      );
+      const semanticInvalidGeometry = canonicalTargets.filter(
+        (target, index) => {
+          const item = identified[index]!;
+          return (
+            semanticMarkerKeys.has(
+              `${item.frame.index}:${item.candidate.marker}`,
+            ) && target.geometry?.bounds === null
+          );
+        },
+      ).length;
+      const semanticHidden = acquired.reduce(
+        (sum, frame) =>
+          sum +
+          frame.candidates.filter(
+            (candidate) =>
+              frame.semanticMarkers.has(candidate.marker) && !candidate.visible,
+          ).length,
+        0,
+      );
+      const semanticUnsupported = acquired.reduce(
+        (sum, frame) =>
+          sum +
+          frame.candidates.filter(
+            (candidate) =>
+              frame.semanticMarkers.has(candidate.marker) &&
+              candidate.visible &&
+              classifyKind(candidate) === undefined,
+          ).length,
+        0,
+      );
+      const semanticAmbiguous = acquired.reduce(
+        (sum, frame) => sum + (frame.excludedByReason.ambiguous_binding ?? 0),
+        0,
+      );
+      const semanticNoDomBinding = acquired.reduce(
+        (sum, frame) =>
+          sum +
+          Math.max(
+            0,
+            frame.semanticInteractiveCount -
+              frame.semanticMarkers.size -
+              (frame.excludedByReason.ambiguous_binding ?? 0),
+          ),
+        0,
+      );
+      const semanticInteractiveCount = acquired.reduce(
+        (sum, frame) => sum + frame.semanticInteractiveCount,
+        0,
+      );
+      const semanticTargeted = Math.max(
+        0,
+        semanticInteractiveCount -
+          semanticHidden -
+          semanticUnsupported -
+          semanticInvalidGeometry -
+          semanticAmbiguous -
+          semanticNoDomBinding,
+      );
+
       metadata.targetsTruncated = targetsTruncated;
+      metadata.targetCoverage = {
+        semanticInteractiveCount,
+        primaryDiscoveredCount: acquired.reduce(
+          (sum, frame) => sum + frame.primaryCount,
+          0,
+        ),
+        accessibilityRecoveredCount: acquired.reduce(
+          (sum, frame) => sum + frame.recoveredCount,
+          0,
+        ),
+        classifiedCandidateCount: acquired.reduce(
+          (sum, frame) => sum + frame.classified.length,
+          0,
+        ),
+        identifiedCandidateCount: identified.length,
+        registeredTargetCount: canonicalTargets.length,
+        exposedTargetCount: result.targets.length,
+        excludedByReason,
+        acquisitionErrors: acquired.flatMap((frame) => frame.acquisitionErrors),
+        semanticOutcomes: {
+          targeted: semanticTargeted,
+          hidden: semanticHidden,
+          unsupported_role_or_capability: semanticUnsupported,
+          invalid_geometry: semanticInvalidGeometry,
+          ambiguous_binding: semanticAmbiguous,
+          no_dom_binding: semanticNoDomBinding,
+        },
+      };
     } else {
       await clearTargetMarkers(page);
     }
@@ -263,6 +464,20 @@ export class PageInspector {
 
     return result;
   }
+}
+
+async function clearTargetMarkersInFrame(frame: Frame): Promise<void> {
+  await frame.evaluate((markerAttribute) => {
+    const clear = (root: Document | ShadowRoot): void => {
+      root
+        .querySelectorAll(`[${markerAttribute}]`)
+        .forEach((element) => element.removeAttribute(markerAttribute));
+      for (const element of Array.from(root.querySelectorAll("*"))) {
+        if (element.shadowRoot !== null) clear(element.shadowRoot);
+      }
+    };
+    clear(document);
+  }, "data-rove-target");
 }
 
 export {
@@ -425,4 +640,26 @@ async function extractFrameText(
 
 function round(value: number): number {
   return Number(value.toFixed(3));
+}
+
+function enrichPerceivedControl(
+  perceived: Awaited<ReturnType<typeof readPerceivedControl>>,
+  semanticRole: string | undefined,
+): Awaited<ReturnType<typeof readPerceivedControl>> {
+  if (semanticRole === undefined) return perceived;
+  const capabilities = [...perceived.capabilities];
+  const add = (capability: (typeof capabilities)[number]) => {
+    if (!capabilities.includes(capability)) capabilities.push(capability);
+  };
+
+  if (["button", "link", "tab", "menuitem"].includes(semanticRole)) {
+    add("activate");
+  }
+  if (["checkbox", "switch"].includes(semanticRole)) {
+    add("check");
+    add("uncheck");
+  }
+  if (semanticRole === "radio") add("check");
+
+  return { ...perceived, capabilities };
 }

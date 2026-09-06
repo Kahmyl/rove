@@ -109,7 +109,7 @@ Rove is designed as a user-directed assistant, not an anti-detection system. In 
 
 These safeguards reduce accidental rapid automation and disposable-session behavior, but they do not guarantee access to any site. Rove does not spoof browser fingerprints, hide automation or developer tooling, rotate proxies, solve CAPTCHAs, or bypass a site's access controls. A site's restriction remains authoritative and must be handled by the user or site operator.
 
-Local pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS` and `ROVE_BROWSER_TYPING_DELAY_MS`. Setting either to `0` disables that delay; headed development defaults to `3000` ms between actions and `35` ms between key events. Rove removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults, then reports observed sandbox status from runtime evidence as `enabled`, `disabled`, or `unknown`.
+Local action pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS`; setting it to `0` disables that delay. Text entry replaces editable contents deterministically, while `browser.press` is the separate operation for explicit keyboard semantics. Rove removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults, then reports observed sandbox status from runtime evidence as `enabled`, `disabled`, or `unknown`.
 
 Manual verification commands:
 

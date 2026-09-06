@@ -577,7 +577,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "browser.type",
       description:
-        "Type text into an inspected target at Runtime-controlled pacing. Authentication secrets and human-verification responses must be entered only by the human during control handoff.",
+        "Deterministically replace the complete contents of an inspected input, textarea, or contenteditable target. Use browser.press separately when explicit keyboard semantics are required. Authentication secrets and human-verification responses must be entered only by the human during control handoff.",
       inputSchema: {
         type: "object",
         properties: {

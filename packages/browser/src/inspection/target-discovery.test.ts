@@ -18,7 +18,10 @@ import {
   startFixtureServer,
   type FixtureServer,
 } from "../fixtures/fixture-server.js";
-import { discoverTargetCandidates } from "./target-discovery.js";
+import {
+  discoverTargetCandidates,
+  recoverAccessibilityCandidates,
+} from "./target-discovery.js";
 
 let browser: Browser;
 let context: BrowserContext;
@@ -60,9 +63,15 @@ describe("discoverTargetCandidates", () => {
       text: "View details",
     });
 
-    expect(candidates.some((candidate) => candidate.tag === "button")).toBe(true);
-    expect(candidates.some((candidate) => candidate.tag === "input")).toBe(true);
-    expect(candidates.some((candidate) => candidate.tag === "select")).toBe(true);
+    expect(candidates.some((candidate) => candidate.tag === "button")).toBe(
+      true,
+    );
+    expect(candidates.some((candidate) => candidate.tag === "input")).toBe(
+      true,
+    );
+    expect(candidates.some((candidate) => candidate.tag === "select")).toBe(
+      true,
+    );
   });
 
   it("discovers role candidates without prematurely classifying them", async () => {
@@ -70,8 +79,7 @@ describe("discoverTargetCandidates", () => {
 
     const customButton = candidates.find(
       (candidate) =>
-        candidate.role === "button" &&
-        candidate.text === "Custom action",
+        candidate.role === "button" && candidate.text === "Custom action",
     );
 
     const structuralRole = candidates.find(
@@ -87,14 +95,11 @@ describe("discoverTargetCandidates", () => {
 
     const hiddenButton = candidates.find(
       (candidate) =>
-        candidate.tag === "button" &&
-        candidate.text === "Hidden action",
+        candidate.tag === "button" && candidate.text === "Hidden action",
     );
 
     const visibleButton = candidates.find(
-      (candidate) =>
-        candidate.tag === "button" &&
-        candidate.text === "Submit",
+      (candidate) => candidate.tag === "button" && candidate.text === "Submit",
     );
 
     expect(hiddenButton?.visible).toBe(false);
@@ -106,14 +111,11 @@ describe("discoverTargetCandidates", () => {
 
     const disabledButton = candidates.find(
       (candidate) =>
-        candidate.tag === "button" &&
-        candidate.text === "Disabled action",
+        candidate.tag === "button" && candidate.text === "Disabled action",
     );
 
     const submitButton = candidates.find(
-      (candidate) =>
-        candidate.tag === "button" &&
-        candidate.text === "Submit",
+      (candidate) => candidate.tag === "button" && candidate.text === "Submit",
     );
 
     expect(disabledButton?.disabled).toBe(true);
@@ -162,26 +164,59 @@ describe("discoverTargetCandidates", () => {
 
     const candidates = await discoverTargetCandidates(page);
 
-    expect(candidates.some((candidate) => candidate.tag === "textarea")).toBe(true);
+    expect(candidates.some((candidate) => candidate.tag === "textarea")).toBe(
+      true,
+    );
 
-    expect(
-      candidates.some((candidate) => candidate.contentEditable),
-    ).toBe(true);
+    expect(candidates.some((candidate) => candidate.contentEditable)).toBe(
+      true,
+    );
 
     expect(
       candidates.some(
         (candidate) =>
-          candidate.tag === "div" &&
-          candidate.text === "Keyboard target",
+          candidate.tag === "div" && candidate.text === "Keyboard target",
       ),
     ).toBe(true);
 
     expect(
       candidates.some(
-        (candidate) =>
-          candidate.tag === "input" &&
-          candidate.type === "hidden",
+        (candidate) => candidate.tag === "input" && candidate.type === "hidden",
       ),
     ).toBe(false);
+  });
+
+  it("does not let an SVG role node abort discovery for the entire frame", async () => {
+    await page.setContent(`
+      <svg role="img" aria-label="Status icon"><circle r="4" /></svg>
+      <button>Save</button><button>Cancel</button>
+    `);
+
+    const candidates = await discoverTargetCandidates(page);
+
+    expect(candidates.map((candidate) => candidate.text)).toEqual([
+      "",
+      "Save",
+      "Cancel",
+    ]);
+  });
+
+  it("recovers implicit accessibility controls and deduplicates primary controls", async () => {
+    await page.setContent(`
+      <label>Actions<select><option>Record actions</option></select></label>
+      <button>Save</button>
+    `);
+
+    const primary = await discoverTargetCandidates(page);
+    const recovery = await recoverAccessibilityCandidates(page, primary.length);
+
+    expect(recovery.semanticInteractiveCount).toBe(3);
+    expect(recovery.recovered).toHaveLength(1);
+    expect(recovery.recovered[0]).toMatchObject({
+      text: "Record actions",
+      semanticRole: "option",
+      provenance: "accessibility_recovery",
+    });
+    expect(await page.locator("[data-rove-target]").count()).toBe(3);
   });
 });
