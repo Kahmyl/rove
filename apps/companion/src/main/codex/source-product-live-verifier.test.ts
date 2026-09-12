@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   liveResultMarkerInstruction,
   verifyLiveJourney,
-} from "../../../../../experiments/phase5-app-server/source-product-live-verifier.mjs";
+} from "../../../../../experiments/agent-execution/source-product-live-verifier.mjs";
 
 const ids = {
   evidence1: `ev_${"1".repeat(32)}`,
@@ -136,9 +136,9 @@ function driveMarker() {
   return {
     journey: "drive",
     status: "passed",
-    folderName: "Rove Live Acceptance P5.9 20260910-1200",
+    folderName: "Rove Browser Acceptance 20260910-1200",
     folderUrl: "https://drive.google.com/drive/folders/freshAcceptanceFolder",
-    breadcrumb: "My Drive > Rove Live Acceptance P5.9 20260910-1200 > Archive",
+    breadcrumb: "My Drive > Rove Browser Acceptance 20260910-1200 > Archive",
     sourceFileName: "rove-live-acceptance.txt",
     fileName: "rove-live-acceptance-renamed.txt",
     fileCount: 1,
@@ -549,7 +549,7 @@ describe("source product live journey verifier", () => {
       readFileSync(
         resolve(
           import.meta.dirname,
-          "../../../../../artifacts/phase5-gmail-calendar-live-20260909-181822.json",
+          "../../../../../tests/fixtures/agent-execution/gmail-calendar-outcome.json",
         ),
         "utf8",
       ),
@@ -727,7 +727,7 @@ describe("source product live journey verifier", () => {
       const source = readFileSync(
         resolve(
           import.meta.dirname,
-          "../../../../../experiments/phase5-app-server",
+          "../../../../../experiments/agent-execution",
           filename,
         ),
         "utf8",
@@ -735,7 +735,7 @@ describe("source product live journey verifier", () => {
       expect(source).toContain(
         "Omit the optional download_completed filename because this journey is discovering and reporting the actual collision-safe saved filename.",
       );
-      expect(source).toContain("Rove Live Acceptance P5.9");
+      expect(source).toContain("Rove Browser Acceptance");
       expect(source).toContain("rove-live-acceptance.txt");
       expect(source).toContain("rove-live-acceptance-renamed.txt");
       expect(source).toMatch(/create Archive|Create a subfolder named Archive/);
@@ -766,7 +766,7 @@ describe("source product live journey verifier", () => {
     const source = readFileSync(
       resolve(
         import.meta.dirname,
-        "../../../../../experiments/phase5-app-server/source-product-gmail-calendar-live.mjs",
+        "../../../../../experiments/agent-execution/source-product-gmail-calendar-live.mjs",
       ),
       "utf8",
     );

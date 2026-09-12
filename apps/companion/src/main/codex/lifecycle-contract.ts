@@ -5,7 +5,7 @@ import {
 } from "@rove/protocol";
 
 /**
- * Production entry point for the accepted P5.9 lifecycle contract.
+ * Production entry point for the task lifecycle contract.
  * The implementation is shared verbatim with the locked L0 oracle so the
  * product cannot drift into a second lifecycle model.
  */

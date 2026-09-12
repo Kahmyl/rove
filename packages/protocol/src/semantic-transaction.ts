@@ -10,7 +10,7 @@ import {
   type ActionReceipt,
   type EffectVerification,
   type ExpectedTarget,
-} from "./phase2-interaction.js";
+} from "./verified-interaction.js";
 import { targetReferenceSchema } from "./schemas.js";
 
 export const semanticTransactionKindSchema = z.enum(["transfer"]);

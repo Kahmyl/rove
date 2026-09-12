@@ -953,7 +953,7 @@ html[data-rove-surface="follower"] body {
   font-size: 12px;
 }
 
-/* Phase 5 native product surface. All presentations use ProductSurface and the
+/* Native product surface. All presentations use ProductSurface and the
    single subscribed DesktopSurfaceSnapshot owned by RoveSurfaceRoot. */
 input,
 textarea,

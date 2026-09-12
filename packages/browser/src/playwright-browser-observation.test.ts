@@ -95,7 +95,7 @@ async function createBrowser() {
   return browser;
 }
 
-describe("Milestone 9 browser activity foundation", () => {
+describe("browser activity foundation", () => {
   it("records bounded, sanitized navigation, failure, and browser-error evidence", async () => {
     const server = await startFixtureServer();
     servers.push(server);

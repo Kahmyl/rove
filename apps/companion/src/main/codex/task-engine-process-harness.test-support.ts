@@ -7,11 +7,11 @@ const root = resolve(import.meta.dirname, "../../../../..");
 const executable = join(root, "apps/companion/node_modules/.bin/tsx");
 const driver = join(
   root,
-  "experiments/phase5-app-server/l2/desktop-host-driver.mjs",
+  "experiments/agent-execution/recovery-harness/desktop-host-driver.mjs",
 );
 const sourceTsconfig = join(
   root,
-  "experiments/phase5-app-server/l2/tsconfig.source.json",
+  "experiments/agent-execution/recovery-harness/tsconfig.source.json",
 );
 
 export type ProductValue = Record<string, unknown>;

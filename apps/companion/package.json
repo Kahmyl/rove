@@ -1,7 +1,7 @@
 {
   "name": "@rove/companion",
   "version": "0.1.0",
-  "description": "Local-first browser automation with human-agent collaboration",
+  "description": "Task and workflow assistant for getting digital work done",
   "author": "Rove",
   "private": true,
   "type": "module",

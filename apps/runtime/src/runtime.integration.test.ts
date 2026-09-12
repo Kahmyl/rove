@@ -225,7 +225,7 @@ afterEach(async () => {
     await rm(homes.pop()!, { recursive: true, force: true });
 });
 
-describe("Milestone 4 runtime integration", () => {
+describe("runtime integration", () => {
   it("reports a terminal workspace session released while a newer session owns that workspace", async () => {
     const { runtime } = await harness({
       start: async (request) => readyBrowserSession(`browser_${request.mode}`),
@@ -919,7 +919,7 @@ describe("Milestone 4 runtime integration", () => {
     });
   });
 
-  describe("F2.5 page-policy state and mode matrix", () => {
+  describe("page-policy state and mode matrix", () => {
     const cases = [
       {
         label: "ready",
@@ -1004,7 +1004,7 @@ describe("Milestone 4 runtime integration", () => {
         })),
       ),
     )(
-      "$mode mode + $label has the frozen F2 ownership behavior",
+      "$mode mode + $label has the expected page-policy ownership behavior",
       async ({
         mode,
         route,
@@ -3293,7 +3293,7 @@ describe("Milestone 4 runtime integration", () => {
   });
 });
 
-describe("Milestone 9 human activity foundation", () => {
+describe("human activity foundation", () => {
   it("persists browser lifecycle activity only while human owns control", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
@@ -3361,7 +3361,7 @@ describe("Milestone 9 human activity foundation", () => {
   });
 });
 
-describe("Milestone 9 human DOM activity", () => {
+describe("human DOM activity", () => {
   it("persists ordered minimized human interactions without sensitive field values", async () => {
     const server = await fixture();
 
@@ -3691,7 +3691,7 @@ describe("Milestone 9 human DOM activity", () => {
     await mutationStarted;
 
     // Simulate ownership invalidation at the exact fence layer.
-    // F3.5 will centralize all real transition callers.
+    // Control transitions are validated at their authoritative boundary.
     const transition = ownershipFence.beginTransition(session.id);
 
     let drained = false;
@@ -3787,7 +3787,7 @@ function runtimeEvidence(runtime: RuntimeService): EvidenceService {
   ).evidence;
 }
 
-describe("F3.6 adversarial ownership races", () => {
+describe("adversarial ownership races", () => {
   it("Race A — inspect vs request-human discards stale inspection before policy commit or return", async () => {
     const server = await fixture();
 
@@ -4610,7 +4610,7 @@ describe("F3.6 adversarial ownership races", () => {
 
     // If F2 tries to transition while the mutation lease is still
     // active, this call deadlocks. Successful completion therefore
-    // proves the post-action ordering frozen in F3.4.
+    // proves the required post-action ordering.
     const result = await runtime.navigate(session.id, {
       url: `${server.url}/authentication`,
     });

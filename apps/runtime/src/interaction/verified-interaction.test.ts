@@ -30,7 +30,7 @@ function observation(
   };
 }
 
-describe("Phase 2 verified interaction semantics", () => {
+describe("verified interaction semantics", () => {
   it("requires positive successor evidence for applied", () => {
     const predecessor = observation(
       "before",

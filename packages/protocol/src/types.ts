@@ -40,7 +40,7 @@ import type {
   ActionPhaseRecord,
   BrowserInteractionRequest,
   PerceivedControl,
-} from "./phase2-interaction.js";
+} from "./verified-interaction.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;

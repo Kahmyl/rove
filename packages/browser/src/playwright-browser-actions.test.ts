@@ -126,8 +126,8 @@ afterEach(async () => {
   while (servers.length > 0) await servers.pop()?.close();
 });
 
-describe("Milestone 3 browser actions", () => {
-  it("executes the Wave 1-5 primitive set with phase evidence", async () => {
+describe("browser actions", () => {
+  it("executes supported interaction primitives with action evidence", async () => {
     const { session } = await setup("/capability-waves");
     let observation = await session.inspect();
 
