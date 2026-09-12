@@ -7,7 +7,8 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # Preserve Chromium's sandbox; do not disable it to accommodate runner defaults.
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
