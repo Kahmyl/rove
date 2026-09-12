@@ -5,9 +5,9 @@ import {
   type NativeLifecycleInput,
 } from "../src/native-lifecycle-contract.js";
 // @ts-expect-error The experiment wrapper intentionally remains plain ESM.
-import { reduceTaskLifecycle as lockedOracle } from "../../../experiments/phase5-app-server/native-lifecycle-contract.mjs";
+import { reduceTaskLifecycle as lockedOracle } from "../../../experiments/agent-execution/native-lifecycle-contract.mjs";
 
-describe("P5.9 production lifecycle authority", () => {
+describe("production lifecycle authority", () => {
   it("exports the exact locked L0 reducer rather than a second model", () => {
     expect(productionReducer).toBe(lockedOracle);
   });

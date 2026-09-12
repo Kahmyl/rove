@@ -4,17 +4,17 @@
 
 ## Retained foundation
 
-| Responsibility | Direction | Reason |
-| --- | --- | --- |
-| Application language/workspace | TypeScript and the existing pnpm monorepo | Reuse working code and contracts; avoid a language rewrite unrelated to product behavior. |
-| Desktop interface | Electron, React, Vite | Existing shell and secure host/renderer boundary; a shell change does not remove browser or model supervision. |
-| Agent execution | Qualified local Codex App Server through a narrow stdio adapter | Reuse conversation/turn machinery rather than adding another planner. |
-| Browser capability | Playwright-backed adapter, retaining useful Rove authority and recovery behavior | Existing generic browser primitives plus task-aware control; alternatives require comparative evidence. |
-| Local structured data | SQLite, better-sqlite3, Kysely where appropriate | Local durable work with explicit transactions; no full database synchronization. |
-| Local browser API | Existing Runtime composition where it remains useful | Keep private execution authority without making its session model the product domain. |
-| Contracts/validation | Existing TypeScript and Zod boundary schemas | Validate caller intent, engine messages, and capability results at authority boundaries. |
-| UI rendering | Existing components first; selective accessible component libraries | A UI library must not own a competing execution queue or approval state. |
-| Verification | Vitest, Node's test runner for retained experiment tests, browser fixtures, package checks | Deterministic checks first; live model/service checks remain explicitly opt-in. |
+| Responsibility                 | Direction                                                                                  | Reason                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Application language/workspace | TypeScript and the existing pnpm monorepo                                                  | Reuse working code and contracts; avoid a language rewrite unrelated to product behavior.                      |
+| Desktop interface              | Electron, React, Vite                                                                      | Existing shell and secure host/renderer boundary; a shell change does not remove browser or model supervision. |
+| Agent execution                | Qualified local Codex App Server through a narrow stdio adapter                            | Reuse conversation/turn machinery rather than adding another planner.                                          |
+| Browser capability             | Playwright-backed adapter, retaining useful Rove authority and recovery behavior           | Existing generic browser primitives plus task-aware control; alternatives require comparative evidence.        |
+| Local structured data          | SQLite, better-sqlite3, Kysely where appropriate                                           | Local durable work with explicit transactions; no full database synchronization.                               |
+| Local browser API              | Existing Runtime composition where it remains useful                                       | Keep private execution authority without making its session model the product domain.                          |
+| Contracts/validation           | Existing TypeScript and Zod boundary schemas                                               | Validate caller intent, engine messages, and capability results at authority boundaries.                       |
+| UI rendering                   | Existing components first; selective accessible component libraries                        | A UI library must not own a competing execution queue or approval state.                                       |
+| Verification                   | Vitest, Node's test runner for retained experiment tests, browser fixtures, package checks | Deterministic checks first; live model/service checks remain explicitly opt-in.                                |
 
 ## Reviewed dependency baseline
 

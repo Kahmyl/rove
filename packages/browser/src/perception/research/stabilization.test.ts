@@ -69,7 +69,7 @@ async function referenceFor(
   }
 }
 
-describe("F1 Gate 4 stabilization research", () => {
+describe("stabilization", () => {
   const quietPolicy: StabilizationPolicy = {
     id: "floor-400-quiet-75",
     kind: "quiet-window",

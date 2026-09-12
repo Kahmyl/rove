@@ -18,13 +18,13 @@ Keep four sources distinguishable: approved workflow guidance, the current task 
   "revision": 12,
   "name": "Job Search",
   "purpose": "Find and pursue suitable roles",
-  "preferences": {"roleFamilies": ["backend engineering"]},
+  "preferences": { "roleFamilies": ["backend engineering"] },
   "exclusions": [],
   "guidance": [],
   "skills": [],
-  "resultConventions": {"includeSource": true},
-  "connectionRequirements": [{"kind": "email", "label": "Outreach account"}],
-  "resourceRequirements": [{"kind": "document", "label": "Current CV"}],
+  "resultConventions": { "includeSource": true },
+  "connectionRequirements": [{ "kind": "email", "label": "Outreach account" }],
+  "resourceRequirements": [{ "kind": "document", "label": "Current CV" }],
   "approvedKnowledge": []
 }
 ```

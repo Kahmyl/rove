@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ConsequenceReplayFence } from "./consequence-replay-fence.js";
 
-describe("Phase 2 consequence replay fence", () => {
+describe("consequence replay fence", () => {
   it("blocks only the unresolved stable key in the same session", () => {
     const fence = new ConsequenceReplayFence();
 

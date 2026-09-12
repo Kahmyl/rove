@@ -20,24 +20,24 @@ A workflow can exist without tasks on this device. A task can exist without a wo
 
 ## Concepts and ownership
 
-| Concept | Identity and responsibility | Persistence |
-| --- | --- | --- |
-| Rove profile | Stable owner of portable setup and this device's local work; distinct from model account. | Account identity plus local profile partition. |
-| Workflow environment | Purpose and approved operating context for recurring work. | Small portable configuration and local cache. |
-| Workflow revision | Immutable approved configuration used to identify what guidance applied. | Portable configuration metadata; not a product release version. |
-| Task | Flexible conversation and related work; standalone or associated with a workflow. | Local. |
-| Conversation entry | User input, assistant output, or meaningful displayed tool/result item. | Local; raw model internals are not a product record. |
-| Execution turn | A bounded attempt to respond to a request inside a task. | Local status, correlation, and outcomes. |
-| Engine association | Mapping from a task to a qualified Codex thread/account connection epoch. | Local; no credential values in the mapping. |
-| Capability attachment | Availability and ownership of a resource needed by a task. | Local; live authority must be revalidated after restart. |
-| Browser identity/host | Rove-owned profile and the verified process using it. | Local identity; current process evidence is ephemeral/reconciled. |
-| Page group | Task-owned set of pages within a host; not an authentication boundary. | Local mapping, re-established using current browser evidence. |
-| Grant | User-authorized access to a resource and operations within a scope. | Local, revocable, never inherited from webpage instructions. |
-| Attention request | A pending decision or intervention addressed to one task/operation. | Local with resolved/cancelled/expired state. |
-| Operation | One accepted command with stable identity and dispatch/outcome evidence. | Local journal; deduplication is not external exactly-once delivery. |
-| Result | A finding collection, draft, record, recommendation, or action outcome. | Local; can reference sources and artifacts. |
-| Artifact | A managed local file with ownership, type, size, integrity, and origin metadata. | Local bytes and metadata. |
-| Workflow promotion | User-approved selection of reusable information to place in guidance. | Portable only after explicit approval and validation. |
+| Concept               | Identity and responsibility                                                               | Persistence                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Rove profile          | Stable owner of portable setup and this device's local work; distinct from model account. | Account identity plus local profile partition.                      |
+| Workflow environment  | Purpose and approved operating context for recurring work.                                | Small portable configuration and local cache.                       |
+| Workflow revision     | Immutable approved configuration used to identify what guidance applied.                  | Portable configuration metadata; not a product release version.     |
+| Task                  | Flexible conversation and related work; standalone or associated with a workflow.         | Local.                                                              |
+| Conversation entry    | User input, assistant output, or meaningful displayed tool/result item.                   | Local; raw model internals are not a product record.                |
+| Execution turn        | A bounded attempt to respond to a request inside a task.                                  | Local status, correlation, and outcomes.                            |
+| Engine association    | Mapping from a task to a qualified Codex thread/account connection epoch.                 | Local; no credential values in the mapping.                         |
+| Capability attachment | Availability and ownership of a resource needed by a task.                                | Local; live authority must be revalidated after restart.            |
+| Browser identity/host | Rove-owned profile and the verified process using it.                                     | Local identity; current process evidence is ephemeral/reconciled.   |
+| Page group            | Task-owned set of pages within a host; not an authentication boundary.                    | Local mapping, re-established using current browser evidence.       |
+| Grant                 | User-authorized access to a resource and operations within a scope.                       | Local, revocable, never inherited from webpage instructions.        |
+| Attention request     | A pending decision or intervention addressed to one task/operation.                       | Local with resolved/cancelled/expired state.                        |
+| Operation             | One accepted command with stable identity and dispatch/outcome evidence.                  | Local journal; deduplication is not external exactly-once delivery. |
+| Result                | A finding collection, draft, record, recommendation, or action outcome.                   | Local; can reference sources and artifacts.                         |
+| Artifact              | A managed local file with ownership, type, size, integrity, and origin metadata.          | Local bytes and metadata.                                           |
+| Workflow promotion    | User-approved selection of reusable information to place in guidance.                     | Portable only after explicit approval and validation.               |
 
 ## Task, turn, control, and presentation are separate
 

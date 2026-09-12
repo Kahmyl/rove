@@ -56,7 +56,7 @@ async function evidenceFor(route: string): Promise<ResearchEvidence> {
   }
 }
 
-describe("F1 Gate 4 bounded evidence collectors", () => {
+describe("evidence", () => {
   it("distinguishes the six presentation adversaries with bounded geometry facts", async () => {
     const hidden = firstChildFrame(
       await evidenceFor("/perception/ready-hidden-recaptcha-empty"),

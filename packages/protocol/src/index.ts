@@ -8,7 +8,7 @@ export * from "./runtime.js";
 export * from "./schemas.js";
 export * from "./types.js";
 
-export * from "./phase2-interaction.js";
+export * from "./verified-interaction.js";
 export * from "./semantic-transaction.js";
 export * from "./rove-tool-catalog.js";
 export * from "./native-lifecycle-contract.js";

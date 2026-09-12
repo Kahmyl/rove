@@ -16,17 +16,17 @@ The user can find standalone tasks and tasks grouped by workflow, start new work
 
 Each task presents a conversation, useful results, active work status, and controls appropriate to its state. The composer remains a conversation entry point rather than a form restricted to predetermined follow-ups. Result selections are optional input to the next request.
 
-| User action or condition | Required response |
-| --- | --- |
-| Send a model request with known unavailable access | Explain the missing connection/allowance before accepting execution. |
-| Start non-browser work | Do not open or demand a browser. |
-| Open Browser explicitly | Attach or reveal the task's browser resources, without restarting the conversation. |
-| Switch tasks | Preserve both tasks, drafts, results, and routing. |
-| Stop | Prevent further dispatch; retain the conversation, partial work, and known/unknown action outcomes. |
-| Send after stopping or completion | Continue the same task with the new request; do not demand a new task. |
-| Change subject | Follow the new request, using workflow guidance only where relevant. |
-| Browser becomes unavailable | Report affected operations; keep other capabilities and the conversation usable. |
-| Archive | Remove from ordinary navigation while retaining history; do not confuse archiving with permanent deletion. |
+| User action or condition                           | Required response                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Send a model request with known unavailable access | Explain the missing connection/allowance before accepting execution.                                       |
+| Start non-browser work                             | Do not open or demand a browser.                                                                           |
+| Open Browser explicitly                            | Attach or reveal the task's browser resources, without restarting the conversation.                        |
+| Switch tasks                                       | Preserve both tasks, drafts, results, and routing.                                                         |
+| Stop                                               | Prevent further dispatch; retain the conversation, partial work, and known/unknown action outcomes.        |
+| Send after stopping or completion                  | Continue the same task with the new request; do not demand a new task.                                     |
+| Change subject                                     | Follow the new request, using workflow guidance only where relevant.                                       |
+| Browser becomes unavailable                        | Report affected operations; keep other capabilities and the conversation usable.                           |
+| Archive                                            | Remove from ordinary navigation while retaining history; do not confuse archiving with permanent deletion. |
 
 The implementation may bound simultaneous execution for memory or account limits. It must identify the affected resource and must not make all other tasks inaccessible. A user request rejected because of model unavailability is not a draft task queued for later dispatch.
 

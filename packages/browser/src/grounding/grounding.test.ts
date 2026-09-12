@@ -76,7 +76,7 @@ function observation(): BrowserObservation {
   };
 }
 
-describe("Phase 2 target grounding", () => {
+describe("target grounding", () => {
   it("uses an exact requested kind to select a same-named link", () => {
     const input = observation();
     input.targets = [
@@ -183,7 +183,7 @@ describe("Phase 2 target grounding", () => {
   });
 });
 
-describe("Phase 2 grounding safety regressions", () => {
+describe("grounding safety regressions", () => {
   it("matches a requested whole-token sequence through supplemental text and wrapping punctuation", () => {
     const input = observation();
 

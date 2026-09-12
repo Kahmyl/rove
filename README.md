@@ -12,17 +12,17 @@ Several tasks should be able to use task-owned browser page groups with coordina
 
 ## Repository
 
-| Location | Responsibility |
-| --- | --- |
-| `apps/companion` | Electron/React interface, local product service, and Codex integration. |
-| `apps/runtime` | Existing private browser/session execution composition. |
-| `apps/mcp` | MCP adapter and tools. |
-| `apps/control-plane` | Existing relay development code; not a mandatory local-product dependency. |
-| `packages` | Shared contracts, browser capability, configuration, and storage. |
-| `docs` | Current product and engineering contracts. |
-| `tests/fixtures` | Retained regression input data and manual test pages. |
-| `experiments/agent-execution` | Executable model-interface and recovery investigations. |
-| `artifacts` | Ignored generated evidence and packaging output. |
+| Location                      | Responsibility                                                             |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `apps/companion`              | Electron/React interface, local product service, and Codex integration.    |
+| `apps/runtime`                | Existing private browser/session execution composition.                    |
+| `apps/mcp`                    | MCP adapter and tools.                                                     |
+| `apps/control-plane`          | Existing relay development code; not a mandatory local-product dependency. |
+| `packages`                    | Shared contracts, browser capability, configuration, and storage.          |
+| `docs`                        | Current product and engineering contracts.                                 |
+| `tests/fixtures`              | Retained regression input data and manual test pages.                      |
+| `experiments/agent-execution` | Executable model-interface and recovery investigations.                    |
+| `artifacts`                   | Ignored generated evidence and packaging output.                           |
 
 ## Development
 

@@ -62,7 +62,7 @@ function settledInitialLaunch() {
   };
 }
 
-describe("P5.7 truth-based recovery", () => {
+describe("truth-based recovery", () => {
   it("reconciles App Server, Runtime, Desktop, and combined cuts without replaying a turn", async () => {
     const authority = new ContextAuthority();
     authority.restore({

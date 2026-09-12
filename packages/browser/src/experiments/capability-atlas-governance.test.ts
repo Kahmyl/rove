@@ -46,7 +46,7 @@ interface CapabilityAtlas {
 const atlas = JSON.parse(
   readFileSync(
     new URL(
-      "../../../../docs/capabilities/web-capability-atlas.json",
+      "../../../../tests/fixtures/capabilities/web-capability-atlas.json",
       import.meta.url,
     ),
     "utf8",

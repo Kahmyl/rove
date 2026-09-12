@@ -16,11 +16,11 @@ External observations are facts from Codex, the browser, or an integration. Vali
 {
   "eventId": "evt_opaque",
   "sequence": 412,
-  "entity": {"kind": "task", "id": "task_opaque", "revision": 18},
+  "entity": { "kind": "task", "id": "task_opaque", "revision": 18 },
   "type": "result.available",
   "operationId": "op_opaque",
   "observedAt": "2026-09-12T12:00:00Z",
-  "payload": {"resultId": "result_opaque"}
+  "payload": { "resultId": "result_opaque" }
 }
 ```
 

@@ -10,17 +10,17 @@ import {
 import { LOCAL_PERCEPTION_CASES } from "./corpus/local-corpus.js";
 import { classifyObservedPageState } from "./page-state-decision.js";
 import { observeStablePageState } from "./page-state-observation.js";
-import { GATE6_CHALLENGE_B_CASES } from "./research/gate6-challenge-b.js";
-import { GATE6_CHALLENGE_C_CASES } from "./research/gate6-challenge-c.js";
-import { GATE6_CHALLENGE_D_CASES } from "./research/gate6-challenge-d.js";
-import { GATE6_CHALLENGE_E_CASES } from "./research/gate6-challenge-e.js";
-import { GATE6_CHALLENGE_F_CASES } from "./research/gate6-challenge-f.js";
-import { GATE6_CHALLENGE_G_CASES } from "./research/gate6-challenge-g.js";
-import { GATE6_CHALLENGE_H_CASES } from "./research/gate6-challenge-h.js";
+import { GATE6_CHALLENGE_B_CASES } from "./research/presentation-boundaries.js";
+import { GATE6_CHALLENGE_C_CASES } from "./research/hidden-and-optional-surfaces.js";
+import { GATE6_CHALLENGE_D_CASES } from "./research/nested-scope-boundaries.js";
+import { GATE6_CHALLENGE_E_CASES } from "./research/surface-placement-boundaries.js";
+import { GATE6_CHALLENGE_F_CASES } from "./research/document-title-boundaries.js";
+import { GATE6_CHALLENGE_G_CASES } from "./research/evidence-precedence-boundaries.js";
+import { GATE6_CHALLENGE_H_CASES } from "./research/frame-ownership-boundaries.js";
 import {
   GATE6_HELDOUT_CASES,
   gate6Document,
-} from "./research/gate6-heldout.js";
+} from "./research/heldout-cases.js";
 
 let browser: Browser;
 let context: BrowserContext;

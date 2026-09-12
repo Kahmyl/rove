@@ -27,21 +27,21 @@ Retain existing negative cases and outcome assertions during naming cleanup. Do 
 
 ## Product acceptance matrix
 
-| Scenario | Required evidence |
-| --- | --- |
-| Non-browser task | A response can begin without starting Chrome or acquiring a browser profile. |
-| Independent tasks | View changes, streaming, attention, and resources stay associated with the correct tasks. |
-| Model unavailable | Known unavailability does not create false running/queued work; existing data remains readable. |
-| Stop and redirect | A stopped conversation accepts a new request, including a different objective. |
-| Workflow value | Approved guidance changes relevant outcomes without leaking another workflow's context. |
-| Portability | Setup restores on another device while tasks/artifacts/secrets remain local; missing resources are explicit. |
-| Sync conflicts/deletion | Offline edits cannot silently overwrite or resurrect deleted setup; synchronization dispatches no actions. |
-| Browser groups | Multiple task-owned groups, popups, shared resources, and human takeover behave correctly. |
-| Perception/interactions | General control families pass across variations, including icon-only and dynamic UI. |
-| Capture/video | Scope, actor attribution, start/stop, privacy, playable output, and failure handling are demonstrated. |
-| Findings to action | Selected records, drafts, file choice, approval, and confirmed outcomes remain linked. |
-| Interrupted side effect | Lost acknowledgement after dispatch does not lead to an automatic duplicate action. |
-| Profile/model switch | Rove data ownership remains correct; credentials and engine associations do not leak between accounts. |
+| Scenario                | Required evidence                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Non-browser task        | A response can begin without starting Chrome or acquiring a browser profile.                                 |
+| Independent tasks       | View changes, streaming, attention, and resources stay associated with the correct tasks.                    |
+| Model unavailable       | Known unavailability does not create false running/queued work; existing data remains readable.              |
+| Stop and redirect       | A stopped conversation accepts a new request, including a different objective.                               |
+| Workflow value          | Approved guidance changes relevant outcomes without leaking another workflow's context.                      |
+| Portability             | Setup restores on another device while tasks/artifacts/secrets remain local; missing resources are explicit. |
+| Sync conflicts/deletion | Offline edits cannot silently overwrite or resurrect deleted setup; synchronization dispatches no actions.   |
+| Browser groups          | Multiple task-owned groups, popups, shared resources, and human takeover behave correctly.                   |
+| Perception/interactions | General control families pass across variations, including icon-only and dynamic UI.                         |
+| Capture/video           | Scope, actor attribution, start/stop, privacy, playable output, and failure handling are demonstrated.       |
+| Findings to action      | Selected records, drafts, file choice, approval, and confirmed outcomes remain linked.                       |
+| Interrupted side effect | Lost acknowledgement after dispatch does not lead to an automatic duplicate action.                          |
+| Profile/model switch    | Rove data ownership remains correct; credentials and engine associations do not leak between accounts.       |
 
 ## Fault injection and budgets
 

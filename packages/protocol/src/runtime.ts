@@ -37,7 +37,7 @@ import type {
   TargetResolution,
   TargetResolutionRequest,
   VerifiedInteractionRequest,
-} from "./phase2-interaction.js";
+} from "./verified-interaction.js";
 
 export const ROVE_RUNTIME = Symbol.for("ROVE_RUNTIME");
 

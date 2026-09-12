@@ -9,7 +9,7 @@ import {
 } from "./types.js";
 
 const DEFAULT_RISK_MODEL_URL = new URL(
-  "../../../../../docs/hardening/perception/f1-risk-model.json",
+  "../../../../../tests/fixtures/perception/risk-model.json",
   import.meta.url,
 );
 

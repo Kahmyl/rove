@@ -12,23 +12,23 @@ Keep SQLite with better-sqlite3/Kysely where appropriate. The application servic
 
 Names describe domain responsibilities. Implementations may retain existing tables where they satisfy these constraints rather than migrating for cosmetic equivalence.
 
-| Relation | Essential columns | Constraints and ownership |
-| --- | --- | --- |
-| `profile` | `profile_id`, remote subject reference, display name, timestamps | One local partition owner; never keyed by a Codex token/account. |
-| `workflow` | `workflow_id`, `profile_id`, name, current revision, archive/deletion state | Owner-scoped identity; deleting setup does not delete local tasks. |
-| `workflow_revision` | `workflow_id`, revision, approved configuration JSON, digest, approval time | Composite primary key; immutable after approval; validated portable schema. |
-| `workflow_sync` | `workflow_id`, acknowledged remote revision, pending local revision, state, conflict payload | Configuration only; no execution instructions. One current sync state per workflow. |
-| `task` | `task_id`, optional `workflow_id`, title, organization state, timestamps | Conversation persists independently of engine or browser. Workflow removal uses a nullable live reference. |
-| `task_turn` | `turn_id`, `task_id`, request operation ID, state, context snapshot/digest, timestamps | Request operation unique within the profile. A stopped/completed turn does not close its task. |
-| `conversation_entry` | `entry_id`, `task_id`, optional `turn_id`, sequence, kind, display payload | Unique `(task_id, sequence)`; stable upstream item identity deduplicates delivery. |
-| `engine_association` | association ID, task ID, thread ID, connection epoch, compatibility identity, attachment state | Local mapping; credentials live outside the table. No cross-account thread reuse by assumption. |
-| `operation` | operation ID, task/turn IDs, kind, request digest, approval reference, dispatch state, outcome, timestamps | Stable idempotency key; same key with different payload is rejected. Unknown outcomes cannot become success by timeout. |
-| `attention_request` | request ID, task/operation IDs, generation, kind, scope digest, state, response | Exact live generation required; terminal requests cannot be accepted twice. |
-| `capability_grant` | grant ID, task or profile scope, capability, resource reference, permitted operations, expiry/revocation | Local, revocable, explicitly authorized; no portable secret values. |
-| `capability_attachment` | attachment ID, task ID, capability kind, local resource/host identity, generation, state | Attachment absence does not invalidate task existence. Revalidate live authority after restart. |
-| `result` | result ID, task ID, optional turn ID, kind, structured payload, source references, timestamps | Local; selection refers to stable records rather than rendered text. |
-| `artifact` | artifact ID, task ID, managed relative path, MIME type, size, digest, origin, availability | Path resolves under owned artifact storage; metadata does not imply bytes exist. |
-| `local_change` | sequence, entity identity, revision, event kind, bounded payload, time | Durable notification/recovery facts only where needed; not a second authoritative lifecycle engine. |
+| Relation                | Essential columns                                                                                          | Constraints and ownership                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `profile`               | `profile_id`, remote subject reference, display name, timestamps                                           | One local partition owner; never keyed by a Codex token/account.                                                        |
+| `workflow`              | `workflow_id`, `profile_id`, name, current revision, archive/deletion state                                | Owner-scoped identity; deleting setup does not delete local tasks.                                                      |
+| `workflow_revision`     | `workflow_id`, revision, approved configuration JSON, digest, approval time                                | Composite primary key; immutable after approval; validated portable schema.                                             |
+| `workflow_sync`         | `workflow_id`, acknowledged remote revision, pending local revision, state, conflict payload               | Configuration only; no execution instructions. One current sync state per workflow.                                     |
+| `task`                  | `task_id`, optional `workflow_id`, title, organization state, timestamps                                   | Conversation persists independently of engine or browser. Workflow removal uses a nullable live reference.              |
+| `task_turn`             | `turn_id`, `task_id`, request operation ID, state, context snapshot/digest, timestamps                     | Request operation unique within the profile. A stopped/completed turn does not close its task.                          |
+| `conversation_entry`    | `entry_id`, `task_id`, optional `turn_id`, sequence, kind, display payload                                 | Unique `(task_id, sequence)`; stable upstream item identity deduplicates delivery.                                      |
+| `engine_association`    | association ID, task ID, thread ID, connection epoch, compatibility identity, attachment state             | Local mapping; credentials live outside the table. No cross-account thread reuse by assumption.                         |
+| `operation`             | operation ID, task/turn IDs, kind, request digest, approval reference, dispatch state, outcome, timestamps | Stable idempotency key; same key with different payload is rejected. Unknown outcomes cannot become success by timeout. |
+| `attention_request`     | request ID, task/operation IDs, generation, kind, scope digest, state, response                            | Exact live generation required; terminal requests cannot be accepted twice.                                             |
+| `capability_grant`      | grant ID, task or profile scope, capability, resource reference, permitted operations, expiry/revocation   | Local, revocable, explicitly authorized; no portable secret values.                                                     |
+| `capability_attachment` | attachment ID, task ID, capability kind, local resource/host identity, generation, state                   | Attachment absence does not invalidate task existence. Revalidate live authority after restart.                         |
+| `result`                | result ID, task ID, optional turn ID, kind, structured payload, source references, timestamps              | Local; selection refers to stable records rather than rendered text.                                                    |
+| `artifact`              | artifact ID, task ID, managed relative path, MIME type, size, digest, origin, availability                 | Path resolves under owned artifact storage; metadata does not imply bytes exist.                                        |
+| `local_change`          | sequence, entity identity, revision, event kind, bounded payload, time                                     | Durable notification/recovery facts only where needed; not a second authoritative lifecycle engine.                     |
 
 A workflow's skills and resource requirements may be validated JSON within its approved configuration for this MVP. Do not create independent services or tables for every form field. Normalize further only for concrete query, integrity, or update requirements.
 
@@ -59,7 +59,7 @@ Use conditional updates against the known remote revision. Local revision and re
 
 ## Existing persistence and migration
 
-The reviewed source contains `SqliteTaskStateRepository`/task-ledger storage and `SqliteTaskEngineStore` in `apps/companion/src/main/codex`. Existing migrations include `0001_durable_task_ledger` and `0002_task_engine_event_aggregate_outbox`. These describe actual storage history and are not product release versions. Keep their identities for existing local databases.
+The reviewed source contains `SqliteTaskStore`/task-ledger storage and `SqliteTaskEngineStore` in `apps/companion/src/main/codex`. Existing migrations include `0001_durable_task_ledger` and `0002_task_engine_event_aggregate_outbox`. These describe actual storage history and are not product release versions. Keep their identities for existing local databases.
 
 Add workflow support and task/browser separation through deliberate migrations after the target contracts are implemented. Do not create a second task authority in parallel without a defined cutover, data mapping, backup, and reconciliation plan. Existing compatibility epochs must remain interpretable even when their historical string contains a milestone label.
 

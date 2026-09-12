@@ -12,3 +12,6 @@ release/
 !.rove/.gitkeep
 apps/runtime/.rove/
 apps/companion/.rove/
+
+# Generated qualification reports, recordings, and installers.
+artifacts/
