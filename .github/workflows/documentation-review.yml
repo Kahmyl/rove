@@ -1,27 +1,44 @@
-name: Documentation review
+name: Documentation reconciliation
 on:
   push:
     branches: [docs/product-foundation]
+    paths: [.github/reconcile-repository.py]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  baseline:
+  reconcile-and-check:
+    if: github.ref == 'refs/heads/docs/product-foundation'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Apply reviewed naming and documentation changes
+        run: python .github/reconcile-repository.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - uses: pnpm/action-setup@v4
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Format new maintained documents and checker
+        run: pnpm exec prettier --write docs/README.md docs/Products/platform-policy.md docs/Products/product-operating-model.md 'docs/Engineering/*.md' README.md AGENTS.md CONTRIBUTING.md scripts/check-repository.mjs .github/workflows/repository-checks.yml
+      - name: Commit reconciled tree to the review branch
+        run: |
+          git add -A
+          git reset -- .github
+          git -c user.name='Rove repository maintenance' -c user.email='repository-maintenance@users.noreply.github.com' commit -m 'docs: rebuild product foundation and normalize repository names'
+          git push origin HEAD:refs/heads/docs/product-foundation
+          git rev-parse HEAD > /tmp/rove-checked-commit.txt
       - name: Prepare native database and browser
         run: |
           pnpm --filter @rove/companion exec npm rebuild better-sqlite3
           pnpm --filter @rove/browser exec playwright install --with-deps chromium
+      - name: Repository contracts and links
+        id: repository
+        continue-on-error: true
+        run: node scripts/check-repository.mjs > /tmp/rove-repository.log 2>&1
       - name: Typecheck
         id: typecheck
         continue-on-error: true
@@ -30,23 +47,30 @@ jobs:
         id: build
         continue-on-error: true
         run: pnpm build > /tmp/rove-build.log 2>&1
-      - name: Deterministic tests
+      - name: Deterministic regression suite
         id: tests
         continue-on-error: true
-        run: xvfb-run -a pnpm test -- --reporter=json --outputFile=/tmp/rove-tests.json > /tmp/rove-tests.log 2>&1
-      - name: Save check outcomes
+        run: xvfb-run -a pnpm exec vitest run --reporter=json --outputFile=/tmp/rove-tests.json > /tmp/rove-tests.log 2>&1
+      - name: Executable investigation regression suite
+        id: experiments
+        continue-on-error: true
+        run: node --test experiments/agent-execution/*.test.mjs > /tmp/rove-experiments.log 2>&1
+      - name: Save checks and reviewed source
         if: always()
         run: |
-          printf 'typecheck=%s\nbuild=%s\ntests=%s\n' '${{ steps.typecheck.outcome }}' '${{ steps.build.outcome }}' '${{ steps.tests.outcome }}' > /tmp/rove-checks.txt
+          printf 'repository=%s\ntypecheck=%s\nbuild=%s\ntests=%s\nexperiments=%s\n' '${{ steps.repository.outcome }}' '${{ steps.typecheck.outcome }}' '${{ steps.build.outcome }}' '${{ steps.tests.outcome }}' '${{ steps.experiments.outcome }}' > /tmp/rove-checks.txt
+          git archive --format=tar.gz HEAD > /tmp/rove-reconciled-source.tar.gz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-baseline-checks
+          name: documentation-reconciliation-checks
           path: /tmp/rove-*
           retention-days: 1
-      - name: Report check failures
+      - name: Report failures
         if: always()
         run: |
+          test '${{ steps.repository.outcome }}' = success
           test '${{ steps.typecheck.outcome }}' = success
           test '${{ steps.build.outcome }}' = success
           test '${{ steps.tests.outcome }}' = success
+          test '${{ steps.experiments.outcome }}' = success

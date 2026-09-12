@@ -1,0 +1,31 @@
+name: Repository checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare native database and browser
+        run: |
+          pnpm --filter @rove/companion exec npm rebuild better-sqlite3
+          pnpm --filter @rove/browser exec playwright install --with-deps chromium
+      - run: node scripts/check-repository.mjs
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Deterministic tests
+        run: xvfb-run -a pnpm exec vitest run
+      - name: Investigation regression tests
+        run: node --test experiments/agent-execution/*.test.mjs
