@@ -12,6 +12,8 @@ Inspect actual source and current worktree before edits. Keep documentation stat
 
 Use temporary test homes. Never reuse user credentials or run live model/external-service tasks without explicit authorization. Do not copy tokens into logs, fixtures, documentation, or synchronization payloads. Stop and inspect uncertainty before repeating an external effect.
 
-Use subagents only when the user or an applicable instruction explicitly asks for delegation. Keep product and architecture decisions in the main task; give subagents bounded, independently verifiable work.
+Codex may use bounded subagents when independent research, disjoint read-only exploration, or review materially improves speed or confidence. The root agent owns architecture, integration, and final verification. Parallel writers require separate branches and worktrees plus isolation of mutable runtime resources.
+
+Ordinary feature and bug work must not modify `AGENTS.md`, `.agents/**`, `.codex/**`, or engineering-agent governance documentation. Change those only when the objective explicitly concerns the engineering environment, or when repeated concrete evidence shows that environment causes a recurring failure and its correction is explicitly in scope. Never weaken policy to bypass task friction. Normal tasks may still update owning product/engineering contracts, implementation status, tests, and code documentation.
 
 Run repository checks, typecheck, build, and appropriate tests; state exactly what could not be run. Before finishing, inspect the complete diff, reconcile relevant documentation, and leave a precise continuation record when work remains. Read `CONTRIBUTING.md` for naming, migration, fixture, and evidence rules.

@@ -17,6 +17,8 @@ Own the engineering objective end to end. ChatGPT investigation, another agent, 
 
 Read [repository-map.md](references/repository-map.md) to route context without loading the entire repository indiscriminately.
 
+Ordinary feature and bug work must not edit `AGENTS.md`, `.agents/**`, `.codex/**`, or engineering-agent governance documentation. Modify governance only when the objective explicitly concerns this environment, or repeated concrete evidence establishes a recurring environment failure and its correction is explicitly in scope. Never weaken policy to escape friction. Normal tasks may still update owning contracts, implementation status, tests, and code documentation.
+
 ## Recover authority and current truth
 
 Read `AGENTS.md`, `CONTRIBUTING.md`, and `docs/README.md`. Before changing product behavior, also read the Product Brief and Product Direction, then the product and engineering contracts responsible for the affected behavior.
@@ -35,15 +37,23 @@ Do not let an implementation shortcut redefine product behavior. Do not claim a 
 
 Resolve material uncertainty instead of coding around it. Use local source and installed-tool help for implementation facts. For current or unfamiliar external behavior, consult primary official documentation and record the relevant compatibility assumptions. Never read secrets or run live model, browser-account, or third-party actions without explicit authorization.
 
-Choose the smallest coherent change that satisfies the objective and existing contracts. Reuse working boundaries and dependencies where they retain the required behavior. Escalate only decisions that require product or human authority, including:
+Codex owns normal technical architecture within an approved product objective: storage representation, schemas, additive non-destructive migrations, transaction boundaries, service/process/module ownership, persistence abstractions, concurrency and recovery mechanisms, contract implementation, refactoring or replacement of bad internal abstractions, internal API shape, and justified dependency research or replacement. When a change materially affects these or another cross-cutting boundary, use [design-judgment.md](references/design-judgment.md). Trivial local corrections do not need architecture ceremony.
 
-- a change to product scope, persistence, permissions, or user-control semantics;
-- a new paid or hosted dependency, broad framework, or external operator commitment;
-- destructive or compatibility-breaking migration choices;
-- use of credentials, real accounts, consequential external actions, or unresolved repeat effects; and
-- a tradeoff whose alternatives materially change the requested outcome.
+Choose the smallest coherent change that satisfies the objective and existing contracts. Reuse working boundaries and dependencies where they retain required behavior. Escalate only when the proposal materially changes:
+
+- product scope or settled product behavior;
+- what user data is retained or the local-versus-remote persistence policy;
+- destructive or irreversible user-data consequences;
+- product permissions, user control, security, privacy, legal, or compliance boundaries;
+- a new mandatory paid/hosted service or external operator commitment;
+- credentials, real accounts, consequential external actions, or unresolved repeat effects; or
+- publication, merge, release, or another action whose authority was not granted.
+
+Return escalations as `Decision required`, `Recommended option`, `Credible alternatives`, `Consequences`, and `Supporting evidence`. Do not ask vague architecture questions when implementation evidence can resolve them.
 
 Document meaningful architectural decisions in the canonical document that owns the responsibility. Do not create implementation diaries, milestone documents, or a second source of product truth.
+
+Codex may independently use bounded subagents for independent investigation, external technical research, disjoint subsystem analysis, read-only exploration, or independent review when this materially improves speed or confidence. Do not simulate a standing organization or delegate to avoid understanding the work. The root agent owns design selection, integration, and final verification. Read [parallel-execution.md](references/parallel-execution.md) before parallel writes or mutable test execution.
 
 ## Implement and verify
 
@@ -60,6 +70,8 @@ Before reporting completion:
 3. Confirm tests prove the requested behavior rather than only exercising new code.
 4. Confirm generated outputs and reports are in their approved locations and contain no secrets.
 5. Re-run the smallest checks affected by review fixes.
+
+For a stable candidate where independent review is requested or proportionate to the risk, use [independent-review.md](references/independent-review.md). Independent review is read-only by default and is not mandatory for trivial changes.
 
 ## Leave continuation evidence
 

@@ -36,3 +36,5 @@ Prefer a coherent authorized Git commit when a checkpoint is ready. When work mu
 ```
 
 Never put credentials, tokens, cookies, private memory contents, or unnecessary user data in a continuation record. Remove the local note after the work is completed and its necessary facts are represented by code, tests, canonical documentation, commits, and the final task report.
+
+Repository and worktree truth always wins over a stale continuation note. Re-establish branch, HEAD, status, source, and test state before relying on its claims.

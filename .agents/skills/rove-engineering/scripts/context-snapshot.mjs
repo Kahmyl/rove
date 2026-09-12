@@ -4,7 +4,10 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 function git(args, cwd) {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  return execFileSync("git", ["--no-optional-locks", ...args], {
+    cwd,
+    encoding: "utf8",
+  }).trim();
 }
 
 const root = git(["rev-parse", "--show-toplevel"], process.cwd());

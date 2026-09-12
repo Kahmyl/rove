@@ -2,22 +2,49 @@
 # approval when Codex requests to run them outside the sandbox.
 
 prefix_rule(
-    pattern = ["git", ["push", "merge", "rebase", "reset", "clean", "stash"]],
+    pattern = ["git", ["commit", "push", "merge", "rebase", "reset", "clean", "stash", "checkout", "switch", "restore"]],
     decision = "prompt",
-    justification = "Confirm repository integration or potentially destructive Git operations.",
+    justification = "Confirm this durable, integrating, context-changing, or potentially destructive Git operation is authorized for the task.",
     match = [
+        "git commit -m example",
         "git push origin codex/example",
         "git merge feature/example",
         "git rebase main",
         "git reset --hard HEAD~1",
         "git clean -fd",
         "git stash push",
+        "git checkout main",
+        "git switch main",
+        "git restore source.ts",
     ],
     not_match = [
         "git status --short",
         "git diff --check",
-        "git commit -m example",
+        "git add source.ts",
     ],
+)
+
+prefix_rule(
+    pattern = ["git", "branch", ["-d", "-D", "--delete"]],
+    decision = "prompt",
+    justification = "Confirm deletion of the named local branch is authorized and recoverable.",
+    match = [
+        "git branch -d merged-example",
+        "git branch -D unmerged-example",
+        "git branch --delete merged-example",
+    ],
+    not_match = ["git branch --show-current", "git branch --list"],
+)
+
+prefix_rule(
+    pattern = ["git", "worktree", ["remove", "prune"]],
+    decision = "prompt",
+    justification = "Confirm removal of a worktree or its administrative record is authorized.",
+    match = [
+        "git worktree remove ../example",
+        "git worktree prune",
+    ],
+    not_match = ["git worktree list --porcelain", "git worktree add ../example"],
 )
 
 prefix_rule(
