@@ -141,7 +141,7 @@ afterEach(async () => {
     await rm(homes.pop()!, { recursive: true, force: true });
 });
 
-describe("Milestone 4 runtime HTTP API", () => {
+describe("runtime HTTP API", () => {
   it("administers browser workspaces separately from task session start", async () => {
     const token = "runtime-workspace-token-123456";
     const { baseUrl, authorization } = await startHttp(token);
@@ -678,7 +678,7 @@ describe("Milestone 4 runtime HTTP API", () => {
   }, 15_000);
 });
 
-describe("Milestone 8 Companion session discovery", () => {
+describe("Companion session discovery", () => {
   it("lists active sessions and filters Companion Mode", async () => {
     const { baseUrl, authorization } = await startHttp();
 

@@ -98,7 +98,7 @@ afterEach(async () => {
     await rm(homes.pop()!, { recursive: true, force: true });
 });
 
-describe("Milestone 7 requested handoff", () => {
+describe("requested handoff", () => {
   it("persists request, blocks agent browser access, wakes waits, and stales old targets before handback", async () => {
     const fixture = await startFixtureServer();
     servers.push(fixture);
@@ -218,7 +218,7 @@ describe("Milestone 7 requested handoff", () => {
   }, 10_000);
 });
 
-describe("Milestone 7 mode transitions and all-page invalidation", () => {
+describe("mode transitions and all-page invalidation", () => {
   it("supports voluntary Companion takeover and preserves Capture ownership", async () => {
     const { runtime } = await harness();
     const agent = await runtime.startSession({

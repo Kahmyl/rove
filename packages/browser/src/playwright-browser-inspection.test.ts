@@ -274,7 +274,7 @@ describe("PlaywrightBrowserSession inspection", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
-  it("allows inspected targets to drive Milestone 3 actions", async () => {
+  it("allows inspected targets to drive actions", async () => {
     const server = await startServer();
     const session = await startSession();
 
@@ -339,7 +339,7 @@ describe("PlaywrightBrowserSession inspection", () => {
   });
 });
 
-describe("Milestone 2 semantic inspection acceptance", () => {
+describe("semantic inspection acceptance", () => {
   it("returns the complete deterministic fixture semantics", async () => {
     const server = await startServer();
     const session = await startSession();

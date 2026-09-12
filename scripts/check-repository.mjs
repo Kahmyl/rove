@@ -111,11 +111,14 @@ for (const file of files) {
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        node.expression.text === "describe" &&
+        ["describe", "it", "test"].includes(node.expression.text) &&
         node.arguments.length > 0 &&
         ts.isStringLiteralLike(node.arguments[0]) &&
-        /\b(?:Phase\s*\d+|Gate\s*\d+|M\d+|P\d+\.\d+)\b/i.test(node.arguments[0].text)
-      ) errors.push(`Milestone test label: ${file}: ${node.arguments[0].text}`);
+        /\b(?:Phase\s*\d+|Milestone\s*\d+|Gate\s*\d+|M\d+|P\d+\.\d+|F\d+\.\d+|Wave\s*\d+)\b/i.test(
+          node.arguments[0].text,
+        )
+      )
+        errors.push(`Milestone test label: ${file}: ${node.arguments[0].text}`);
       let literal;
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
         literal = node.moduleSpecifier;

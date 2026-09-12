@@ -67,7 +67,7 @@ async function state(revision = 1): Promise<PageState> {
 }
 
 describe("resolveInspectOptions", () => {
-  it("uses the fixed Milestone 2 defaults", () => {
+  it("uses the fixed defaults", () => {
     expect(resolveInspectOptions()).toEqual({
       includeText: true,
       includeTargets: true,

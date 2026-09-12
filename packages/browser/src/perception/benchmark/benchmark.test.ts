@@ -133,7 +133,7 @@ describe("F1 perception benchmark", () => {
     expect(report.metrics.criticalInvariantViolationCount).toBe(0);
   });
 
-  it("treats known blocker to unknown as a Gate 1 hard invariant violation", async () => {
+  it("treats known blocker to unknown as a hard invariant violation", async () => {
     const report = await runBenchmark({
       corpusVersion: LOCAL_PERCEPTION_CORPUS_VERSION,
       cases: [caseById("authentication-required")],
@@ -155,7 +155,7 @@ describe("F1 perception benchmark", () => {
     expect(report.metrics.criticalInvariantViolationCount).toBe(1);
   });
 
-  it("treats an unstable snapshot forced to ready as a Gate 1 hard invariant violation", async () => {
+  it("treats an unstable snapshot forced to ready as a hard invariant violation", async () => {
     const report = await runBenchmark({
       corpusVersion: LOCAL_PERCEPTION_CORPUS_VERSION,
       cases: [caseById("loading-document-signal")],

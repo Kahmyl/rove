@@ -455,7 +455,7 @@ function verifyDrive(marker, task, ledger, violations) {
     violations,
   );
   assertion(
-    /^Rove Live Acceptance P5\.9 \d{8}-\d{4}$/.test(marker.folderName),
+    /^Rove Browser Acceptance \d{8}-\d{4}$/.test(marker.folderName),
     "drive_folder_name",
     violations,
   );
