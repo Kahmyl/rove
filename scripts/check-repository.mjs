@@ -108,6 +108,14 @@ for (const file of files) {
       true,
     );
     const visit = (node) => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "describe" &&
+        node.arguments.length > 0 &&
+        ts.isStringLiteralLike(node.arguments[0]) &&
+        /\b(?:Phase\s*\d+|Gate\s*\d+|M\d+|P\d+\.\d+)\b/i.test(node.arguments[0].text)
+      ) errors.push(`Milestone test label: ${file}: ${node.arguments[0].text}`);
       let literal;
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
         literal = node.moduleSpecifier;

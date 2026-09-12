@@ -100,7 +100,7 @@ afterAll(async () => {
   });
 }, 60_000);
 
-describe("M10 V1 process E2E", () => {
+describe("MCP session lifecycle across processes", () => {
   it("runs a complete agent task through real MCP stdio", async () => {
     const transport = new StdioClientTransport({
       command: process.execPath,

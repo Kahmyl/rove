@@ -50,7 +50,7 @@ afterEach(async () => {
   );
 });
 
-describe("M7 MCP control tools", () => {
+describe("MCP control tools", () => {
   it("runs status, request_human, and wait through real stdio MCP", async () => {
     const clientToServer = new PassThrough();
     const serverToClient = new PassThrough();
