@@ -15,7 +15,7 @@ function digest(definitions: unknown): string {
 }
 
 describe("TOOL_CATALOG", () => {
-  it("exposes the locked M5/M6 tool names", () => {
+  it("exposes the agreed agent-facing tool names", () => {
     expect([...TOOL_CATALOG].sort()).toEqual(
       [
         "browser.back",
