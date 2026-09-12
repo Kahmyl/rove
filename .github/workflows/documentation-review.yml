@@ -5,22 +5,48 @@ on:
 permissions:
   contents: read
 jobs:
-  source-review:
+  baseline:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Export tracked source for reference validation
-        run: |
-          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/rove-tracked-source.tar.gz"
-          git ls-tree -r --name-only HEAD > "$RUNNER_TEMP/rove-tracked-paths.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: documentation-source-review
-          path: |
-            ${{ runner.temp }}/rove-tracked-source.tar.gz
-            ${{ runner.temp }}/rove-tracked-paths.txt
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare native database and browser
+        run: |
+          pnpm --filter @rove/companion exec npm rebuild better-sqlite3
+          pnpm --filter @rove/browser exec playwright install --with-deps chromium
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: pnpm typecheck > /tmp/rove-typecheck.log 2>&1
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: pnpm build > /tmp/rove-build.log 2>&1
+      - name: Deterministic tests
+        id: tests
+        continue-on-error: true
+        run: xvfb-run -a pnpm test -- --reporter=json --outputFile=/tmp/rove-tests.json > /tmp/rove-tests.log 2>&1
+      - name: Save check outcomes
+        if: always()
+        run: |
+          printf 'typecheck=%s\nbuild=%s\ntests=%s\n' '${{ steps.typecheck.outcome }}' '${{ steps.build.outcome }}' '${{ steps.tests.outcome }}' > /tmp/rove-checks.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documentation-baseline-checks
+          path: /tmp/rove-*
           retention-days: 1
-          if-no-files-found: error
+      - name: Report check failures
+        if: always()
+        run: |
+          test '${{ steps.typecheck.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success
+          test '${{ steps.tests.outcome }}' = success
