@@ -1,0 +1,26 @@
+name: Documentation review
+on:
+  push:
+    branches: [docs/product-foundation]
+permissions:
+  contents: read
+jobs:
+  source-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export tracked source for reference validation
+        run: |
+          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/rove-tracked-source.tar.gz"
+          git ls-tree -r --name-only HEAD > "$RUNNER_TEMP/rove-tracked-paths.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-source-review
+          path: |
+            ${{ runner.temp }}/rove-tracked-source.tar.gz
+            ${{ runner.temp }}/rove-tracked-paths.txt
+          retention-days: 1
+          if-no-files-found: error
