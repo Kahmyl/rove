@@ -9,14 +9,17 @@ import type { NativeBrowserIdentity } from "@rove/protocol";
 
 export interface TaskCapabilityClaims {
   taskId: string;
-  sessionId: string;
+  bootstrapId?: string;
+  /** Compatibility claim for tasks created before lazy Runtime attachment. */
+  sessionId?: string;
   executionMode: "agent" | "companion" | "capture";
-  browserIdentity: NativeBrowserIdentity;
+  browserIdentity?: NativeBrowserIdentity;
   nonce: string;
 }
 
 /** Deterministic task capability issuer. Persisting the key plus the exact
- * task/session/mode/browser binding makes issuance reproducible after restart. */
+ * task/bootstrap/mode/browser binding makes issuance reproducible after restart.
+ * The scoped MCP client binds the first correlated Runtime session lazily. */
 export class PersistedTaskCapabilityIssuer {
   constructor(private readonly key: Buffer = randomBytes(32)) {
     if (key.byteLength !== 32)
@@ -27,8 +30,11 @@ export class PersistedTaskCapabilityIssuer {
     token: string;
     fingerprint: string;
   } {
+    const scopeId = claims.bootstrapId ?? claims.sessionId;
+    if (!scopeId || (claims.bootstrapId && claims.sessionId))
+      throw new Error("Task capability requires one resource scope.");
     const nonce = createHmac("sha256", this.key)
-      .update(`${claims.taskId}:${claims.sessionId}`)
+      .update(`${claims.taskId}:${scopeId}`)
       .digest("hex")
       .slice(0, 32);
     const payload = Buffer.from(JSON.stringify({ ...claims, nonce })).toString(
@@ -60,4 +66,3 @@ export class PersistedTaskCapabilityIssuer {
     return this.key.toString("base64url");
   }
 }
-

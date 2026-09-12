@@ -5,18 +5,20 @@ import type { RuntimeClient } from "./runtime-client.types.js";
 
 export interface TaskRuntimeScope {
   taskId: string;
-  sessionId: string;
+  bootstrapId?: string;
+  sessionId?: string;
   capability: string;
   executionMode: "agent" | "companion" | "capture";
-  browserIdentity:
+  browserIdentity?:
     { mode: "temporary" } | { mode: "workspace"; workspaceId: string };
 }
 
 interface CapabilityClaims {
   taskId: string;
-  sessionId: string;
+  bootstrapId?: string;
+  sessionId?: string;
   executionMode: TaskRuntimeScope["executionMode"];
-  browserIdentity: TaskRuntimeScope["browserIdentity"];
+  browserIdentity?: TaskRuntimeScope["browserIdentity"];
   nonce: string;
 }
 
@@ -53,12 +55,13 @@ function matchesBoundStart(
   )
     return false;
   const browser = input.browser;
-  if (scope.browserIdentity.mode === "temporary")
+  if (scope.browserIdentity?.mode === "temporary")
     return (
       isRecord(browser) &&
       browser.mode === "temporary" &&
       Object.keys(browser).every((key) => key === "mode")
     );
+  if (scope.browserIdentity === undefined) return browser === undefined;
   if (browser === undefined) return true;
   if (
     !isRecord(browser) ||
@@ -91,12 +94,17 @@ function parseCapability(token: string, verifier: string): CapabilityClaims {
   ) as Partial<CapabilityClaims>;
   if (
     typeof claims.taskId !== "string" ||
-    typeof claims.sessionId !== "string" ||
+    (typeof claims.bootstrapId !== "string" &&
+      typeof claims.sessionId !== "string") ||
+    (claims.bootstrapId !== undefined && claims.sessionId !== undefined) ||
     typeof claims.nonce !== "string" ||
     (claims.executionMode !== "agent" &&
       claims.executionMode !== "companion" &&
       claims.executionMode !== "capture") ||
-    !validBrowserIdentity(claims.browserIdentity)
+    (claims.bootstrapId !== undefined &&
+      !/^boot_[a-f0-9]{32}$/.test(claims.bootstrapId)) ||
+    (claims.browserIdentity !== undefined &&
+      !validBrowserIdentity(claims.browserIdentity))
   )
     throw new Error("Invalid task capability claims.");
   return claims as CapabilityClaims;
@@ -106,13 +114,14 @@ export function taskRuntimeScopeFromEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): TaskRuntimeScope | undefined {
   const taskId = environment.ROVE_TASK_ID;
+  const bootstrapId = environment.ROVE_TASK_BOOTSTRAP_ID;
   const sessionId = environment.ROVE_TASK_SESSION_ID;
   const capability = environment.ROVE_TASK_CAPABILITY;
   const executionMode = environment.ROVE_TASK_EXECUTION_MODE;
   const identity = environment.ROVE_TASK_BROWSER_IDENTITY;
   const verifier = environment.ROVE_TASK_CAPABILITY_VERIFIER;
   if (
-    [taskId, sessionId, capability, executionMode, identity].every(
+    [taskId, bootstrapId, sessionId, capability, executionMode, identity].every(
       (value) => value === undefined,
     )
   ) {
@@ -122,31 +131,40 @@ export function taskRuntimeScopeFromEnvironment(
   }
   if (
     taskId === undefined ||
-    sessionId === undefined ||
+    (bootstrapId === undefined && sessionId === undefined) ||
     capability === undefined ||
     verifier === undefined ||
     (executionMode !== "agent" &&
       executionMode !== "companion" &&
       executionMode !== "capture") ||
-    identity === undefined
+    (bootstrapId !== undefined && !/^boot_[a-f0-9]{32}$/.test(bootstrapId))
   ) {
     throw new Error("Incomplete or invalid task-scoped MCP environment.");
   }
-  const browserIdentity = JSON.parse(
-    identity,
-  ) as TaskRuntimeScope["browserIdentity"];
-  if (!validBrowserIdentity(browserIdentity)) {
+  const browserIdentity =
+    identity === undefined
+      ? undefined
+      : (JSON.parse(identity) as TaskRuntimeScope["browserIdentity"]);
+  if (browserIdentity !== undefined && !validBrowserIdentity(browserIdentity)) {
     throw new Error("Invalid scoped browser identity.");
   }
   const claims = parseCapability(capability, verifier);
   if (
     claims.taskId !== taskId ||
-    claims.sessionId !== sessionId ||
+    (claims.bootstrapId !== undefined && claims.bootstrapId !== bootstrapId) ||
+    (claims.sessionId !== undefined && claims.sessionId !== sessionId) ||
     claims.executionMode !== executionMode ||
     JSON.stringify(claims.browserIdentity) !== JSON.stringify(browserIdentity)
   )
     throw new Error("Task capability scope mismatch.");
-  return { taskId, sessionId, capability, executionMode, browserIdentity };
+  return {
+    taskId,
+    ...(bootstrapId ? { bootstrapId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    capability,
+    executionMode,
+    ...(browserIdentity ? { browserIdentity } : {}),
+  };
 }
 
 /** Prevents a task-bound MCP process from addressing or creating another session. */
@@ -154,8 +172,9 @@ export function scopeRuntimeClient(
   runtime: RuntimeClient,
   scope: TaskRuntimeScope,
 ): RuntimeClient {
+  let attachedSessionId = scope.sessionId;
   const verifySession = (sessionId: unknown) => {
-    if (sessionId !== scope.sessionId)
+    if (!attachedSessionId || sessionId !== attachedSessionId)
       throw new Error("Task capability session mismatch.");
   };
   return new Proxy(runtime, {
@@ -165,9 +184,24 @@ export function scopeRuntimeClient(
           if (!matchesBoundStart(input, scope)) {
             throw new Error("Task capability launch context mismatch.");
           }
-          if (input.startUrl !== undefined)
-            await target.navigate(scope.sessionId, { url: input.startUrl });
-          return target.getSession(scope.sessionId);
+          if (attachedSessionId) {
+            if (input.startUrl !== undefined)
+              await target.navigate(attachedSessionId, { url: input.startUrl });
+            return target.getSession(attachedSessionId);
+          }
+          if (!scope.bootstrapId)
+            throw new Error("Task capability lacks a Runtime bootstrap scope.");
+          const session = await target.startSession({
+            ...input,
+            bootstrapId: scope.bootstrapId,
+            ...(scope.browserIdentity
+              ? { browser: scope.browserIdentity }
+              : {}),
+          });
+          if (session.bootstrapId !== scope.bootstrapId)
+            throw new Error("Task capability Runtime receipt mismatch.");
+          attachedSessionId = session.id;
+          return session;
         };
       }
       const value = Reflect.get(target, property, receiver) as unknown;

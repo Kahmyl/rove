@@ -111,7 +111,7 @@ describe("native product composer state", () => {
     },
   );
 
-  it("blocks logged-out, unavailable, empty, and implicit no-workspace launch", () => {
+  it("blocks unavailable model access and empty input without requiring a browser", () => {
     for (const account of ["logged_out", "unavailable"] as const)
       expect(
         composerGate(desktop(account), {
@@ -134,8 +134,8 @@ describe("native product composer state", () => {
         outcome: "Do it",
         mode: "agent",
         browserChoice: "",
-      }).reason,
-    ).toMatch(/Create.*Temporary/);
+      }),
+    ).toEqual({ ready: true });
   });
 
   it("keeps an unmatched Runtime session visible without globally blocking new tasks", () => {
@@ -168,14 +168,14 @@ describe("native product composer state", () => {
     ).toMatchObject({ ready: true, browserIdentity: { mode: "temporary" } });
   });
 
-  it("rejects stale workspace, model, and reasoning-effort selections", () => {
+  it("defers stale browser selection while rejecting stale model choices", () => {
     expect(
       composerGate(desktop(), {
         outcome: "Do it",
         mode: "agent",
         browserChoice: "workspace:wrk_00000000-0000-4000-8000-000000000099",
-      }).reason,
-    ).toMatch(/available browser/);
+      }),
+    ).toEqual({ ready: true });
     expect(
       composerGate(desktop(), {
         outcome: "Do it",
@@ -239,6 +239,39 @@ describe("native product composer state", () => {
       ready: true,
       browserIdentity: { mode: "temporary" },
     });
+  });
+
+  it("keeps a selected task visible when another active task receives an update", () => {
+    const state = product();
+    const active: ProductTaskProjection = {
+      taskId: "task_a",
+      executionMode: "agent",
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-12T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      lifecycle: { phase: "working", reason: "Working." },
+      availableActions: ["message", "interrupt", "finish"],
+    };
+    const selected: ProductTaskProjection = {
+      ...active,
+      taskId: "task_b",
+      lifecycle: { phase: "ready", reason: "Ready." },
+      availableActions: ["message", "finish"],
+    };
+    state.tasks = [active, selected];
+    state.currentTaskId = active.taskId;
+
+    expect(reconcileSelectedTaskId(selected.taskId, active.taskId, state)).toBe(
+      selected.taskId,
+    );
+    state.tasks = [
+      { ...active, lifecycle: { phase: "working", reason: "New event." } },
+      selected,
+    ];
+    expect(reconcileSelectedTaskId(selected.taskId, active.taskId, state)).toBe(
+      selected.taskId,
+    );
   });
 
   it("derives concise task names from the first meaningful user request", () => {
@@ -331,8 +364,11 @@ describe("native product composer state", () => {
         outcome: "Next",
         mode: "agent",
         browserChoice: `workspace:${workspaceId}`,
-      }).reason,
-    ).toMatch(/still attached/);
+      }),
+    ).toMatchObject({
+      ready: true,
+      browserIdentity: { mode: "workspace", workspaceId },
+    });
     expect(
       composerGate(state, {
         outcome: "Next",
@@ -359,8 +395,8 @@ describe("native product composer state", () => {
         outcome: "Keep the dormant profile selection",
         mode: "agent",
         browserChoice: `workspace:${workspaceId}`,
-      }).reason,
-    ).toMatch(/still attached/);
+      }),
+    ).toMatchObject({ ready: true });
 
     state.product!.tasks = state.product!.tasks.map((task, index) =>
       index === 4

@@ -651,25 +651,24 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
         execute: async (command) => {
           const aggregate = await readAggregate(command);
           const source = `rove:${aggregate.taskId}:${aggregate.launch.bootstrapId}`;
-          const sessionId = aggregate.record?.identity.sessionId;
-          if (!sessionId)
-            throw new Error("Codex launch lacks Runtime binding.");
+          const runtimeSessionId = aggregate.record?.identity.sessionId;
           if (aggregate.launch.attachmentIds.length > 0 && !options.attachments)
             throw new Error(
               "Selected task attachments cannot be materialized.",
             );
-          await options.attachments?.authority.bindDrafts(
-            aggregate.launch.attachmentIds,
-            aggregate.taskId,
-            sessionId,
-            options.attachments.runtime,
-          );
-          const capability = options.capabilityIssuer.issue({
-            taskId: aggregate.taskId,
-            sessionId,
-            executionMode: aggregate.launch.executionMode,
-            browserIdentity: aggregate.launch.browserIdentity,
-          });
+          if (runtimeSessionId)
+            await options.attachments?.authority.bindDrafts(
+              aggregate.launch.attachmentIds,
+              aggregate.taskId,
+              runtimeSessionId,
+              options.attachments.runtime,
+            );
+          else
+            await options.attachments?.authority.bindTaskInputs(
+              aggregate.launch.attachmentIds,
+              aggregate.taskId,
+            );
+          const capability = issueTaskCapability(options, aggregate);
           const launch = threadLaunchParams(
             options,
             aggregate,
@@ -687,7 +686,7 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
           }
           if (matches.length !== 1)
             throw new Error("Codex bootstrap lacks one correlated receipt.");
-          await assertThreadMcp(options, matches[0]!.thread.id, sessionId);
+          await assertThreadMcp(options, matches[0]!.thread.id);
           return success(command, [
             {
               type: "task_capability_observed",
@@ -711,9 +710,6 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
         },
         reconcile: async (command) => {
           const aggregate = await readAggregate(command);
-          const sessionId = aggregate.record?.identity.sessionId;
-          if (!sessionId)
-            throw new Error("Codex recovery lacks Runtime binding.");
           const source = `rove:${aggregate.taskId}:${aggregate.launch.bootstrapId}`;
           const matches = (await listThreads()).filter(
             (entry) => entry.thread.threadSource === source,
@@ -721,13 +717,20 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
           if (matches.length === 0) return observeCodex(command);
           if (matches.length !== 1)
             throw new Error("Codex bootstrap recovery is conflicting.");
-          await assertThreadMcp(options, matches[0]!.thread.id, sessionId);
-          const capability = options.capabilityIssuer.issue({
-            taskId: aggregate.taskId,
-            sessionId,
-            executionMode: aggregate.launch.executionMode,
-            browserIdentity: aggregate.launch.browserIdentity,
-          });
+          const capability = issueTaskCapability(options, aggregate);
+          const thread = matches[0]!.thread;
+          if (!session.isAttached(thread.id)) {
+            const resumed = await session.resume({
+              threadId: thread.id,
+              ...threadLaunchParams(options, aggregate, capability.token),
+              excludeTurns: true,
+            });
+            if (resumed.id !== thread.id || resumed.status.type === "notLoaded")
+              throw new Error(
+                "Codex bootstrap recovery did not load the exact thread.",
+              );
+          }
+          await assertThreadMcp(options, thread.id);
           return success(command, [
             {
               type: "task_capability_observed",
@@ -740,12 +743,8 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
             },
             {
               type: "codex_thread_observed",
-              thread: codexTruth(
-                matches[0]!.thread,
-                source,
-                matches[0]!.archived,
-              ),
-              codexSessionId: matches[0]!.thread.sessionId,
+              thread: codexTruth(thread, source, matches[0]!.archived),
+              codexSessionId: thread.sessionId,
             },
           ]);
         },
@@ -919,15 +918,8 @@ async function resumeBoundThread(
   excludeTurns: boolean,
 ): Promise<CodexThread> {
   const threadId = aggregate.record?.identity.threadId;
-  const sessionId = aggregate.record?.identity.sessionId;
-  if (!threadId || !sessionId)
-    throw new Error("Resume lacks durable bindings.");
-  const capability = options.capabilityIssuer.issue({
-    taskId: aggregate.taskId,
-    sessionId,
-    executionMode: aggregate.launch.executionMode,
-    browserIdentity: aggregate.launch.browserIdentity,
-  });
+  if (!threadId) throw new Error("Resume lacks a durable thread binding.");
+  const capability = issueTaskCapability(options, aggregate);
   if (
     aggregate.capabilityFingerprint &&
     aggregate.capabilityFingerprint !== capability.fingerprint
@@ -941,8 +933,37 @@ async function resumeBoundThread(
   assertBoundThreadIdentity(aggregate, resumed);
   if (resumed.status.type === "notLoaded")
     throw new Error("Codex resume did not load the bound thread.");
-  await assertThreadMcp(options, threadId, sessionId);
+  await assertThreadMcp(options, threadId);
   return resumed;
+}
+
+function issueTaskCapability(
+  options: CodexRuntimeTaskAdapterOptions,
+  aggregate: BoundAggregate,
+): { token: string; fingerprint: string } {
+  const browser = aggregate.launch.browserIdentity;
+  const current = options.capabilityIssuer.issue({
+    taskId: aggregate.taskId,
+    bootstrapId: aggregate.launch.bootstrapId,
+    executionMode: aggregate.launch.executionMode,
+    ...(browser ? { browserIdentity: browser } : {}),
+  });
+  if (
+    !aggregate.capabilityFingerprint ||
+    aggregate.capabilityFingerprint === current.fingerprint
+  )
+    return current;
+  const sessionId = aggregate.record?.identity.sessionId;
+  if (sessionId && browser) {
+    const legacy = options.capabilityIssuer.issue({
+      taskId: aggregate.taskId,
+      sessionId,
+      executionMode: aggregate.launch.executionMode,
+      browserIdentity: browser,
+    });
+    if (legacy.fingerprint === aggregate.capabilityFingerprint) return legacy;
+  }
+  throw new Error("Persisted task capability cannot be reproduced.");
 }
 
 function threadLaunchParams(
@@ -951,11 +972,9 @@ function threadLaunchParams(
   capability: string,
 ) {
   const sessionId = aggregate.record?.identity.sessionId;
-  if (!sessionId) throw new Error("Task session is unbound.");
-  const attachmentInstructions = options.attachments?.authority.instructions(
-    aggregate.taskId,
-    sessionId,
-  );
+  const attachmentInstructions = sessionId
+    ? options.attachments?.authority.instructions(aggregate.taskId, sessionId)
+    : undefined;
   return {
     cwd: aggregate.launch.cwd,
     ...(aggregate.launch.model ? { model: aggregate.launch.model } : {}),
@@ -991,13 +1010,18 @@ function threadLaunchParams(
           env: {
             ...options.mcpLaunch.environment,
             ROVE_TASK_ID: aggregate.taskId,
-            ROVE_TASK_SESSION_ID: sessionId,
+            ROVE_TASK_BOOTSTRAP_ID: aggregate.launch.bootstrapId,
+            ...(sessionId ? { ROVE_TASK_SESSION_ID: sessionId } : {}),
             ROVE_TASK_CAPABILITY: capability,
             ROVE_TASK_CAPABILITY_VERIFIER: options.capabilityIssuer.verifier(),
             ROVE_TASK_EXECUTION_MODE: aggregate.launch.executionMode,
-            ROVE_TASK_BROWSER_IDENTITY: JSON.stringify(
-              aggregate.launch.browserIdentity,
-            ),
+            ...(aggregate.launch.browserIdentity
+              ? {
+                  ROVE_TASK_BROWSER_IDENTITY: JSON.stringify(
+                    aggregate.launch.browserIdentity,
+                  ),
+                }
+              : {}),
           },
           enabled: true,
           required: true,
@@ -1026,7 +1050,6 @@ function threadLaunchParams(
 async function assertThreadMcp(
   options: CodexRuntimeTaskAdapterOptions,
   threadId: string,
-  sessionId: string,
 ): Promise<void> {
   const status = await options.rpc.request("mcpServerStatus/list", {
     threadId,
@@ -1051,8 +1074,7 @@ async function assertThreadMcp(
     rove.serverInfo.version !== "0.1.0" ||
     rove.authStatus === "notLoggedIn" ||
     definitionDigest !== expectedDigest ||
-    JSON.stringify(actualNames) !== JSON.stringify(expectedNames) ||
-    sessionId.length === 0
+    JSON.stringify(actualNames) !== JSON.stringify(expectedNames)
   )
     throw new Error(
       "Actual Codex thread Rove MCP provenance/catalog/auth gate failed.",
@@ -1103,24 +1125,29 @@ function messageHandler(
               typeof attachmentId === "string",
           )
         : [];
-    if (attachmentIds.length > 0 && !sessionId)
-      throw new Error("Codex input attachments lack a Runtime binding.");
     if (attachmentIds.length > 0 && !options.attachments)
       throw new Error("Selected task attachments cannot be materialized.");
-    if (!isInitialLaunch && attachmentIds.length > 0)
-      await options.attachments!.authority.bindDrafts(
-        attachmentIds,
-        aggregate.taskId,
-        sessionId!,
-        options.attachments!.runtime,
-      );
+    if (!isInitialLaunch && attachmentIds.length > 0) {
+      if (sessionId)
+        await options.attachments!.authority.bindDrafts(
+          attachmentIds,
+          aggregate.taskId,
+          sessionId,
+          options.attachments!.runtime,
+        );
+      else
+        await options.attachments!.authority.bindTaskInputs(
+          attachmentIds,
+          aggregate.taskId,
+        );
+    }
     const attachments: UserInput[] =
       attachmentIds.length > 0 && options.attachments
         ? (
             await options.attachments.authority.materializeCodexInputs(
               attachmentIds,
               aggregate.taskId,
-              sessionId!,
+              sessionId,
               aggregate.launch.cwd,
             )
           ).map((attachment) =>
@@ -1183,9 +1210,17 @@ function messageHandler(
     if (delivery.state === "transport_may_have_received")
       return unresolvedDelivery(delivery, deliveryFacts);
     if (delivery.state === "non_submission_established")
-      throw new Error("Codex conclusively rejected the message dispatch.");
+      return {
+        status: "failed" as const,
+        facts: deliveryFacts,
+        detail: { reason: "Codex conclusively rejected the message dispatch." },
+      };
     if (delivery.state === "dispatch_not_started")
-      throw new Error("Codex message dispatch did not start.");
+      return {
+        status: "failed" as const,
+        facts: deliveryFacts,
+        detail: { reason: "Codex message dispatch did not start." },
+      };
     // turn/start acceptance is the command result. Ordered App Server events
     // own the subsequently materialized item and turn state; an immediate
     // thread/read can temporarily expose a pre-run terminal placeholder and

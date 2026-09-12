@@ -819,7 +819,7 @@ export function ProductSurface({
   }, [login, product?.catalog.account, product?.catalog.login]);
 
   const launch = async () => {
-    if (!gate.ready || !gate.browserIdentity) return;
+    if (!gate.ready) return;
     const result = await run(() =>
       command({
         type: "task.launch",
@@ -827,7 +827,9 @@ export function ProductSurface({
         input: {
           outcome: outcome.trim(),
           executionMode: mode,
-          browserIdentity: gate.browserIdentity!,
+          ...(gate.browserIdentity
+            ? { browserIdentity: gate.browserIdentity }
+            : {}),
           approvalsReviewer,
           ...(model ? { model } : {}),
           ...(effort ? { reasoningEffort: effort } : {}),
@@ -1380,7 +1382,7 @@ export function ProductSurface({
             {unmatchedSession
               ? `${modeLabel(unmatchedSession.session.mode)} · ${unmatchedSession.session.status}`
               : activeTask
-                ? `${modeLabel(activeTask.executionMode)} · ${workspaceName(desktop, activeTask.browserIdentity.mode === "workspace" ? activeTask.browserIdentity.workspaceId : "")} · Controller: ${activeTaskControl.controllerLabel}`
+                ? `${modeLabel(activeTask.executionMode)} · ${workspaceName(desktop, activeTask.browserIdentity?.mode === "workspace" ? activeTask.browserIdentity.workspaceId : "")} · Controller: ${activeTaskControl.controllerLabel}`
                 : "Open Rove to start a task"}
           </small>
         </div>
@@ -2923,9 +2925,7 @@ export function ProductSurface({
                     role="menuitem"
                     disabled={
                       (!taskContextEntry.availableActions.includes("archive") &&
-                        !taskContextEntry.availableActions.includes(
-                          "finish",
-                        ) &&
+                        !taskContextEntry.availableActions.includes("finish") &&
                         !taskContextEntry.availableActions.includes(
                           "retry_cleanup",
                         )) ||
@@ -3048,7 +3048,9 @@ export function ProductSurface({
                 <button
                   className="primary"
                   disabled={busy}
-                  onClick={() => void run(window.rove.showBrowser)}
+                  onClick={() =>
+                    void run(() => window.rove.showBrowser(viewedTask.taskId))
+                  }
                 >
                   {desktop?.companion?.browserOpen
                     ? "View Browser"

@@ -120,7 +120,7 @@ describe("SQLite durable task process store", () => {
     const first = await manager.accept(input);
     expect(first.projection.sequence).toBe(1);
     expect(first.command?.type).toBe("advance_bootstrap_stage");
-    expect(first.record?.bootstrap.stage).toBe("runtime_dispatching");
+    expect(first.record?.bootstrap.stage).toBe("thread_dispatching");
     expect(await store.projection(taskId)).toEqual(first.projection);
     expect(await store.launchConfiguration(taskId)).toEqual({
       roveTaskId: "raw-task-1",

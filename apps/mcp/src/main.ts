@@ -63,10 +63,10 @@ async function main(): Promise<void> {
   // A deployed MCP service must remain available while a user's Hub is
   // offline. Direct development still fails fast when its local Runtime is
   // unavailable; relay mode reports Hub readiness through /health instead.
-  if (controlPlaneUrl === undefined) {
+  const taskScope = taskRuntimeScopeFromEnvironment();
+  if (controlPlaneUrl === undefined && taskScope === undefined) {
     await unscopedRuntime.healthCheck();
   }
-  const taskScope = taskRuntimeScopeFromEnvironment();
   const runtime =
     taskScope === undefined
       ? unscopedRuntime

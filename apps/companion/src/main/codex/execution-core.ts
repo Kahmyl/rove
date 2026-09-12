@@ -591,6 +591,46 @@ export class CodexExecutionCore {
     return this.apiValue;
   }
 
+  async attachBrowser(taskId: string): Promise<string> {
+    if (!this.store) throw new Error("Codex execution core is not started.");
+    const aggregate = await this.store.aggregate(taskId);
+    if (
+      !aggregate?.launch ||
+      aggregate.record?.bootstrap.stage !== "complete" ||
+      aggregate.desiredState !== "open"
+    )
+      throw new Error("Browser attachment requires an open, ready task.");
+    const inventory = await this.options.runtime.listSessionInventory?.();
+    const matches = (inventory ?? []).filter((entry) =>
+      aggregate.record?.identity.sessionId
+        ? entry.session.id === aggregate.record.identity.sessionId
+        : entry.session.bootstrapId === aggregate.launch!.bootstrapId,
+    );
+    if (matches.length > 1)
+      throw new Error("Browser attachment lookup is conflicting.");
+    let session = matches[0]?.session;
+    if (!session || ["completed", "failed"].includes(session.status))
+      session = await this.options.runtime.startSession({
+        bootstrapId: aggregate.launch.bootstrapId,
+        mode: aggregate.launch.executionMode,
+        ...(aggregate.launch.browserIdentity
+          ? { browser: aggregate.launch.browserIdentity }
+          : {}),
+      });
+    else if (
+      (matches[0]!.attachment !== "attached" ||
+        matches[0]!.recovery !== "not_needed") &&
+      this.options.runtime.recoverSession
+    )
+      session = (await this.options.runtime.recoverSession(session.id)).session;
+    if (session.bootstrapId !== aggregate.launch.bootstrapId)
+      throw new Error(
+        "Browser attachment returned a conflicting task receipt.",
+      );
+    await this.pollRuntimeTruth();
+    return session.id;
+  }
+
   async requestLocalFileGrant(input: {
     reason: string;
     allowMultiple: boolean;
@@ -727,6 +767,18 @@ export class CodexExecutionCore {
             ? entry.session.id === aggregate.record.identity.sessionId
             : entry.session.bootstrapId === aggregate.launch!.bootstrapId,
         );
+        if (
+          match &&
+          aggregate.launch.attachmentIds.length > 0 &&
+          this.options.attachmentAuthority &&
+          this.options.attachmentRuntime
+        )
+          await this.options.attachmentAuthority.bindDrafts(
+            aggregate.launch.attachmentIds,
+            aggregate.taskId,
+            match.session.id,
+            this.options.attachmentRuntime,
+          );
         let control;
         try {
           control =

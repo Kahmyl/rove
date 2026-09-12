@@ -689,6 +689,46 @@ describe("runtime integration", () => {
     await expect(runtime.listActiveSessions()).resolves.toHaveLength(1);
   });
 
+  it("serializes simultaneous first attachment for one bootstrap", async () => {
+    let releaseLaunch!: () => void;
+    const launchGate = new Promise<void>((resolve) => {
+      releaseLaunch = resolve;
+    });
+    let launchStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      launchStarted = resolve;
+    });
+    let starts = 0;
+    const engine: BrowserEngine = {
+      start: async () => {
+        starts += 1;
+        launchStarted();
+        await launchGate;
+        return readyBrowserSession(`browser_${starts}`);
+      },
+    };
+    const { runtime } = await harness(engine);
+    const request = {
+      bootstrapId: `boot_${"4".repeat(32)}`,
+      mode: "agent" as const,
+      browser: { mode: "temporary" as const },
+    };
+
+    const firstResponse = runtime.startSession(request);
+    await started;
+    const secondResponse = runtime.startSession(request);
+    await Promise.resolve();
+    expect(starts).toBe(1);
+
+    releaseLaunch();
+    const [first, second] = await Promise.all([firstResponse, secondResponse]);
+    active.push({ runtime, id: first.id });
+
+    expect(second.id).toBe(first.id);
+    expect(starts).toBe(1);
+    await expect(runtime.listActiveSessions()).resolves.toHaveLength(1);
+  });
+
   it("keeps repeated direct inspection observational while returning page policy", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();

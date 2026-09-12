@@ -141,7 +141,7 @@ export interface RoveDesktopApi {
   updateFollowerDrag(): Promise<void>;
   endFollowerDrag(): Promise<void>;
   openRove(): Promise<void>;
-  showBrowser(): Promise<boolean>;
+  showBrowser(taskId?: string): Promise<boolean>;
   openTrustedExternal(intent: TrustedExternalIntent): Promise<void>;
   getBrowserWorkspaces(): Promise<DesktopBrowserWorkspaceStatus>;
   createBrowserWorkspace(

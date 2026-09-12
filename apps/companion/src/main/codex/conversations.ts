@@ -53,7 +53,7 @@ export interface ConversationAssociation {
   roveTaskId: string;
   codexThreadId: string;
   codexSessionId: string;
-  roveSessionId: string;
+  roveSessionId?: string;
   activeTurnId?: string;
   turnStatus: CodexTurnStatus;
   explicitSummary?: string;

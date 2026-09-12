@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
+import type { StartSessionRequest } from "@rove/protocol";
 
 import {
   scopeRuntimeClient,
@@ -20,6 +21,71 @@ describe("task-scoped Runtime client", () => {
     ).toString("base64url");
     return `rtcap_${payload}.${createHmac("sha256", key).update(payload).digest("base64url")}`;
   }
+
+  it("creates and fences the Runtime session only when browser capability is requested", async () => {
+    const bootstrapId = `boot_${"b".repeat(32)}`;
+    const startSession = vi.fn(async (input: StartSessionRequest) => ({
+      id: "ses_lazy",
+      bootstrapId: input.bootstrapId,
+    }));
+    const getSession = vi.fn(async (id: string) => ({ id, bootstrapId }));
+    const scoped = scopeRuntimeClient({ startSession, getSession } as never, {
+      taskId: "task_lazy",
+      bootstrapId,
+      capability: "rtcap_lazy",
+      executionMode: "agent",
+    });
+
+    expect(startSession).not.toHaveBeenCalled();
+    await expect(scoped.getSession("ses_lazy")).rejects.toThrow(/mismatch/);
+    await expect(scoped.startSession({ mode: "agent" })).resolves.toMatchObject(
+      {
+        id: "ses_lazy",
+        bootstrapId,
+      },
+    );
+    expect(startSession).toHaveBeenCalledWith({ mode: "agent", bootstrapId });
+    await expect(scoped.getSession("ses_lazy")).resolves.toMatchObject({
+      id: "ses_lazy",
+    });
+    await expect(scoped.getSession("ses_other")).rejects.toThrow(/mismatch/);
+  });
+
+  it("does not let an unbound bootstrap capability select a browser", async () => {
+    const bootstrapId = `boot_${"c".repeat(32)}`;
+    const startSession = vi.fn(async () => ({
+      id: "ses_unbound",
+      bootstrapId,
+    }));
+    const runtime = scopeRuntimeClient({ startSession } as never, {
+      taskId: "task_unbound",
+      bootstrapId,
+      capability: "rtcap_unbound",
+      executionMode: "agent",
+    });
+
+    for (const browser of [
+      {
+        mode: "workspace" as const,
+        workspaceId: "wrk_00000000-0000-4000-8000-000000000001",
+      },
+      {
+        mode: "workspace" as const,
+        workspaceId: "wrk_00000000-0000-4000-8000-000000000002",
+      },
+      { mode: "temporary" as const },
+    ])
+      await expect(
+        runtime.startSession({ mode: "agent", browser }),
+      ).rejects.toThrow(/context/);
+
+    expect(startSession).not.toHaveBeenCalled();
+    await expect(
+      runtime.startSession({ mode: "agent" }),
+    ).resolves.toMatchObject({ id: "ses_unbound", bootstrapId });
+    expect(startSession).toHaveBeenCalledOnce();
+    expect(startSession).toHaveBeenCalledWith({ mode: "agent", bootstrapId });
+  });
 
   it("fails closed on incomplete scope and fences every session method", async () => {
     expect(() =>

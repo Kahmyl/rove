@@ -92,7 +92,7 @@ describe("TaskProcessWorker", () => {
     );
     expect(await store.projection(taskId)).toMatchObject({ sequence: 3 });
     expect(await store.claimDueCommands("inspection", 2, 1)).toMatchObject([
-      { type: "lookup_or_start_runtime", claimedFrom: "pending" },
+      { type: "lookup_or_start_codex_thread", claimedFrom: "pending" },
     ]);
   });
 

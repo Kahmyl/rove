@@ -92,7 +92,9 @@ async function convertLegacySources(
           taskId: context.roveTaskId,
           ...(sessionId ? { sessionId } : {}),
           ...(threadId ? { threadId } : {}),
-          browser: context.browserIdentity,
+          ...(context.browserIdentity
+            ? { browser: context.browserIdentity }
+            : {}),
         },
         bootstrap: {
           operationId: context.bootstrap.attemptId,
@@ -145,10 +147,12 @@ async function convertLegacySources(
             controller: continuation ? "human" : "agent",
             attachment: "attached",
             profileLock:
-              context.browserIdentity.mode === "temporary"
+              context.browserIdentity?.mode === "temporary"
                 ? "released"
                 : "owned",
-            browserIdentity: context.browserIdentity,
+            ...(context.browserIdentity
+              ? { browserIdentity: context.browserIdentity }
+              : {}),
             recovery: "not_needed",
             ...(continuation
               ? { ownershipGeneration: continuation.handoffGeneration + 1 }

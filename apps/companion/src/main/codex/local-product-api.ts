@@ -31,7 +31,7 @@ export const LOCAL_PRODUCT_API_VERSION = 7 as const;
 export interface ProductTaskLaunchInput {
   outcome: string;
   executionMode: ExecutionMode;
-  browserIdentity: BrowserIdentity;
+  browserIdentity?: BrowserIdentity;
   approvalsReviewer: ApprovalsReviewer;
   model?: string;
   reasoningEffort?: string;
@@ -241,7 +241,7 @@ export interface ProductConversationProjection {
 export interface ProductTaskProjection {
   taskId: string;
   executionMode: ExecutionMode;
-  browserIdentity: BrowserIdentity;
+  browserIdentity?: BrowserIdentity;
   selectionSource: ProductTaskSnapshot["context"]["selectionSource"];
   selectedAt: string;
   bootstrapStage: ProductTaskSnapshot["context"]["bootstrap"]["stage"];
@@ -997,13 +997,17 @@ function projectTask(
   return {
     taskId: context.roveTaskId,
     executionMode: context.executionMode,
-    browserIdentity:
-      context.browserIdentity.mode === "temporary"
-        ? { mode: "temporary" }
-        : {
-            mode: "workspace",
-            workspaceId: context.browserIdentity.workspaceId,
-          },
+    ...(context.browserIdentity
+      ? {
+          browserIdentity:
+            context.browserIdentity.mode === "temporary"
+              ? ({ mode: "temporary" } as const)
+              : {
+                  mode: "workspace" as const,
+                  workspaceId: context.browserIdentity.workspaceId,
+                },
+        }
+      : {}),
     selectionSource: context.selectionSource,
     selectedAt: context.selectedAt.slice(0, 40),
     bootstrapStage: context.bootstrap.stage,
@@ -1493,22 +1497,14 @@ export class LocalProductApi {
     }
     if (value.type === "task.stop") {
       const task = await this.taskProjection(taskId);
-      // A user-selected Finish remains a close request even when the current
-      // projection also offers cleanup recovery. Cleanup retry is only the
-      // fallback for a task that cannot accept a fresh Finish intent.
-      const intentType = task.availableActions.includes("finish")
-        ? "finish"
-        : task.availableActions.includes("retry_cleanup")
-          ? "retry_cleanup"
-          : null;
-      if (intentType === null)
-        throw new Error("Finish is not available for this task.");
+      if (!task.availableActions.includes("interrupt"))
+        throw new Error("Stop is available only while this task is executing.");
       return this.tasks.submit({
-        type: intentType,
+        type: "interrupt",
         taskId,
         operationId: stableOperationId(
           value.operationId,
-          "finish operation id",
+          "interrupt operation id",
         ),
       });
     }
@@ -1656,6 +1652,17 @@ export class LocalProductApi {
         `${action.replaceAll("_", " ")} is not available for this task.`,
       );
   }
+  private requireModelReady(model?: string, effort?: string): void {
+    if (!this.health().ready) throw new Error("Codex App Server is not ready.");
+    const catalog = this.account.snapshot();
+    if (catalog.account.status !== "logged_in")
+      throw new Error("ChatGPT model access is unavailable.");
+    if (!model) return;
+    const selected = catalog.models.find((candidate) => candidate.id === model);
+    if (!selected) throw new Error("The selected model is stale.");
+    if (effort && !selected.efforts.includes(effort))
+      throw new Error("The selected reasoning effort is unavailable.");
+  }
   async execute(command: LocalProductCommand): Promise<LocalProductResult> {
     if (command === null || typeof command !== "object")
       throw new Error("Invalid local product command.");
@@ -1734,6 +1741,7 @@ export class LocalProductApi {
         );
         if (input === null || typeof input !== "object")
           throw new Error("Invalid product task launch.");
+        this.requireModelReady(input.model, input.reasoningEffort);
         exactCommand(input as unknown as Record<string, unknown>, [
           "outcome",
           "executionMode",
@@ -1761,32 +1769,14 @@ export class LocalProductApi {
             )
         )
           throw new Error("Task launch attachment selection is stale.");
-        const existingTasks = await this.tasks.productTasks();
-        const requestedWorkspaceId =
-          input.browserIdentity.mode === "workspace"
-            ? input.browserIdentity.workspaceId
-            : undefined;
-        if (
-          requestedWorkspaceId !== undefined &&
-          existingTasks.some(
-            (task) =>
-              task.context.initialLaunch?.operationId !== operationId &&
-              !["closed", "failed"].includes(task.lifecycle.phase) &&
-              task.context.browserIdentity.mode === "workspace" &&
-              task.context.browserIdentity.workspaceId ===
-                requestedWorkspaceId &&
-              task.runtime?.profileOwnership !== "released",
-          )
-        )
-          throw new Error(
-            "That browser profile is still attached to another task. Choose Guest, another persistent profile, or finish the old task to release it.",
-          );
         const started = await this.tasks.submit({
           type: "launch",
           operationId,
           outcome,
           executionMode: input.executionMode,
-          browserIdentity: input.browserIdentity,
+          ...(input.browserIdentity
+            ? { browserIdentity: input.browserIdentity }
+            : {}),
           approvalsReviewer: input.approvalsReviewer,
           cwd: this.taskCwd,
           ...(input.model === undefined ? {} : { model: input.model }),
@@ -1800,6 +1790,11 @@ export class LocalProductApi {
       }
       case "task.message": {
         const taskId = nonempty(command.taskId, "task id");
+        const existingTask = await this.tasks.readTask(taskId);
+        this.requireModelReady(
+          existingTask?.context.policy.model,
+          existingTask?.context.policy.reasoningEffort,
+        );
         const outcome = nonempty(command.outcome, "task outcome").slice(
           0,
           16_000,

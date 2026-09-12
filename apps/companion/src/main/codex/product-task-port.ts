@@ -31,7 +31,7 @@ export type ProductTaskIntent =
       operationId: string;
       outcome: string;
       executionMode: ExecutionMode;
-      browserIdentity: BrowserIdentity;
+      browserIdentity?: BrowserIdentity;
       approvalsReviewer: ApprovalsReviewer;
       cwd: string;
       model?: string;
@@ -46,6 +46,7 @@ export type ProductTaskIntent =
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
     }
+  | { type: "interrupt"; taskId: string; operationId: string }
   | { type: "finish"; taskId: string; operationId: string }
   | { type: "retry_cleanup"; taskId: string; operationId: string }
   | { type: "return_control"; taskId: string; operationId: string }
@@ -95,7 +96,8 @@ export interface LedgerProductTaskPortOptions {
 
 function productLifecycleReason(
   phase: ProductTaskSnapshot["lifecycle"]["phase"],
-  codexTurn: "none" | "active" | "completed" | "failed" | "interrupted" | "unknown",
+  codexTurn:
+    "none" | "active" | "completed" | "failed" | "interrupted" | "unknown",
   fallback: string,
 ): string {
   if (codexTurn === "active") return "Codex is working on this task.";
@@ -164,7 +166,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             requestedAt: base.observedAt,
             outcome: intent.outcome,
             executionMode: intent.executionMode,
-            browserIdentity: intent.browserIdentity,
+            ...(intent.browserIdentity
+              ? { browserIdentity: intent.browserIdentity }
+              : {}),
             approvalsReviewer: intent.approvalsReviewer,
             cwd: launchWorkspace ?? intent.cwd,
             ...(intent.model ? { model: intent.model } : {}),
@@ -187,6 +191,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
             : {}),
+        };
+        break;
+      case "interrupt":
+        event = {
+          ...base,
+          type: "task_interrupt_requested",
+          operationId: intent.operationId,
         };
         break;
       case "finish":
@@ -292,7 +303,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           context: {
             roveTaskId: aggregate.taskId,
             executionMode: aggregate.launch.executionMode,
-            browserIdentity: aggregate.launch.browserIdentity,
+            ...(aggregate.launch.browserIdentity
+              ? { browserIdentity: aggregate.launch.browserIdentity }
+              : {}),
             selectionSource: "user_selected",
             selectedAt: aggregate.launch.requestedAt,
             policy: {
@@ -368,15 +381,15 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               ? {}
               : { legacyEffects: aggregate.runtime.legacyEffects }),
           },
-          ...(record?.identity.threadId &&
-          record.identity.sessionId &&
-          aggregate.codexSessionId
+          ...(record?.identity.threadId && aggregate.codexSessionId
             ? {
                 conversation: {
                   roveTaskId: aggregate.taskId,
                   codexThreadId: record.identity.threadId,
                   codexSessionId: aggregate.codexSessionId,
-                  roveSessionId: record.identity.sessionId,
+                  ...(record.identity.sessionId
+                    ? { roveSessionId: record.identity.sessionId }
+                    : {}),
                   ...(aggregate.codex.turnId
                     ? { activeTurnId: aggregate.codex.turnId }
                     : {}),

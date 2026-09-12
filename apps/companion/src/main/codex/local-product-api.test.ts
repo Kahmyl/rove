@@ -71,6 +71,7 @@ function fixture(
       runtime: unknown,
     ): Promise<unknown>;
   },
+  accountState: unknown = account(),
 ) {
   const start = vi.fn(async (input) => ({
     context: { ...context(mode), ...input },
@@ -96,7 +97,9 @@ function fixture(
     };
   });
   const steerTurn = vi.fn(async (_input?: unknown) => ({ turnId: "turn_1" }));
-  const interruptTurn = vi.fn(async () => undefined);
+  const interruptTurn = vi.fn(
+    async (_taskId?: string, _operationId?: string) => undefined,
+  );
   const closeTask = vi.fn(
     async (_taskId?: string, _operationId?: string) => undefined,
   );
@@ -123,6 +126,8 @@ function fixture(
         taskId = started.context.roveTaskId;
       } else if (input.type === "message") {
         await steerTurn({ taskId, text: input.message });
+      } else if (input.type === "interrupt") {
+        await interruptTurn(taskId, input.operationId);
       } else if (input.type === "explicit_continuation_response") {
         await steerTurn({ taskId, text: input.message });
         if (await tasks.acknowledgeExplicitResponse(taskId)) {
@@ -257,7 +262,7 @@ function fixture(
       restartAttempt: 0,
       stderrTail: ["token=host-secret"],
     }),
-    account() as never,
+    accountState as never,
     tasks as never,
     broker as never,
     attention,
@@ -417,8 +422,7 @@ describe("LocalProductApi native product seam", () => {
   });
 
   it("launches an ordinary task from outcome-only UI input with host-owned policy", async () => {
-    const { api, start, startTurn, tasks } = fixture();
-    tasks.productTasks.mockResolvedValueOnce([]);
+    const { api, start, startTurn } = fixture();
     await api.execute({
       type: "task.launch",
       operationId: "intent_11111111-1111-4111-8111-111111111111",
@@ -444,6 +448,54 @@ describe("LocalProductApi native product seam", () => {
     );
   });
 
+  it("accepts an ordinary model task without browser identity", async () => {
+    const { api, start } = fixture();
+
+    await api.execute({
+      type: "task.launch",
+      operationId: "intent_12111111-1111-4111-8111-111111111111",
+      input: {
+        outcome: "Summarize the local notes",
+        executionMode: "agent",
+        approvalsReviewer: "auto_review",
+      },
+    });
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(start.mock.calls[0]?.[0]).not.toHaveProperty("browserIdentity");
+  });
+
+  it("rejects a stale selected model at the host boundary before task acceptance", async () => {
+    const catalog = {
+      ...account(),
+      snapshot: () => ({
+        account: {
+          status: "logged_in" as const,
+          authMode: "chatgpt" as const,
+        },
+        models: [{ id: "available-model", efforts: ["low"] }],
+        rateLimits: null,
+        usage: null,
+        refreshedAt: "2026-09-07T00:00:00Z",
+      }),
+    };
+    const { api, tasks } = fixture("agent", undefined, catalog);
+
+    await expect(
+      api.execute({
+        type: "task.launch",
+        operationId: "intent_13111111-1111-4111-8111-111111111111",
+        input: {
+          outcome: "Use a model that is no longer available",
+          executionMode: "agent",
+          approvalsReviewer: "auto_review",
+          model: "stale-model",
+        },
+      }),
+    ).rejects.toThrow(/selected model is stale/i);
+    expect(tasks.submit).not.toHaveBeenCalled();
+  });
+
   it("carries only opaque attachment ids while coordinator owns finish cleanup", async () => {
     const attachmentId = `att_${"b".repeat(32)}`;
     const attachments = {
@@ -457,7 +509,6 @@ describe("LocalProductApi native product seam", () => {
       cleanupTask: vi.fn(async () => undefined),
     };
     const { api, start, tasks } = fixture("agent", attachments);
-    tasks.productTasks.mockResolvedValueOnce([]);
     await api.execute({
       type: "task.launch",
       operationId: "intent_31111111-1111-4111-8111-111111111111",
@@ -574,8 +625,7 @@ describe("LocalProductApi native product seam", () => {
   });
 
   it("starts Capture human-owned without starting a Codex agent turn", async () => {
-    const { api, start, startTurn, tasks } = fixture("capture");
-    tasks.productTasks.mockResolvedValueOnce([]);
+    const { api, start, startTurn } = fixture("capture");
     await api.execute({
       type: "task.launch",
       operationId: "intent_22222222-2222-4222-8222-222222222222",
@@ -607,7 +657,7 @@ describe("LocalProductApi native product seam", () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
-  it("rejects reuse of a saved browser profile still owned by another open task", async () => {
+  it("does not apply browser profile admission to ordinary task creation", async () => {
     const { api, start } = fixture();
 
     await expect(
@@ -621,11 +671,11 @@ describe("LocalProductApi native product seam", () => {
           approvalsReviewer: "auto_review",
         },
       }),
-    ).rejects.toThrow(/still attached/);
-    expect(start).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
+    expect(start).toHaveBeenCalledOnce();
   });
 
-  it("does not silently switch a saved profile that a dormant task still has attached", async () => {
+  it("keeps dormant browser ownership out of model-task readiness", async () => {
     const { api, start, tasks } = fixture();
     const existing = (await tasks.productTasks())[0]!;
     tasks.productTasks.mockResolvedValueOnce([
@@ -651,9 +701,9 @@ describe("LocalProductApi native product seam", () => {
           approvalsReviewer: "auto_review",
         },
       }),
-    ).rejects.toThrow(/still attached/);
+    ).resolves.toBeDefined();
 
-    expect(start).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledOnce();
   });
 
   it("advances a closed current task to the oldest cleanup task without blocking a fresh-profile launch", async () => {
@@ -818,7 +868,6 @@ describe("LocalProductApi native product seam", () => {
     expect(legacyEffects.acknowledgeLegacyEffectScope).toHaveBeenCalledWith(
       "ses_existing",
     );
-    tasks.productTasks.mockResolvedValueOnce([]);
     await api.executeRendererIntent({
       type: "task.launch",
       operationId: "intent_44444444-4444-4444-8444-444444444444",
@@ -849,10 +898,22 @@ describe("LocalProductApi native product seam", () => {
       taskId: "task_existing",
       operationId: "intent_66666666-6666-4666-8666-666666666666",
     });
-    expect(interruptTurn).not.toHaveBeenCalled();
-    expect(closeTask).toHaveBeenCalledWith(
+    expect(interruptTurn).toHaveBeenCalledWith(
       "task_existing",
       "intent_66666666-6666-4666-8666-666666666666",
+    );
+    expect(closeTask).not.toHaveBeenCalled();
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_67666666-6666-4666-8666-666666666665",
+      outcome: "Redirect the same task after stopping its turn",
+    });
+    expect(steerTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        taskId: "task_existing",
+        text: "Redirect the same task after stopping its turn",
+      }),
     );
 
     tasks.productTasks.mockResolvedValueOnce([
@@ -865,16 +926,13 @@ describe("LocalProductApi native product seam", () => {
         availableActions: ["retry_cleanup"] as const,
       },
     ] as never);
-    await api.executeRendererIntent({
-      type: "task.stop",
-      taskId: "task_existing",
-      operationId: "intent_67666666-6666-4666-8666-666666666666",
-    });
-    expect(tasks.submit).toHaveBeenLastCalledWith({
-      type: "retry_cleanup",
-      taskId: "task_existing",
-      operationId: "intent_67666666-6666-4666-8666-666666666666",
-    });
+    await expect(
+      api.executeRendererIntent({
+        type: "task.stop",
+        taskId: "task_existing",
+        operationId: "intent_67666666-6666-4666-8666-666666666666",
+      }),
+    ).rejects.toThrow(/only while.*executing/);
 
     tasks.productTasks.mockResolvedValueOnce([
       {
@@ -886,16 +944,13 @@ describe("LocalProductApi native product seam", () => {
         availableActions: ["retry_cleanup", "finish"] as const,
       },
     ] as never);
-    await api.executeRendererIntent({
-      type: "task.stop",
-      taskId: "task_existing",
-      operationId: "intent_68666666-6666-4666-8666-666666666666",
-    });
-    expect(tasks.submit).toHaveBeenLastCalledWith({
-      type: "finish",
-      taskId: "task_existing",
-      operationId: "intent_68666666-6666-4666-8666-666666666666",
-    });
+    await expect(
+      api.executeRendererIntent({
+        type: "task.stop",
+        taskId: "task_existing",
+        operationId: "intent_68666666-6666-4666-8666-666666666666",
+      }),
+    ).rejects.toThrow(/only while.*executing/);
 
     attention.enqueue({
       authority: "codex",
@@ -1000,18 +1055,17 @@ describe("LocalProductApi native product seam", () => {
       },
     ] as never);
 
-    await api.executeRendererIntent({
-      type: "task.stop",
-      taskId: "task_existing",
-      operationId: "intent_88888888-8888-4888-a888-888888888888",
-    });
+    await expect(
+      api.executeRendererIntent({
+        type: "task.stop",
+        taskId: "task_existing",
+        operationId: "intent_88888888-8888-4888-a888-888888888888",
+      }),
+    ).rejects.toThrow(/only while.*executing/);
 
     expect(tasks.readTaskProjection).not.toHaveBeenCalled();
     expect(interruptTurn).not.toHaveBeenCalled();
-    expect(closeTask).toHaveBeenCalledWith(
-      "task_existing",
-      "intent_88888888-8888-4888-a888-888888888888",
-    );
+    expect(closeTask).not.toHaveBeenCalled();
   });
 
   it("redacts host diagnostics, task policy, capability, and raw attention payload", async () => {

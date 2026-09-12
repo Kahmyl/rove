@@ -211,6 +211,7 @@ export class RuntimeService implements RoveRuntime {
   private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
+  private readonly bootstrapStarts = new Map<string, Promise<Session>>();
   private readonly downloadEffectWaiters = new Map<
     string,
     DownloadEffectWaiter
@@ -316,6 +317,27 @@ export class RuntimeService implements RoveRuntime {
   async startSession(request: StartSessionRequest): Promise<Session> {
     await this.effectJournalReady;
     const input = startSessionRequestSchema.parse(request);
+    if (input.bootstrapId === undefined) return this.startSessionOnce(input);
+
+    const pending = this.bootstrapStarts.get(input.bootstrapId);
+    if (pending !== undefined) {
+      await pending;
+      return this.startSessionOnce(input);
+    }
+
+    const start = this.startSessionOnce(input);
+    this.bootstrapStarts.set(input.bootstrapId, start);
+    try {
+      return await start;
+    } finally {
+      if (this.bootstrapStarts.get(input.bootstrapId) === start)
+        this.bootstrapStarts.delete(input.bootstrapId);
+    }
+  }
+
+  private async startSessionOnce(
+    input: ReturnType<typeof startSessionRequestSchema.parse>,
+  ): Promise<Session> {
     let workspace: BrowserWorkspace | undefined;
     let profile: BrowserProfileConfig = { mode: "temporary" };
     if (input.browser.mode === "workspace") {
@@ -375,8 +397,7 @@ export class RuntimeService implements RoveRuntime {
         this.persistBrowserActivity(session.id, activity);
       });
 
-      if (request.startUrl !== undefined)
-        await browser.navigate(request.startUrl);
+      if (input.startUrl !== undefined) await browser.navigate(input.startUrl);
       const activePageId = (await browser.pages()).find(
         (page) => page.active,
       )?.id;

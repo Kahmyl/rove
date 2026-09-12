@@ -321,6 +321,111 @@ describe("production lifecycle authority", () => {
     });
   });
 
+  it("starts Codex without Runtime and keeps the conversation usable when browser support is unavailable", () => {
+    const taskId = "task_91111111-1111-4111-8111-111111111111";
+    const threadId = "01a09746-5a83-7862-96df-d14a72aadef7";
+    const bootstrapId = `boot_${"9".repeat(32)}`;
+    const browserless: NativeLifecycleInput = {
+      record: {
+        schemaVersion: 1,
+        identity: { taskId },
+        bootstrap: {
+          operationId: bootstrapId,
+          threadSource: `rove:${taskId}:${bootstrapId}`,
+          stage: "intent_persisted",
+        },
+        desiredState: "open",
+      },
+      codex: {
+        availability: "available",
+        threadExists: false,
+        sourceLookup: "none",
+        runtimeStatus: "notLoaded",
+        archived: null,
+        turn: "none",
+      },
+      runtime: {
+        availability: "unavailable",
+        sessionExists: false,
+        bootstrapLookup: "unknown",
+        status: "unknown",
+        controller: null,
+        attachment: "unknown",
+        profileLock: "unknown",
+        recovery: "unknown",
+      },
+      continuation: { status: "none" },
+      attentions: [],
+      freshInspection: null,
+      requestedOperation: { type: "observe", taskId },
+    };
+
+    expect(productionReducer(browserless)).toMatchObject({
+      phase: "starting",
+      nextCommand: {
+        type: "advance_bootstrap_stage",
+        stage: "thread_dispatching",
+      },
+    });
+
+    const ready = structuredClone(browserless);
+    ready.record!.identity.threadId = threadId;
+    ready.record!.bootstrap.stage = "complete";
+    ready.codex = {
+      availability: "available",
+      threadExists: true,
+      threadId,
+      threadSource: `rove:${taskId}:${bootstrapId}`,
+      sourceLookup: "exact",
+      runtimeStatus: "idle",
+      archived: false,
+      turn: "completed",
+    };
+    ready.requestedOperation = {
+      type: "message",
+      taskId,
+      operationId: "intent_91911111-1111-4111-8111-111111111111",
+      message: "Continue without a browser.",
+    };
+    expect(productionReducer(ready)).toMatchObject({
+      phase: "ready",
+      nextCommand: {
+        type: "start_or_steer_codex_turn",
+        taskId,
+        threadId,
+      },
+    });
+
+    const afterBrowserClosure = structuredClone(ready);
+    const sessionId = `ses_${"9".repeat(32)}`;
+    afterBrowserClosure.record!.identity.sessionId = sessionId;
+    afterBrowserClosure.record!.identity.browser = { mode: "temporary" };
+    afterBrowserClosure.runtime = {
+      availability: "available",
+      sessionExists: true,
+      sessionId,
+      bootstrapId,
+      bootstrapLookup: "exact",
+      status: "failed",
+      controller: null,
+      attachment: "missing",
+      profileLock: "released",
+      browserIdentity: { mode: "temporary" },
+      recovery: "cleanup_required",
+    };
+    afterBrowserClosure.requestedOperation = {
+      type: "message",
+      taskId,
+      operationId: "intent_92911111-1111-4111-8111-111111111111",
+      message: "Continue after the browser closed.",
+    };
+    expect(productionReducer(afterBrowserClosure)).toMatchObject({
+      phase: "ready",
+      allowedActions: expect.arrayContaining(["message"]),
+      nextCommand: { type: "start_or_steer_codex_turn", taskId, threadId },
+    });
+  });
+
   it("rejects empty, oversized, and wrongly typed opaque Codex identities", () => {
     const taskId = "task_11111111-1111-4111-8111-111111111111";
     const sessionId = `ses_${"2".repeat(32)}`;

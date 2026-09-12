@@ -207,7 +207,8 @@ function validateRecord(record) {
     id(identity.sessionId, "session id", PATTERNS.session);
   if (identity.threadId !== undefined)
     id(identity.threadId, "thread id", PATTERNS.appServer);
-  browser(identity.browser, "frozen browser identity");
+  if (identity.browser !== undefined)
+    browser(identity.browser, "attached browser identity");
   const bootstrap = object(
     record.bootstrap,
     ["operationId", "threadSource", "stage"],
@@ -230,13 +231,14 @@ function validateRecord(record) {
     ],
     "bootstrap stage",
   );
-  const sessionBound = [
-    "runtime_bound",
-    "thread_dispatching",
-    "complete",
-  ].includes(bootstrap.stage);
+  const sessionRequired = bootstrap.stage === "runtime_bound";
   const threadBound = bootstrap.stage === "complete";
-  if (sessionBound !== (identity.sessionId !== undefined))
+  if (sessionRequired && identity.sessionId === undefined)
+    throw new Error("Bootstrap stage and Runtime identity binding disagree.");
+  if (
+    ["intent_persisted", "runtime_dispatching"].includes(bootstrap.stage) &&
+    identity.sessionId !== undefined
+  )
     throw new Error("Bootstrap stage and Runtime identity binding disagree.");
   if (threadBound !== (identity.threadId !== undefined))
     throw new Error("Bootstrap stage and Codex identity binding disagree.");
@@ -1009,7 +1011,7 @@ function validateInput(input) {
       "Codex thread source does not match the durable association.",
     );
   if (
-    input.record?.bootstrap.stage === "intent_persisted" &&
+    input.record?.bootstrap.stage === "runtime_dispatching" &&
     input.runtime.sessionExists
   )
     throw new Error("Runtime receipt exists before durable dispatch intent.");
@@ -1140,6 +1142,7 @@ function identityProblem(input) {
     return "Runtime session identity does not match the durable task.";
   if (
     input.runtime.sessionExists &&
+    expected.browser !== undefined &&
     !sameBrowser(input.runtime.browserIdentity, expected.browser)
   )
     return "Runtime browser identity does not match the frozen launch identity.";
@@ -1352,14 +1355,14 @@ function reduceBootstrap(input) {
       identity.taskId,
       "starting",
       ["finish"],
-      "Runtime dispatch intent must be durable before dispatch.",
+      "Codex dispatch intent must be durable before dispatch.",
       transition(
         "advance_bootstrap_stage",
-        { taskId: identity.taskId, stage: "runtime_dispatching" },
+        { taskId: identity.taskId, stage: "thread_dispatching" },
         {
           type: "durable_bootstrap_stage",
           taskId: identity.taskId,
-          stage: "runtime_dispatching",
+          stage: "thread_dispatching",
         },
       ),
     );
@@ -1432,27 +1435,6 @@ function reduceBootstrap(input) {
       ),
     );
   }
-  if (runtime.availability === "unavailable")
-    return output(
-      identity.taskId,
-      "recovering",
-      ["finish", "retry_cleanup"],
-      "Bound Runtime truth is unavailable.",
-      transition(
-        "read_runtime_inventory",
-        { taskId: identity.taskId, sessionId: identity.sessionId },
-        {
-          type: "runtime_inventory",
-          taskId: identity.taskId,
-          sessionId: identity.sessionId,
-        },
-      ),
-    );
-  if (!runtime.sessionExists || runtime.sessionId !== identity.sessionId)
-    return retryableCleanup(
-      input,
-      "Bound Runtime identity is missing or conflicting.",
-    );
   if (stage === "runtime_bound")
     return output(
       identity.taskId,
@@ -1505,7 +1487,7 @@ function reduceBootstrap(input) {
           {
             taskId: identity.taskId,
             threadSource: record.bootstrap.threadSource,
-            sessionId: identity.sessionId,
+            ...(identity.sessionId ? { sessionId: identity.sessionId } : {}),
           },
           {
             type: "codex_thread_source_receipt",
@@ -1806,19 +1788,16 @@ function reduceClose(input) {
 function reduceOpen(input) {
   const { record, codex, runtime, continuation } = input;
   const identity = record.identity;
-  if (
-    codex.availability === "unavailable" ||
-    runtime.availability === "unavailable"
-  )
+  if (codex.availability === "unavailable")
     return output(
       identity.taskId,
       "recovering",
       ["finish", "retry_cleanup"],
-      "Lifecycle truth is unavailable.",
+      "Codex lifecycle truth is unavailable.",
       transition(
-        "read_lifecycle_truth",
+        "read_codex_thread",
         { taskId: identity.taskId },
-        { type: "lifecycle_truth", taskId: identity.taskId },
+        { type: "codex_thread_truth", taskId: identity.taskId },
       ),
     );
   if (!codex.threadExists)
@@ -1878,12 +1857,33 @@ function reduceOpen(input) {
         },
       ),
     );
-  if (!runtime.sessionExists)
-    return retryableCleanup(
-      input,
-      "Durable task has no persisted Runtime session.",
+  if (runtime.sessionExists && identity.sessionId === undefined)
+    return output(
+      identity.taskId,
+      "recovering",
+      ["finish"],
+      "The on-demand Runtime capability must be bound to this task.",
+      transition(
+        "bind_runtime_identity",
+        {
+          taskId: identity.taskId,
+          bootstrapId: record.bootstrap.operationId,
+          returnedSessionId: runtime.sessionId,
+          returnedBrowserIdentity: runtime.browserIdentity,
+        },
+        {
+          type: "durable_runtime_binding",
+          taskId: identity.taskId,
+          sessionId: runtime.sessionId,
+        },
+      ),
     );
-  if (runtime.status === "starting")
+  const runtimeAttached =
+    runtime.sessionExists &&
+    runtime.sessionId === identity.sessionId &&
+    !TERMINAL_RUNTIME.has(runtime.status) &&
+    runtime.attachment === "attached";
+  if (runtimeAttached && runtime.status === "starting")
     return output(
       identity.taskId,
       "recovering",
@@ -1899,53 +1899,16 @@ function reduceOpen(input) {
         },
       ),
     );
-  if (TERMINAL_RUNTIME.has(runtime.status))
-    return retryableCleanup(
-      input,
-      "Open task has a terminal persisted Runtime session.",
-    );
   if (
-    runtime.attachment === "conflicting" ||
-    runtime.profileLock === "conflicting"
+    runtimeAttached &&
+    (runtime.attachment === "conflicting" ||
+      runtime.profileLock === "conflicting")
   )
     return retryableCleanup(
       input,
       "Runtime attachment or profile ownership conflicts.",
     );
-  if (runtime.attachment === "missing") {
-    if (
-      identity.browser.mode === "workspace" &&
-      runtime.recovery === "relaunchable" &&
-      ["released", "claimable"].includes(runtime.profileLock)
-    )
-      return output(
-        identity.taskId,
-        "recovering",
-        ["finish", "retry_cleanup"],
-        "Exact named session is relaunchable.",
-        transition(
-          "relaunch_named_browser",
-          {
-            taskId: identity.taskId,
-            sessionId: identity.sessionId,
-            browserIdentity: identity.browser,
-          },
-          {
-            type: "runtime_session_attached",
-            taskId: identity.taskId,
-            sessionId: identity.sessionId,
-            browserIdentity: identity.browser,
-          },
-        ),
-      );
-    return retryableCleanup(
-      input,
-      identity.browser.mode === "temporary"
-        ? "Temporary browser loss is not restorable."
-        : "Named browser loss lacks exact relaunch authority.",
-    );
-  }
-  if (runtime.recovery !== "not_needed")
+  if (runtimeAttached && runtime.recovery !== "not_needed")
     return retryableCleanup(
       input,
       "Attached Runtime session has contradictory recovery classification.",
@@ -2154,13 +2117,11 @@ function reduceOpen(input) {
     codexAttention.length === 0 &&
     continuation.status !== "pending" &&
     handoff === null &&
-    runtime.controller === "agent";
-  if (codex.turn === "active" && runtime.controller === "agent")
-    actions.push("interrupt");
+    (!runtimeAttached || runtime.controller === "agent");
+  if (codex.turn === "active") actions.push("interrupt");
   if (codex.turn === "active" && canMessage) actions.push("message");
   if (
     ["none", "completed", "failed", "interrupted"].includes(codex.turn) &&
-    runtime.status === "active" &&
     canMessage
   )
     actions.push("message");
@@ -2168,8 +2129,8 @@ function reduceOpen(input) {
     codexAttention.length > 0 ||
     handoff !== null ||
     continuation.status === "pending" ||
-    runtime.controller === "human" ||
-    runtime.status === "awaiting_human";
+    (runtimeAttached && runtime.controller === "human") ||
+    (runtimeAttached && runtime.status === "awaiting_human");
   return output(
     identity.taskId,
     waiting

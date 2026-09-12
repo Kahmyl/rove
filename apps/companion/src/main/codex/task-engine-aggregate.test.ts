@@ -570,7 +570,7 @@ describe("TaskAggregate exact event fold", () => {
       }),
     );
 
-    expect(accepted.command?.type).toBe("read_lifecycle_truth");
+    expect(accepted.command).toBeNull();
     expect(commits[0]?.freshInspection).toBeNull();
     expect(commits[0]?.runtime.availability).toBe("unavailable");
   });

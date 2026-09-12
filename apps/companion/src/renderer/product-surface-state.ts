@@ -164,7 +164,7 @@ export function taskHasAttachedBrowserWorkspace(
 ): boolean {
   return (
     !terminalProductTask(task) &&
-    task.browserIdentity.mode === "workspace" &&
+    task.browserIdentity?.mode === "workspace" &&
     task.browserIdentity.workspaceId === workspaceId &&
     task.runtime?.profileOwnership !== "released"
   );
@@ -191,25 +191,6 @@ export function composerGate(
     selection.browserChoice,
     desktop,
   );
-  if (!browserIdentity)
-    return {
-      ready: false,
-      reason:
-        desktop.workspaces.workspaces.length === 0
-          ? "Create a browser workspace or explicitly choose Temporary."
-          : "Choose an available browser identity.",
-    };
-  if (
-    browserIdentity.mode === "workspace" &&
-    product.tasks.some((task) =>
-      taskHasAttachedBrowserWorkspace(task, browserIdentity.workspaceId),
-    )
-  )
-    return {
-      ready: false,
-      reason:
-        "That browser profile is still attached to another task. Choose Guest, another persistent profile, or finish the old task to release it.",
-    };
   if (selection.model) {
     const model = product.catalog.models.find(
       (candidate) => candidate.id === selection.model,
@@ -221,7 +202,7 @@ export function composerGate(
         reason: "The selected reasoning effort is unavailable.",
       };
   }
-  return { ready: true, browserIdentity };
+  return { ready: true, ...(browserIdentity ? { browserIdentity } : {}) };
 }
 
 export function recoveryLabel(desktop: DesktopSurfaceSnapshot | null): string {

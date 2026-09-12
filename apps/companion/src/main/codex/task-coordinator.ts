@@ -1011,7 +1011,9 @@ export interface StartedTask {
   context: Required<ResolvedTaskContext>;
 }
 export interface ProductTaskSnapshot {
-  context: ResolvedTaskContext;
+  context: Omit<ResolvedTaskContext, "browserIdentity"> & {
+    browserIdentity?: BrowserIdentity;
+  };
   conversation?: ConversationAssociation;
   lifecycle: { phase: ProductLifecyclePhase; reason: string };
   availableActions: ProductLifecycleAction[];
@@ -3828,6 +3830,10 @@ export class RoveTaskCoordinator {
     if (contractIdentity(launch.roveTaskId, "task") !== record.identity.taskId)
       throw new Error(
         "Frozen task identity does not match the lifecycle ledger.",
+      );
+    if (!restoredBrowser || !record.identity.browser)
+      throw new Error(
+        "Legacy lifecycle restoration requires its historical browser binding.",
       );
     if (
       restoredBrowser.mode !== record.identity.browser.mode ||

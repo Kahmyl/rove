@@ -98,8 +98,8 @@ const api: RoveDesktopApi = {
 
   openRove: () => ipcRenderer.invoke("rove:open") as Promise<void>,
 
-  showBrowser: () =>
-    ipcRenderer.invoke("rove:show-browser") as Promise<boolean>,
+  showBrowser: (taskId) =>
+    ipcRenderer.invoke("rove:show-browser", taskId) as Promise<boolean>,
 
   openTrustedExternal: (intent) =>
     ipcRenderer.invoke("rove:open-trusted-external", intent) as Promise<void>,

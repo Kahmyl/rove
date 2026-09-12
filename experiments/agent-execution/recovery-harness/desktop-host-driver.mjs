@@ -277,6 +277,7 @@ async function execute(command) {
                 command: rove.command,
                 args: rove.args,
                 taskId: rove.env?.ROVE_TASK_ID,
+                bootstrapId: rove.env?.ROVE_TASK_BOOTSTRAP_ID,
                 sessionId: rove.env?.ROVE_TASK_SESSION_ID,
                 mode: rove.env?.ROVE_TASK_EXECUTION_MODE,
                 browserIdentity: rove.env?.ROVE_TASK_BROWSER_IDENTITY,
@@ -320,11 +321,13 @@ async function execute(command) {
       input: command.input,
     });
   if (command.type === "task.finish")
-    return core.api().executeRendererIntent({
-      type: "task.stop",
+    return core.api().execute({
+      type: "task.close",
       taskId: command.taskId,
       operationId: command.operationId,
     });
+  if (command.type === "browser.attach")
+    return core.attachBrowser(command.taskId);
   if (command.type === "task.message")
     return core.api().executeRendererIntent({
       type: "task.message",

@@ -15,7 +15,7 @@ import {
 const representatives = [
   { class: "repeatable_read", command: "read_codex_thread" },
   { class: "correlated_write", command: "start_or_steer_codex_turn" },
-  { class: "uncertain_write", command: "lookup_or_start_runtime" },
+  { class: "codex_bootstrap_write", command: "lookup_or_start_codex_thread" },
 ] as const;
 
 const cuts = [
@@ -135,6 +135,10 @@ describe("21 real process stop/restart interruption cases", () => {
               (snapshot) =>
                 task(snapshot, expectedTaskId).bootstrapStage === "complete",
             );
+            await current.request({
+              type: "browser.attach",
+              taskId: expectedTaskId,
+            });
             // Component replacement is its own cut, not an accidental
             // interruption of the still-asynchronous initial dispatch.
             await current.untilResult(
@@ -148,7 +152,7 @@ describe("21 real process stop/restart interruption cases", () => {
                   (action) => action.method === "startSession",
                 ),
             );
-            if (representative.class === "uncertain_write")
+            if (representative.class === "codex_bootstrap_write")
               await current
                 .request({ type: "runtime.kill.now" })
                 .catch(() => ({}));
@@ -184,6 +188,11 @@ describe("21 real process stop/restart interruption cases", () => {
           expect(lifecycle(task(recovered, expectedTaskId)).phase).toBe(
             "ready",
           );
+
+          await current.request({
+            type: "browser.attach",
+            taskId: expectedTaskId,
+          });
 
           const afterRecovery = await current.untilResult(
             { type: "external.actions" },

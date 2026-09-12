@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 
 import Database from "better-sqlite3";
 import type {
+  NativeBrowserIdentity,
   TaskAcceptance,
   TaskAggregate,
   TaskCommand,
@@ -363,9 +364,8 @@ export class SqliteTaskEngineStore implements TaskEngineStore {
                   : "Recover migrated task",
               executionMode: rawLaunch.executionMode as
                 "agent" | "companion" | "capture",
-              browserIdentity: rawLaunch.browserIdentity as NonNullable<
-                typeof aggregate.launch
-              >["browserIdentity"],
+              browserIdentity:
+                rawLaunch.browserIdentity as NativeBrowserIdentity,
               approvalsReviewer: policy.approvalsReviewer,
               cwd: policy.cwd,
               ...(typeof policy.model === "string"

@@ -44,7 +44,7 @@ export interface TaskLaunchConfiguration {
   requestedAt: string;
   outcome: string;
   executionMode: "agent" | "companion" | "capture";
-  browserIdentity: NativeBrowserIdentity;
+  browserIdentity?: NativeBrowserIdentity;
   approvalsReviewer: "auto_review" | "user";
   cwd: string;
   model?: string;
@@ -118,6 +118,10 @@ export type TaskEvent =
     })
   | (TaskEventBase & {
       type: "task_return_requested";
+      operationId: string;
+    })
+  | (TaskEventBase & {
+      type: "task_interrupt_requested";
       operationId: string;
     })
   | (TaskEventBase & {
@@ -235,6 +239,7 @@ export type TaskIntent = Extract<
       | "task_launch_requested"
       | "task_message_requested"
       | "task_return_requested"
+      | "task_interrupt_requested"
       | "task_finish_requested"
       | "task_cleanup_retry_requested"
       | "task_archive_requested"
@@ -710,6 +715,12 @@ function operation(event: TaskEvent): NativeRequestedOperation | null {
     case "task_return_requested":
       return {
         type: "return_control",
+        taskId: event.taskId,
+        operationId: event.operationId,
+      };
+    case "task_interrupt_requested":
+      return {
+        type: "interrupt",
         taskId: event.taskId,
         operationId: event.operationId,
       };
@@ -1190,7 +1201,9 @@ export function applySuccessfulTaskCommand(
         schemaVersion: 1,
         identity: {
           taskId: next.taskId,
-          browser: structuredClone(next.launch.browserIdentity),
+          ...(next.launch.browserIdentity
+            ? { browser: structuredClone(next.launch.browserIdentity) }
+            : {}),
         },
         bootstrap: {
           operationId: next.launch.bootstrapId,
@@ -1214,7 +1227,12 @@ export function applySuccessfulTaskCommand(
           "Runtime binding outcome lacks an exact session identity.",
         );
       next.record.identity.sessionId = payload.returnedSessionId;
-      next.record.bootstrap.stage = "runtime_bound";
+      if (payload.returnedBrowserIdentity)
+        next.record.identity.browser = structuredClone(
+          payload.returnedBrowserIdentity as NativeBrowserIdentity,
+        );
+      if (next.record.bootstrap.stage !== "complete")
+        next.record.bootstrap.stage = "runtime_bound";
       break;
     case "bind_codex_identity":
       if (
@@ -1376,6 +1394,9 @@ export function applySuccessfulTaskCommand(
     case "start_or_steer_codex_turn":
       settleRequestedOperation(next, command, "message");
       break;
+    case "interrupt_codex_turn":
+      settleRequestedOperation(next, command, "interrupt");
+      break;
     case "return_runtime_ownership":
       settleRequestedOperation(next, command, "return_control");
       break;
@@ -1536,7 +1557,7 @@ export class TaskEngine {
             priorCommand,
             event.facts,
           );
-        } else if (event.status === "unresolved") {
+        } else if (event.status === "unresolved" || event.status === "failed") {
           for (const fact of event.facts) {
             if (fact.type !== "codex_message_delivery_observed") continue;
             const folded = foldTaskEvent(
@@ -1545,16 +1566,31 @@ export class TaskEngine {
             );
             Object.assign(aggregate, folded, { revision: aggregate.revision });
           }
-          aggregate.recoveryRequired = [
-            "finish",
-            "retry_cleanup",
-            "archive",
-            "resume",
-          ].includes(aggregate.requestedOperation.type)
-            ? null
-            : `Command ${priorCommand.type} requires truth-based reconciliation.`;
-        } else
-          aggregate.recoveryRequired = `Command ${priorCommand.type} failed.`;
+          const nonSubmission = event.facts.some(
+            (fact) =>
+              fact.type === "codex_message_delivery_observed" &&
+              ["dispatch_not_started", "non_submission_established"].includes(
+                fact.delivery.state,
+              ),
+          );
+          if (nonSubmission) {
+            aggregate.requestedOperation = {
+              type: "observe",
+              taskId: aggregate.taskId,
+            };
+            aggregate.recoveryRequired = null;
+          } else
+            aggregate.recoveryRequired = [
+              "finish",
+              "retry_cleanup",
+              "archive",
+              "resume",
+            ].includes(aggregate.requestedOperation.type)
+              ? null
+              : event.status === "unresolved"
+                ? `Command ${priorCommand.type} requires truth-based reconciliation.`
+                : `Command ${priorCommand.type} failed.`;
+        }
       }
       const output = outputFor(aggregate);
       const outcomeReleasesActive =

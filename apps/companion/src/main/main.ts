@@ -522,7 +522,12 @@ function registerIpc(
     openFullSurface();
   });
 
-  ipcMain.handle(companionIpcChannels.showBrowser, async () => {
+  ipcMain.handle(companionIpcChannels.showBrowser, async (_event, taskId) => {
+    if (typeof taskId === "string") {
+      if (codexExecutionCore === undefined || codexProductError !== null)
+        throw new Error("Codex product service is unavailable.");
+      await codexExecutionCore.attachBrowser(taskId);
+    }
     const shown = await runtime.showBrowser();
     if (shown) {
       closeFullSurface();

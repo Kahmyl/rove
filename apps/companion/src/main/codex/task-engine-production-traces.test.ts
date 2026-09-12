@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,6 +63,10 @@ function processAlive(processId: number): boolean {
   }
 }
 
+function bootstrapId(operationId: string): string {
+  return `boot_${createHash("sha256").update(operationId).digest("hex").slice(0, 32)}`;
+}
+
 const ids = {
   launch: "intent_11111111-1111-4111-8111-111111111111",
   attention: "intent_22222222-2222-4222-8222-222222222222",
@@ -71,7 +76,7 @@ const ids = {
 } as const;
 
 describe("five process-backed production-composition lifecycle traces", () => {
-  it("1. launches with attachments and exact Rove MCP/model/browser parameters, and rejects a bad catalog", async () => {
+  it("1. launches browserlessly with local attachments and exact Rove MCP/model parameters, and rejects a bad catalog", async () => {
     const current = await product();
     const selected = await current.request({
       type: "attachment.prepare",
@@ -135,18 +140,24 @@ describe("five process-backed production-composition lifecycle traces", () => {
       defaultPermissions: "rove_task",
     });
     expect(start?.developerInstructions).toContain("Rove browser route policy");
-    expect(start?.developerInstructions).toContain("trace.txt");
-    expect(start?.rove).toMatchObject({
+    const rove = start?.rove as ProductValue | undefined;
+    expect(rove).toMatchObject({
       required: true,
       enabled: true,
       taskId: taskId(ids.launch),
-      sessionId: entry.roveSessionId,
+      bootstrapId: bootstrapId(ids.launch),
       mode: "agent",
       browserIdentity: JSON.stringify({ mode: "temporary" }),
       capability: true,
       verifier: true,
     });
+    expect(rove?.sessionId).toBeUndefined();
     const actions = await current.request({ type: "external.actions" });
+    expect(
+      (actions.runtime as ProductValue[]).filter(
+        (action) => action.method === "startSession",
+      ),
+    ).toHaveLength(0);
     expect(
       (actions.appServer as ProductValue[]).filter(
         (action) =>
@@ -309,6 +320,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
       ),
     ).toHaveLength(1);
     await current.request({
+      type: "browser.attach",
+      taskId: taskId(ids.handoff),
+    });
+    await current.request({
       type: "handoff.prepare",
       taskId: taskId(ids.handoff),
     });
@@ -388,6 +403,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     await current.until(
       (value) => task(value, taskId(ids.finish)).bootstrapStage === "complete",
     );
+    await current.request({
+      type: "browser.attach",
+      taskId: taskId(ids.finish),
+    });
     await current.request({
       type: "handoff.prepare",
       taskId: taskId(ids.finish),
@@ -476,19 +495,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     expect(lifecycle(task(nextTask, taskId(ids.finish))).phase).toBe("closed");
   }, 120_000);
 
-  it("5. restores exact state across App Server, Runtime, and Desktop restarts and accepts a second product intent once", async () => {
+  it("5. restores a browserless task across App Server, Runtime, and Desktop restarts and accepts a second product intent once", async () => {
     let current = await product();
-    const workspace = await current.request({
-      type: "workspace.create",
-      displayName: "Restart trace workspace",
-    });
-    const workspaceId = String(
-      (workspace.workspace as ProductValue | undefined)?.id ?? workspace.id,
-    );
     await current.request(
-      launchIntent(ids.restart, {
-        browserIdentity: { mode: "workspace", workspaceId },
-      }),
+      launchIntent(ids.restart, { browserIdentity: undefined }),
     );
     const started = await current.until((value) => {
       const entry = task(value, taskId(ids.restart));
@@ -504,6 +514,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
       );
     });
     const sessionId = task(started, taskId(ids.restart)).roveSessionId;
+    expect(sessionId).toBeUndefined();
     const appServerReplacement = await current.request({
       type: "appserver.kill",
     });
@@ -530,23 +541,16 @@ describe("five process-backed production-composition lifecycle traces", () => {
       requests.some(
         (request) =>
           request.method === "thread/resume" &&
-          (request.rove as ProductValue | null)?.sessionId === sessionId,
+          (request.rove as ProductValue | null)?.bootstrapId ===
+            bootstrapId(ids.restart),
       ),
     ).toBe(true);
     const runtimeReplacement = await current.request({ type: "runtime.kill" });
     expect(
       Number((runtimeReplacement.identities as ProductValue).runtimePid),
     ).not.toBe(Number(runtimeReplacement.killedPid));
-    await current.untilResult(
-      { type: "inventory" },
-      (value) =>
-        Array.isArray(value) &&
-        value.some(
-          (entry) =>
-            (entry as ProductValue).attachment === "attached" &&
-            (entry as ProductValue).recovery === "not_needed" &&
-            ((entry as ProductValue).session as ProductValue).id === sessionId,
-        ),
+    await current.until(
+      (value) => lifecycle(task(value, taskId(ids.restart))).phase === "ready",
     );
 
     const beforeDesktopRestart = await current.request({
@@ -584,7 +588,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
     await current.until((value) => {
       const restored = task(value, taskId(ids.restart));
       return (
-        restored.roveSessionId === sessionId &&
+        restored.roveSessionId === undefined &&
         lifecycle(restored).phase === "ready" &&
         conversation(restored).turnStatus === "completed" &&
         Object.values(conversation(restored).items as ProductValue).some(
@@ -627,5 +631,11 @@ describe("five process-backed production-composition lifecycle traces", () => {
     expect(requests.some((request) => request.method === "thread/resume")).toBe(
       true,
     );
+    expect(
+      (
+        (await current.request({ type: "external.actions" }))
+          .runtime as ProductValue[]
+      ).filter((action) => action.method === "startSession"),
+    ).toHaveLength(0);
   }, 180_000);
 });

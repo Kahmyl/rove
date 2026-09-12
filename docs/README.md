@@ -27,7 +27,9 @@ There is no partner-facing platform API commitment. The usual API/Partner Integr
 
 The engineering documents specify target behavior. Existing code supplies reusable foundations but has not thereby been certified to satisfy the new product model. A rename, passing regression test, or updated document is not proof that workflow portability, lazy browser attachment, or browser-group concurrency has been implemented.
 
-The baseline inspected for this reconciliation is `e6b891820ed44aeeecf41670421b0403b7a7532f`. In that code, task launch still contains browser identity requirements, browser-route guidance is more restrictive than the new product direction, and existing local task/execution stores are not a workflow synchronization service. Those differences must be reconciled deliberately, not concealed by changing the prose.
+The bounded task-lifecycle correction was implemented from baseline `3f9d74bb011b52caf92bd857a8fd8922eb3b7a8f`. Ordinary model tasks can now start and continue without a Runtime session or browser identity; a task-scoped MCP capability attaches one correlated Runtime/browser session only when browser work is requested. Browser loss does not close the Codex conversation, Stop interrupts only the active turn, and launch/message admission checks the live host account and selected model before durable task acceptance. Existing browser-backed tasks retain their stored session capability compatibility and exact task/thread/session routing.
+
+This is implementation evidence for task independence and lazy browser attachment only. It does not certify workflow portability, page-group concurrency, account/workflow synchronization, requested video capture, or a replacement UI/browser stack. Existing local task and execution stores remain device-local product state, not a workflow synchronization service.
 
 ## Decisions still requiring implementation evidence
 

@@ -461,6 +461,9 @@ export class TaskAttachmentAuthority {
         !(
           (item.taskId === undefined && item.status === "ready") ||
           (item.taskId === taskId &&
+            item.sessionId === undefined &&
+            item.status === "bound") ||
+          (item.taskId === taskId &&
             item.sessionId === sessionId &&
             ["binding", "bound"].includes(item.status))
         )
@@ -547,6 +550,35 @@ export class TaskAttachmentAuthority {
     }
   }
 
+  async bindTaskInputs(
+    ids: readonly string[],
+    taskId: string,
+  ): Promise<TaskAttachmentDescriptor[]> {
+    if (new Set(ids).size !== ids.length)
+      throw new Error("Duplicate attachment identity.");
+    const items = ids.map((id) => {
+      const item = this.attachments.get(id);
+      if (
+        !item ||
+        !(
+          (item.taskId === undefined && item.status === "ready") ||
+          (item.taskId === taskId &&
+            item.sessionId === undefined &&
+            item.status === "bound")
+        )
+      )
+        throw new Error("Unknown or conflicting task attachment.");
+      return item;
+    });
+    this.assertAggregate(items);
+    for (const item of items) {
+      item.taskId = taskId;
+      item.status = "bound";
+    }
+    await this.flush();
+    return items.map(project);
+  }
+
   instructions(taskId: string, sessionId: string): string {
     const attachments = [
       ...new Map(
@@ -576,7 +608,7 @@ export class TaskAttachmentAuthority {
   async materializeCodexInputs(
     attachmentIds: readonly string[],
     taskId: string,
-    sessionId: string,
+    sessionId: string | undefined,
     taskWorkspace: string,
   ): Promise<CodexInputAttachment[]> {
     if (!isAbsolute(taskWorkspace))
@@ -587,9 +619,10 @@ export class TaskAttachmentAuthority {
       const item = this.attachments.get(attachmentId);
       if (
         !item ||
-        item.sessionId !== sessionId ||
+        item.taskId !== taskId ||
+        (sessionId !== undefined && item.sessionId !== sessionId) ||
         item.status !== "bound" ||
-        !item.evidenceId
+        (sessionId !== undefined && !item.evidenceId)
       )
         throw new Error("Codex input attachment is not fully bound.");
       return item;

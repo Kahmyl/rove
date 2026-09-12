@@ -106,7 +106,7 @@ export interface NativeTaskRecord {
     taskId: string;
     sessionId?: string;
     threadId?: string;
-    browser: NativeBrowserIdentity;
+    browser?: NativeBrowserIdentity;
   };
   bootstrap: {
     operationId: string;
