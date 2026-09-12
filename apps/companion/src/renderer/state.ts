@@ -2,251 +2,96 @@ import type {
   CompanionSnapshot,
   DesktopNotice,
 } from "../shared/desktop-api.js";
+import {
+  toUnifiedSessionViewModel,
+  type UnifiedSessionExperience,
+  type UnifiedSessionPrimaryAction,
+} from "./unified-session-state.js";
 
 export type CompanionExperience =
   | "no_session"
   | "agent_working"
   | "handoff_waiting"
   | "human_step"
+  | "paused"
   | "capture"
   | "session_ended"
   | "interrupted";
 
-export type CompanionPrimaryAction =
-  "take_control" | "return_control" | "finish_capture" | null;
+export type CompanionPrimaryAction = UnifiedSessionPrimaryAction;
 
 export interface CompanionViewModel {
   hasSession: boolean;
   experience: CompanionExperience;
-
   kicker: string;
   title: string;
   description: string;
   supportingText?: string;
-
   primaryAction: CompanionPrimaryAction;
   primaryActionLabel?: string;
-
   sessionId: string;
   mode: string;
   status: string;
   controller: string;
-
   observationCount: number;
   evidenceCount: number;
-
   handoffReason?: string;
-
   canTakeControl: boolean;
   canReturnControl: boolean;
   canFinish: boolean;
 }
 
+function companionExperience(
+  experience: UnifiedSessionExperience,
+): CompanionExperience {
+  return experience === "human_controlling" ? "human_step" : experience;
+}
+
+/** Full presentation adapter over the one canonical Rove session model. */
 export function toCompanionViewModel(
   snapshot: CompanionSnapshot | null,
   notice: DesktopNotice | null = null,
 ): CompanionViewModel {
-  if (notice !== null) {
-    return {
-      hasSession: false,
-      experience: "interrupted",
-
-      kicker: "Session interrupted",
-      title: notice.title,
-      description: notice.message,
-      supportingText: notice.supportingText,
-
-      primaryAction: null,
-
-      sessionId: notice.sessionId,
-      mode: "—",
-      status: "Interrupted",
-      controller: "None",
-
-      observationCount: 0,
-      evidenceCount: 0,
-
-      canTakeControl: false,
-      canReturnControl: false,
-      canFinish: false,
-    };
-  }
-
-  if (snapshot === null) {
-    return {
-      hasSession: false,
-      experience: "no_session",
-
-      kicker: "Ready",
-      title: "Waiting for a session",
-      description:
-        "Rove will appear here when an agent or Capture session starts.",
-
-      primaryAction: null,
-
-      sessionId: "—",
-      mode: "—",
-      status: "No session",
-      controller: "None",
-
-      observationCount: 0,
-      evidenceCount: 0,
-
-      canTakeControl: false,
-      canReturnControl: false,
-      canFinish: false,
-    };
-  }
-
-  const { session } = snapshot;
-
-  const live =
-    session.status === "active" || session.status === "awaiting_human";
-
+  const session = snapshot?.session ?? null;
+  const unified = toUnifiedSessionViewModel(session, notice);
+  const sessionId = notice?.sessionId ?? session?.id ?? "—";
+  const handoffReason = session?.handoff?.reason;
   const controller =
-    session.controller === "human"
+    session?.controller === "human"
       ? "You"
-      : session.controller === "agent"
+      : session?.controller === "agent"
         ? "Agent"
-        : "Waiting";
-
-  const requestedHandoff =
-    session.status === "awaiting_human" &&
-    session.controller === null &&
-    session.handoff !== undefined;
-
-  const canTakeControl =
-    live &&
-    session.controller !== "human" &&
-    (session.mode === "companion" ||
-      (session.mode === "agent" && requestedHandoff));
-
-  const canReturnControl =
-    live && session.controller === "human" && session.mode !== "capture";
-
-  const canFinish = live;
-
-  const handoffReason = session.handoff?.reason;
-
-  const shared = {
-    hasSession: true,
-    sessionId: session.id,
-    mode: session.mode,
-    status: session.status.replaceAll("_", " "),
-    controller,
-    observationCount: snapshot.observationCount,
-    evidenceCount: snapshot.evidenceCount,
-    ...(handoffReason === undefined ? {} : { handoffReason }),
-    canTakeControl,
-    canReturnControl,
-    canFinish,
-  };
-
-  if (!live) {
-    return {
-      ...shared,
-
-      experience: "session_ended",
-
-      kicker: "Session ended",
-      title:
-        session.status === "failed"
-          ? "This session stopped"
-          : "Session complete",
-      description:
-        session.status === "failed"
-          ? "Rove is waiting for the next session."
-          : "The browser session has finished.",
-
-      primaryAction: null,
-    };
-  }
-
-  if (session.mode === "capture") {
-    return {
-      ...shared,
-
-      experience: "capture",
-
-      kicker: "Capture mode",
-      title: "You're in control",
-      description: "Rove is observing this browser session while you work.",
-      primaryAction: canFinish ? "finish_capture" : null,
-      ...(canFinish
-        ? {
-            primaryActionLabel: "Finish Capture",
-          }
-        : {}),
-    };
-  }
-
-  if (session.status === "awaiting_human" && session.controller === null) {
-    return {
-      ...shared,
-
-      experience: "handoff_waiting",
-
-      kicker: "Your turn",
-      title: "Rove needs you for one step",
-      description:
-        handoffReason ?? "Complete the requested step in the browser.",
-      supportingText: "Rove is paused until you take over.",
-
-      primaryAction: canTakeControl ? "take_control" : null,
-      ...(canTakeControl
-        ? {
-            primaryActionLabel: "Start this step",
-          }
-        : {}),
-    };
-  }
-
-  if (session.controller === "human") {
-    const requestedStep = handoffReason !== undefined;
-
-    return {
-      ...shared,
-
-      experience: "human_step",
-
-      kicker: "You're in control",
-      title: requestedStep
-        ? "You're handling this step"
-        : "Browser control is yours",
-      description:
-        handoffReason ??
-        "Use the browser directly, then resume automation when you're done.",
-      supportingText: "Rove is paused while you work.",
-
-      primaryAction: canReturnControl ? "return_control" : null,
-      ...(canReturnControl
-        ? {
-            primaryActionLabel: requestedStep
-              ? "Done — Resume Automation"
-              : "Resume Automation",
-          }
-        : {}),
-    };
-  }
+        : session === null
+          ? "None"
+          : "Waiting";
 
   return {
-    ...shared,
-
-    experience: "agent_working",
-
-    kicker: "Agent working",
-    title: "Working in the browser",
-    description: "No action is needed from you right now.",
-    supportingText:
-      session.mode === "companion"
-        ? "You can take over whenever you need to."
-        : "Rove will ask when it needs your help.",
-
-    primaryAction: canTakeControl ? "take_control" : null,
-    ...(canTakeControl
-      ? {
-          primaryActionLabel: "Take over",
-        }
-      : {}),
+    hasSession: session !== null,
+    experience: companionExperience(unified.experience),
+    kicker: unified.kicker,
+    title: unified.title,
+    description: unified.description,
+    ...(unified.supportingText === undefined
+      ? {}
+      : { supportingText: unified.supportingText }),
+    primaryAction: unified.primaryAction,
+    ...(unified.primaryActionLabel === undefined
+      ? {}
+      : { primaryActionLabel: unified.primaryActionLabel }),
+    sessionId,
+    mode: session?.mode ?? "—",
+    status:
+      notice !== null
+        ? "Interrupted"
+        : (session?.status.replaceAll("_", " ") ?? "No session"),
+    controller,
+    observationCount: snapshot?.observationCount ?? 0,
+    evidenceCount: snapshot?.evidenceCount ?? 0,
+    ...(handoffReason === undefined ? {} : { handoffReason }),
+    canTakeControl: unified.primaryAction === "take_control",
+    canReturnControl:
+      unified.primaryAction === "return_control" ||
+      unified.primaryAction === "resume",
+    canFinish: unified.canStop || unified.primaryAction === "finish_capture",
   };
 }

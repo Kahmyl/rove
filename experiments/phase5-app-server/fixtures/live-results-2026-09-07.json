@@ -1,0 +1,79 @@
+{
+  "date": "2026-09-07",
+  "cliVersion": "0.153.4",
+  "executable": "/Applications/ChatGPT.app/Contents/Resources/codex",
+  "executableSha256": "a30ec314bbd0e3721632234d07db7c99855db3b9f1e32dbe8c791947f07e7629",
+  "protocol": {
+    "preInitializeRejected": true,
+    "preInitializeErrorCode": -32600,
+    "malformedInputProcessSurvived": true,
+    "malformedInputDiagnosticObserved": true,
+    "initializedUserAgentVersion": "0.153.4",
+    "platformFamily": "unix",
+    "platformOs": "macos"
+  },
+  "accountAndCatalog": {
+    "loggedInAccountObserved": true,
+    "authMode": "chatgpt",
+    "redactedPlanType": "pro",
+    "rateLimitsAvailable": true,
+    "usageAvailable": true,
+    "modelCount": 9,
+    "hiddenModelCount": 2,
+    "loggedOutFixtureAccountObserved": true,
+    "loggedOutRateLimitsUnavailable": true,
+    "loggedOutUsageUnavailable": true
+  },
+  "threadLifecycle": {
+    "start": true,
+    "list": true,
+    "read": true,
+    "resume": true,
+    "streamedTurnCompleted": true,
+    "steer": true,
+    "interrupt": true,
+    "interruptRpcStatus": "ok",
+    "interruptTerminalStatus": "interrupted",
+    "interruptAttempts": 1,
+    "archiveUnarchive": true,
+    "processRestartRecovery": true,
+    "recoveredStatus": "notLoaded",
+    "blindTurnReplay": false,
+    "finalState": "archived"
+  },
+  "requiredMcp": {
+    "serverName": "rove",
+    "serverInfoName": "rove",
+    "runtimeStatus": "connected",
+    "toolCount": 29,
+    "catalogMatches": true,
+    "taskBoundCallSucceeded": true,
+    "mismatchedTaskCallRejected": true,
+    "imageAndTextContentObserved": true,
+    "unavailableRequiredServerFailedThreadStart": true,
+    "unavailableErrorCode": -32603,
+    "startupStatusNotifications": 2
+  },
+  "notificationCountsFromLifecycle": {
+    "item/agentMessage/delta": 1830,
+    "item/completed": 8,
+    "item/started": 8,
+    "turn/completed": 3,
+    "turn/started": 3,
+    "thread/status/changed": 8,
+    "mcpServer/startupStatus/updated": 14
+  },
+  "privacy": {
+    "accountIdentifierRecorded": false,
+    "tokenRecorded": false,
+    "rawTranscriptRecorded": false
+  },
+  "harnessVerification": {
+    "readOnlyModePassed": true,
+    "requiredMcpModePassed": true,
+    "lifecycleModePassed": true,
+    "failedInvariantExitCodeIsNonzero": true,
+    "temporaryCodexHomeCleanup": "finally-plus-process-exit-fallback",
+    "executableResolution": "PATH-or-explicit-path"
+  }
+}

@@ -11,9 +11,7 @@ type ActiveWindowLookup = (options?: {
   screenRecordingPermission: boolean;
 }) => Promise<ForegroundWindow | undefined>;
 
-export class NativeBrowserFollowForegroundSource
-  implements BrowserFollowForegroundSource
-{
+export class NativeBrowserFollowForegroundSource implements BrowserFollowForegroundSource {
   constructor(
     private readonly platform: NodeJS.Platform = process.platform,
     private readonly lookup: ActiveWindowLookup = activeWindow,
@@ -37,7 +35,9 @@ export class NativeBrowserFollowForegroundSource
 
     const processId = window?.owner.processId;
 
-    return Number.isInteger(processId) && processId !== undefined && processId > 0
+    return Number.isInteger(processId) &&
+      processId !== undefined &&
+      processId > 0
       ? processId
       : null;
   }

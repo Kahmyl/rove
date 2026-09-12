@@ -23,6 +23,7 @@ export class CompanionSurface {
   constructor(
     private readonly createWindow: CompanionWindowFactory,
     private readonly shouldAllowClose: () => boolean,
+    private readonly onInterceptedClose: () => void = () => undefined,
   ) {}
 
   ensure(): CompanionWindowHandle {
@@ -41,6 +42,7 @@ export class CompanionSurface {
 
       event.preventDefault();
       window.hide();
+      this.onInterceptedClose();
     });
 
     window.once("closed", () => {

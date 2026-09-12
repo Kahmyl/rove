@@ -1,13 +1,23 @@
 import { z } from "zod";
+import type { BrowserActionEffect } from "./action-authorization.js";
 
 import { targetKindSchema, targetReferenceSchema } from "./schemas.js";
 
 export const targetCapabilitySchema = z.enum([
   "activate",
+  "double_activate",
+  "secondary_activate",
   "fill",
+  "set_value",
   "select",
+  "select_text",
   "check",
   "uncheck",
+  "expand",
+  "collapse",
+  "focus",
+  "press",
+  "clipboard",
   "hover",
   "drag",
   "upload",
@@ -23,6 +33,12 @@ export const structuralScopeKindSchema = z.enum([
   "row",
   "region",
   "group",
+  "list",
+  "listbox",
+  "tree",
+  "grid",
+  "table",
+  "menu",
 ]);
 
 export type StructuralScopeKind = z.infer<typeof structuralScopeKindSchema>;
@@ -41,6 +57,7 @@ export interface PerceivedControl {
 
 export const targetIntentSchema = z
   .object({
+    kind: targetKindSchema.optional(),
     capability: targetCapabilitySchema.optional(),
     text: z.string().trim().min(1).max(500).optional(),
     scope: structuralScopeSchema.optional(),
@@ -49,6 +66,7 @@ export const targetIntentSchema = z
   .refine(
     (value) =>
       value.capability !== undefined ||
+      value.kind !== undefined ||
       value.text !== undefined ||
       value.scope !== undefined ||
       value.frameLabel !== undefined,
@@ -110,10 +128,12 @@ export const dialogDirectiveSchema = z.discriminatedUnion("action", [
 
 export type DialogDirective = z.infer<typeof dialogDirectiveSchema>;
 
-const expectedTargetSchema = z.object({
+export const expectedTargetSchema = z.object({
   name: z.string().trim().min(1).max(500),
   kind: targetKindSchema.optional(),
 });
+
+export type ExpectedTarget = z.infer<typeof expectedTargetSchema>;
 
 export const expectedEffectSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -156,6 +176,66 @@ export const expectedEffectSchema = z.discriminatedUnion("kind", [
     target: expectedTargetSchema,
   }),
   z.object({
+    kind: z.literal("target_focused"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_blurred"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_expanded"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_collapsed"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_pressed"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_unpressed"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_selected"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_unselected"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_open"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_closed"),
+    target: expectedTargetSchema,
+  }),
+  z.object({
+    kind: z.literal("target_value"),
+    target: expectedTargetSchema,
+    value: z.string().max(100_000),
+  }),
+  z.object({
+    kind: z.literal("target_numeric_value"),
+    target: expectedTargetSchema,
+    value: z.number().finite(),
+  }),
+  z.object({
+    kind: z.literal("target_within_scope"),
+    target: expectedTargetSchema,
+    scope: structuralScopeSchema,
+  }),
+  z.object({
+    kind: z.literal("target_outside_scope"),
+    target: expectedTargetSchema,
+    scope: structuralScopeSchema,
+  }),
+  z.object({
     kind: z.literal("selected_value"),
     target: expectedTargetSchema,
     value: z.string().max(5_000),
@@ -166,6 +246,10 @@ export const expectedEffectSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("page_closed"),
   }),
+  z.object({
+    kind: z.literal("download_completed"),
+    filename: z.string().trim().min(1).max(500).optional(),
+  }),
 ]);
 
 export type ExpectedEffect = z.infer<typeof expectedEffectSchema>;
@@ -175,14 +259,50 @@ const targetActionBase = {
   dialog: dialogDirectiveSchema.optional(),
 };
 
-export const browserInteractionRequestSchema = z.discriminatedUnion("kind", [
+export const keyboardModifierSchema = z.enum([
+  "Alt",
+  "Control",
+  "Meta",
+  "Shift",
+]);
+
+export type KeyboardModifier = z.infer<typeof keyboardModifierSchema>;
+
+const browserInteractionRequestBaseSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("click"),
     ...targetActionBase,
   }),
   z.object({
+    kind: z.literal("double_click"),
+    ...targetActionBase,
+  }),
+  z.object({
+    kind: z.literal("secondary_click"),
+    ...targetActionBase,
+  }),
+  z.object({
+    kind: z.literal("modified_click"),
+    ...targetActionBase,
+    modifiers: z.array(keyboardModifierSchema).min(1).max(4),
+  }),
+  z.object({
     kind: z.literal("hover"),
     ...targetActionBase,
+  }),
+  z.object({
+    kind: z.literal("focus"),
+    ...targetActionBase,
+  }),
+  z.object({
+    kind: z.literal("blur"),
+    ...targetActionBase,
+  }),
+  z.object({
+    kind: z.literal("press"),
+    target: targetReferenceSchema.optional(),
+    dialog: dialogDirectiveSchema.optional(),
+    key: z.string().trim().min(1).max(100),
   }),
   z.object({
     kind: z.literal("clear"),
@@ -192,6 +312,16 @@ export const browserInteractionRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("fill"),
     ...targetActionBase,
     value: z.string().max(100_000),
+  }),
+  z.object({
+    kind: z.literal("type_sequential"),
+    ...targetActionBase,
+    value: z.string().max(100_000),
+    delayMs: z.number().int().min(0).max(1_000).optional().default(0),
+  }),
+  z.object({
+    kind: z.literal("select_text"),
+    ...targetActionBase,
   }),
   z.object({
     kind: z.literal("select"),
@@ -214,7 +344,18 @@ export const browserInteractionRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("upload"),
     ...targetActionBase,
-    evidenceId: z.string().startsWith("ev_"),
+    evidenceId: z.string().startsWith("ev_").optional(),
+    evidenceIds: z
+      .array(z.string().startsWith("ev_"))
+      .min(1)
+      .max(100)
+      .optional(),
+  }),
+  z.object({
+    kind: z.literal("clipboard"),
+    target: targetReferenceSchema.optional(),
+    dialog: dialogDirectiveSchema.optional(),
+    operation: z.enum(["copy", "cut", "paste"]),
   }),
   z.object({
     kind: z.literal("precise_scroll"),
@@ -231,6 +372,21 @@ export const browserInteractionRequestSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+export const browserInteractionRequestSchema =
+  browserInteractionRequestBaseSchema.superRefine((value, context) => {
+    if (value.kind !== "upload") return;
+    const count =
+      (value.evidenceId === undefined ? 0 : 1) +
+      (value.evidenceIds === undefined ? 0 : 1);
+    if (count !== 1) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceIds"],
+        message: "Upload requires exactly one of evidenceId or evidenceIds.",
+      });
+    }
+  });
+
 export type BrowserInteractionRequest = z.infer<
   typeof browserInteractionRequestSchema
 >;
@@ -245,14 +401,62 @@ export const verifiedInteractionRequestSchema = z
       .optional()
       .default([]),
     consequential: z.boolean().optional().default(false),
+    effect: z
+      .enum([
+        "observe",
+        "recover",
+        "navigate",
+        "reversible_ui",
+        "edit_content",
+        "external_commit",
+        "irreversible",
+        "credential_entry",
+      ] satisfies BrowserActionEffect[])
+      .optional(),
     consequenceKey: z.string().trim().min(1).max(500).optional(),
   })
   .superRefine((value, context) => {
+    if (
+      value.expectedEffects.filter(
+        (effect) => effect.kind === "download_completed",
+      ).length > 1
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["expectedEffects"],
+        message:
+          "A verified interaction supports at most one download_completed effect.",
+      });
+    }
+    if (
+      value.expectedEffects.some(
+        (effect) => effect.kind === "download_completed",
+      ) &&
+      value.action.kind !== "click"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["action", "kind"],
+        message:
+          "download_completed currently requires a grounded click action.",
+      });
+    }
     if (value.consequential && value.consequenceKey === undefined) {
       context.addIssue({
         code: "custom",
         path: ["consequenceKey"],
         message: "Consequential actions require a stable consequence key.",
+      });
+    }
+    if (
+      (value.effect === "external_commit" || value.effect === "irreversible") &&
+      !value.consequential
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["consequential"],
+        message:
+          "External or irreversible interactions must be marked consequential.",
       });
     }
   });
@@ -266,6 +470,18 @@ export type ActionOutcome = "applied" | "not_applied" | "unknown";
 export interface EffectVerification {
   effect: ExpectedEffect;
   state: "observed" | "contradicted" | "unresolved";
+  observationId?: string;
+  evidenceId?: string;
+  code?: string;
+}
+
+export type ActionExecutionPhase =
+  "preflight" | "engage" | "progress" | "commit" | "synchronize";
+
+export interface ActionPhaseRecord {
+  phase: ActionExecutionPhase;
+  status: "completed" | "skipped" | "uncertain";
+  strategy?: string;
 }
 
 export interface ActionReceipt {
@@ -285,6 +501,7 @@ export interface ActionReceipt {
     ref: string;
   };
   effects: EffectVerification[];
+  phases?: ActionPhaseRecord[];
   pageChanged?: boolean;
   previousRevision?: number;
   currentRevision?: number;

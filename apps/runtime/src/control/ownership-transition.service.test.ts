@@ -129,7 +129,11 @@ function harness(initial: Session) {
 
   const ownershipFence = new BrowserOwnershipFence();
 
-  ownershipFence.initialize(initial.id, initial.controller);
+  ownershipFence.initialize(
+    initial.id,
+    initial.controller,
+    initial.ownershipGeneration ?? 1,
+  );
 
   const interactionPolicy = new InteractionPolicy();
 
@@ -189,6 +193,61 @@ describe("OwnershipTransitionService", () => {
     );
 
     expect(test.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists one stable handoff identity and every ownership generation across restart cuts", async () => {
+    const requested = harness(makeSession({ ownershipGeneration: 7 }));
+    const awaiting = await requested.service.requestHuman(
+      "ses_test",
+      "Sign in",
+    );
+    expect(awaiting).toMatchObject({
+      generation: 8,
+      activeHandoffId: expect.stringMatching(/^handoff_/),
+      activeHandoffGeneration: 8,
+    });
+    expect(requested.current()).toMatchObject({
+      ownershipGeneration: 8,
+      activeHandoffGeneration: 8,
+    });
+
+    const afterRequestRestart = harness(requested.current());
+    const human = await afterRequestRestart.service.takeHuman("ses_test");
+    expect(human).toMatchObject({
+      generation: 9,
+      activeHandoffId: awaiting.activeHandoffId,
+      activeHandoffGeneration: 8,
+    });
+    expect(afterRequestRestart.current()).toMatchObject({
+      ownershipGeneration: 9,
+      activeHandoffId: awaiting.activeHandoffId,
+      activeHandoffGeneration: 8,
+    });
+
+    const afterTakeRestart = harness(afterRequestRestart.current());
+    const returned = await afterTakeRestart.service.returnAgent(
+      "ses_test",
+      async () => undefined,
+    );
+    expect(returned).toMatchObject({
+      generation: 10,
+      lastReturnedHandoffId: awaiting.activeHandoffId,
+    });
+    expect(afterTakeRestart.current()).toMatchObject({
+      ownershipGeneration: 10,
+      lastReturnedHandoffId: awaiting.activeHandoffId,
+    });
+    expect(afterTakeRestart.current().activeHandoffId).toBeUndefined();
+    expect(afterTakeRestart.current().activeHandoffGeneration).toBeUndefined();
+
+    const postReturnRestart = new BrowserOwnershipFence();
+    expect(
+      postReturnRestart.initialize(
+        "ses_test",
+        "agent",
+        afterTakeRestart.current().ownershipGeneration,
+      ),
+    ).toBe(10);
   });
 
   it("routes automatic F2 handoff through the same awaiting-human transition and remains idempotent", async () => {

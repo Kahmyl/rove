@@ -21,6 +21,13 @@ pnpm test
 pnpm build
 ```
 
+Run the source-built Phase 5 local recovery qualification without packaging or
+external services:
+
+```bash
+pnpm phase5:p59:l2
+```
+
 Development entry points:
 
 ```bash
@@ -101,15 +108,15 @@ Command Prompt without shell-specific environment syntax.
 
 ## Browser verification
 
-Rove supports real headed Playwright browser sessions with Rove-managed persistent or explicitly requested temporary profiles, stable page/revision authority, bounded visible text, redacted Playwright ARIA hierarchy, frame/open-shadow target provenance, target geometry and basic occlusion evidence, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and masked PNG capture. Viewport and region screenshots can be returned to MCP callers as actual image content while remaining durable evidence; observation-bound capture rejects stale revision, mutation, URL, scroll, viewport, or device-scale state. MCP sessions default to the managed persistent `default` profile so user-authorized cookies and ordinary browser preferences survive browser and Runtime restarts. Each persistent profile has at most one writable, strongly identified Rove browser host: an orphaned verified host can be reattached with fresh session authority, an actively leased host reports a precise busy state, and stale owned metadata is reconciled without silently falling back to a temporary profile. Temporary profiles must be explicitly requested. Ordinary/default Chrome profiles are intentionally unsupported.
+Rove supports real headed Playwright browser sessions with durable Rove browser workspaces or explicitly requested temporary identities, stable page/revision authority, bounded visible text, redacted Playwright ARIA hierarchy, frame/open-shadow target provenance, target geometry and basic occlusion evidence, revision-scoped target references, stale-target protection, browser actions, popup discovery, history navigation, and masked PNG capture. Viewport and region screenshots can be returned to MCP callers as actual image content while remaining durable evidence; observation-bound capture rejects stale revision, mutation, URL, scroll, viewport, or device-scale state. MCP sessions reuse the workspace selected in the Rove app unless an existing opaque workspace ID or an intentional temporary identity is supplied. Workspace cookies and ordinary browser preferences survive browser, Runtime, and Rove restarts. Each workspace has at most one writable, strongly identified Rove browser host; unknown IDs fail without creating storage. Legacy managed profiles are registered in place on first use without copying or rewriting Chrome data. Ordinary Chrome's own default profile remains unsupported.
 
 ### Responsible browsing boundary
 
-Rove is designed as a user-directed assistant, not an anti-detection system. In headed mode it uses normal system Chrome with JavaScript enabled, applies a configurable minimum interval between agent actions, and emits sequential keyboard events for normal-sized text input. Browser perception is evaluated separately from Runtime policy: authentication and presented human-verification states may automatically request human control at session-start or post-action orchestration boundaries, while access restriction, unknown interstitials, page errors, and loading states block or defer autonomous mutation without automatically transferring control. `browser.inspect` is observational and reports perception plus Runtime policy without changing ownership.
+Rove is designed as a user-directed assistant, not an anti-detection system. In headed mode it uses normal system Chrome with JavaScript enabled, applies a configurable minimum interval between agent actions, and emits sequential keyboard events for normal-sized text input. Browser perception supplies facts rather than a global mutation verdict. Runtime authorizes each proposed effect against ownership, observation freshness, target authority, credentials, consequence, repetition, and outcome-verification requirements. Authentication and presented human-verification states may request human control, while recovery and navigation can remain available through uncertain or restricted page semantics. `browser.inspect` remains observational and never changes ownership.
 
 These safeguards reduce accidental rapid automation and disposable-session behavior, but they do not guarantee access to any site. Rove does not spoof browser fingerprints, hide automation or developer tooling, rotate proxies, solve CAPTCHAs, or bypass a site's access controls. A site's restriction remains authoritative and must be handled by the user or site operator.
 
-Local action pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS`; setting it to `0` disables that delay. Text entry replaces editable contents deterministically, while `browser.press` is the separate operation for explicit keyboard semantics. Rove removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults, then reports observed sandbox status from runtime evidence as `enabled`, `disabled`, or `unknown`.
+Local action pacing can be configured with `ROVE_BROWSER_MIN_ACTION_INTERVAL_MS`; setting it to `0` disables that delay. The agent-facing `browser.interact` tool owns target mutation: `fill` replaces editable contents deterministically, while its `press` action supplies explicit keyboard semantics. Rove removes Playwright's `--no-sandbox` and `--disable-setuid-sandbox` defaults, then reports observed sandbox status from runtime evidence as `enabled`, `disabled`, or `unknown`.
 
 Manual verification commands:
 
@@ -120,6 +127,9 @@ pnpm browser:soak
 pnpm browser:demo
 pnpm browser:inspect
 pnpm browser:actions
+pnpm browser:capability-atlas
+pnpm browser:capability-waves
+pnpm browser:semantic-transactions
 pnpm runtime:demo
 pnpm control:demo
 ```
@@ -127,6 +137,17 @@ pnpm control:demo
 `browser:doctor` reports requested browser settings, resolved launch configuration, and observed runtime state. `browser:compat` runs deterministic browser-platform and Rove-runtime compatibility checks. `browser:soak` runs the long browser stability check. `browser:actions` runs the headed target-reference action and stale-target demonstration. `runtime:demo` exercises the real private HTTP API and persists a completed session, observations, screenshot evidence, and structured record under `.rove-demo/`.
 
 `control:demo` exercises requested Agent handoff and voluntary Companion takeover without Electron. It verifies exclusive ownership, wait notifications, mutation blocking, human-to-agent return, and stale target references after handback. Set `ROVE_CONTROL_DEMO_WAIT=1` to pause both flows for manual interaction in the headed browser.
+
+The standards-derived [Web Capability Atlas](docs/capabilities/web-capability-atlas.md)
+tracks browser coverage from perception through safety, with a machine-readable
+84-family inventory and isolated adversarial experiments. Live application
+journeys validate composition; they are not the primary mechanism for discovering
+missing browser primitives. `browser:capability-waves` qualifies the admitted
+production tranche across browser execution, runtime verification, MCP exposure,
+and atlas drift gates. `browser:semantic-transactions` additionally qualifies
+freshly grounded prepare/commit phases, visible-scope and remote-destination
+verification, exactly-once consequence fencing, HTTP exposure, and MCP
+exposure.
 
 ## Electron Companion
 

@@ -1,0 +1,194 @@
+{
+  "status": "completed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 3326,
+    "ownedProcessPids": [
+      3326,
+      3349,
+      3350,
+      3357,
+      3407,
+      3415
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_fb5fa3e0-eacf-4ac9-8ceb-42f01246bcc6",
+    "operationId": "intent_f053758f-1c2c-4a6f-8108-a27614a85bcf",
+    "sessionId": "ses_cc05fb3cc6784531b4a68dd2be127b4a",
+    "threadId": "01a08433-b290-7c02-ab8b-8b5c3c581e59",
+    "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+  },
+  "terminalRevision": 109,
+  "terminalTask": {
+    "taskId": "task_fb5fa3e0-eacf-4ac9-8ceb-42f01246bcc6",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Lifecycle is ready."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_f053758f-1c2c-4a6f-8108-a27614a85bcf",
+      "stage": "turn_started",
+      "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+    },
+    "roveSessionId": "ses_cc05fb3cc6784531b4a68dd2be127b4a",
+    "codexThreadId": "01a08433-b290-7c02-ab8b-8b5c3c581e59",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+      ],
+      "itemCount": 11
+    },
+    "attachmentCount": 0
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_0534bc7b9aa48e49016aa0d1de431c87d28105d810f7cdc3e5",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "text": "I’ll verify the folder and file in Drive, capture the viewport, check the history return to Archive, and download the file once while recording Rove’s receipt."
+      },
+      {
+        "id": "msg_0534bc7b9aa48e49016aa0d21dee8887d2b96c1ee9c579dbd8",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "text": "Stopped because the opened Archive folder is empty—a required target is missing.\n\n- Drive URL: https://drive.google.com/drive/u/0/folders/1yD7RJHfZEs0__Tgdc-c8Fz5CL46A-tm3\n- Page identity: `page_01`, revision `4`, title **Archive - Google Drive**\n- Observation: `bobs_4c6658db80c64751940fe42984bfc3e3`\n- Rove state: `ready`, HTTP 200; authentication not required.\n- Visible UI: **Archive** breadcrumb, filter controls, and **“Drop files here or use the ‘New’ button.”** No file row is present.\n\nMy Drive contained two folders named **Rove Live Acceptance**. The first opened folder contained **Archive** and **rove-live-acceptance-renamed.txt** alongside it, but its Archive subfolder was empty.\n\nNo Drive content was altered. No download was dispatched; download receipt, filename/size/MIME evidence, and download identifiers are unavailable. Screenshot capture and history verification were not performed because the required-path failure mandated stopping."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-4bc3e41d-9921-453d-b60c-bc118bf9c2ee",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/session.start"
+      },
+      {
+        "id": "exec-4c79f23c-60df-4a49-af46-09a06cad23cf",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-e047a531-751e-44a9-9155-30c52e6646c1",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-053c1d7e-3a46-4b93-b4ae-7617699d896c",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-bb102b52-1df2-4a47-aed7-d4ba5b16d050",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-65326970-fff5-4c7f-b60d-2fdbc1670c3b",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-49ba0a97-de03-4cee-86bd-19a33d31a9b4",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      }
+    ],
+    "driveUrls": [
+      "https://drive.google.com/drive/u/0/folders/1yD7RJHfZEs0__Tgdc-c8Fz5CL46A-tm3"
+    ],
+    "receiptIds": [],
+    "observationIds": [
+      "bobs_4c6658db80c64751940fe42984bfc3e3"
+    ],
+    "evidenceIds": [],
+    "pageIds": [
+      "page_01"
+    ],
+    "downloadFilenameMentions": 1,
+    "downloadSizes": [],
+    "mimeTypes": [
+      "com/drive",
+      "u/0",
+      "filename/size"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/drive-20260909-0424-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_fb5fa3e0-eacf-4ac9-8ceb-42f01246bcc6",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Lifecycle is closed."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_f053758f-1c2c-4a6f-8108-a27614a85bcf",
+        "stage": "turn_started",
+        "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+      },
+      "roveSessionId": "ses_cc05fb3cc6784531b4a68dd2be127b4a",
+      "codexThreadId": "01a08433-b290-7c02-ab8b-8b5c3c581e59",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+        ],
+        "itemCount": 11
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

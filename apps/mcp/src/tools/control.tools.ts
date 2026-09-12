@@ -21,14 +21,24 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "control.request_human",
       description:
-        "Pause automation and request human control when an agent-controlled session requires a human-only step such as sign-in, OAuth, MFA, CAPTCHA, passkey, account selection, consent, or security confirmation. If the user's requested outcome requires authentication, do not substitute an unauthenticated workflow. After requesting human control, stop browser mutations and use control.wait.",
+        "Pause automation and request human control when an agent-controlled session requires a human-only step such as sign-in, OAuth, MFA, CAPTCHA, passkey, account selection, consent, or security confirmation. Supply the exact instruction to run after control returns and an explicit continuation policy. If the user's requested outcome requires authentication, do not substitute an unauthenticated workflow. After requesting human control, stop browser mutations and use control.wait.",
       inputSchema: {
         type: "object",
         properties: {
           sessionId: { type: "string", minLength: 1 },
           reason: { type: "string", minLength: 1, maxLength: 500 },
+          instruction: { type: "string", minLength: 1, maxLength: 4000 },
+          continuationPolicy: {
+            type: "string",
+            enum: ["resume_after_control_return", "explicit_user_response"],
+          },
         },
-        required: ["sessionId", "reason"],
+        required: [
+          "sessionId",
+          "reason",
+          "instruction",
+          "continuationPolicy",
+        ],
         additionalProperties: false,
       },
       handler: (input) => {
@@ -36,7 +46,13 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
           .object({
             sessionId: sessionIdSchema,
             reason: requestHumanRequestSchema.shape.reason,
+            instruction: z.string().trim().min(1).max(4000),
+            continuationPolicy: z.enum([
+              "resume_after_control_return",
+              "explicit_user_response",
+            ]),
           })
+          .strict()
           .parse(input);
         return runtime.requestHuman(parsed.sessionId, parsed.reason);
       },

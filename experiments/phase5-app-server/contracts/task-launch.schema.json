@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rove.local/contracts/task-launch.schema.json",
+  "title": "ResolvedTaskLaunch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roveTaskId",
+    "executionMode",
+    "browserIdentityMode",
+    "selectionSource",
+    "selectedAt"
+  ],
+  "properties": {
+    "roveTaskId": { "type": "string", "pattern": "^task_[A-Za-z0-9_-]+$" },
+    "executionMode": { "enum": ["agent", "companion", "capture"] },
+    "browserIdentityMode": { "enum": ["workspace", "temporary"] },
+    "resolvedWorkspaceId": {
+      "type": "string",
+      "pattern": "^wrk_[a-f0-9-]{36}$"
+    },
+    "selectionSource": {
+      "enum": ["user_selected", "remembered_default", "workflow_policy"]
+    },
+    "selectedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "browserIdentityMode": { "const": "workspace" } }
+      },
+      "then": { "required": ["resolvedWorkspaceId"] },
+      "else": { "not": { "required": ["resolvedWorkspaceId"] } }
+    }
+  ],
+  "x-rove-invariants": [
+    "resolved launch is immutable for one active Rove session",
+    "the model cannot select or alter execution mode or browser identity",
+    "missing, unknown, or leased workspaces fail visibly without fallback",
+    "temporary cleanup applies only to the local isolated profile"
+  ]
+}

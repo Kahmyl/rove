@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import {
   PlaywrightBrowserEngine,
   type BrowserEngine,
   type BrowserSession,
+  type RoveProfileLock,
 } from "@rove/browser";
 import { loadConfig } from "@rove/config";
 import {
@@ -17,6 +19,7 @@ import {
 } from "@rove/protocol";
 import {
   FileEvidenceStore,
+  FileEffectJournalStore,
   FileObservationStore,
   FileSessionStore,
 } from "@rove/storage";
@@ -24,6 +27,7 @@ import {
   startFixtureServer,
   type FixtureServer,
 } from "../../../packages/browser/src/fixtures/fixture-server.js";
+import { SessionController } from "./api/session.controller.js";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import { BrowserOwnershipFence } from "./control/browser-ownership-fence.js";
@@ -72,6 +76,7 @@ async function harness(
   browserPolicy: {
     headless?: boolean;
     minimumActionIntervalMs?: number;
+    actionMs?: number;
   } = {},
 ): Promise<Harness> {
   const home = await mkdtemp(join(tmpdir(), "rove-runtime-"));
@@ -97,6 +102,12 @@ async function harness(
 
       return {
         ...config,
+        timeouts: {
+          ...config.timeouts,
+          ...(browserPolicy.actionMs === undefined
+            ? {}
+            : { actionMs: browserPolicy.actionMs }),
+        },
         browser: {
           ...config.browser,
           ...(browserPolicy.headless === undefined
@@ -112,6 +123,8 @@ async function harness(
     })(),
     ownershipFence,
   );
+
+  await runtime.createBrowserWorkspace("Default");
 
   return {
     home,
@@ -213,9 +226,279 @@ afterEach(async () => {
 });
 
 describe("Milestone 4 runtime integration", () => {
+  it("reports a terminal workspace session released while a newer session owns that workspace", async () => {
+    const { runtime } = await harness({
+      start: async (request) => readyBrowserSession(`browser_${request.mode}`),
+    });
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const first = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    await runtime.endSession(first.id);
+    const second = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime, id: second.id });
+
+    await expect(runtime.listSessionInventory()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          session: expect.objectContaining({
+            id: first.id,
+            status: "completed",
+          }),
+          profileOwnership: "released",
+          recovery: "cleanup_required",
+        }),
+        expect.objectContaining({
+          session: expect.objectContaining({ id: second.id }),
+          profileOwnership: "owned",
+          recovery: "not_needed",
+        }),
+      ]),
+    );
+  });
+
+  it("inventories persisted sessions even when no browser is attached", async () => {
+    const { home, runtime, sessions } = await harness({
+      start: async () => readyBrowserSession("browser_inventory"),
+    });
+    expect(
+      JSON.parse(
+        await readFile(
+          join(home, ".rove/effect-journal/cutover/v1.json"),
+          "utf8",
+        ),
+      ),
+    ).toMatchObject({ epoch: "phase5-effect-journal-v1" });
+    const persisted = await sessions.start(
+      {
+        bootstrapId: "boot_11111111111111111111111111111111",
+        mode: "agent",
+        browser: { mode: "temporary" },
+      },
+      { profile: { mode: "temporary" } },
+    );
+    await expect(runtime.listActiveSessions()).resolves.toEqual([persisted]);
+    await expect(runtime.listSessionInventory()).resolves.toMatchObject([
+      {
+        schemaVersion: 1,
+        session: { id: persisted.id },
+        attachment: "missing",
+        recovery: "unrecoverable",
+        profileOwnership: "released",
+        legacyEffects: "not_applicable",
+      },
+    ]);
+  });
+
+  it("recovers one exact named persisted session without replaying navigation", async () => {
+    let starts = 0;
+    const { runtime, sessions } = await harness({
+      start: async () => {
+        starts += 1;
+        return readyBrowserSession(`browser_recovery_${starts}`);
+      },
+    });
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const persisted = await sessions.start(
+      {
+        bootstrapId: "boot_22222222222222222222222222222222",
+        mode: "agent",
+        browser: { mode: "workspace", workspaceId: workspace.id },
+      },
+      {
+        profile: { mode: "persistent", name: workspace.id },
+        workspace,
+      },
+    );
+    const results = await Promise.all([
+      runtime.recoverSession(persisted.id),
+      runtime.recoverSession(persisted.id),
+    ]);
+    expect(starts).toBe(1);
+    expect(results).toMatchObject([
+      { attachment: "attached", recovery: "not_needed" },
+      { attachment: "attached", recovery: "not_needed" },
+    ]);
+    active.push({ runtime, id: persisted.id });
+  });
+
+  it("retries a transient profile-lock release and confirms terminal released inventory", async () => {
+    const { runtime } = await harness({
+      start: async () => readyBrowserSession("browser_release_retry"),
+    });
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const session = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    const locks = (
+      runtime as unknown as { profileLocks: Map<string, RoveProfileLock> }
+    ).profileLocks;
+    const lock = locks.get(session.id)!;
+    const release = lock.release.bind(lock);
+    let attempts = 0;
+    lock.release = async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("injected unlink failure");
+      await release();
+    };
+
+    await expect(runtime.endSession(session.id)).rejects.toThrow(
+      /injected unlink failure/,
+    );
+    expect(locks.has(session.id)).toBe(true);
+    await expect(runtime.endSession(session.id)).resolves.toMatchObject({
+      status: "completed",
+      controller: null,
+    });
+    expect(attempts).toBe(2);
+    expect(locks.has(session.id)).toBe(false);
+    await expect(runtime.listSessionInventory()).resolves.toEqual([
+      expect.objectContaining({
+        session: expect.objectContaining({
+          id: session.id,
+          status: "completed",
+        }),
+        attachment: "missing",
+        profileOwnership: "released",
+      }),
+    ]);
+  });
+
+  it("conservatively terminates a lost Temporary session and repeats cleanup", async () => {
+    const { runtime, sessions } = await harness({
+      start: async () => readyBrowserSession("browser_unused"),
+    });
+    const persisted = await sessions.start(
+      { mode: "agent", browser: { mode: "temporary" } },
+      { profile: { mode: "temporary" } },
+    );
+    await expect(runtime.recoverSession(persisted.id)).resolves.toMatchObject({
+      session: { status: "failed", controller: null },
+      attachment: "missing",
+      recovery: "cleanup_required",
+    });
+    const first = await runtime.endSession(persisted.id);
+    const second = await runtime.endSession(persisted.id);
+    expect(second).toEqual(first);
+  });
+
+  it("ends an active persisted Temporary session when no ownership fence was restored", async () => {
+    const { runtime, sessions } = await harness({
+      start: async () => readyBrowserSession("browser_unused"),
+    });
+    const persisted = await sessions.start(
+      { mode: "agent", browser: { mode: "temporary" } },
+      { profile: { mode: "temporary" } },
+    );
+
+    await expect(runtime.endSession(persisted.id)).resolves.toMatchObject({
+      id: persisted.id,
+      status: "completed",
+      controller: null,
+    });
+    await expect(runtime.listSessionInventory()).resolves.toEqual([
+      expect.objectContaining({
+        session: expect.objectContaining({
+          id: persisted.id,
+          status: "completed",
+        }),
+        attachment: "missing",
+        profileOwnership: "released",
+      }),
+    ]);
+  });
+
+  it("reports the latest durable observation cursor in active control truth", async () => {
+    const { runtime, sessions } = await harness({
+      start: async () => readyBrowserSession("browser_unused"),
+    });
+    const persisted = await sessions.start(
+      { mode: "agent", browser: { mode: "temporary" } },
+      { profile: { mode: "temporary" } },
+    );
+    const activeSession = await sessions.update({
+      ...persisted,
+      status: "active",
+      controller: "agent",
+    });
+    const fence = (
+      runtime as unknown as { ownershipFence: BrowserOwnershipFence }
+    ).ownershipFence;
+    fence.initialize(
+      activeSession.id,
+      activeSession.controller,
+      activeSession.ownershipGeneration,
+    );
+    const requested = await runtime.requestHuman(persisted.id, {
+      reason: "Cursor qualification",
+    });
+
+    await expect(runtime.getControlStatus(persisted.id)).resolves.toMatchObject(
+      {
+        sessionId: persisted.id,
+        status: "awaiting_human",
+        observationSeq: requested.observationSeq,
+      },
+    );
+    await runtime.endSession(persisted.id);
+  });
+
+  it("reports persisted human and returned control truth after in-memory ownership state is lost", async () => {
+    const { runtime, ownershipFence } = await harness({
+      start: async () =>
+        ({
+          ...readyBrowserSession("browser_control_restart"),
+          invalidateAllTargets: async () => [],
+        }) as BrowserSession,
+    });
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const session = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime, id: session.id });
+
+    const requested = await runtime.requestHuman(session.id, {
+      reason: "Restart control-state qualification",
+    });
+    const human = await runtime.takeHumanControl(session.id);
+    ownershipFence.clear(session.id);
+
+    await expect(runtime.getControlStatus(session.id)).resolves.toMatchObject({
+      sessionId: session.id,
+      status: "active",
+      controller: "human",
+      generation: human.generation,
+      activeHandoffId: requested.activeHandoffId,
+      activeHandoffGeneration: requested.activeHandoffGeneration,
+      observationSeq: human.observationSeq,
+    });
+
+    ownershipFence.initialize(session.id, "human", human.generation);
+    const returned = await runtime.returnAgentControl(session.id);
+    ownershipFence.clear(session.id);
+
+    await expect(runtime.getControlStatus(session.id)).resolves.toMatchObject({
+      sessionId: session.id,
+      status: "active",
+      controller: "agent",
+      generation: returned.generation,
+      lastReturnedHandoffId: requested.activeHandoffId,
+      observationSeq: returned.observationSeq,
+    });
+  });
+
   it("starts real agent, companion, and capture sessions with the correct lifecycle", async () => {
     const { runtime, browser, home } = await harness();
-    const agent = await runtime.startSession({ mode: "agent" });
+    const agent = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: agent.id });
     expect(agent).toMatchObject({
       status: "active",
@@ -253,11 +536,17 @@ describe("Milestone 4 runtime integration", () => {
       (await runtime.getObservations(agent.id)).items.map((item) => item.type),
     ).toEqual(["session_started"]);
 
-    const companion = await runtime.startSession({ mode: "companion" });
+    const companion = await runtime.startSession({
+      mode: "companion",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: companion.id });
     expect(companion.controller).toBe("agent");
 
-    const capture = await runtime.startSession({ mode: "capture" });
+    const capture = await runtime.startSession({
+      mode: "capture",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: capture.id });
     expect(capture.controller).toBe("human");
     await expect(
@@ -323,33 +612,28 @@ describe("Milestone 4 runtime integration", () => {
     ).toEqual(["session_started"]);
   });
 
-  it("creates Rove-managed persistent profile metadata before browser launch", async () => {
+  it("launches the selected durable browser workspace and records its identity", async () => {
     const { runtime, home } = await harness();
-    const session = await runtime.startSession({
-      mode: "agent",
-      profile: {
-        mode: "persistent",
-        name: "default",
-      },
-    });
+    const session = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: session.id });
 
-    const metadata = JSON.parse(
-      await readFile(
-        join(home, ".rove", "profiles", "default", "profile.json"),
-        "utf8",
-      ),
+    const catalog = JSON.parse(
+      await readFile(join(home, ".rove", "browser-workspaces.json"), "utf8"),
     );
 
-    expect(metadata).toMatchObject({
-      name: "default",
-      browserDistribution: "chromium",
+    expect(session.workspace).toMatchObject({
+      id: catalog.selectedWorkspaceId,
+      displayName: "Default",
+      browser: "chromium",
+      storageLayout: "workspace",
     });
-    expect(metadata.createdAt).toEqual(expect.any(String));
-    expect(metadata.lastUsedAt).toEqual(expect.any(String));
+    expect(session.profile).toEqual({
+      mode: "persistent",
+      name: catalog.selectedWorkspaceId,
+    });
   });
 
-  it("rejects a second active persistent session using the same profile", async () => {
+  it("rejects a second active session using the same browser workspace", async () => {
     let starts = 0;
     const engine: BrowserEngine = {
       start: async () => {
@@ -359,26 +643,14 @@ describe("Milestone 4 runtime integration", () => {
     };
 
     const { runtime } = await harness(engine);
-    const first = await runtime.startSession({
-      mode: "agent",
-      profile: {
-        mode: "persistent",
-        name: "default",
-      },
-    });
+    const first = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: first.id });
 
-    await expect(
-      runtime.startSession({
-        mode: "agent",
-        profile: {
-          mode: "persistent",
-          name: "default",
-        },
-      }),
-    ).rejects.toMatchObject({
-      code: "PROFILE_LOCKED",
-    });
+    await expect(runtime.startSession({ mode: "agent" })).rejects.toMatchObject(
+      {
+        code: "PROFILE_LOCKED",
+      },
+    );
 
     expect(starts).toBe(1);
   });
@@ -402,10 +674,7 @@ describe("Milestone 4 runtime integration", () => {
       },
     };
     const { runtime } = await harness(engine);
-    const request = {
-      mode: "agent" as const,
-      profile: { mode: "persistent" as const, name: "default" },
-    };
+    const request = { mode: "agent" as const };
 
     const firstResponse = runtime.startSession(request);
     await started;
@@ -518,7 +787,7 @@ describe("Milestone 4 runtime integration", () => {
     ]);
   });
 
-  it("keeps agent ownership when a site explicitly restricts access", async () => {
+  it("keeps agent ownership and allows navigation away when a site restricts access", async () => {
     const server = await fixture();
     const { runtime } = await harness();
 
@@ -542,9 +811,9 @@ describe("Milestone 4 runtime integration", () => {
 
     await expect(
       runtime.navigate(session.id, { url: server.url }),
-    ).rejects.toMatchObject({
-      code: "SITE_ACCESS_RESTRICTED",
-      retryable: false,
+    ).resolves.toMatchObject({
+      ok: true,
+      url: new URL("/", server.url).toString(),
     });
   });
 
@@ -620,7 +889,7 @@ describe("Milestone 4 runtime integration", () => {
     },
   );
 
-  it("stops on an unknown interstitial without automatic handoff", async () => {
+  it("keeps an unknown interstitial observational and allows navigation away", async () => {
     const server = await fixture();
     const { runtime } = await harness();
 
@@ -644,9 +913,9 @@ describe("Milestone 4 runtime integration", () => {
 
     await expect(
       runtime.navigate(session.id, { url: server.url }),
-    ).rejects.toMatchObject({
-      code: "UNKNOWN_INTERSTITIAL",
-      retryable: false,
+    ).resolves.toMatchObject({
+      ok: true,
+      url: new URL("/", server.url).toString(),
     });
   });
 
@@ -842,21 +1111,28 @@ describe("Milestone 4 runtime integration", () => {
         expect(afterInspect.controller).toBe(beforeInspect.controller);
         expect(afterInspect.handoff).toEqual(beforeInspect.handoff);
 
-        // For agent-owned stop/wait states, prove that preserving ownership
-        // does not mean autonomous mutation remains authorized.
+        // The legacy page decision remains observable, while action-level
+        // authorization permits navigation out of stable stop-only states.
         if (
           mode !== "capture" &&
           mutationAllowed === false &&
           disposition !== "request_human"
         ) {
-          await expect(
-            runtime.navigate(session.id, {
-              url: `${server.url}/actions`,
-            }),
-          ).rejects.toMatchObject({
-            code: errorCode,
-            retryable,
+          const navigation = runtime.navigate(session.id, {
+            url: `${server.url}/actions`,
           });
+
+          if (pageState === "loading") {
+            await expect(navigation).rejects.toMatchObject({
+              code: "INSPECTION_REQUIRED",
+              retryable: true,
+            });
+          } else {
+            await expect(navigation).resolves.toMatchObject({
+              ok: true,
+              url: `${server.url}/actions`,
+            });
+          }
 
           expect(await runtime.getSession(session.id)).toMatchObject({
             status: "active",
@@ -902,7 +1178,7 @@ describe("Milestone 4 runtime integration", () => {
     const { runtime, browser } = await harness();
     const session = await runtime.startSession({
       mode: "agent",
-      startUrl: `${server.url}/actions`,
+      startUrl: `${server.url}/download`,
     });
     active.push({ runtime, id: session.id });
 
@@ -1034,9 +1310,7 @@ describe("Milestone 4 runtime integration", () => {
     expect(ended).toMatchObject({ status: "completed", controller: null });
     expect(ended.endedAt).toBeDefined();
     expect(browser.has(session.id)).toBe(false);
-    await expect(runtime.endSession(session.id)).rejects.toMatchObject({
-      code: "SESSION_ALREADY_ENDED",
-    });
+    await expect(runtime.endSession(session.id)).resolves.toEqual(ended);
     await expect(runtime.inspectBrowser(session.id)).rejects.toMatchObject({
       code: "SESSION_NOT_ACTIVE",
     });
@@ -1187,6 +1461,11 @@ describe("Milestone 4 runtime integration", () => {
       dispatched: true,
       dispatchStatus: "completed",
       outcome: "applied",
+      phases: expect.arrayContaining([
+        expect.objectContaining({ phase: "preflight", status: "completed" }),
+        expect.objectContaining({ phase: "commit", status: "completed" }),
+        expect.objectContaining({ phase: "synchronize", status: "completed" }),
+      ]),
       degradations: [
         {
           stage: "page_synchronization",
@@ -1196,7 +1475,59 @@ describe("Milestone 4 runtime integration", () => {
     });
   });
 
-  it("fences replay when dispatch completes but successor truth is unavailable", async () => {
+  it("reconciles a dispatch-stage control error when successor evidence proves the effect", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/interactive-reconciliation`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const internal = liveBrowser as unknown as {
+      applyCheckedState: (...args: unknown[]) => Promise<void>;
+    };
+    const applyCheckedState = internal.applyCheckedState.bind(liveBrowser);
+
+    internal.applyCheckedState = async (...args: unknown[]) => {
+      await applyCheckedState(...args);
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "forced control replacement after checked state changed",
+      });
+    };
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "check",
+        target: target(inspection, "task one"),
+      },
+      expectedEffects: [
+        {
+          kind: "target_checked",
+          target: { name: "task one", kind: "checkbox" },
+        },
+      ],
+      consequential: true,
+      consequenceKey: "fixture:checkbox:checked",
+    });
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      dispatchStatus: "completed",
+      outcome: "applied",
+      degradations: [
+        {
+          stage: "action_dispatch",
+          code: "TARGET_NOT_INTERACTIVE",
+        },
+      ],
+    });
+  });
+
+  it("reconciles a delayed client-side consequential commit without redispatching it", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
     const session = await runtime.startSession({
@@ -1204,15 +1535,148 @@ describe("Milestone 4 runtime integration", () => {
       startUrl: `${server.url}/consequential-action`,
     });
     active.push({ runtime, id: session.id });
-    const inspection = await runtime.inspectBrowser(session.id);
+    const predecessor = await runtime.inspectBrowser(session.id);
     const liveBrowser = browser.get(session.id);
-    const internal = liveBrowser as unknown as {
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    let successorInspectionCalls = 0;
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (...args: Parameters<typeof inspect>) => {
+        successorInspectionCalls += 1;
+
+        if (successorInspectionCalls === 1) {
+          return predecessor;
+        }
+
+        return inspect(...args);
+      },
+    });
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      consequential: true,
+      consequenceKey: "fixture:mutation:delayed-reconciliation",
+    });
+
+    expect(server.mutationCount()).toBe(1);
+    expect(successorInspectionCalls).toBeGreaterThan(1);
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      dispatchStatus: "completed",
+      outcome: "applied",
+      pageChanged: true,
+      url: `${server.url}/consequential-result`,
+    });
+  });
+
+  it("reconciles delayed expected effects for ordinary navigation", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    let successorInspectionCalls = 0;
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (...args: Parameters<typeof inspect>) => {
+        successorInspectionCalls += 1;
+
+        if (successorInspectionCalls === 1) return predecessor;
+
+        return inspect(...args);
+      },
+    });
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Navigate result"),
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      effect: "navigate",
+    });
+
+    expect(successorInspectionCalls).toBeGreaterThan(1);
+    expect(receipt).toMatchObject({
+      outcome: "applied",
+      pageChanged: true,
+      url: `${server.url}/result`,
+    });
+  });
+
+  it("fences unresolved workspace work across origin, Runtime, and task replacement while permitting one trusted attempt", async () => {
+    const affectedServer = await fixture();
+    const unrelatedServer = await fixture();
+    const { runtime, browser, sessions, ownershipFence } = await harness();
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const taskABootstrap = `boot_${"a".repeat(32)}`;
+    const taskBBootstrap = `boot_${"b".repeat(32)}`;
+    const sessionA = await runtime.startSession({
+      bootstrapId: taskABootstrap,
+      mode: "agent",
+      startUrl: `${affectedServer.url}/consequential-form?churn=one`,
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime, id: sessionA.id });
+    const prepareForm = async (
+      current: RuntimeService,
+      sessionId: string,
+      server: FixtureServer,
+      title: string,
+      churn: string,
+    ) => {
+      await current.inspectBrowser(sessionId);
+      await current.navigate(sessionId, {
+        url: `${server.url}/consequential-form?churn=${churn}`,
+      });
+      const empty = await current.inspectBrowser(sessionId);
+      await current.interact(sessionId, {
+        observationId: empty.observationId,
+        action: {
+          kind: "fill",
+          target: target(empty, "Record title"),
+          value: title,
+        },
+        expectedEffects: [
+          {
+            kind: "target_value",
+            target: { kind: "input", name: "Record title" },
+            value: title,
+          },
+        ],
+        consequential: false,
+      });
+      return current.inspectBrowser(sessionId);
+    };
+    const issueA = await prepareForm(
+      runtime,
+      sessionA.id,
+      affectedServer,
+      "Issue A",
+      "one",
+    );
+    const liveBrowser = browser.get(sessionA.id);
+    const browserInternal = liveBrowser as unknown as {
       synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
     };
-    const synchronize = internal.synchronizeAfterAction.bind(liveBrowser);
+    const synchronize =
+      browserInternal.synchronizeAfterAction.bind(liveBrowser);
     const inspect = liveBrowser.inspect.bind(liveBrowser);
 
-    internal.synchronizeAfterAction = async () => {
+    browserInternal.synchronizeAfterAction = async () => {
       throw new Error("forced post-action synchronization failure");
     };
     Object.defineProperty(liveBrowser, "inspect", {
@@ -1222,18 +1686,18 @@ describe("Milestone 4 runtime integration", () => {
       },
     });
 
-    const receipt = await runtime.interact(session.id, {
-      observationId: inspection.observationId,
+    const receipt = await runtime.interact(sessionA.id, {
+      observationId: issueA.observationId,
       action: {
         kind: "click",
-        target: target(inspection, "Apply consequential mutation"),
+        target: target(issueA, "Create record"),
       },
       expectedEffects: [{ kind: "url_changed" }],
       consequential: true,
-      consequenceKey: "fixture:mutation:unknown",
+      consequenceKey: "fixture:form:issue-a:unknown",
     });
 
-    expect(server.mutationCount()).toBe(1);
+    expect(affectedServer.mutationCount()).toBe(1);
     expect(receipt).toMatchObject({
       dispatched: true,
       dispatchStatus: "completed",
@@ -1244,28 +1708,729 @@ describe("Milestone 4 runtime integration", () => {
       ]),
     });
 
-    internal.synchronizeAfterAction = synchronize;
+    browserInternal.synchronizeAfterAction = synchronize;
     Object.defineProperty(liveBrowser, "inspect", {
       configurable: true,
       value: inspect,
     });
-    await liveBrowser.navigate(`${server.url}/consequential-action`);
-    const reconciled = await runtime.inspectBrowser(session.id);
 
+    const runtimeInternal = runtime as unknown as {
+      control: ControlService;
+      controlWait: ControlWaitService;
+      coordinator: BrowserCommandCoordinator;
+      observations: ObservationService;
+      evidence: EvidenceService;
+      config: ReturnType<typeof loadConfig>;
+    };
+    const replacement = new RuntimeService(
+      sessions,
+      runtimeInternal.control,
+      runtimeInternal.controlWait,
+      runtimeInternal.coordinator,
+      browser,
+      runtimeInternal.observations,
+      runtimeInternal.evidence,
+      runtimeInternal.config,
+      ownershipFence,
+      new FileEffectJournalStore(runtimeInternal.config.home),
+    );
+
+    const sameIssueWithUnrelatedChurn = await prepareForm(
+      replacement,
+      sessionA.id,
+      affectedServer,
+      "Issue A",
+      "two",
+    );
     await expect(
-      runtime.interact(session.id, {
-        observationId: reconciled.observationId,
+      replacement.interact(sessionA.id, {
+        observationId: sameIssueWithUnrelatedChurn.observationId,
         action: {
           kind: "click",
-          target: target(reconciled, "Apply consequential mutation"),
+          target: target(sameIssueWithUnrelatedChurn, "Create record"),
         },
         expectedEffects: [{ kind: "url_changed" }],
         consequential: true,
-        consequenceKey: "fixture:mutation:unknown",
+        consequenceKey: "fixture:form:issue-a:rotated-key",
+        repeatAuthorization: "caller-authored-value-must-not-work",
+      } as never),
+    ).rejects.toMatchObject({
+      code: "CONSEQUENTIAL_ACTION_UNRESOLVED",
+      details: { effectIds: [expect.stringMatching(/^[a-f0-9]{64}$/)] },
+    });
+    expect(affectedServer.mutationCount()).toBe(1);
+
+    const differentFormState = await prepareForm(
+      replacement,
+      sessionA.id,
+      affectedServer,
+      "Issue B",
+      "three",
+    );
+    await expect(
+      replacement.interact(sessionA.id, {
+        observationId: differentFormState.observationId,
+        action: {
+          kind: "click",
+          target: target(differentFormState, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:issue-b:same-task",
       }),
     ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(affectedServer.mutationCount()).toBe(1);
+
+    await replacement.navigate(sessionA.id, {
+      url: `${unrelatedServer.url}/consequential-form?churn=read-only`,
+    });
+    await expect(
+      replacement.inspectBrowser(sessionA.id),
+    ).resolves.toMatchObject({
+      url: expect.stringContaining(unrelatedServer.url),
+    });
+
+    const originalJournal = new FileEffectJournalStore(
+      runtimeInternal.config.home,
+    );
+    const unresolved = await originalJournal.find(
+      taskABootstrap,
+      workspace.id,
+      "fixture:form:issue-a:unknown",
+    );
+    expect(unresolved).toMatchObject({
+      state: "unresolved",
+      taskScope: taskABootstrap,
+      browserWorkspaceScope: workspace.id,
+    });
+
+    await runtime.endSession(sessionA.id);
+
+    const sessionB = await replacement.startSession({
+      bootstrapId: taskBBootstrap,
+      mode: "agent",
+      startUrl: `${affectedServer.url}/consequential-form?churn=four`,
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime: replacement, id: sessionB.id });
+
+    const taskBDifferentForm = await prepareForm(
+      replacement,
+      sessionB.id,
+      affectedServer,
+      "Issue B",
+      "four",
+    );
+    await expect(
+      replacement.interact(sessionB.id, {
+        observationId: taskBDifferentForm.observationId,
+        action: {
+          kind: "click",
+          target: target(taskBDifferentForm, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:issue-a:unknown",
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(affectedServer.mutationCount()).toBe(1);
+
+    const unrelatedDomain = await prepareForm(
+      replacement,
+      sessionB.id,
+      unrelatedServer,
+      "Unrelated origin",
+      "five",
+    );
+    await expect(
+      replacement.interact(sessionB.id, {
+        observationId: unrelatedDomain.observationId,
+        action: {
+          kind: "click",
+          target: target(unrelatedDomain, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:unrelated-origin",
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(unrelatedServer.mutationCount()).toBe(0);
+
+    const productAuthorizationBoundary = new SessionController(replacement);
+    await productAuthorizationBoundary.authorizeEffectRepeat(sessionB.id, {
+      effectId: unresolved!.effectId,
+      authorizationId: "effect_repeat_12345678-1234-4123-8123-123456789abc",
+    });
+
+    const authorizedProgress = await prepareForm(
+      replacement,
+      sessionB.id,
+      affectedServer,
+      "Issue B",
+      "six",
+    );
+    await expect(
+      replacement.interact(sessionB.id, {
+        observationId: authorizedProgress.observationId,
+        action: {
+          kind: "click",
+          target: target(authorizedProgress, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:authorized-progress",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied" });
+    expect(affectedServer.mutationCount()).toBe(2);
+    expect(
+      await originalJournal.find(
+        taskABootstrap,
+        workspace.id,
+        "fixture:form:issue-a:unknown",
+      ),
+    ).toMatchObject({
+      state: "unresolved",
+      repeatAuthorization: {
+        consumedByAttemptId: expect.stringMatching(/^effect_attempt_/),
+      },
+    });
+    const consumed = (await originalJournal.findById(unresolved!.effectId))!
+      .repeatAuthorization!.consumedByAttemptId!;
+    const authorizedEffectId = createHash("sha256")
+      .update(
+        [
+          taskBBootstrap,
+          workspace.id,
+          "fixture:form:authorized-progress",
+          consumed,
+        ].join("\0"),
+      )
+      .digest("hex");
+    expect(await originalJournal.findById(authorizedEffectId)).toMatchObject({
+      state: "applied",
+      taskScope: taskBBootstrap,
+      attemptId: consumed,
+    });
+
+    await replacement.endSession(sessionB.id);
+    const taskCBootstrap = `boot_${"c".repeat(32)}`;
+    const sessionC = await replacement.startSession({
+      bootstrapId: taskCBootstrap,
+      mode: "agent",
+      startUrl: `${affectedServer.url}/consequential-form?churn=seven`,
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime: replacement, id: sessionC.id });
+    const reusedCallerKey = await prepareForm(
+      replacement,
+      sessionC.id,
+      affectedServer,
+      "Issue C",
+      "seven",
+    );
+    await expect(
+      replacement.interact(sessionC.id, {
+        observationId: reusedCallerKey.observationId,
+        action: {
+          kind: "click",
+          target: target(reusedCallerKey, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:authorized-progress",
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(affectedServer.mutationCount()).toBe(2);
+
+    const independentWorkspace =
+      await replacement.createBrowserWorkspace("Independent");
+    const sessionD = await replacement.startSession({
+      bootstrapId: `boot_${"d".repeat(32)}`,
+      mode: "agent",
+      startUrl: `${unrelatedServer.url}/consequential-form?churn=eight`,
+      browser: { mode: "workspace", workspaceId: independentWorkspace.id },
+    });
+    active.push({ runtime: replacement, id: sessionD.id });
+    const independentAction = await prepareForm(
+      replacement,
+      sessionD.id,
+      unrelatedServer,
+      "Independent",
+      "eight",
+    );
+    await expect(
+      replacement.interact(sessionD.id, {
+        observationId: independentAction.observationId,
+        action: {
+          kind: "click",
+          target: target(independentAction, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:form:independent-workspace",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied" });
+    expect(unrelatedServer.mutationCount()).toBe(1);
+  }, 30_000);
+
+  it("records Browser-proven pre-dispatch rejection as not applied without fencing the workspace", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
+    const bootstrapId = `boot_${"e".repeat(32)}`;
+    const session = await runtime.startSession({
+      bootstrapId,
+      mode: "agent",
+      startUrl: `${server.url}/consequential-form?churn=predispatch`,
+      browser: { mode: "workspace", workspaceId: workspace.id },
+    });
+    active.push({ runtime, id: session.id });
+    const observation = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: async (...args: Parameters<typeof interact>) => {
+        await liveBrowser.navigate(`${server.url}/result`);
+        return interact(...args);
+      },
+    });
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: {
+          kind: "click",
+          target: target(observation, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:predispatch:rejected",
+      }),
+    ).rejects.toMatchObject({ code: "OBSERVATION_STALE" });
+    expect(server.mutationCount()).toBe(0);
+
+    const runtimeInternal = runtime as unknown as {
+      config: ReturnType<typeof loadConfig>;
+    };
+    const journal = new FileEffectJournalStore(runtimeInternal.config.home);
+    await expect(
+      journal.find(bootstrapId, workspace.id, "fixture:predispatch:rejected"),
+    ).resolves.toMatchObject({ state: "not_applied" });
+
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: interact,
+    });
+    await runtime.inspectBrowser(session.id);
+    await runtime.navigate(session.id, {
+      url: `${server.url}/consequential-form?churn=retry`,
+    });
+    const fresh = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.interact(session.id, {
+        observationId: fresh.observationId,
+        action: {
+          kind: "click",
+          target: target(fresh, "Create record"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        consequenceKey: "fixture:predispatch:fresh-work",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied" });
     expect(server.mutationCount()).toBe(1);
+  }, 15_000);
+
+  it("rejects a semantic transfer commit whose expected effect is unrelated to the source", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "destination_observation",
+        label: "Archive",
+      },
+      mechanism: "drag",
+      consequenceKey: "fixture:move:weak-commit-evidence",
+    });
+
+    await expect(
+      runtime.advanceSemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: initial.observationId,
+        phase: "commit",
+        action: {
+          kind: "click",
+          target: target(initial, "Quarterly report"),
+        },
+        expectedEffects: [{ kind: "text_present", text: "Archive" }],
+        effect: "external_commit",
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+
+    expect(
+      await runtime.getSemanticTransaction(session.id, begun.transactionId),
+    ).toMatchObject({ status: "prepared", steps: [] });
+    expect(
+      (await runtime.inspectBrowser(session.id)).targets?.find(
+        (item) => item.name === "Quarterly report",
+      )?.state?.expanded,
+    ).not.toBe(true);
   });
+
+  it("executes a freshly grounded semantic transfer through one explicit commit", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "within_scope",
+        scope: { kind: "list", label: "Archive" },
+      },
+      mechanism: "menu",
+      consequenceKey: "fixture:move:quarterly-report:archive",
+    });
+    const duplicate = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "within_scope",
+        scope: { kind: "list", label: "Archive" },
+      },
+      mechanism: "menu",
+      consequenceKey: "fixture:move:quarterly-report:archive",
+    });
+
+    expect(duplicate.transactionId).toBe(begun.transactionId);
+    expect(begun).toMatchObject({
+      status: "prepared",
+      source: { name: "Quarterly report", kind: "button" },
+      destination: {
+        verification: "within_scope",
+        scope: { kind: "list", label: "Archive" },
+      },
+    });
+
+    const prepared = await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: initial.observationId,
+      phase: "prepare",
+      action: { kind: "click", target: target(initial, "Quarterly report") },
+      expectedEffects: [
+        {
+          kind: "target_present",
+          target: { name: "Move to Archive", kind: "menuitem" },
+        },
+      ],
+      effect: "reversible_ui",
+    });
+
+    expect(prepared).toMatchObject({
+      transaction: { status: "in_progress" },
+      receipt: { outcome: "applied", consequential: false },
+    });
+
+    const commitObservation = await runtime.inspectBrowser(session.id);
+    expect(commitObservation.observationId).not.toBe(initial.observationId);
+    const committed = await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: commitObservation.observationId,
+      phase: "commit",
+      action: {
+        kind: "click",
+        target: target(commitObservation, "Move to Archive"),
+      },
+      expectedEffects: [
+        {
+          kind: "target_within_scope",
+          target: { name: "Quarterly report", kind: "button" },
+          scope: { kind: "list", label: "Archive" },
+        },
+      ],
+      effect: "external_commit",
+    });
+
+    expect(committed).toMatchObject({
+      transaction: { status: "committed" },
+      receipt: {
+        outcome: "applied",
+        consequential: true,
+        consequenceKey: "fixture:move:quarterly-report:archive",
+      },
+    });
+
+    const verificationObservation = await runtime.inspectBrowser(session.id);
+    expect(verificationObservation.observationId).not.toBe(
+      commitObservation.observationId,
+    );
+    const verified = await runtime.verifySemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: verificationObservation.observationId,
+      additionalExpectedEffects: [
+        { kind: "text_present", text: "Moved to Archive" },
+      ],
+    });
+
+    expect(verified).toMatchObject({
+      outcome: "applied",
+      transaction: {
+        status: "verified",
+        steps: [
+          { phase: "prepare", outcome: "applied" },
+          { phase: "commit", outcome: "applied" },
+        ],
+        verification: {
+          observationId: verificationObservation.observationId,
+          outcome: "applied",
+        },
+      },
+      effects: [
+        {
+          effect: {
+            kind: "target_within_scope",
+            scope: { kind: "list", label: "Archive" },
+          },
+          state: "observed",
+        },
+        {
+          effect: { kind: "text_present", text: "Moved to Archive" },
+          state: "observed",
+        },
+      ],
+    });
+
+    await expect(
+      runtime.cancelSemanticTransaction(session.id, begun.transactionId),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+    expect(
+      (await runtime.getObservations(session.id)).items.map(
+        (observation) => observation.type,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "semantic_transaction_begun",
+        "semantic_transaction_advanced",
+        "semantic_transaction_verified",
+      ]),
+    );
+  }, 15_000);
+
+  it("stages trusted clipboard cut from an exactly selected transaction source", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-clipboard-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const source = initial.targets?.find(
+      (candidate) =>
+        candidate.kind === "gridcell" && candidate.name === "Quarterly report",
+    );
+    expect(source).toMatchObject({ state: { selected: true } });
+    if (source === undefined) throw new Error("Missing selected source");
+
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: {
+        pageId: initial.pageId,
+        revision: initial.revision,
+        ref: source.ref,
+      },
+      destination: {
+        verification: "destination_observation",
+        label: "Archive",
+      },
+      mechanism: "keyboard",
+      consequenceKey: "fixture:clipboard:quarterly-report:archive",
+    });
+
+    const prepared = await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: initial.observationId,
+      phase: "prepare",
+      action: { kind: "clipboard", operation: "cut" },
+      expectedEffects: [],
+      effect: "reversible_ui",
+    });
+
+    expect(prepared).toMatchObject({
+      transaction: {
+        status: "in_progress",
+        steps: [
+          {
+            outcome: "unknown",
+            dispatchStatus: "completed",
+            evidenceBasis: "trusted_dispatch",
+          },
+        ],
+      },
+      receipt: {
+        dispatched: true,
+        dispatchStatus: "completed",
+        outcome: "unknown",
+        consequential: false,
+      },
+    });
+    expect((await runtime.inspectBrowser(session.id)).text).toContain(
+      "Cut received",
+    );
+  }, 10_000);
+
+  it("rejects effect-free clipboard staging when the exact source is not selected", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "destination_observation",
+        label: "Archive",
+      },
+      mechanism: "keyboard",
+      consequenceKey: "fixture:clipboard:unselected-report:archive",
+    });
+
+    await expect(
+      runtime.advanceSemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: initial.observationId,
+        phase: "prepare",
+        action: { kind: "clipboard", operation: "cut" },
+        expectedEffects: [],
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+
+    expect(
+      await runtime.getSemanticTransaction(session.id, begun.transactionId),
+    ).toMatchObject({ status: "prepared", steps: [] });
+  });
+
+  it("verifies a remote transfer from exact source presence plus independent destination context", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "destination_observation",
+        label: "Archive",
+      },
+      mechanism: "menu",
+      consequenceKey: "fixture:move:quarterly-report:remote-archive",
+    });
+
+    await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: initial.observationId,
+      phase: "prepare",
+      action: { kind: "click", target: target(initial, "Quarterly report") },
+      expectedEffects: [
+        {
+          kind: "target_present",
+          target: { name: "Move to Archive", kind: "menuitem" },
+        },
+      ],
+      effect: "reversible_ui",
+    });
+
+    const commitObservation = await runtime.inspectBrowser(session.id);
+    await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: commitObservation.observationId,
+      phase: "commit",
+      action: {
+        kind: "click",
+        target: target(commitObservation, "Move to Archive"),
+      },
+      expectedEffects: [
+        {
+          kind: "target_within_scope",
+          target: { name: "Quarterly report", kind: "button" },
+          scope: { kind: "list", label: "Archive" },
+        },
+      ],
+    });
+
+    const destinationObservation = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.verifySemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: destinationObservation.observationId,
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+
+    const verified = await runtime.verifySemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: destinationObservation.observationId,
+      additionalExpectedEffects: [
+        { kind: "text_present", text: "Moved to Archive" },
+      ],
+    });
+
+    expect(verified).toMatchObject({
+      outcome: "applied",
+      transaction: {
+        status: "verified",
+        destination: {
+          verification: "destination_observation",
+          label: "Archive",
+        },
+      },
+      effects: [
+        {
+          effect: {
+            kind: "target_present",
+            target: { name: "Quarterly report", kind: "button" },
+          },
+          state: "observed",
+        },
+        {
+          effect: { kind: "text_present", text: "Moved to Archive" },
+          state: "observed",
+        },
+      ],
+    });
+  }, 15_000);
 
   it("exposes managed browser downloads as file evidence", async () => {
     const server = await fixture();
@@ -1304,6 +2469,8 @@ describe("Milestone 4 runtime integration", () => {
       label: "rove-session-download.txt",
       metadata: {
         filename: "rove-session-download.txt",
+        mimeType: "text/plain",
+        mimeTypeBasis: "filename_extension",
         source: "browser_download",
         sizeBytes: "rove session download".length,
       },
@@ -1311,6 +2478,8 @@ describe("Milestone 4 runtime integration", () => {
 
     expect(downloaded.data).toMatchObject({
       evidenceId: file?.id,
+      mimeType: "text/plain",
+      mimeTypeBasis: "filename_extension",
     });
     await expect(
       runtime.readEvidence(session.id, file!.id),
@@ -1321,6 +2490,599 @@ describe("Milestone 4 runtime integration", () => {
         encoding: "external",
       },
     });
+  });
+
+  it.each([
+    ["Download file", "rove-session-download.txt"],
+    ["Slow download file", "rove-slow-download.txt"],
+  ])(
+    "verifies an action-correlated managed download from %s",
+    async (targetName, filename) => {
+      const server = await fixture();
+      const { runtime } = await harness();
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/download`,
+      });
+      active.push({ runtime, id: session.id });
+
+      const inspection = await runtime.inspectBrowser(session.id);
+      const receipt = await runtime.interact(session.id, {
+        observationId: inspection.observationId,
+        action: { kind: "click", target: target(inspection, targetName) },
+        expectedEffects: [{ kind: "download_completed", filename }],
+        consequential: true,
+        consequenceKey: `download:${filename}`,
+      });
+
+      expect(receipt).toMatchObject({
+        dispatched: true,
+        outcome: "applied",
+        effects: [
+          {
+            effect: { kind: "download_completed", filename },
+            state: "observed",
+            observationId: expect.stringMatching(/^obs_/),
+            evidenceId: expect.stringMatching(/^ev_/),
+          },
+        ],
+      });
+      expect(
+        (await runtime.listEvidence(session.id)).filter(
+          (item) => item.type === "file",
+        ),
+      ).toHaveLength(1);
+    },
+    15_000,
+  );
+
+  it("contradicts an action-correlated download with the wrong filename", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Download file"),
+      },
+      expectedEffects: [
+        { kind: "download_completed", filename: "different.txt" },
+      ],
+    });
+
+    expect(receipt).toMatchObject({
+      outcome: "not_applied",
+      effects: [
+        {
+          state: "contradicted",
+          code: "DOWNLOAD_FILENAME_MISMATCH",
+          observationId: expect.stringMatching(/^obs_/),
+          evidenceId: expect.stringMatching(/^ev_/),
+        },
+      ],
+    });
+  }, 15_000);
+
+  it("returns honest contradiction for an action-correlated download failure", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    const emitActivity = (
+      liveBrowser as unknown as {
+        emitActivity: (activity: unknown) => void;
+      }
+    ).emitActivity.bind(liveBrowser);
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: async (...args: Parameters<typeof interact>) => {
+        const result = await interact(...args);
+        emitActivity({
+          type: "download_failed",
+          pageId: result.pageId,
+          timestamp: new Date().toISOString(),
+          data: {
+            reason: "fixture transport failure",
+            suggestedFilename: "rove-failed-download.txt",
+            downloadUrl: `${server.url}/failed-download-probe`,
+            actionBoundaryId: args[1].activityBoundaryId,
+            correlation: "matched",
+          },
+        });
+        return result;
+      },
+    });
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Failed download probe"),
+      },
+      expectedEffects: [{ kind: "download_completed" }],
+    });
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      outcome: "not_applied",
+      effects: [
+        {
+          state: "contradicted",
+          code: "DOWNLOAD_FAILED",
+          observationId: expect.stringMatching(/^obs_/),
+        },
+      ],
+    });
+    expect(
+      (await runtime.listEvidence(session.id)).filter(
+        (item) => item.type === "file",
+      ),
+    ).toHaveLength(0);
+  }, 15_000);
+
+  it("does not let old download evidence satisfy a new action and fences replay without redispatch", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness(undefined, { actionMs: 100 });
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+
+    let inspection = await runtime.inspectBrowser(session.id);
+    await runtime.click(session.id, {
+      target: target(inspection, "Download file"),
+    });
+    await waitForObservation(runtime, session.id, "download_completed");
+
+    const liveBrowser = browser.get(session.id);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    let dispatches = 0;
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: async (...args: Parameters<typeof interact>) => {
+        dispatches += 1;
+        return interact(...args);
+      },
+    });
+
+    inspection = await runtime.inspectBrowser(session.id);
+    const request = {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click" as const,
+        target: target(inspection, "Failed download probe"),
+      },
+      expectedEffects: [{ kind: "download_completed" as const }],
+      consequential: true,
+      consequenceKey: "download:no-event",
+    };
+    const receipt = await runtime.interact(session.id, request);
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      outcome: "unknown",
+      effects: [{ state: "unresolved", code: "DOWNLOAD_TIMEOUT" }],
+    });
+    expect(dispatches).toBe(1);
+
+    inspection = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.interact(session.id, {
+        ...request,
+        observationId: inspection.observationId,
+        action: {
+          ...request.action,
+          target: target(inspection, "Failed download probe"),
+        },
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(dispatches).toBe(1);
+    expect(
+      (await runtime.listEvidence(session.id)).filter(
+        (item) => item.type === "file",
+      ),
+    ).toHaveLength(1);
+  }, 15_000);
+
+  it("fences a consequential download when ownership generation changes while completion is pending", async () => {
+    const server = await fixture();
+    const { runtime, browser, ownershipFence } = await harness(undefined, {
+      actionMs: 1_000,
+    });
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    let inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    const dispatched = raceGate();
+    let dispatches = 0;
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: async (...args: Parameters<typeof interact>) => {
+        dispatches += 1;
+        const result = await interact(...args);
+        dispatched.resolve();
+        return result;
+      },
+    });
+    const consequenceKey = "download:ownership-change";
+    const pending = runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Failed download probe"),
+      },
+      expectedEffects: [{ kind: "download_completed" }],
+      consequential: true,
+      consequenceKey,
+    });
+    await dispatched.promise;
+    const transitionStarted = observeNextOwnershipTransition(ownershipFence);
+    const handoff = runtimeOwnershipTransitions(runtime).requestHuman(
+      session.id,
+      "download completion ownership race",
+    );
+    await transitionStarted;
+
+    await expect(pending).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+    await expect(handoff).resolves.toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
+    await runtime.takeHumanControl(session.id);
+    await runtime.returnAgentControl(session.id);
+    inspection = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.interact(session.id, {
+        observationId: inspection.observationId,
+        action: {
+          kind: "click",
+          target: target(inspection, "Failed download probe"),
+        },
+        expectedEffects: [{ kind: "download_completed" }],
+        consequential: true,
+        consequenceKey,
+      }),
+    ).rejects.toMatchObject({ code: "CONSEQUENTIAL_ACTION_UNRESOLVED" });
+    expect(dispatches).toBe(1);
+  }, 15_000);
+
+  it("keeps an overlapping delayed prior same-URL download ambiguous", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    let inspection = await runtime.inspectBrowser(session.id);
+    await runtime.click(session.id, {
+      target: target(inspection, "Schedule unrelated download"),
+    });
+    inspection = await runtime.inspectBrowser(session.id);
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Delayed requested download"),
+      },
+      expectedEffects: [{ kind: "download_completed" }],
+    });
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      outcome: "unknown",
+      effects: [
+        {
+          state: "unresolved",
+          code: "DOWNLOAD_CORRELATION_AMBIGUOUS",
+        },
+      ],
+    });
+  }, 15_000);
+
+  it("verifies one exact action-bound no-href button download", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Button download"),
+      },
+      expectedEffects: [{ kind: "download_completed" }],
+    });
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      outcome: "applied",
+      effects: [
+        {
+          state: "observed",
+          observationId: expect.stringMatching(/^obs_/),
+          evidenceId: expect.stringMatching(/^ev_/),
+        },
+      ],
+    });
+    const observation = await waitForObservation(
+      runtime,
+      session.id,
+      "download_completed",
+    );
+    expect(observation.data).toMatchObject({
+      correlation: "matched",
+      correlationStrategy: "trusted_action_download",
+    });
+    expect(
+      (await runtime.listEvidence(session.id)).filter(
+        (item) => item.type === "file",
+      ),
+    ).toHaveLength(1);
+  }, 15_000);
+
+  it("keeps two no-href downloads in one action boundary ambiguous", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const receipt = await runtime.interact(session.id, {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Button download twice"),
+      },
+      expectedEffects: [{ kind: "download_completed" }],
+      consequential: true,
+      consequenceKey: "download:dynamic-two",
+    });
+
+    expect(receipt).toMatchObject({
+      dispatched: true,
+      outcome: "unknown",
+      effects: [
+        { state: "unresolved", code: "DOWNLOAD_CORRELATION_AMBIGUOUS" },
+      ],
+    });
+    expect(
+      (await runtime.listEvidence(session.id)).filter(
+        (item) => item.type === "file",
+      ),
+    ).toHaveLength(2);
+  }, 15_000);
+
+  it.runIf(process.platform === "darwin")(
+    "verifies Chromium PDF viewer Download through its bounded viewer identity",
+    async () => {
+      const server = await fixture();
+      const { runtime } = await harness(undefined, {
+        headless: false,
+        actionMs: 2_000,
+      });
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/fixture.pdf`,
+      });
+      active.push({ runtime, id: session.id });
+      const inspection = await runtime.inspectBrowser(session.id);
+
+      const receipt = await runtime.interact(session.id, {
+        observationId: inspection.observationId,
+        action: {
+          kind: "click",
+          target: target(inspection, "Download"),
+        },
+        expectedEffects: [
+          { kind: "download_completed", filename: "rove-fixture.pdf" },
+        ],
+      });
+
+      expect(receipt).toMatchObject({
+        dispatched: true,
+        outcome: "applied",
+        effects: [
+          {
+            state: "observed",
+            observationId: expect.stringMatching(/^obs_/),
+            evidenceId: expect.stringMatching(/^ev_/),
+          },
+        ],
+      });
+      expect(
+        (await runtime.listEvidence(session.id)).filter(
+          (item) => item.type === "file",
+        ),
+      ).toHaveLength(1);
+      expect(
+        (await runtime.getObservations(session.id)).items.find(
+          (item) => item.type === "download_completed",
+        ),
+      ).toMatchObject({
+        data: {
+          downloadUrl: `${server.url}/fixture.pdf`,
+          correlation: "matched",
+          correlationStrategy: "chromium_pdf_viewer",
+        },
+      });
+    },
+    20_000,
+  );
+
+  it("cancels the registered Runtime waiter after BrowserSession rejects before dispatch", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/download`,
+    });
+    active.push({ runtime, id: session.id });
+    const inspection = await runtime.inspectBrowser(session.id);
+    const liveBrowser = browser.get(session.id);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    let waiterCountAtBrowserEntry = 0;
+    Object.defineProperty(liveBrowser, "interact", {
+      configurable: true,
+      value: async (
+        request: Parameters<typeof interact>[0],
+        context: Parameters<typeof interact>[1],
+      ) => {
+        waiterCountAtBrowserEntry = (
+          runtime as unknown as {
+            downloadEffectWaiters: Map<string, unknown>;
+          }
+        ).downloadEffectWaiters.size;
+        if (request.kind !== "click") {
+          throw new Error("Expected the download fixture click.");
+        }
+        return interact(
+          {
+            ...request,
+            target: { ...request.target, ref: "t_missing" },
+          },
+          context,
+        );
+      },
+    });
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: inspection.observationId,
+        action: {
+          kind: "click",
+          target: target(inspection, "Download file"),
+        },
+        expectedEffects: [{ kind: "download_completed" }],
+      }),
+    ).rejects.toMatchObject({ code: "TARGET_NOT_FOUND" });
+
+    expect(waiterCountAtBrowserEntry).toBe(1);
+    expect(
+      (
+        runtime as unknown as {
+          downloadEffectWaiters: Map<string, unknown>;
+        }
+      ).downloadEffectWaiters.size,
+    ).toBe(0);
+    expect(
+      (
+        liveBrowser as unknown as {
+          downloadCorrelationWindows: Map<string, unknown>;
+        }
+      ).downloadCorrelationWindows.size,
+    ).toBe(0);
+  }, 15_000);
+
+  it("materializes generated and user-granted bytes as opaque file evidence", async () => {
+    const { runtime } = await harness();
+    const session = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: session.id });
+
+    const generated = await runtime.materializeFileEvidence(session.id, {
+      filename: "acceptance.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("Rove acceptance"),
+      source: "agent_generated",
+    });
+    const granted = await runtime.materializeFileEvidence(session.id, {
+      filename: "selected.pdf",
+      mimeType: "application/pdf",
+      bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+      source: "user_file_grant",
+      grantId: `grant_${"a".repeat(32)}`,
+    });
+
+    expect(generated).toMatchObject({
+      type: "file",
+      label: "acceptance.txt",
+      metadata: {
+        filename: "acceptance.txt",
+        mimeType: "text/plain",
+        sizeBytes: 15,
+        source: "agent_generated",
+      },
+    });
+    expect(generated.metadata?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(granted).toMatchObject({
+      type: "file",
+      metadata: {
+        filename: "selected.pdf",
+        source: "user_file_grant",
+        grantId: `grant_${"a".repeat(32)}`,
+      },
+    });
+    expect(JSON.stringify(granted)).not.toContain("/tmp/");
+    await expect(
+      runtime.readEvidence(session.id, generated.id),
+    ).resolves.toMatchObject({
+      binary: { available: true, encoding: "external" },
+    });
+    expect(
+      (await runtime.getObservations(session.id)).items.slice(-2),
+    ).toMatchObject([
+      { actor: "agent", type: "file_artifact_created" },
+      { actor: "human", type: "local_file_granted" },
+    ]);
+    await expect(
+      runtime.deleteFileGrant(session.id, `grant_${"a".repeat(32)}`),
+    ).resolves.toEqual({
+      sessionId: session.id,
+      grantId: `grant_${"a".repeat(32)}`,
+      deleted: 1,
+    });
+    expect(
+      (await runtime.listEvidence(session.id)).map((item) => item.id),
+    ).toContain(generated.id);
+    expect(
+      (await runtime.listEvidence(session.id)).map((item) => item.id),
+    ).not.toContain(granted.id);
+    await expect(
+      runtime.deleteFileGrant(session.id, `grant_${"a".repeat(32)}`),
+    ).resolves.toMatchObject({ deleted: 0 });
+    await expect(
+      runtime.materializeFileEvidence(session.id, {
+        filename: "not-granted.txt",
+        mimeType: "text/plain",
+        bytes: new Uint8Array(),
+        source: "user_file_grant",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+    await expect(
+      runtime.materializeFileEvidence(session.id, {
+        filename: "generated.txt",
+        mimeType: "text/plain",
+        bytes: new Uint8Array(),
+        source: "agent_generated",
+        grantId: `grant_${"b".repeat(32)}`,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
   });
 
   it("serializes runtime mutations per session without blocking another session", async () => {
@@ -1399,8 +3161,14 @@ describe("Milestone 4 runtime integration", () => {
       },
     };
     const { runtime } = await harness(engine);
-    const firstSession = await runtime.startSession({ mode: "agent" });
-    const secondSession = await runtime.startSession({ mode: "agent" });
+    const firstSession = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
+    const secondSession = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
     active.push(
       { runtime, id: firstSession.id },
       { runtime, id: secondSession.id },
@@ -1532,6 +3300,7 @@ describe("Milestone 9 human activity foundation", () => {
 
     const capture = await runtime.startSession({
       mode: "capture",
+      browser: { mode: "temporary" },
     });
 
     active.push({
@@ -1574,6 +3343,7 @@ describe("Milestone 9 human activity foundation", () => {
 
     const agent = await runtime.startSession({
       mode: "agent",
+      browser: { mode: "temporary" },
     });
 
     active.push({

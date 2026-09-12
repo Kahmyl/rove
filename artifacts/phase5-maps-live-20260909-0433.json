@@ -1,0 +1,2344 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "error": "Authentication requires human control: control:ses_2abe621042974d1895d36517a7646c64:handoff_72a2252c905c496c87dae8bd5056b94d.",
+  "taskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+  "task": {
+    "taskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+    "lifecycle": {
+      "phase": "waiting_for_human",
+      "reason": "Lifecycle is waiting_for_human."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_086e24e9-054a-4ce0-81c1-02546b5ee052",
+      "stage": "turn_started",
+      "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315"
+    },
+    "roveSessionId": "ses_2abe621042974d1895d36517a7646c64",
+    "codexThreadId": "01a08543-4d02-7360-b9c3-c8be589e1ba7",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish"
+    ],
+    "runtime": {
+      "status": "awaiting_human",
+      "controller": null,
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "in_progress",
+      "archived": false,
+      "turnOrder": [
+        "01a08543-5b8b-79a2-b840-0e35f1023315"
+      ],
+      "itemCount": 24
+    },
+    "attachmentCount": 0
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_01362035d4fcdb01016aa11765e3f887d2b4f4b15449320804",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "text": "I’ll inspect the place in Google Maps, capture the viewport, then compare directions and public transit options and capture the route view. I’ll stop if authentication or consent requires your input."
+      },
+      {
+        "id": "msg_01362035d4fcdb01016aa117aa350487d29e6d024bb41bc76b",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "text": "The first screenshot shows a close neighborhood view at a 100 m scale, with the place panel on the left and the destination pin in the green reserve. The screenshot initially hit a stale-observation error; the single fresh-inspection retry succeeded. I’m now setting the airport as the origin."
+      },
+      {
+        "id": "msg_01362035d4fcdb01016aa117e584e887d2aa31d34db04454d2",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "text": "Transit was already selected, and Maps lists six options ranging from 1 hr 39 min to 2 hr 12 min, with a warning that timetables may be outdated. The second screenshot succeeded after one fresh-inspection retry. It also shows a survey with consent language; I’ll hand control to you and stop without responding to it."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-841971b4-4011-4497-95f0-f2fb2a9abcf1",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/session.start"
+      },
+      {
+        "id": "exec-d41fd79f-a4c8-4ea7-9743-67328576b983",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-7c6354df-a602-4008-ae68-af092c8cd2bf",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-43380252-2ac1-433c-b8d3-9236dbfa5488",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-69e5cfba-a62c-41cc-b667-a6379f2dfe89",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-07b9a49d-d342-4561-93c2-f713e01e8027",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-5c113833-415a-4107-8c70-058331d84fd1",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-65146d83-e1a1-458f-a110-2a2c5998b7a9",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-b6e33c39-c220-41e7-be9e-5a5d9a0e4510",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-d976c4af-261d-4078-b4e2-5ebac7e7bb85",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-d5634d9f-fcc1-4bf7-9b25-a0870bfe8c7d",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-cc786a23-bf32-4441-befc-289fc394736b",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-5f5107b0-5f98-4440-9181-4a211a5c2620",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/browser.pages"
+      },
+      {
+        "id": "exec-a6c4f2d1-2b06-4b3c-ac62-e031bb7a8106",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/session.observations"
+      },
+      {
+        "id": "exec-f88455d3-9c4f-40c7-833a-6c65a0359175",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "completed",
+        "title": "rove/control.request_human"
+      }
+    ],
+    "mapsUrls": [],
+    "observationIds": [],
+    "evidenceIds": [],
+    "pageIds": [],
+    "visibleDurations": [
+      "1 hr",
+      "39 min",
+      "2 hr",
+      "12 min"
+    ]
+  },
+  "surface": {
+    "revision": 219,
+    "account": "logged_in",
+    "currentTaskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+    "tasks": [
+      {
+        "taskId": "task_de7d9177-ebee-4495-9b18-73b9615fa6ce",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_ca89611199014b75a3ab9cee4fa7be3b",
+        "codexThreadId": "01a0819a-dfa5-78e0-b725-371572a99787",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "user",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0819a-eb7b-7fa2-9d33-29f824eb3d18"
+          ],
+          "itemCount": 4
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_20fd610b-2511-4a56-93fd-1b8563f72b37",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_fa88668ee55942ec998c0648f4eba9b7",
+        "codexThreadId": "01a081cb-4b87-7e00-aaae-3293607a46ed",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "user",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a081cb-5a06-7bf1-a425-7e987879a403"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_8cb9ede0-0784-4ea3-87f7-c5fbb065df71",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_1f2781bbad6146748096e6369b7d0786",
+        "codexThreadId": "01a081ea-684e-7952-813f-91ea8f09e2ee",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "user",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a081ea-739d-7af0-99f1-8abb53431c66"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_b68515df-2ad0-4be5-b7ca-2e8c191085bd",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_3efa167db24e462f90caf9302ae3c4b6",
+        "codexThreadId": "01a081f1-4ad8-7fb1-8090-052c1039d6b5",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "user",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a081f1-567b-7d51-a6c9-bb2b4de13be0"
+          ],
+          "itemCount": 4
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_bbfb66b9-194f-493e-8762-8490399e3caa",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_d08c4f0cc9d44344b9cf6106b2ddf68f",
+        "codexThreadId": "01a08208-7212-7e82-ab42-5c365fd64962",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08208-7e0a-7231-a624-d031e99f6b86"
+          ],
+          "itemCount": 11
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_7ce27622-3384-48e9-b944-c4c7a30bc065",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_1d639e93f07843908febfc529d7fc2a6",
+        "codexThreadId": "01a08220-ea99-7dc1-8d26-64739506f966",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08220-f5c8-7612-bb78-23c8bea3f162"
+          ],
+          "itemCount": 24
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_da53da68-be9c-43b8-aff3-96610532be08",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_6801e2143e6644ef9af97e48e3f74b0d",
+        "codexThreadId": "01a08267-c006-76f0-a21c-72e974a4cf12",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08267-cacc-7043-a141-32092d86953b"
+          ],
+          "itemCount": 7
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_66a93823-c971-4d22-955f-f610e9c68f60",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_a0db0e7aa8884dc7870fb32150e9999f",
+        "codexThreadId": "01a08280-2f39-7b31-b72e-1111b20ef5c3",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08280-3abd-7b83-b353-d73cfe08c2ff"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_3f9f9c16-777f-4dc0-b130-f0fbb28221a7",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_8f4ada8e667d430487f8b149d3e3ab6d",
+        "codexThreadId": "01a0828b-b712-74b1-9a21-6c8acc6c740f",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0828b-c5fc-74f2-9d04-25b467c32643"
+          ],
+          "itemCount": 26
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_276a7873-4519-4121-bbd4-e5b20462b7ce",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_2dcbcd80cc4749628e50abb861876cb4",
+        "codexThreadId": "01a08295-5b0a-7011-a737-c88ff5822ab3",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08295-6e96-7f33-9d7a-9098cf3ea752"
+          ],
+          "itemCount": 4
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a3e97eea-5436-46c0-928a-b87d3b35e8f6",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_7f26f07266004242bc46c1a002e67fc5",
+        "codexThreadId": "01a08297-8bab-7810-b3e8-0687a4b31531",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08297-9b47-7e70-b0f0-177c95799078"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_9034a9bc-e825-4515-93c2-76e1b4bea3e7",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_0eb996d30cb64adba5bcfbc8be24c376",
+        "codexThreadId": "01a08299-6d3c-7cd1-9c4c-4d116b1bd23b",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a08299-7897-7360-8343-4dc1828a9318"
+          ],
+          "itemCount": 26
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_33381846-0f9a-467f-8273-7122abe3b2c2",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_e78c7a91f7254e619e33a2727f805a05",
+        "codexThreadId": "01a082af-921c-74c1-8cb8-59b240007ac9",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": false,
+          "turnOrder": [
+            "01a082af-a46b-7fd3-b964-cf89418dd6e5",
+            "01a082b1-2e76-7b51-ace4-5f2558149c5f"
+          ],
+          "itemCount": 14
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_c925b934-19b7-454a-beda-13e4ecb0a352",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_0da6aa1888cc4ba4b2d3142ed0c3c010",
+        "codexThreadId": "01a082b2-89ad-72b3-8e8b-d62a90775bc1",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a082b2-97fc-7c71-93d0-36096ed31a39"
+          ],
+          "itemCount": 10
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_474b097b-0e49-4d98-bffa-3c80d65e0cf3",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_7ac5911507874f33bbcb6879c6ed2968",
+        "codexThreadId": "01a082d1-4284-7bc0-a166-16ac70e774a3",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a082d1-4fb8-7450-b448-fdc32115749a",
+            "01a082d2-33c6-7d43-b7c1-d7853ac6b0c8"
+          ],
+          "itemCount": 57
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_dab27dc4-86ee-4930-a8b7-cf149cc3c6f4",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_e418650406584564b31761e2ef709a2a",
+        "codexThreadId": "01a082de-034a-7e91-8264-eba492d46aef",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a082de-0ec6-7503-b614-b3540f1c2965",
+            "01a082df-9852-7fd1-bd77-f62c16e7e011"
+          ],
+          "itemCount": 15
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_83971cde-69da-4513-9a69-45a549adb655",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_0e8205037e5c4395b7fab084a18554e7",
+        "codexThreadId": "01a082ff-ac01-71d0-9efa-6fceade52719",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a082ff-bcc9-7102-ba05-6273c38bfe85",
+            "01a08300-ceb8-7223-b04a-3b6df453baec",
+            "01a08302-3b41-7e03-8270-3e583ecf2138"
+          ],
+          "itemCount": 21
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_2e9dfb96-f560-49c9-9869-6da75da8568d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_2d974e05d3ba4993b0f9e434481d584c",
+        "codexThreadId": "01a08307-f594-7d02-99ce-f2a30769b4fb",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08308-0479-7870-a488-23b5e83f6a95"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_82225804-7504-43aa-a6b3-3ddc8b7da4aa",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": null,
+        "roveSessionId": "ses_fc28d8b63cd34287b58c308dc65b1c31",
+        "codexThreadId": "01a0837e-ab26-7f11-87c7-7f8cd7fffa57",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": false,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_b39ec96c-14f0-409d-884e-ea735287a0d5",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "attachments_bound",
+        "initialLaunch": null,
+        "roveSessionId": "ses_3aece01d32d84fa7a1e4c27288a3a336",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": null,
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_b27e9a0f-3836-40e4-82db-563269430573",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_bbf0f4c1-c7f9-466d-bb1a-e04aa4ed79d5",
+          "stage": "reconciliation_required"
+        },
+        "roveSessionId": "ses_0e5090204f1d4a17bac81a779a64f414",
+        "codexThreadId": "01a083ba-413e-7110-ba75-6faf00c063e3",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": true,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_bdd77286-ff22-42c6-9eb8-5a6b478326d0",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_6077bc03-6637-420d-ba51-fbe69c776f8e",
+          "stage": "reconciliation_required"
+        },
+        "roveSessionId": "ses_8e39a6f641e147548f6071a2fc22bc3e",
+        "codexThreadId": "01a083df-92e3-7410-80de-785b93150775",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": true,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_cb24d846-0f6e-4ab3-9f94-b89ede3c0a2a",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_2e49fb40-bc67-4175-8ecc-1d5b5ee192f3",
+          "stage": "turn_started",
+          "turnId": "01a08406-3ecb-7eb1-b16a-001133df6c01"
+        },
+        "roveSessionId": "ses_196b49e2c39c4b91b7f9edfcd9e8fe47",
+        "codexThreadId": "01a08406-3403-7fc3-808f-ad7468d3dbac",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a08406-3ecb-7eb1-b16a-001133df6c01"
+          ],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_d94f4f65-56b2-46e6-8d88-18ea863c0d5c",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_fccd4b90-36a7-48e5-881d-ef44b585fff6",
+          "stage": "turn_started",
+          "turnId": "01a0840a-5f54-71e3-b8a0-80b21665452c"
+        },
+        "roveSessionId": "ses_f6f8225af8e84745b3d4ce07bdbb152e",
+        "codexThreadId": "01a0840a-538c-7343-ac21-433e300d0e39",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840a-5f54-71e3-b8a0-80b21665452c"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a0069ce4-40c7-4ce2-ac67-b18bd1c181bf",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_dbcf2668-9af0-4c7f-8fd5-2cfd06888609",
+          "stage": "turn_started",
+          "turnId": "01a0840a-c54f-7300-9de5-60ca3a1c669b"
+        },
+        "roveSessionId": "ses_9d63e6ded8be46a2889d2f438ad3091d",
+        "codexThreadId": "01a0840a-ba96-7613-a906-560afcadb06a",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840a-c54f-7300-9de5-60ca3a1c669b"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_0bd1bc03-3405-4908-bb45-397c2bc5ff63",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_de05d5b4-fbd9-446d-a80a-34d532a93bee",
+          "stage": "turn_started",
+          "turnId": "01a0840b-55ae-7513-83e3-38e1092ae64d"
+        },
+        "roveSessionId": "ses_73ab7e1907324470acfdd94b8cfe348d",
+        "codexThreadId": "01a0840b-4a7d-7a40-8153-c94c693e5189",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840b-55ae-7513-83e3-38e1092ae64d"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_5d19eddd-e5f2-4fe1-ae6f-b3713fd9ef5e",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_7597d5ab-eb13-4129-b6ed-a01156b28fb9",
+          "stage": "turn_started",
+          "turnId": "01a0840b-f1ac-7d21-92bb-2c5e6b4b8b5c"
+        },
+        "roveSessionId": "ses_6425b729eee34c6d80f504b0f4c389e0",
+        "codexThreadId": "01a0840b-e6a3-7790-8b51-f5a6c0a30a0d",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840b-f1ac-7d21-92bb-2c5e6b4b8b5c"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_d3cabd01-52fe-405a-a7c8-b4faf2213d91",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_63e54035-fd9e-4edb-b66d-d89e4f9b490e",
+          "stage": "turn_started",
+          "turnId": "01a0840c-9f08-73c1-9590-75fbc353ba9b"
+        },
+        "roveSessionId": "ses_8e5f60ba26374253b3b46d8b1c676df6",
+        "codexThreadId": "01a0840c-952d-7930-8e82-acb087c9c596",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840c-9f08-73c1-9590-75fbc353ba9b"
+          ],
+          "itemCount": 9
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_3d09197b-0610-4c9a-9795-e18f63b4b8ef",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_bd03db3c-3542-4575-bc19-51bd26f00189",
+          "stage": "turn_started",
+          "turnId": "01a0840d-6133-7ff1-8ce9-9f2a3fe5367d"
+        },
+        "roveSessionId": "ses_dc52fe0721464095b825fd3210a0452a",
+        "codexThreadId": "01a0840d-57e6-7ed0-9d1d-0c23a76c1a7a",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840d-6133-7ff1-8ce9-9f2a3fe5367d"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_1bb9958a-1d5b-4463-ada4-d1047ddabaf3",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_bd224b88-bc3c-48c6-891a-55a431cb681d",
+          "stage": "turn_started",
+          "turnId": "01a0840d-e52a-7bb2-bb45-eb1899c730c2"
+        },
+        "roveSessionId": "ses_708f2ec26de341e99d494289a8bfa0c2",
+        "codexThreadId": "01a0840d-db02-7a31-8bd6-c9a75c1953e9",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840d-e52a-7bb2-bb45-eb1899c730c2"
+          ],
+          "itemCount": 10
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_c6a9214b-dc79-468e-8f74-6550fcd7ca66",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_ca69f324-d851-4965-9bf3-a93b4b85aba6",
+          "stage": "turn_started",
+          "turnId": "01a0840e-aa49-7ab2-92cb-060351ee98e4"
+        },
+        "roveSessionId": "ses_ec3ba0f7a8a04fd4ab23b3d42a468799",
+        "codexThreadId": "01a0840e-a102-7cb3-bbab-c8f9c095840a",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840e-aa49-7ab2-92cb-060351ee98e4"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_e8627d67-9251-4904-a00f-4f4ffebe6e9b",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_10ceea6b-1219-4637-a59f-501945fc6173",
+          "stage": "turn_started",
+          "turnId": "01a0840f-3178-70d1-a516-3ab5d2c0db4c"
+        },
+        "roveSessionId": "ses_ac987cc0bb474a4d851a062fb6520591",
+        "codexThreadId": "01a0840f-26f5-7de2-bab2-4c419d3d646d",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840f-3178-70d1-a516-3ab5d2c0db4c"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_581abfc0-3aab-42b2-88d1-bc4d4dba2049",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_9ef95dd1-1cd1-4354-aeba-0b050cbaad39",
+          "stage": "turn_started",
+          "turnId": "01a0840f-e54c-77e2-85a5-9a6ccaa65eaa"
+        },
+        "roveSessionId": "ses_876d62d1f0ab4404b44508972acbd08a",
+        "codexThreadId": "01a0840f-db21-7012-9674-941e02215cd0",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0840f-e54c-77e2-85a5-9a6ccaa65eaa"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_8feb745e-5db2-4382-b879-c2bf5948225c",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_11d39fe5-aa9c-4fc0-b03a-00f671b52312",
+          "stage": "turn_started",
+          "turnId": "01a08415-b514-73c0-8433-c3511d675008"
+        },
+        "roveSessionId": "ses_016b1d5abf994e758d5bf4f20e3811e6",
+        "codexThreadId": "01a08415-aa06-7941-9833-94030d577313",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08415-b514-73c0-8433-c3511d675008"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_8f77e85e-9204-4feb-8b5a-1c12a1172143",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_515a262f-68b1-4278-ac1e-d2339c73a7b7",
+          "stage": "turn_started",
+          "turnId": "01a08416-319f-7ce3-8b0f-e04b24b0ae2f"
+        },
+        "roveSessionId": "ses_ef8e397983804de3b0bd107fa5294b80",
+        "codexThreadId": "01a08416-2713-7691-9ab2-06cef4b9517b",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08416-319f-7ce3-8b0f-e04b24b0ae2f"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_2e5c7272-a3eb-406e-91f3-2445e5f7e150",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_b40c5fae-4b5e-4827-b473-33fc360b6645",
+          "stage": "turn_started",
+          "turnId": "01a08416-a242-7c20-ab19-20097bfd971a"
+        },
+        "roveSessionId": "ses_231aa8d8a6a74113bf57b7ddba4d63c8",
+        "codexThreadId": "01a08416-985e-7fa1-8d81-bda4e43270ff",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08416-a242-7c20-ab19-20097bfd971a"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_69fd3bad-214e-475c-bef9-38ea7aa7b654",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_d9d5464c-edb0-48f9-be53-94d9b07bf5f8",
+          "stage": "turn_started",
+          "turnId": "01a08417-3183-7833-9c48-20e3bc3436e1"
+        },
+        "roveSessionId": "ses_56ba03dda7844ed8af5b47c4e8a11815",
+        "codexThreadId": "01a08417-2770-7130-a3c5-7da426d585d8",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08417-3183-7833-9c48-20e3bc3436e1"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_3ccc5d33-b951-4e55-a343-10d9fc87845b",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_40f2b0f7-33c6-46ab-a1d8-d13f768d16fa",
+          "stage": "turn_started",
+          "turnId": "01a08417-e518-7152-b837-f62258132d87"
+        },
+        "roveSessionId": "ses_191b1679989243908c164656edd80d0a",
+        "codexThreadId": "01a08417-db24-7d61-b5a5-ac4c44631bed",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08417-e518-7152-b837-f62258132d87"
+          ],
+          "itemCount": 10
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fcfdcf9a-296b-4ea6-a41a-f9d9986e64ba",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_51cbfa55-c43a-4c4e-abb3-c1b9984dfdf2",
+          "stage": "turn_started",
+          "turnId": "01a08418-b170-7ff3-9a29-44efbff71ec3"
+        },
+        "roveSessionId": "ses_b6b5e3229b8945ad8327e12e5463cbe7",
+        "codexThreadId": "01a08418-a643-7203-9195-617fb9c9f565",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08418-b170-7ff3-9a29-44efbff71ec3"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_f294338a-4eaa-468c-a533-6f33da7e9657",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_97cf51f9-f152-4818-b45e-e6d4633d0507",
+          "stage": "turn_started",
+          "turnId": "01a08419-3241-78f1-9638-dc148b88bb1f"
+        },
+        "roveSessionId": "ses_72172653f03b4e14aec5a27ab45631c9",
+        "codexThreadId": "01a08419-2685-7d00-85ef-2968c023c1db",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08419-3241-78f1-9638-dc148b88bb1f"
+          ],
+          "itemCount": 9
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_0b6fb75b-1f9d-41e5-ac1c-1220a12b190f",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_3013f7e8-4d61-470b-b120-0d45980b42e8",
+          "stage": "turn_started",
+          "turnId": "01a08419-ec68-7832-b84a-b508198a44d6"
+        },
+        "roveSessionId": "ses_8511445baf564d95ac370333a32a2333",
+        "codexThreadId": "01a08419-e24a-7170-ae82-1f0111bcb4bf",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08419-ec68-7832-b84a-b508198a44d6"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_833b1bfa-be1c-46a8-aa04-127c68708d03",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_9e95d829-2fe3-4943-bef9-6ad972a8a07f",
+          "stage": "turn_started",
+          "turnId": "01a0841a-8f10-7c70-a20e-b1f820479066"
+        },
+        "roveSessionId": "ses_a52f0187a802417e8e23d28ffb4c741c",
+        "codexThreadId": "01a0841a-8457-74a1-b7c4-451a7d382665",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0841a-8f10-7c70-a20e-b1f820479066"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fef5aefc-7b79-4854-b37c-3ce948c061f3",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_c151da3d-6a4b-48e6-bc49-dc136e0ef791",
+          "stage": "turn_started",
+          "turnId": "01a0841b-4a71-72b3-bd8e-c5b64e3e7d01"
+        },
+        "roveSessionId": "ses_eea979ed130846528f15270d587167fc",
+        "codexThreadId": "01a0841b-40a9-75b1-8158-8d4a960e8c63",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0841b-4a71-72b3-bd8e-c5b64e3e7d01"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_312d8817-ace4-4246-95ba-e3406fb09c0f",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_8f05324f-ea19-49ff-85fe-c80bc4b7ee9f",
+          "stage": "turn_started",
+          "turnId": "01a0842b-0144-7e10-a6af-6b4cc61f5104"
+        },
+        "roveSessionId": "ses_30943491687a448db74f398183cc0529",
+        "codexThreadId": "01a0842a-f5f3-7bc3-a1ec-7da008e5a3ea",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0842b-0144-7e10-a6af-6b4cc61f5104"
+          ],
+          "itemCount": 4
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_b81d1f83-446c-4f6b-ae32-c0604fa357e5",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_d4762707-9252-4223-9a72-ad6e47bfa52b",
+          "stage": "turn_started",
+          "turnId": "01a0842e-b678-7d63-9e3c-f75380012bf7"
+        },
+        "roveSessionId": "ses_ef40f17538d84a14b605cfa77ff3ed85",
+        "codexThreadId": "01a0842e-abcd-7340-82c5-dbf8153068b3",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0842e-b678-7d63-9e3c-f75380012bf7"
+          ],
+          "itemCount": 23
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fb5fa3e0-eacf-4ac9-8ceb-42f01246bcc6",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_f053758f-1c2c-4a6f-8108-a27614a85bcf",
+          "stage": "turn_started",
+          "turnId": "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+        },
+        "roveSessionId": "ses_cc05fb3cc6784531b4a68dd2be127b4a",
+        "codexThreadId": "01a08433-b290-7c02-ab8b-8b5c3c581e59",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08433-bc9f-72a2-8000-2ae6d83bba25"
+          ],
+          "itemCount": 11
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_60fe2bb7-6650-44e1-938b-565e449636bf",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_2a91ae1f-576f-4eeb-b053-bf26cda82ade",
+          "stage": "turn_started",
+          "turnId": "01a08436-7916-7cf0-9b7c-bd299f3334f9"
+        },
+        "roveSessionId": "ses_15ed7ed0067c4909a9ac1f1b54467e80",
+        "codexThreadId": "01a08436-6e1c-7591-bd7d-1a8e5df3bdf6",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08436-7916-7cf0-9b7c-bd299f3334f9"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_0d7e5031-0eb3-4544-b6a4-2e7c17b8399d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_39996dcd-f9ba-4e66-9da8-977c4476a52c",
+          "stage": "turn_started",
+          "turnId": "01a08438-31cf-70b1-ba3e-1f487e9c52c4"
+        },
+        "roveSessionId": "ses_6e417e4137ae4e5c9b32a0a3d59922c1",
+        "codexThreadId": "01a08438-26ed-7471-97f3-9b257728f396",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "failed",
+          "archived": true,
+          "turnOrder": [
+            "01a08438-31cf-70b1-ba3e-1f487e9c52c4"
+          ],
+          "itemCount": 1
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_1208ec0a-09ac-42e9-986c-d9eb7b48524d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_1077dd2f-b31f-47a3-95bc-dc57574fdd0c",
+          "stage": "turn_started",
+          "turnId": "01a084bc-1ab8-76d2-87fe-36b78b3b6573"
+        },
+        "roveSessionId": "ses_71c577d328c64d1fb29b2db6f5fb042b",
+        "codexThreadId": "01a084bc-0f72-78c0-8534-37361861e88b",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "failed",
+          "archived": true,
+          "turnOrder": [
+            "01a084bc-1ab8-76d2-87fe-36b78b3b6573"
+          ],
+          "itemCount": 1
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_c883ace6-79c9-4c94-95a0-e104c94a4d2f",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_130f3f11-687b-43bb-ace6-5bc22d343fa6",
+          "stage": "turn_started",
+          "turnId": "01a084c5-d282-7cf2-9c88-e71f8c01cac9"
+        },
+        "roveSessionId": "ses_41e7b2e1ca434dbaba23430ac04c20b1",
+        "codexThreadId": "01a084c5-c54e-7f63-aa9e-e13f62389f4f",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084c5-d282-7cf2-9c88-e71f8c01cac9"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_d9946ef6-22d9-4696-8559-84394bb2b6a9",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_d46b28fa-0681-43a6-bff6-56f0ce2431e8",
+          "stage": "turn_started",
+          "turnId": "01a084c8-ed10-7a70-99bd-1fa88c28cdc3"
+        },
+        "roveSessionId": "ses_a718bf14a3564d659407b079346712ed",
+        "codexThreadId": "01a084c8-e14b-7942-bf78-3328d2c04bb7",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084c8-ed10-7a70-99bd-1fa88c28cdc3"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_ebc9f25d-d1fc-4a7a-9d38-9ca21e86ab65",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_8259aa70-6078-40ea-bf2e-09671e067463",
+          "stage": "turn_started",
+          "turnId": "01a084ca-7b9d-7553-9347-63a17a030a0c"
+        },
+        "roveSessionId": "ses_06bdfebc46c74daa88a62acb6af2c325",
+        "codexThreadId": "01a084ca-6fb0-7d13-a539-6ddc47e623aa",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084ca-7b9d-7553-9347-63a17a030a0c"
+          ],
+          "itemCount": 35
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_f4aa9ee2-ec6e-4816-b6d1-94f424d24577",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_dd3ac2d5-5c49-4322-8fa5-bb74b10cbd5c",
+          "stage": "turn_started",
+          "turnId": "01a084f3-2653-7801-b9a9-eee238a92b68"
+        },
+        "roveSessionId": "ses_f99bab41b66f4d168bc3a297cc58b800",
+        "codexThreadId": "01a084f3-1878-7342-9d7c-77eb420c4e80",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084f3-2653-7801-b9a9-eee238a92b68"
+          ],
+          "itemCount": 12
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_bb6115e9-4d90-4b16-b297-ea6e36ea408c",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_43821de7-e858-4eb8-b779-7c734b9b71c1",
+          "stage": "turn_started",
+          "turnId": "01a084f8-e51f-70a1-a8eb-6b8069e54ec8"
+        },
+        "roveSessionId": "ses_54b837f591a846518e55ffa4ac52446a",
+        "codexThreadId": "01a084f8-d5f2-78e2-9a4e-8a0934574017",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084f8-e51f-70a1-a8eb-6b8069e54ec8"
+          ],
+          "itemCount": 7
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_5bf41f55-74a7-43c2-8d14-9a5698afc7bb",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_5dd63a2a-36b2-4453-98c7-81fbd66fe61c",
+          "stage": "turn_started",
+          "turnId": "01a084fa-556b-7c10-b717-99e2077a629e"
+        },
+        "roveSessionId": "ses_a05afcb1adc1494a8d3bff029e3480b2",
+        "codexThreadId": "01a084fa-48a4-7be3-86f3-2bea1072fd08",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084fa-556b-7c10-b717-99e2077a629e"
+          ],
+          "itemCount": 26
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_74f0bc30-b584-407c-a553-6e036d5fa21a",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_668ecb57-f3aa-4fdb-86f2-dd6ddde3acb8",
+          "stage": "turn_started",
+          "turnId": "01a084fe-1b68-7973-9254-69f89faab295"
+        },
+        "roveSessionId": "ses_690c01d0ee2b4ab4a56f874a01d90250",
+        "codexThreadId": "01a084fe-0ca6-74d0-9089-59cfe5eae602",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a084fe-1b68-7973-9254-69f89faab295"
+          ],
+          "itemCount": 22
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_464b616f-2a24-4d1e-bf2f-3b374fae2245",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Lifecycle is closed."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_ac7910b0-7fe9-4264-b49a-1e4b5be1f1b0",
+          "stage": "turn_started",
+          "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+        },
+        "roveSessionId": "ses_469653760ee5429e9f8767d1f63887ac",
+        "codexThreadId": "01a0853e-de52-7b41-94b7-a97b99f332fa",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+          ],
+          "itemCount": 20
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+        "lifecycle": {
+          "phase": "waiting_for_human",
+          "reason": "Lifecycle is waiting_for_human."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_086e24e9-054a-4ce0-81c1-02546b5ee052",
+          "stage": "turn_started",
+          "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315"
+        },
+        "roveSessionId": "ses_2abe621042974d1895d36517a7646c64",
+        "codexThreadId": "01a08543-4d02-7360-b9c3-c8be589e1ba7",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "finish"
+        ],
+        "runtime": {
+          "status": "awaiting_human",
+          "controller": null,
+          "recovery": "not_needed"
+        },
+        "conversation": {
+          "turnStatus": "in_progress",
+          "archived": false,
+          "turnOrder": [
+            "01a08543-5b8b-79a2-b840-0e35f1023315"
+          ],
+          "itemCount": 24
+        },
+        "attachmentCount": 0
+      }
+    ],
+    "attention": [
+      {
+        "authority": "codex",
+        "kind": "mcp_elicitation",
+        "requestId": "codex_7a9c53b5d54f4863b1c75829bb769f31:server:0",
+        "taskId": "task_de7d9177-ebee-4495-9b18-73b9615fa6ce",
+        "threadId": "01a0819a-dfa5-78e0-b725-371572a99787",
+        "turnId": "01a0819a-eb7b-7fa2-9d33-29f824eb3d18",
+        "status": "resolved"
+      },
+      {
+        "authority": "codex",
+        "kind": "mcp_elicitation",
+        "requestId": "codex_38f00bfae4d449bfbd57da166e794ad1:server:0",
+        "taskId": "task_20fd610b-2511-4a56-93fd-1b8563f72b37",
+        "threadId": "01a081cb-4b87-7e00-aaae-3293607a46ed",
+        "turnId": "01a081cb-5a06-7bf1-a425-7e987879a403",
+        "status": "resolved"
+      },
+      {
+        "authority": "codex",
+        "kind": "mcp_elicitation",
+        "requestId": "codex_4619e0aecb6948c4847b9f14f79be0f5:server:0",
+        "taskId": "task_8cb9ede0-0784-4ea3-87f7-c5fbb065df71",
+        "threadId": "01a081ea-684e-7952-813f-91ea8f09e2ee",
+        "turnId": "01a081ea-739d-7af0-99f1-8abb53431c66",
+        "status": "resolved"
+      },
+      {
+        "authority": "codex",
+        "kind": "mcp_elicitation",
+        "requestId": "codex_4825955b1e27445fb0eb2f330eff1756:server:0",
+        "taskId": "task_b68515df-2ad0-4be5-b7ca-2e8c191085bd",
+        "threadId": "01a081f1-4ad8-7fb1-8090-052c1039d6b5",
+        "turnId": "01a081f1-567b-7d51-a6c9-bb2b4de13be0",
+        "status": "resolved"
+      },
+      {
+        "authority": "codex",
+        "kind": "mcp_elicitation",
+        "requestId": "codex_4825955b1e27445fb0eb2f330eff1756:server:1",
+        "taskId": "task_b68515df-2ad0-4be5-b7ca-2e8c191085bd",
+        "threadId": "01a081f1-4ad8-7fb1-8090-052c1039d6b5",
+        "turnId": "01a081f1-567b-7d51-a6c9-bb2b4de13be0",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_d08c4f0cc9d44344b9cf6106b2ddf68f:handoff_447ba47297d740a0907078722d9434b0",
+        "taskId": "task_bbfb66b9-194f-493e-8762-8490399e3caa",
+        "threadId": "01a08208-7212-7e82-ab42-5c365fd64962",
+        "turnId": "01a08208-7e0a-7231-a624-d031e99f6b86",
+        "status": "stale"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_0eb996d30cb64adba5bcfbc8be24c376:handoff_3d82110509bf41b0b2aeb1b6ff378923",
+        "taskId": "task_9034a9bc-e825-4515-93c2-76e1b4bea3e7",
+        "threadId": "01a08299-6d3c-7cd1-9c4c-4d116b1bd23b",
+        "turnId": "01a08299-7897-7360-8343-4dc1828a9318",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_e78c7a91f7254e619e33a2727f805a05:handoff_96ffa6f9bf4241bf9f6cfd36f2988255",
+        "taskId": "task_33381846-0f9a-467f-8273-7122abe3b2c2",
+        "threadId": "01a082af-921c-74c1-8cb8-59b240007ac9",
+        "turnId": "01a082af-a46b-7fd3-b964-cf89418dd6e5",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_0da6aa1888cc4ba4b2d3142ed0c3c010:handoff_2f98bbb8eb8047e6a5a1c4aa14d8cef7",
+        "taskId": "task_c925b934-19b7-454a-beda-13e4ecb0a352",
+        "threadId": "01a082b2-89ad-72b3-8e8b-d62a90775bc1",
+        "turnId": "01a082b2-97fc-7c71-93d0-36096ed31a39",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_8e5f60ba26374253b3b46d8b1c676df6:handoff_793b4615139a4dd79693ee1930bc39ff",
+        "taskId": "task_d3cabd01-52fe-405a-a7c8-b4faf2213d91",
+        "threadId": "01a0840c-952d-7930-8e82-acb087c9c596",
+        "turnId": "01a0840c-9f08-73c1-9590-75fbc353ba9b",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_708f2ec26de341e99d494289a8bfa0c2:handoff_83d57caa83e548e9b53597639df65f07",
+        "taskId": "task_1bb9958a-1d5b-4463-ada4-d1047ddabaf3",
+        "threadId": "01a0840d-db02-7a31-8bd6-c9a75c1953e9",
+        "turnId": "01a0840d-e52a-7bb2-bb45-eb1899c730c2",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_191b1679989243908c164656edd80d0a:handoff_93d6b149b140480cb0e571b92e990a09",
+        "taskId": "task_3ccc5d33-b951-4e55-a343-10d9fc87845b",
+        "threadId": "01a08417-db24-7d61-b5a5-ac4c44631bed",
+        "turnId": "01a08417-e518-7152-b837-f62258132d87",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_72172653f03b4e14aec5a27ab45631c9:handoff_13ebaaec072447d5ac1cd6ecb0c390d7",
+        "taskId": "task_f294338a-4eaa-468c-a533-6f33da7e9657",
+        "threadId": "01a08419-2685-7d00-85ef-2968c023c1db",
+        "turnId": "01a08419-3241-78f1-9638-dc148b88bb1f",
+        "status": "resolved"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_2abe621042974d1895d36517a7646c64:handoff_72a2252c905c496c87dae8bd5056b94d",
+        "taskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+        "threadId": "01a08543-4d02-7360-b9c3-c8be589e1ba7",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315",
+        "status": "pending"
+      }
+    ],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "companion": {
+      "sessionId": "ses_2abe621042974d1895d36517a7646c64",
+      "status": "awaiting_human",
+      "controller": null
+    }
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/maps-20260909-0433-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_1fbf5fd5-c04c-4081-984b-f97f3e3014ad",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Lifecycle is closed."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_086e24e9-054a-4ce0-81c1-02546b5ee052",
+        "stage": "turn_started",
+        "turnId": "01a08543-5b8b-79a2-b840-0e35f1023315"
+      },
+      "roveSessionId": "ses_2abe621042974d1895d36517a7646c64",
+      "codexThreadId": "01a08543-4d02-7360-b9c3-c8be589e1ba7",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "interrupted",
+        "archived": true,
+        "turnOrder": [
+          "01a08543-5b8b-79a2-b840-0e35f1023315"
+        ],
+        "itemCount": 24
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:ses_2abe621042974d1895d36517a7646c64:handoff_72a2252c905c496c87dae8bd5056b94d",
+        "status": "cancelled"
+      }
+    ],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": [
+      "run_owned_attention"
+    ]
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

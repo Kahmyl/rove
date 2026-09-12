@@ -20,19 +20,77 @@ import type {
   ScrollOptions,
   StartSessionRequest,
   TypeRequest,
+  BrowserWorkspace,
+  BrowserWorkspaceStatus,
+  RuntimeSessionInventory,
 } from "./types.js";
+import type {
+  AdvanceSemanticTransactionRequest,
+  BeginSemanticTransactionRequest,
+  SemanticTransactionAdvanceResult,
+  SemanticTransactionSnapshot,
+  SemanticTransactionVerificationResult,
+  VerifySemanticTransactionRequest,
+} from "./semantic-transaction.js";
+import type {
+  ActionReceipt,
+  TargetResolution,
+  TargetResolutionRequest,
+  VerifiedInteractionRequest,
+} from "./phase2-interaction.js";
 
 export const ROVE_RUNTIME = Symbol.for("ROVE_RUNTIME");
 
 export interface RoveRuntime {
+  listBrowserWorkspaces(): Promise<BrowserWorkspaceStatus>;
+  createBrowserWorkspace(displayName: string): Promise<BrowserWorkspace>;
+  selectBrowserWorkspace(workspaceId: string): Promise<BrowserWorkspaceStatus>;
+  renameBrowserWorkspace(
+    workspaceId: string,
+    displayName: string,
+  ): Promise<BrowserWorkspaceStatus>;
+  deleteBrowserWorkspace(workspaceId: string): Promise<BrowserWorkspaceStatus>;
   startSession(request: StartSessionRequest): Promise<SessionSnapshot>;
+  listSessionInventory(
+    mode?: SessionSnapshot["mode"],
+  ): Promise<RuntimeSessionInventory[]>;
   getSession(sessionId: string): Promise<SessionSnapshot>;
+  recoverSession(sessionId: string): Promise<RuntimeSessionInventory>;
   endSession(sessionId: string): Promise<SessionSnapshot>;
   inspectBrowser(
     sessionId: string,
     options?: InspectOptions,
   ): Promise<PageInspection>;
+  resolveBrowserTarget(
+    sessionId: string,
+    request: TargetResolutionRequest,
+  ): Promise<TargetResolution>;
+  interact(
+    sessionId: string,
+    request: VerifiedInteractionRequest,
+  ): Promise<ActionReceipt>;
+  beginSemanticTransaction(
+    sessionId: string,
+    request: BeginSemanticTransactionRequest,
+  ): Promise<SemanticTransactionSnapshot>;
+  advanceSemanticTransaction(
+    sessionId: string,
+    request: AdvanceSemanticTransactionRequest,
+  ): Promise<SemanticTransactionAdvanceResult>;
+  verifySemanticTransaction(
+    sessionId: string,
+    request: VerifySemanticTransactionRequest,
+  ): Promise<SemanticTransactionVerificationResult>;
+  getSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot>;
+  cancelSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot>;
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult>;
+  openPage(sessionId: string, request: NavigateRequest): Promise<PageSummary>;
   click(sessionId: string, request: ClickRequest): Promise<ActionResult>;
   type(sessionId: string, request: TypeRequest): Promise<ActionResult>;
   press(sessionId: string, request: PressRequest): Promise<ActionResult>;

@@ -5,10 +5,12 @@ import { loadConfig } from "@rove/config";
 import { ROVE_RUNTIME } from "@rove/protocol";
 import {
   FileEvidenceStore,
+  FileEffectJournalStore,
   FileObservationStore,
   FileSessionStore,
 } from "@rove/storage";
 import { BrowserController } from "./api/browser.controller.js";
+import { BrowserWorkspaceController } from "./api/browser-workspace.controller.js";
 import { ControlController } from "./api/control.controller.js";
 import { EvidenceController } from "./api/evidence.controller.js";
 import { HealthController } from "./api/health.controller.js";
@@ -30,6 +32,7 @@ import { RuntimeService } from "./runtime.service.js";
 import { SessionService } from "./session/session.service.js";
 import {
   EVIDENCE_STORE,
+  EFFECT_JOURNAL_STORE,
   OBSERVATION_STORE,
   ROVE_CONFIG,
   SESSION_STORE,
@@ -43,6 +46,7 @@ assertRuntimeBindingSafe(config);
     HealthController,
     SessionController,
     BrowserController,
+    BrowserWorkspaceController,
     ControlController,
     ObservationController,
     EvidenceController,
@@ -54,6 +58,10 @@ assertRuntimeBindingSafe(config);
       useValue: new FileObservationStore(config.home),
     },
     { provide: EVIDENCE_STORE, useValue: new FileEvidenceStore(config.home) },
+    {
+      provide: EFFECT_JOURNAL_STORE,
+      useValue: new FileEffectJournalStore(config.home),
+    },
     { provide: ROVE_CONFIG, useValue: config },
     { provide: BROWSER_ENGINE, useClass: PlaywrightBrowserEngine },
     { provide: APP_GUARD, useClass: RuntimeAuthGuard },

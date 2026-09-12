@@ -1,0 +1,268 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 76613,
+    "ownedProcessPids": [
+      76613,
+      76636,
+      76637,
+      76638,
+      76696,
+      76703
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_798c9518-f9f3-4886-91a5-420e6cda4d8c",
+    "operationId": "intent_798c9518-f9f3-4886-91a5-420e6cda4d8c",
+    "sessionId": "ses_ccdc968b1b134906bcd7c75f8e385625",
+    "threadId": "01a08d8d-6c65-7993-9402-06deb75886b1",
+    "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22"
+  },
+  "terminalRevision": 683,
+  "terminalTask": {
+    "taskId": "task_798c9518-f9f3-4886-91a5-420e6cda4d8c",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_798c9518-f9f3-4886-91a5-420e6cda4d8c",
+      "stage": "turn_started",
+      "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22"
+    },
+    "roveSessionId": "ses_ccdc968b1b134906bcd7c75f8e385625",
+    "codexThreadId": "01a08d8d-6c65-7993-9402-06deb75886b1",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08d8d-7b46-7621-bba1-116e63dbee22"
+      ],
+      "itemCount": 21
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "journey_not_passed",
+      "screenshot_ids_count",
+      "gmail_url",
+      "event_title",
+      "event_title_not_edited",
+      "event_description",
+      "event_guests",
+      "calendar_mutations",
+      "calendar_receipt_not_in_ledger",
+      "calendar_mutation_receipts",
+      "gmail_not_returned",
+      "gmail_calendar_distinct_tabs",
+      "calendar_second_tab_tool",
+      "gmail_return_tool"
+    ],
+    "marker": {
+      "journey": "gmail_calendar",
+      "status": "blocked",
+      "reason": "Step 1 incomplete: event remained outside the viewport after the allowed scroll recovery. Description and guest state could not be verified. No title edit or Save was attempted; subsequent steps were not performed.",
+      "gmailUrl": null,
+      "calendarUrl": "https://calendar.google.com/calendar/u/0/r",
+      "requestedDuration": "30 minutes",
+      "schedulingPeriod": "tomorrow afternoon",
+      "emailEventTitle": "Rove acceptance review",
+      "note": "Created during Rove live acceptance.",
+      "created": true,
+      "createdEventTitle": "Rove acceptance review",
+      "titleEdited": false,
+      "eventTitle": "Rove acceptance review",
+      "eventTime": "Friday, September 11, 2026, 2:00–2:30 PM GMT+01",
+      "eventDescription": null,
+      "eventCount": 1,
+      "noGuests": null,
+      "gmailReturnedOpen": false,
+      "externalMutations": [
+        "calendar_event_create"
+      ],
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [
+        "bobs_ef0ad65072f84476b626f0541d151f1f"
+      ],
+      "screenshotEvidenceIds": [],
+      "receiptIds": [
+        "rcpt_54d9e7c87ed443558b636fe5c9fc02e3",
+        "rcpt_8a507a125e814ef09a49927303d699a2"
+      ],
+      "finalObservationId": "bobs_ef0ad65072f84476b626f0541d151f1f"
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_ccdc968b1b134906bcd7c75f8e385625",
+    "pageIds": [
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_4a62f8de5b1f476399c48e191fc5e2cf",
+      "obs_06e8946798294d16a598d1453add7768",
+      "obs_906937cdd55c481e8907dd50415b83af",
+      "obs_9ab975cc3434466eb696d9163b22b418",
+      "bobs_ef0ad65072f84476b626f0541d151f1f"
+    ],
+    "evidenceIds": [
+      "ev_888a8a5c66ca4b158a26b1d1808e5dac",
+      "ev_ec509383f14047a9b78ecdd4b2b97885"
+    ],
+    "screenshotEvidenceIds": [],
+    "receipts": [
+      {
+        "id": "rcpt_8a507a125e814ef09a49927303d699a2",
+        "observationId": "obs_9ab975cc3434466eb696d9163b22b418",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_02f8646c886543bf016aa336aa274c87d28665db16d6b4b5ec",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "text": "I’ll verify the existing event first, then change only its title if every required fact is proven. I won’t repeat the creation or retry an uncertain Save."
+      },
+      {
+        "id": "msg_02f8646c886543bf016aa336e6cc3887d2b0edff82fbe6f46e",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "text": "Calendar shows exactly one event on September 11 at 2:00–2:30 PM GMT+01 with the original title. It’s below the visible time range; I’m bringing it into view to inspect its description and guest state."
+      },
+      {
+        "id": "msg_02f8646c886543bf016aa3371274ac87d2aa876f1201fcc71e",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "text": "The Rove scroll did not bring the event into view, and the allowed recovery attempt is exhausted. I’m stopping before any edit because the description and absence of guests remain unverified."
+      },
+      {
+        "id": "msg_02f8646c886543bf016aa33722526887d2aa7c9738d0ed148d",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"gmail_calendar\",\"status\":\"blocked\",\"reason\":\"Step 1 incomplete: event remained outside the viewport after the allowed scroll recovery. Description and guest state could not be verified. No title edit or Save was attempted; subsequent steps were not performed.\",\"gmailUrl\":null,\"calendarUrl\":\"https://calendar.google.com/calendar/u/0/r\",\"requestedDuration\":\"30 minutes\",\"schedulingPeriod\":\"tomorrow afternoon\",\"emailEventTitle\":\"Rove acceptance review\",\"note\":\"Created during Rove live acceptance.\",\"created\":true,\"createdEventTitle\":\"Rove acceptance review\",\"titleEdited\":false,\"eventTitle\":\"Rove acceptance review\",\"eventTime\":\"Friday, September 11, 2026, 2:00–2:30 PM GMT+01\",\"eventDescription\":null,\"eventCount\":1,\"noGuests\":null,\"gmailReturnedOpen\":false,\"externalMutations\":[\"calendar_event_create\"],\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[\"bobs_ef0ad65072f84476b626f0541d151f1f\"],\"screenshotEvidenceIds\":[],\"receiptIds\":[\"rcpt_54d9e7c87ed443558b636fe5c9fc02e3\",\"rcpt_8a507a125e814ef09a49927303d699a2\"],\"finalObservationId\":\"bobs_ef0ad65072f84476b626f0541d151f1f\"}\n\nVerified one event with the original title and expected time. No Calendar fields were changed. The new receipt records only a nonconsequential scroll; no title-edit receipt exists."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-02a9d706-f9a6-41ce-9b8c-6e508dc270af",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-8b0a6ede-a953-4ad8-9c43-0dac6aa574ed",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-09602880-6aff-4766-a213-7aac04a4dce7",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-344416b1-e9cc-4c54-a03a-61eaee7227ac",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-3ec6ad4e-8dfe-4927-a263-9ca1d1b62a9f",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.scroll"
+      },
+      {
+        "id": "exec-d0f0a4f1-b4d8-4df2-b699-7c367277f0e8",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-de8d2bcd-86ba-42f2-b91c-65980f490b5d",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-f1b377f2-447f-4b2c-85ba-27df92112669",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-031f4134-4551-4909-ad64-3b29304352e8",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-07d57c77-e21a-4689-8127-d3da7fa98efe",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-701a0cfe-bc81-4ef1-ab4c-9c0cb75ef973",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "session.observations"
+      },
+      {
+        "id": "exec-2709e22a-f7aa-40ba-8514-d6530099ce5f",
+        "turnId": "01a08d8d-7b46-7621-bba1-116e63dbee22",
+        "status": "completed",
+        "title": "evidence.list"
+      }
+    ],
+    "gmailUrls": [],
+    "calendarUrls": [
+      "https://calendar.google.com/calendar/u/0/r\",\"requestedDuration\":\"30"
+    ],
+    "observationIds": [
+      "bobs_ef0ad65072f84476b626f0541d151f1f"
+    ],
+    "evidenceIds": [],
+    "pageIds": [
+      "page_01"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/gmail-calendar-20260911-000039-native.png",
+  "cleanupError": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Archive', exact: true })\u001b[22m\n",
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

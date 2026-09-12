@@ -4,7 +4,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js";
+import {
+  ReadBuffer,
+  serializeMessage,
+} from "@modelcontextprotocol/sdk/shared/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { ControlStatus, ControlWaitResult } from "@rove/protocol";
@@ -16,15 +19,35 @@ import { createMcpServer } from "./server/create-mcp-server.js";
 import { startStreamableHttpServer } from "./transports/streamable-http.js";
 
 const TOKEN = "m7-control-transport-test-token";
-const silentLogger: McpLogger = { debug() {}, info() {}, warn() {}, error() {} };
+const silentLogger: McpLogger = {
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+};
 const openClients: Client[] = [];
 const openMcpServers: Server[] = [];
 const openServers: HttpServer[] = [];
 
 afterEach(async () => {
-  await Promise.all(openClients.splice(0).map((client) => client.close().catch(() => undefined)));
-  await Promise.all(openMcpServers.splice(0).map((server) => server.close().catch(() => undefined)));
-  await Promise.all(openServers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+  await Promise.all(
+    openClients
+      .splice(0)
+      .map((client) => client.close().catch(() => undefined)),
+  );
+  await Promise.all(
+    openMcpServers
+      .splice(0)
+      .map((server) => server.close().catch(() => undefined)),
+  );
+  await Promise.all(
+    openServers
+      .splice(0)
+      .map(
+        (server) =>
+          new Promise<void>((resolve) => server.close(() => resolve())),
+      ),
+  );
 });
 
 describe("M7 MCP control tools", () => {
@@ -33,7 +56,9 @@ describe("M7 MCP control tools", () => {
     const serverToClient = new PassThrough();
     const server = createMcpServer(createFakeRuntimeClient());
     openMcpServers.push(server);
-    await server.connect(new StdioServerTransport(clientToServer, serverToClient));
+    await server.connect(
+      new StdioServerTransport(clientToServer, serverToClient),
+    );
     const transport = new StreamClientTransport(clientToServer, serverToClient);
     const client = new Client({ name: "m7-stdio-test", version: "1.0.0" });
     openClients.push(client);
@@ -56,9 +81,12 @@ describe("M7 MCP control tools", () => {
     });
     openServers.push(server);
 
-    const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${String(port)}/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${TOKEN}` } },
-    });
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://127.0.0.1:${String(port)}/mcp`),
+      {
+        requestInit: { headers: { authorization: `Bearer ${TOKEN}` } },
+      },
+    );
     const client = new Client({ name: "m7-http-test", version: "1.0.0" });
     openClients.push(client);
     await client.connect(transport);
@@ -82,40 +110,119 @@ describe("M7 MCP control tools", () => {
 
     openServers.push(server);
 
-    const malformed = await fetch(
-      `http://127.0.0.1:${String(port)}/mcp`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${TOKEN}`,
-          "content-type": "application/json",
-        },
-        body: '{"jsonrpc":',
+    const malformed = await fetch(`http://127.0.0.1:${String(port)}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
       },
-    );
+      body: '{"jsonrpc":',
+    });
 
     expect(malformed.status).toBe(400);
 
-    await expect(
-      malformed.json(),
-    ).resolves.toEqual({
+    await expect(malformed.json()).resolves.toEqual({
       error: {
         code: "INVALID_JSON",
         message: "Request body must contain valid JSON.",
       },
     });
 
-    const health = await fetch(
-      `http://127.0.0.1:${String(port)}/health`,
-    );
+    const health = await fetch(`http://127.0.0.1:${String(port)}/health`);
 
     expect(health.status).toBe(200);
 
-    const live = await fetch(
-      `http://127.0.0.1:${String(port)}/live`,
-    );
+    const live = await fetch(`http://127.0.0.1:${String(port)}/live`);
 
     expect(live.status).toBe(200);
+  });
+
+  it("rejects a stale MCP HTTP session immediately so the client can reinitialize", async () => {
+    const port = await availablePort();
+    const runtime = createFakeRuntimeClient();
+    let createdServers = 0;
+    const server = await startStreamableHttpServer({
+      host: "127.0.0.1",
+      port,
+      path: "/mcp",
+      allowedHosts: [`127.0.0.1:${String(port)}`],
+      auth: new BearerTokenVerifier(TOKEN),
+      runtime,
+      createServer: () => {
+        createdServers += 1;
+        return createMcpServer(runtime);
+      },
+      logger: silentLogger,
+    });
+    openServers.push(server);
+
+    const response = await fetch(`http://127.0.0.1:${String(port)}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        "mcp-session-id": "session-from-restarted-server",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "MCP_SESSION_NOT_FOUND",
+        message:
+          "MCP transport session was not found; initialize a new session.",
+      },
+    });
+    expect(createdServers).toBe(0);
+  });
+
+  it("does not create an MCP HTTP session for a non-initialize request", async () => {
+    const port = await availablePort();
+    const runtime = createFakeRuntimeClient();
+    let createdServers = 0;
+    const server = await startStreamableHttpServer({
+      host: "127.0.0.1",
+      port,
+      path: "/mcp",
+      allowedHosts: [`127.0.0.1:${String(port)}`],
+      auth: new BearerTokenVerifier(TOKEN),
+      runtime,
+      createServer: () => {
+        createdServers += 1;
+        return createMcpServer(runtime);
+      },
+      logger: silentLogger,
+    });
+    openServers.push(server);
+
+    const response = await fetch(`http://127.0.0.1:${String(port)}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "MCP_SESSION_REQUIRED",
+        message: "Initialize an MCP transport session before sending requests.",
+      },
+    });
+    expect(createdServers).toBe(0);
   });
 
   it("cancels a Streamable HTTP control.wait on client disconnect without changing ownership", async () => {
@@ -124,12 +231,20 @@ describe("M7 MCP control tools", () => {
     const controller: ControlStatus["controller"] = "agent";
     const runtime = {
       ...createFakeRuntimeClient(),
-      waitForControl: async (_sessionId: string, _input: unknown, signal?: AbortSignal): Promise<ControlWaitResult> => {
+      waitForControl: async (
+        _sessionId: string,
+        _input: unknown,
+        signal?: AbortSignal,
+      ): Promise<ControlWaitResult> => {
         waiters += 1;
         try {
           await new Promise<void>((_resolve, reject) => {
             if (signal?.aborted === true) return reject(new Error("cancelled"));
-            signal?.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+            signal?.addEventListener(
+              "abort",
+              () => reject(new Error("cancelled")),
+              { once: true },
+            );
           });
           throw new Error("unreachable");
         } finally {
@@ -149,23 +264,34 @@ describe("M7 MCP control tools", () => {
       logger: silentLogger,
     });
     openServers.push(server);
-    const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${String(port)}/mcp`), {
-      requestInit: { headers: { authorization: `Bearer ${TOKEN}` } },
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://127.0.0.1:${String(port)}/mcp`),
+      {
+        requestInit: { headers: { authorization: `Bearer ${TOKEN}` } },
+      },
+    );
+    const client = new Client({
+      name: "m7-http-disconnect-test",
+      version: "1.0.0",
     });
-    const client = new Client({ name: "m7-http-disconnect-test", version: "1.0.0" });
     openClients.push(client);
     await client.connect(transport);
 
     const abort = new AbortController();
     const pending = client.callTool(
-      { name: "control.wait", arguments: { sessionId: "ses_m7", afterSeq: 12, timeoutMs: 10_000 } },
+      {
+        name: "control.wait",
+        arguments: { sessionId: "ses_m7", afterSeq: 12, timeoutMs: 10_000 },
+      },
       undefined,
       { signal: abort.signal },
     );
-    while (waiters === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+    while (waiters === 0)
+      await new Promise((resolve) => setTimeout(resolve, 5));
     abort.abort();
     await expect(pending).rejects.toThrow();
-    while (waiters !== 0) await new Promise((resolve) => setTimeout(resolve, 5));
+    while (waiters !== 0)
+      await new Promise((resolve) => setTimeout(resolve, 5));
     expect(controller).toBe("agent");
   });
 });
@@ -173,31 +299,65 @@ describe("M7 MCP control tools", () => {
 async function assertControlWorkflow(client: Client): Promise<void> {
   const listed = await client.listTools();
   const names = listed.tools.map((tool) => tool.name);
-  expect(names).toEqual(expect.arrayContaining(["control.status", "control.request_human", "control.wait"]));
-  expect(names).not.toEqual(expect.arrayContaining([
-    "control.take_human",
-    "control.return_agent",
-    "control.transfer",
-    "control.set",
-  ]));
+  expect(names).toEqual(
+    expect.arrayContaining([
+      "control.status",
+      "control.request_human",
+      "control.wait",
+    ]),
+  );
+  expect(names).not.toEqual(
+    expect.arrayContaining([
+      "control.take_human",
+      "control.return_agent",
+      "control.transfer",
+      "control.set",
+    ]),
+  );
 
-  await expect(callJson(client, "control.status", { sessionId: "ses_m7" })).resolves.toMatchObject({
+  await expect(
+    callJson(client, "control.status", { sessionId: "ses_m7" }),
+  ).resolves.toMatchObject({
     status: "active",
     controller: "agent",
   });
-  const requested = await callJson(client, "control.request_human", { sessionId: "ses_m7", reason: "Authenticate" });
-  expect(requested).toMatchObject({ status: "awaiting_human", controller: null, handoff: { reason: "Authenticate" } });
-  await expect(callJson(client, "control.wait", { sessionId: "ses_m7", afterSeq: 11, timeoutMs: 1_000 })).resolves.toMatchObject({
+  const requested = await callJson(client, "control.request_human", {
+    sessionId: "ses_m7",
+    reason: "Authenticate",
+    instruction: "Inspect the authenticated page and continue.",
+    continuationPolicy: "resume_after_control_return",
+  });
+  expect(requested).toMatchObject({
+    sessionId: "ses_m7",
+    generation: 8,
+    status: "awaiting_human",
+    controller: null,
+    activeHandoffId: "handoff_m7",
+    observationSeq: 11,
+    handoff: { reason: "Authenticate" },
+  });
+  await expect(
+    callJson(client, "control.wait", {
+      sessionId: "ses_m7",
+      afterSeq: 11,
+      timeoutMs: 1_000,
+    }),
+  ).resolves.toMatchObject({
     event: "human_took_control",
     controller: "human",
     observationSeq: 12,
   });
 }
 
-async function callJson(client: Client, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function callJson(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const result = await client.callTool({ name, arguments: args });
   const content = result.content[0];
-  if (content?.type !== "text") throw new Error(`Expected text result from ${name}.`);
+  if (content?.type !== "text")
+    throw new Error(`Expected text result from ${name}.`);
   return JSON.parse(content.text) as Record<string, unknown>;
 }
 
@@ -208,6 +368,8 @@ function createFakeRuntimeClient(): RuntimeClient {
     getControlStatus: async () => active,
     requestHuman: async (_sessionId, reason) => ({
       ...controlStatus("awaiting_human", null),
+      generation: 8,
+      activeHandoffId: "handoff_m7",
       handoff: { reason, requestedAt: "2026-01-01T00:00:01.000Z" },
       observationSeq: 11,
     }),
@@ -221,9 +383,13 @@ function createFakeRuntimeClient(): RuntimeClient {
   } as RuntimeClient;
 }
 
-function controlStatus(status: ControlStatus["status"], controller: ControlStatus["controller"]): ControlStatus {
+function controlStatus(
+  status: ControlStatus["status"],
+  controller: ControlStatus["controller"],
+): ControlStatus {
   return {
     sessionId: "ses_m7",
+    generation: 7,
     status,
     controller,
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -237,7 +403,8 @@ async function availablePort(): Promise<number> {
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  if (address === null || typeof address === "string") throw new Error("Port probe did not bind TCP.");
+  if (address === null || typeof address === "string")
+    throw new Error("Port probe did not bind TCP.");
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return address.port;
 }
@@ -250,11 +417,17 @@ class StreamClientTransport implements Transport {
   private readonly onData = (chunk: Buffer) => {
     try {
       this.buffer.append(chunk);
-      for (let message = this.buffer.readMessage(); message !== null; message = this.buffer.readMessage()) {
+      for (
+        let message = this.buffer.readMessage();
+        message !== null;
+        message = this.buffer.readMessage()
+      ) {
         this.onmessage?.(message);
       }
     } catch (error) {
-      this.onerror?.(error instanceof Error ? error : new Error("Invalid stdio MCP frame."));
+      this.onerror?.(
+        error instanceof Error ? error : new Error("Invalid stdio MCP frame."),
+      );
     }
   };
 

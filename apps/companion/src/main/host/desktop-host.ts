@@ -20,11 +20,7 @@ import { waitForRuntimeReady } from "./runtime-readiness.js";
 import { reconcileManagedRuntime } from "./managed-runtime-registry.js";
 
 export type DesktopHostState =
-  | "starting"
-  | "ready"
-  | "degraded"
-  | "stopping"
-  | "failed";
+  "starting" | "ready" | "degraded" | "stopping" | "failed";
 
 export interface DesktopServiceConnection {
   baseUrl: string;
@@ -66,7 +62,10 @@ export interface DesktopHostDependencies {
   ): Promise<void>;
   sleep(ms: number): Promise<void>;
   token(): string;
-  reconcileManagedRuntime(options: { home: string; runtimeDirectory: string }): Promise<void>;
+  reconcileManagedRuntime(options: {
+    home: string;
+    runtimeDirectory: string;
+  }): Promise<void>;
 }
 
 export interface DesktopHostOptions {

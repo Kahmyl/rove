@@ -32,6 +32,8 @@ export interface PageStateSemanticSurface {
   identityChooser: boolean;
   passkeyGate: boolean;
   providerAuthGate: boolean;
+  routineDismissControl: boolean;
+  workflowFormSurface: boolean;
 
   restrictionCue: boolean;
   errorCue: boolean;
@@ -694,6 +696,75 @@ export async function collectPageStateSurfaceFacts(
         normalize(controlSemanticText(element)),
       );
 
+      const consequentialDialogCue =
+        /\\b(?:accept|agree|authorize|authorization|consent|cookie|permission|privacy|terms|policy|sign[ -]?in|log[ -]?in|password|passkey|verification|verify|captcha|payment|purchase|subscribe|delete|remove)\\b/.test(
+          normalize(headingText + " " + semanticText),
+        );
+
+      const routineDismissButton = buttonTexts.some((text) =>
+          /^(?:close|dismiss|got it|not now|skip|no thanks)$/.test(
+            text,
+          ),
+        );
+
+      const notificationPermissionPrompt =
+        /\\bnotifications?\\b/.test(
+          normalize(headingText + " " + semanticText),
+        ) &&
+        /\\bpermission\\b/.test(
+          normalize(headingText + " " + semanticText),
+        ) &&
+        buttonTexts.some((text) =>
+          /^(?:allow|continue|enable|turn on)(?:\\s|$)/.test(text),
+        );
+
+      const safeNotificationDecline =
+        notificationPermissionPrompt &&
+        buttonTexts.some((text) =>
+          /^(?:ask me later|block|cancel|dismiss|don't allow|do not allow|no thanks|not now)$/.test(
+            text,
+          ),
+        );
+
+      const routineDismissControl =
+        kind === "blocking_dialog" &&
+        (
+          (!consequentialDialogCue && routineDismissButton) ||
+          safeNotificationDecline
+        );
+
+      const editableWorkflowControls = controls.filter((element) => {
+        if (element.matches("textarea,select,[contenteditable='true']")) {
+          return true;
+        }
+
+        if (!element.matches("input")) {
+          return false;
+        }
+
+        return ![
+          "button",
+          "checkbox",
+          "color",
+          "file",
+          "hidden",
+          "image",
+          "radio",
+          "reset",
+          "submit",
+        ].includes(normalize(element.getAttribute("type") || "text"));
+      });
+
+      const workflowFormSurface =
+        kind === "blocking_dialog" &&
+        !consequentialDialogCue &&
+        editableWorkflowControls.length > 0 &&
+        buttonTexts.some((text) =>
+          /^(?:save|create|update|add|apply|done)(?:\\s|$)/.test(
+            text,
+          ),
+        );
+
       const emailLikeChoices = buttonTexts.filter((text) =>
         /\\b[^\\s@]+@[^\\s@]+\\.[^\\s@]+\\b/.test(text),
       ).length;
@@ -974,6 +1045,8 @@ export async function collectPageStateSurfaceFacts(
         identityChooser,
         passkeyGate,
         providerAuthGate,
+        routineDismissControl,
+        workflowFormSurface,
         restrictionCue:
           semanticMessages.some((message) =>
             restrictionCue(message),

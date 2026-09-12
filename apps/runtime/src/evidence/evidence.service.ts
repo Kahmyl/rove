@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   RoveError,
   type Artifact,
@@ -103,8 +103,57 @@ export class EvidenceService {
     return item;
   }
 
+  async saveFileArtifact(
+    sessionId: string,
+    input: {
+      filename: string;
+      mimeType: string;
+      bytes: Uint8Array;
+      source: "agent_generated" | "user_file_grant";
+      grantId?: string;
+    },
+  ): Promise<Evidence> {
+    return this.savePayload(
+      sessionId,
+      {
+        type: "file",
+        label: input.filename,
+        metadata: {
+          filename: input.filename,
+          mimeType: input.mimeType,
+          sizeBytes: input.bytes.byteLength,
+          sha256: createHash("sha256").update(input.bytes).digest("hex"),
+          source: input.source,
+          ...(input.grantId === undefined ? {} : { grantId: input.grantId }),
+        },
+      },
+      input.bytes,
+    );
+  }
+
   list(sessionId: string): Promise<Evidence[]> {
     return this.evidence.list(sessionId);
+  }
+
+  async deleteGrant(sessionId: string, grantId: string): Promise<number> {
+    if (!/^grant_[a-f0-9]{32}$/u.test(grantId))
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "File grant identity is invalid.",
+      });
+    if (!this.evidence.delete)
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Evidence cleanup is unavailable.",
+      });
+    const matches = (await this.evidence.list(sessionId)).filter(
+      (item) =>
+        item.type === "file" &&
+        item.metadata?.source === "user_file_grant" &&
+        item.metadata.grantId === grantId,
+    );
+    for (const item of matches) await this.evidence.delete(sessionId, item.id);
+    return matches.length;
   }
 
   async metadata(sessionId: string, evidenceId: string): Promise<Evidence> {

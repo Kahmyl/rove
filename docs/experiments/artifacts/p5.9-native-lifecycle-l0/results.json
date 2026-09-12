@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "oracle": "P5.9 L0 native lifecycle convergence",
+  "fixture": "experiments/phase5-app-server/fixtures/native-lifecycle-l0.json",
+  "fixtureCases": 55,
+  "exhaustiveStates": 10080,
+  "rejectedExhaustiveStates": 1440,
+  "modelSequences": 64,
+  "semanticCases": 21,
+  "transitionSequences": 26,
+  "rejectionCases": 34,
+  "assertions": 63443,
+  "maximumOutputBytes": 773,
+  "limits": {
+    "tasks": 32,
+    "attentionsPerTask": 32,
+    "roveIdCharacters": 128,
+    "codexIdCharacters": 256,
+    "messageCharacters": 16000,
+    "errorCharacters": 240,
+    "outputCharacters": 32768
+  },
+  "result": "passed"
+}

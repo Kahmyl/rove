@@ -48,6 +48,8 @@ describe("NativeBrowserFollowForegroundSource", () => {
 
     const abort = new AbortController();
     abort.abort();
-    await expect(missing.getForegroundProcessId(abort.signal)).resolves.toBeNull();
+    await expect(
+      missing.getForegroundProcessId(abort.signal),
+    ).resolves.toBeNull();
   });
 });

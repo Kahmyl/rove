@@ -1,0 +1,349 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 11871,
+    "ownedProcessPids": [
+      11871,
+      11887,
+      11888,
+      11895,
+      11944,
+      11959
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+    "operationId": "intent_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+    "sessionId": "ses_6d25ce45b1f74192849b9503a28ff70d",
+    "threadId": "01a089a6-9a63-7c71-bfed-a655394b4e6d",
+    "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca"
+  },
+  "terminalRevision": 1361,
+  "terminalTask": {
+    "taskId": "task_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+      "stage": "turn_started",
+      "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca"
+    },
+    "roveSessionId": "ses_6d25ce45b1f74192849b9503a28ff70d",
+    "codexThreadId": "01a089a6-9a63-7c71-bfed-a655394b4e6d",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a089a6-b586-7570-8d22-1e96ed8bf5ca"
+      ],
+      "itemCount": 22
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "maps_interaction_count"
+    ],
+    "marker": {
+      "journey": "maps",
+      "status": "passed",
+      "place": "Lekki Conservation Centre, Lagos",
+      "origin": "Murtala Muhammed International Airport",
+      "destination": "Lekki Conservation Centre",
+      "directionsShown": true,
+      "transit": "selected",
+      "transitUnavailableObservationId": null,
+      "routeOptions": [
+        {
+          "duration": "1 hr 19 min"
+        },
+        {
+          "duration": "1 hr 27 min"
+        },
+        {
+          "duration": "1 hr 49 min"
+        },
+        {
+          "duration": "1 hr 47 min"
+        },
+        {
+          "duration": "1 hr 54 min"
+        },
+        {
+          "duration": "1 hr 56 min"
+        }
+      ],
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [
+        "bobs_74fa4b17ec9546a8b8725252bf135e95",
+        "bobs_c98da414bfc44a45835fc8f0d197a12b"
+      ],
+      "screenshotEvidenceIds": [
+        "ev_73acaf360f2e495fa34337b3bd639c55",
+        "ev_49648e01e11f4ee883915575efc1c480"
+      ],
+      "receiptIds": [
+        "rcpt_1a538bcd1ecd416bad3269b531d085e2"
+      ]
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_6d25ce45b1f74192849b9503a28ff70d",
+    "pageIds": [
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_6b117afc4bf94b7588bc618898fc704e",
+      "obs_7986ed121aa94370b759769535b67b24",
+      "obs_725b35036f9b4366bf813d116d18890c",
+      "obs_cd973afad9fe43619085dfe41a49d2d6",
+      "obs_5ab132e0f2004e86bc92d87d2a6d752b",
+      "obs_80f41682aa3341288c60b167c51310a4",
+      "bobs_74fa4b17ec9546a8b8725252bf135e95",
+      "bobs_213f8f204358426da29810da584bcb72",
+      "bobs_c98da414bfc44a45835fc8f0d197a12b"
+    ],
+    "evidenceIds": [
+      "ev_49648e01e11f4ee883915575efc1c480",
+      "ev_73acaf360f2e495fa34337b3bd639c55",
+      "ev_d7364a98212e4bf6bf2e92a78aeb8e25",
+      "ev_ee1251f67cdc4e6683a784ddc0dc498e"
+    ],
+    "screenshotEvidenceIds": [
+      "ev_49648e01e11f4ee883915575efc1c480",
+      "ev_73acaf360f2e495fa34337b3bd639c55"
+    ],
+    "receipts": [
+      {
+        "id": "rcpt_1a538bcd1ecd416bad3269b531d085e2",
+        "observationId": "obs_5ab132e0f2004e86bc92d87d2a6d752b",
+        "outcome": "not_applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "contradicted"
+          }
+        ]
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_080d36a9e8119a7c016aa236fc311487d095d617340151d106",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "text": "I’ll inspect the place in Google Maps, capture its layout, then check directions and public transit options and capture the route view."
+      },
+      {
+        "id": "msg_080d36a9e8119a7c016aa237362dfc87d0993f89a310162cf4",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "text": "The place panel is on the left, with a close street-level map of the reserve on the right. The first screenshot succeeded after one permitted stale-observation recovery. I’ll now inspect the airport-to-centre routes."
+      },
+      {
+        "id": "msg_080d36a9e8119a7c016aa2378ef53487d08fbaf30da041fa6c",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "text": "Public transit is selected, and Maps lists six itineraries from 1 hr 19 min to 1 hr 56 min. Maps warns that it lacks the most recent local timetables. The second screenshot shows the wider Lagos region, with the selected route in thick blue and alternatives in thinner purple lines."
+      },
+      {
+        "id": "msg_080d36a9e8119a7c016aa237a25f7087d0a319c8aac9c26c91",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"maps\",\"status\":\"passed\",\"place\":\"Lekki Conservation Centre, Lagos\",\"origin\":\"Murtala Muhammed International Airport\",\"destination\":\"Lekki Conservation Centre\",\"directionsShown\":true,\"transit\":\"selected\",\"transitUnavailableObservationId\":null,\"routeOptions\":[{\"duration\":\"1 hr 19 min\"},{\"duration\":\"1 hr 27 min\"},{\"duration\":\"1 hr 49 min\"},{\"duration\":\"1 hr 47 min\"},{\"duration\":\"1 hr 54 min\"},{\"duration\":\"1 hr 56 min\"}],\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[\"bobs_74fa4b17ec9546a8b8725252bf135e95\",\"bobs_c98da414bfc44a45835fc8f0d197a12b\"],\"screenshotEvidenceIds\":[\"ev_73acaf360f2e495fa34337b3bd639c55\",\"ev_49648e01e11f4ee883915575efc1c480\"],\"receiptIds\":[\"rcpt_1a538bcd1ecd416bad3269b531d085e2\"]}\n\nBoth views used tab `page_01` in session `ses_6d25ce45b1f74192849b9503a28ff70d`. Both screenshots capture a 1200 × 762 CSS-pixel viewport.\n\n**Place screenshot:** `ev_73acaf360f2e495fa34337b3bd639c55`, bound to ledger-backed observation `bobs_74fa4b17ec9546a8b8725252bf135e95`, revision 3.\n\nThe white information panel occupies roughly the left third, beside a narrow navigation rail. It contains a canopy-walk photograph, place name, 4.3 rating, tabs, and Directions, Save, Nearby, Send to phone and Share controls. The map fills the right side. Category buttons run across its top; Layers sits bottom-left; location, zoom and Street View controls sit bottom-right. The red destination pin lies inside the green reserve near Lekki–Epe Expressway. This is a close neighbourhood view at a **100 m scale**, rather than a broad Lagos view.\n\nTab title: “Lekki Conservation Centre - Google Maps”. [Exact place URL](https://www.google.com/maps/place/Lekki+Conservation+Centre/@6.4415182,3.535771,17z/data=!3m1!4b1!4m6!3m5!1s0x103bf6f92da0f59d:0xc020080e1f213866!8m2!3d6.4415182!4d3.535771!16s%2Fm%2F0131jx2y?entry=ttu&g_ep=EgoyMDI2MDkwNi4wIKXMDSoASAFQAw%3D%3D).\n\n**Directions:** Before selecting transit, Maps showed motorcycle choices of **42 min / 41.4 km** vi"
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-c068c31c-3e38-4de5-b97f-9fc61de212f3",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-87b11a1f-879d-472e-81e0-82178982ea16",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-7c535cfd-a9e2-4739-a998-a9a2b605013a",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-1ce1ddc1-d5d2-4787-9718-9bcd01c5ed6d",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-3993a657-7436-4610-907b-d66fba870b5b",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-6c6292b4-90e2-4ca8-9f92-94aa403c7cd9",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.navigate"
+      },
+      {
+        "id": "exec-a389d463-89ce-47d6-a9b1-1e2e235fdcce",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c3a37aae-a882-4906-b9c6-19fc6d5b9dee",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-8c43ab81-88d9-4c66-acc7-9b4cc7c6b8fa",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-3fc7471c-475a-4268-8061-cfda8508ced0",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-0b797c5f-5246-40ca-8ec5-bb2b030bdbb8",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-5051a9eb-a738-4df3-a432-7a89cb93a618",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-712605b8-3fc7-489f-a590-ca380a46da0b",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "session.observations"
+      },
+      {
+        "id": "exec-cfe4a1c5-6898-4a9c-9c3e-edef8fa0c484",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca",
+        "status": "completed",
+        "title": "browser.pages"
+      }
+    ],
+    "mapsUrls": [
+      "https://www.google.com/maps/place/Lekki+Conservation+Centre/@6.4415182,3.535771,17z/data=!3m1!4b1!4m6!3m5!1s0x103bf6f92da0f59d:0xc020080e1f213866!8m2!3d6.4415182!4d3.535771!16s%2Fm%2F0131jx2y?entry=ttu&g_ep=EgoyMDI2MDkwNi4wIKXMDSoASAFQAw%3D%3D"
+    ],
+    "observationIds": [
+      "bobs_74fa4b17ec9546a8b8725252bf135e95",
+      "bobs_c98da414bfc44a45835fc8f0d197a12b"
+    ],
+    "evidenceIds": [
+      "ev_73acaf360f2e495fa34337b3bd639c55",
+      "ev_49648e01e11f4ee883915575efc1c480"
+    ],
+    "pageIds": [
+      "page_01"
+    ],
+    "visibleDurations": [
+      "1 hr",
+      "19 min",
+      "56 min",
+      "27 min",
+      "49 min",
+      "47 min",
+      "54 min",
+      "42 min"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/maps-20260909-181822-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Thread is already archived; repeated archive is reconciled."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_00d7b2fa-b71a-4bf4-92c1-aeb846339bc8",
+        "stage": "turn_started",
+        "turnId": "01a089a6-b586-7570-8d22-1e96ed8bf5ca"
+      },
+      "roveSessionId": "ses_6d25ce45b1f74192849b9503a28ff70d",
+      "codexThreadId": "01a089a6-9a63-7c71-bfed-a655394b4e6d",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a089a6-b586-7570-8d22-1e96ed8bf5ca"
+        ],
+        "itemCount": 22
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

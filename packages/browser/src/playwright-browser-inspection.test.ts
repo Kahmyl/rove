@@ -111,6 +111,23 @@ describe("PlaywrightBrowserSession inspection", () => {
     expect(inspection.targets?.[0]?.ref).toBe("t1");
   });
 
+  it("carries selected composite-item state onto an actionable descendant", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(`${server.url}/semantic-clipboard-transfer`);
+
+    const inspection = await session.inspect();
+    const cell = inspection.targets?.find(
+      (candidate) =>
+        candidate.kind === "gridcell" && candidate.name === "Quarterly report",
+    );
+
+    expect(cell).toMatchObject({
+      state: { selected: true },
+    });
+  });
+
   it("inspects an explicit page without changing the active page", async () => {
     const server = await startServer();
     const session = await startSession();
@@ -492,6 +509,34 @@ describe("Milestone 2 semantic inspection acceptance", () => {
     expect(inspection.metadata).toMatchObject({
       targetsTruncated: true,
     });
+  });
+
+  it("retains canonical target authority behind a presentation-limited observation", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(server.url);
+
+    const presented = await session.inspect({
+      targetLimit: 1,
+    });
+
+    const authoritative = await session.readObservation(
+      presented.observationId,
+    );
+
+    expect(presented.targets).toHaveLength(1);
+    expect(presented.metadata).toMatchObject({
+      targetsTruncated: true,
+    });
+    expect(authoritative.targets?.length).toBeGreaterThan(1);
+    expect(authoritative.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Submit",
+        }),
+      ]),
+    );
   });
 
   it("filters inspection targets by kind", async () => {

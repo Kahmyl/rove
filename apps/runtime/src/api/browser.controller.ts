@@ -26,8 +26,15 @@ import {
   typeRequestSchema,
   targetResolutionRequestSchema,
   verifiedInteractionRequestSchema,
+  advanceSemanticTransactionRequestSchema,
+  beginSemanticTransactionRequestSchema,
+  semanticTransactionReferenceSchema,
+  verifySemanticTransactionRequestSchema,
+  type AdvanceSemanticTransactionRequest,
+  type BeginSemanticTransactionRequest,
   type TargetResolutionRequest,
   type VerifiedInteractionRequest,
+  type VerifySemanticTransactionRequest,
 } from "@rove/protocol";
 import { RuntimeService } from "../runtime.service.js";
 
@@ -47,9 +54,19 @@ export class BrowserController {
     return this.runtime.getBrowserWindowState(id);
   }
 
+  @Post("show")
+  show(@Param("id") id: string) {
+    return this.runtime.showBrowser(id);
+  }
+
   @Post("navigate")
   navigate(@Param("id") id: string, @Body() body: NavigateRequest) {
     return this.runtime.navigate(id, navigateRequestSchema.parse(body));
+  }
+
+  @Post("pages")
+  openPage(@Param("id") id: string, @Body() body: NavigateRequest) {
+    return this.runtime.openPage(id, navigateRequestSchema.parse(body));
   }
 
   @Get("inspect")
@@ -124,6 +141,69 @@ export class BrowserController {
     return this.runtime.interact(
       id,
       verifiedInteractionRequestSchema.parse(body),
+    );
+  }
+
+  @Post("transactions")
+  beginTransaction(
+    @Param("id") id: string,
+    @Body() body: BeginSemanticTransactionRequest,
+  ) {
+    return this.runtime.beginSemanticTransaction(
+      id,
+      beginSemanticTransactionRequestSchema.parse(body),
+    );
+  }
+
+  @Post("transactions/:transactionId/advance")
+  advanceTransaction(
+    @Param("id") id: string,
+    @Param("transactionId") transactionId: string,
+    @Body() body: Omit<AdvanceSemanticTransactionRequest, "transactionId">,
+  ) {
+    return this.runtime.advanceSemanticTransaction(
+      id,
+      advanceSemanticTransactionRequestSchema.parse({
+        ...body,
+        transactionId,
+      }),
+    );
+  }
+
+  @Post("transactions/:transactionId/verify")
+  verifyTransaction(
+    @Param("id") id: string,
+    @Param("transactionId") transactionId: string,
+    @Body() body: Omit<VerifySemanticTransactionRequest, "transactionId">,
+  ) {
+    return this.runtime.verifySemanticTransaction(
+      id,
+      verifySemanticTransactionRequestSchema.parse({
+        ...body,
+        transactionId,
+      }),
+    );
+  }
+
+  @Get("transactions/:transactionId")
+  getTransaction(
+    @Param("id") id: string,
+    @Param("transactionId") transactionId: string,
+  ) {
+    return this.runtime.getSemanticTransaction(
+      id,
+      semanticTransactionReferenceSchema.parse({ transactionId }).transactionId,
+    );
+  }
+
+  @Post("transactions/:transactionId/cancel")
+  cancelTransaction(
+    @Param("id") id: string,
+    @Param("transactionId") transactionId: string,
+  ) {
+    return this.runtime.cancelSemanticTransaction(
+      id,
+      semanticTransactionReferenceSchema.parse({ transactionId }).transactionId,
     );
   }
 

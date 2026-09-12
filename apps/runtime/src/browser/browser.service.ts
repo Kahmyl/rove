@@ -67,6 +67,12 @@ export class BrowserService implements OnModuleDestroy {
     return this.get(sessionId).browserWindowState();
   }
 
+  async show(sessionId: string): Promise<boolean> {
+    if (!this.sessions.has(sessionId)) return false;
+    await this.get(sessionId).show();
+    return true;
+  }
+
   async close(sessionId: string): Promise<void> {
     const browser = this.sessions.get(sessionId);
     if (!browser) return;

@@ -190,7 +190,9 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
 
     if (activeUserPosition !== null && this.lastAppliedBounds !== null) {
       const previousSize = this.sizeForPresentation(this.currentPresentation);
-      const nextSize = expanded ? this.expandedSize : this.microSizeForCurrent();
+      const nextSize = expanded
+        ? this.expandedSize
+        : this.microSizeForCurrent();
       activeUserPosition.x += previousSize.width - nextSize.width;
     }
 
@@ -448,7 +450,6 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
         this.fullscreenWorkspaceVisibility = true;
         workspaceTransition = true;
       }
-
     } else {
       this.revokeFullscreenWorkspaceVisibility(window);
     }
@@ -463,9 +464,7 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
     if (!this.elevatedPresentationActive || enteringFullscreen) {
       window.setAlwaysOnTop(
         true,
-        fullscreen && this.platform === "win32"
-          ? "screen-saver"
-          : "floating",
+        fullscreen && this.platform === "win32" ? "screen-saver" : "floating",
       );
       this.elevatedPresentationActive = true;
     }
@@ -482,7 +481,6 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
     if (this.platform === "linux") {
       window.setAlwaysOnTop(true, "floating");
     }
-
   }
 
   hideFollower(): void {
@@ -511,7 +509,6 @@ export class CompactFollowerSurface implements BrowserFollowSurface {
     if (window.isVisible()) {
       window.hide();
     }
-
   }
 
   private revokePresentation(window: CompactFollowerWindowHandle): void {

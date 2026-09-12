@@ -8,6 +8,12 @@ describe("Phase 2 target intent safety", () => {
 
     expect(
       targetIntentSchema.safeParse({
+        kind: "link",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      targetIntentSchema.safeParse({
         capability: "activate",
       }).success,
     ).toBe(true);
@@ -32,5 +38,11 @@ describe("Phase 2 target intent safety", () => {
         frameLabel: "Checkout",
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects unknown exact target kinds", () => {
+    expect(targetIntentSchema.safeParse({ kind: "email-row" }).success).toBe(
+      false,
+    );
   });
 });

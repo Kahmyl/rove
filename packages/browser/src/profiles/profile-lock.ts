@@ -20,6 +20,11 @@ export interface ProfileLockOwner {
   runtimeInstanceId: string;
   sessionId: string;
 }
+export interface ProfileLockFileOperations {
+  unlink(path: string): Promise<void>;
+}
+
+export type ProfileLockOwnership = "owned" | "claimable" | "conflicting";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,11 +34,13 @@ export class RoveProfileLock {
   private constructor(
     readonly lockPath: string,
     readonly metadata: ProfileLockMetadata,
+    private readonly files: ProfileLockFileOperations,
   ) {}
 
   static async acquire(
     profileDirectory: string,
     owner?: ProfileLockOwner,
+    files: ProfileLockFileOperations = { unlink },
   ): Promise<RoveProfileLock> {
     const lockPath = resolve(profileDirectory, "profile.lock");
     const processIdentity = await readProcessIdentity(process.pid);
@@ -49,21 +56,28 @@ export class RoveProfileLock {
       try {
         const file = await open(lockPath, "wx");
         try {
-          await file.writeFile(`${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+          await file.writeFile(
+            `${JSON.stringify(metadata, null, 2)}\n`,
+            "utf8",
+          );
         } finally {
           await file.close();
         }
-        return new RoveProfileLock(lockPath, metadata);
+        return new RoveProfileLock(lockPath, metadata, files);
       } catch (error) {
         if (!isFileExistsError(error)) throw error;
-        if (attempt === 0 && (await RoveProfileLock.removeStaleLock(lockPath))) {
+        if (
+          attempt === 0 &&
+          (await RoveProfileLock.removeStaleLock(lockPath))
+        ) {
           continue;
         }
 
         const details = await RoveProfileLock.lockDetails(lockPath);
         throw new RoveError({
           code: "PROFILE_LOCKED",
-          message: "Persistent browser profile is already locked by another Rove process.",
+          message:
+            "Persistent browser profile is already locked by another Rove process.",
           retryable: true,
           ...(details === undefined
             ? {}
@@ -79,19 +93,72 @@ export class RoveProfileLock {
 
     throw new RoveError({
       code: "PROFILE_LOCKED",
-      message: "Persistent browser profile is already locked by another Rove process.",
+      message:
+        "Persistent browser profile is already locked by another Rove process.",
       retryable: true,
     });
   }
 
+  static async ownershipStatus(
+    profileDirectory: string,
+    owner: ProfileLockOwner,
+  ): Promise<ProfileLockOwnership> {
+    const details = await RoveProfileLock.lockDetails(
+      resolve(profileDirectory, "profile.lock"),
+    );
+    if (details === undefined) return "claimable";
+    if (
+      details.runtimeInstanceId === owner.runtimeInstanceId &&
+      details.sessionId === owner.sessionId
+    ) {
+      const pid = details.pid;
+      const recordedIdentity = details.processIdentity;
+      if (typeof pid !== "number" || typeof recordedIdentity !== "string")
+        return "conflicting";
+      const currentIdentity = await readProcessIdentity(pid);
+      if (pid === process.pid && currentIdentity === recordedIdentity)
+        return "owned";
+      return currentIdentity === undefined ||
+        currentIdentity !== recordedIdentity
+        ? "claimable"
+        : "conflicting";
+    }
+    const pid = details.pid;
+    if (typeof pid !== "number" || pid <= 0) return "conflicting";
+    if (!processIsAlive(pid)) return "claimable";
+    const recordedIdentity = details.processIdentity;
+    if (typeof recordedIdentity !== "string") return "conflicting";
+    const currentIdentity = await readProcessIdentity(pid);
+    return currentIdentity !== undefined && currentIdentity !== recordedIdentity
+      ? "claimable"
+      : "conflicting";
+  }
+
+  static async releaseClaimable(
+    profileDirectory: string,
+    owner: ProfileLockOwner,
+  ): Promise<boolean> {
+    if (
+      (await RoveProfileLock.ownershipStatus(profileDirectory, owner)) !==
+      "claimable"
+    )
+      return false;
+    return RoveProfileLock.removeStaleLock(
+      resolve(profileDirectory, "profile.lock"),
+    );
+  }
+
   async release(): Promise<void> {
     if (this.released) return;
-    this.released = true;
     const current = await RoveProfileLock.lockDetails(this.lockPath);
-    if (current?.nonce !== this.metadata.nonce) return;
-    await unlink(this.lockPath).catch((error: unknown) => {
+    if (current?.nonce !== this.metadata.nonce) {
+      this.released = true;
+      return;
+    }
+    await this.files.unlink(this.lockPath).catch((error: unknown) => {
       if (!isNotFoundError(error)) throw error;
     });
+    this.released = true;
   }
 
   private static async removeStaleLock(lockPath: string): Promise<boolean> {
@@ -103,7 +170,10 @@ export class RoveProfileLock {
       const recordedIdentity = details?.processIdentity;
       if (typeof recordedIdentity !== "string") return false;
       const currentIdentity = await readProcessIdentity(pid);
-      if (currentIdentity === undefined || currentIdentity === recordedIdentity) {
+      if (
+        currentIdentity === undefined ||
+        currentIdentity === recordedIdentity
+      ) {
         return false;
       }
     }
@@ -118,7 +188,10 @@ export class RoveProfileLock {
     lockPath: string,
   ): Promise<Record<string, unknown> | undefined> {
     try {
-      return JSON.parse(await readFile(lockPath, "utf8")) as Record<string, unknown>;
+      return JSON.parse(await readFile(lockPath, "utf8")) as Record<
+        string,
+        unknown
+      >;
     } catch {
       return undefined;
     }

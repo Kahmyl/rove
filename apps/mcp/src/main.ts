@@ -9,6 +9,10 @@ import { BearerTokenVerifier } from "./auth/bearer-auth.js";
 import { stderrLogger } from "./logging/logger.js";
 import { RuntimeHttpClient } from "./runtime/runtime-client.js";
 import { ControlPlaneRuntimeClient } from "./runtime/control-plane-runtime-client.js";
+import {
+  scopeRuntimeClient,
+  taskRuntimeScopeFromEnvironment,
+} from "./runtime/task-scoped-runtime-client.js";
 import { createMcpServer } from "./server/create-mcp-server.js";
 import { startStdioServer } from "./transports/stdio.js";
 import { startStreamableHttpServer } from "./transports/streamable-http.js";
@@ -41,7 +45,7 @@ async function main(): Promise<void> {
       `MCP build does not satisfy its configured compatibility requirement: ${ownMismatch}.`,
     );
   }
-  const runtime =
+  const unscopedRuntime =
     controlPlaneUrl === undefined
       ? new RuntimeHttpClient(
           config.runtime.url,
@@ -60,8 +64,13 @@ async function main(): Promise<void> {
   // offline. Direct development still fails fast when its local Runtime is
   // unavailable; relay mode reports Hub readiness through /health instead.
   if (controlPlaneUrl === undefined) {
-    await runtime.healthCheck();
+    await unscopedRuntime.healthCheck();
   }
+  const taskScope = taskRuntimeScopeFromEnvironment();
+  const runtime =
+    taskScope === undefined
+      ? unscopedRuntime
+      : scopeRuntimeClient(unscopedRuntime, taskScope);
 
   if (config.mcp.transport === "stdio") {
     await startStdioServer(createMcpServer(runtime), stderrLogger);
@@ -75,12 +84,16 @@ async function main(): Promise<void> {
     runtime,
     createServer: () => createMcpServer(runtime),
     logger: stderrLogger,
-    ...(config.mcp.allowedHosts === undefined ? {} : { allowedHosts: config.mcp.allowedHosts }),
+    ...(config.mcp.allowedHosts === undefined
+      ? {}
+      : { allowedHosts: config.mcp.allowedHosts }),
   });
 }
 
 void main().catch((error: unknown) => {
   // stdout is reserved exclusively for MCP protocol frames.
-  process.stderr.write(`${error instanceof Error ? error.message : "Rove MCP failed."}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? error.message : "Rove MCP failed."}\n`,
+  );
   process.exitCode = 1;
 });

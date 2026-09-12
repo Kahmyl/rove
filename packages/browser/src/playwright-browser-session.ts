@@ -28,9 +28,13 @@ import {
   type TargetResolutionRequest,
   type BrowserInteractionRequest,
   type DialogDirective,
+  type ActionPhaseRecord,
 } from "@rove/protocol";
 import type { BrowserInteractionContext, BrowserSession } from "./engine.js";
-import { InteractionDispatchError } from "./interaction/interaction-dispatch-error.js";
+import {
+  InteractionDispatchError,
+  InteractionNotDispatchedError,
+} from "./interaction/interaction-dispatch-error.js";
 import type {
   BrowserActivity,
   BrowserActivityListener,
@@ -50,6 +54,11 @@ import {
   POPUP_GRACE_MS,
 } from "./actions/action-runner.js";
 import { groundTarget } from "./grounding/grounding.js";
+import {
+  BROWSER_CAPABILITY_ATLAS_VERSION,
+  BROWSER_HUMAN_BOUNDARIES,
+  BROWSER_INTERACTION_KINDS,
+} from "./capabilities/browser-capability-registry.js";
 
 import {
   readMaterialMutationVersion,
@@ -77,8 +86,11 @@ import {
 } from "./perception/page-state-observation.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
+const BROWSER_SHUTDOWN_STEP_TIMEOUT_MS = 3_000;
 
 const MAX_OBSERVATION_AUTHORITIES = 100;
+const CHROMIUM_PDF_VIEWER_URL =
+  "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html";
 
 interface ObservationAuthority {
   observationId: string;
@@ -87,6 +99,26 @@ interface ObservationAuthority {
   mutationVersion: number;
   url: string;
   viewport: BrowserViewport;
+}
+
+export async function settleBrowserShutdownStep<T>(
+  operation: () => Promise<T>,
+  timeoutMs = BROWSER_SHUTDOWN_STEP_TIMEOUT_MS,
+): Promise<T | undefined> {
+  let cancelTimeout: (() => void) | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve()
+        .then(operation)
+        .catch(() => undefined),
+      new Promise<undefined>((resolve) => {
+        const timer = globalThis.setTimeout(resolve, timeoutMs);
+        cancelTimeout = () => globalThis.clearTimeout(timer);
+      }),
+    ]);
+  } finally {
+    cancelTimeout?.();
+  }
 }
 
 function isBrowserClosedError(error: unknown): boolean {
@@ -115,6 +147,113 @@ function browserClosedError(): RoveError {
     code: "BROWSER_CLOSED",
     message: "The browser session is closed.",
   });
+}
+
+async function scrollDomSurface(
+  page: Page,
+  deltaX: number,
+  deltaY: number,
+): Promise<boolean> {
+  for (const frame of page.frames()) {
+    const moved = await frame
+      .evaluate(
+        async (delta) => {
+          const candidates: Element[] = [];
+
+          const visit = (root: Document | ShadowRoot) => {
+            for (const element of Array.from(root.querySelectorAll("*"))) {
+              candidates.push(element);
+              if (element.shadowRoot !== null) visit(element.shadowRoot);
+            }
+          };
+
+          visit(document);
+
+          if (document.scrollingElement !== null) {
+            candidates.push(document.scrollingElement);
+          }
+
+          const scored = candidates.flatMap((element) => {
+            if (!(element instanceof HTMLElement)) return [];
+
+            const maxX = element.scrollWidth - element.clientWidth;
+            const maxY = element.scrollHeight - element.clientHeight;
+            const canMoveX =
+              delta.x > 0
+                ? element.scrollLeft < maxX
+                : delta.x < 0
+                  ? element.scrollLeft > 0
+                  : false;
+            const canMoveY =
+              delta.y > 0
+                ? element.scrollTop < maxY
+                : delta.y < 0
+                  ? element.scrollTop > 0
+                  : false;
+
+            if (!canMoveX && !canMoveY) return [];
+
+            const isDocumentScroller = element === document.scrollingElement;
+
+            const rect = element.getBoundingClientRect();
+            const width = isDocumentScroller
+              ? innerWidth
+              : Math.max(
+                  0,
+                  Math.min(rect.right, innerWidth) - Math.max(rect.left, 0),
+                );
+            const height = isDocumentScroller
+              ? innerHeight
+              : Math.max(
+                  0,
+                  Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0),
+                );
+
+            if (width === 0 || height === 0) return [];
+
+            const visibleArea = width * height;
+
+            // Page-scoped scroll must not silently consume the gesture in a
+            // peripheral rail (for example a PDF thumbnail strip). Smaller
+            // surfaces remain available through targeted precise_scroll.
+            if (visibleArea < innerWidth * innerHeight * 0.5) return [];
+
+            return [{ element, score: visibleArea }];
+          });
+
+          scored.sort((left, right) => right.score - left.score);
+
+          const selected = scored[0]?.element;
+          if (selected === undefined) return false;
+
+          const before = {
+            left: selected.scrollLeft,
+            top: selected.scrollTop,
+          };
+
+          selected.scrollBy({
+            left: delta.x,
+            top: delta.y,
+            behavior: "instant",
+          });
+
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          );
+
+          return (
+            selected.scrollLeft !== before.left ||
+            selected.scrollTop !== before.top
+          );
+        },
+        { x: deltaX, y: deltaY },
+      )
+      .catch(() => false);
+
+    if (moved) return true;
+  }
+
+  return false;
 }
 
 export class PlaywrightBrowserSession implements BrowserSession {
@@ -151,6 +290,17 @@ export class PlaywrightBrowserSession implements BrowserSession {
     },
   );
   private downloadSaveQueue: Promise<void> = Promise.resolve();
+  private readonly downloadCorrelationWindows = new Map<
+    string,
+    {
+      id: string;
+      expectedUrl?: string;
+      strategy:
+        "trusted_anchor" | "chromium_pdf_viewer" | "trusted_action_download";
+      dispatched: boolean;
+      eventCount: number;
+    }
+  >();
 
   private constructor(
     readonly id: string,
@@ -546,7 +696,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
     });
   }
 
-  private registerNewPage(page: Page): void {
+  private registerNewPage(page: Page): string {
+    const existing = this.pageRegistry.pageIdFor(page);
+    if (existing !== undefined) return existing;
+
     const state = this.pageRegistry.registerPage(page);
     this.pageRegistry.activate(state.id);
     this.observePage(page, state.id);
@@ -560,6 +713,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
         url: state.url,
       },
     });
+    return state.id;
   }
 
   onActivity(listener: BrowserActivityListener): () => void {
@@ -651,11 +805,87 @@ export class PlaywrightBrowserSession implements BrowserSession {
         return;
       }
 
+      const pendingCandidate = this.downloadCorrelationWindows.get(pageId);
+      const candidate =
+        pendingCandidate?.strategy !== "trusted_action_download" ||
+        pendingCandidate.dispatched
+          ? pendingCandidate
+          : undefined;
+      if (
+        candidate !== undefined &&
+        candidate.strategy !== "trusted_action_download"
+      ) {
+        this.downloadCorrelationWindows.delete(pageId);
+      }
+      if (candidate?.strategy === "trusted_action_download") {
+        candidate.eventCount += 1;
+      }
+      const downloadUrl = download.url();
+      const correlation =
+        candidate === undefined
+          ? Promise.resolve(undefined)
+          : candidate.strategy === "trusted_action_download"
+            ? new Promise<"matched" | "ambiguous">((resolve) => {
+                setTimeout(() => {
+                  if (
+                    this.downloadCorrelationWindows.get(pageId)?.id ===
+                    candidate.id
+                  ) {
+                    this.downloadCorrelationWindows.delete(pageId);
+                  }
+                  resolve(candidate.eventCount === 1 ? "matched" : "ambiguous");
+                }, 50);
+              })
+            : candidate.strategy === "chromium_pdf_viewer"
+              ? Promise.resolve(
+                  downloadUrl === candidate.expectedUrl
+                    ? ("matched" as const)
+                    : ("ambiguous" as const),
+                )
+              : page
+                  .evaluate(
+                    ({ boundaryId, expectedUrl, actualUrl }) => {
+                      const state = (
+                        window as unknown as {
+                          __roveDownloadCorrelation?: {
+                            id: string;
+                            activations: Array<{
+                              url: string;
+                              trusted: boolean;
+                            }>;
+                          };
+                        }
+                      ).__roveDownloadCorrelation;
+                      if (
+                        actualUrl !== expectedUrl ||
+                        state === undefined ||
+                        state.id !== boundaryId
+                      ) {
+                        return "ambiguous" as const;
+                      }
+                      const matching = state.activations.filter(
+                        (activation) => activation.url === actualUrl,
+                      );
+                      return matching.length === 1 &&
+                        matching[0]?.trusted === true
+                        ? ("matched" as const)
+                        : ("ambiguous" as const);
+                    },
+                    {
+                      boundaryId: candidate.id,
+                      expectedUrl: candidate.expectedUrl,
+                      actualUrl: downloadUrl,
+                    },
+                  )
+                  .catch(() => "ambiguous" as const);
+
       this.downloadSaveQueue = this.downloadSaveQueue
         .then(async () => {
           if (this.downloadRuntime === undefined) {
             return;
           }
+
+          const resolvedCorrelation = await correlation;
 
           const saved = await saveManagedDownload(
             download,
@@ -676,11 +906,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
               directory: saved.directory,
               sizeBytes: saved.sizeBytes,
               suggestedFilename: download.suggestedFilename(),
+              downloadUrl,
               url: page.url(),
+              ...(candidate === undefined
+                ? {}
+                : {
+                    actionBoundaryId: candidate.id,
+                    correlation: resolvedCorrelation,
+                    correlationStrategy: candidate.strategy,
+                  }),
             },
           });
         })
-        .catch((error: unknown) => {
+        .catch(async (error: unknown) => {
+          const resolvedCorrelation = await correlation;
           this.emitActivity({
             type: "download_failed",
             pageId,
@@ -691,7 +930,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
                   ? error.message
                   : "Unknown download failure.",
               suggestedFilename: download.suggestedFilename(),
+              downloadUrl,
               url: page.url(),
+              ...(candidate === undefined
+                ? {}
+                : {
+                    actionBoundaryId: candidate.id,
+                    correlation: resolvedCorrelation,
+                    correlationStrategy: candidate.strategy,
+                  }),
             },
           });
         });
@@ -787,6 +1034,56 @@ export class PlaywrightBrowserSession implements BrowserSession {
       currentRevision: state.revision,
       url: state.url,
     };
+  }
+
+  async openPage(url: string): Promise<PageSummary> {
+    this.ensureOpen();
+
+    let page: Page;
+    try {
+      page = await this.context.newPage();
+    } catch (error) {
+      if (isBrowserClosedError(error)) throw browserClosedError();
+      throw new RoveError({
+        code: "NAVIGATION_FAILED",
+        message: `Opening a new browser page for ${url} failed.`,
+      });
+    }
+
+    const pageId = this.registerNewPage(page);
+
+    try {
+      await this.evidenceRecorder.withAgentAction(page, () =>
+        page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: this.navigationTimeoutMs,
+        }),
+      );
+      await this.pageRegistry.syncMetadata(pageId);
+    } catch (error) {
+      if (isBrowserClosedError(error)) throw browserClosedError();
+      if (error instanceof playwrightErrors.TimeoutError) {
+        throw new RoveError({
+          code: "ACTION_TIMEOUT",
+          message: `Opening a new browser page at ${url} timed out.`,
+          retryable: true,
+          details: { pageId, url: page.url() },
+        });
+      }
+      throw new RoveError({
+        code: "NAVIGATION_FAILED",
+        message: `Opening a new browser page at ${url} failed.`,
+        details: { pageId, url: page.url() },
+      });
+    }
+
+    await page.bringToFront();
+    const state = this.pageRegistry.activate(pageId);
+    await this.inspector.invalidatePage(page, pageId, state.revision);
+
+    return this.pageRegistry
+      .summaries()
+      .find((summary) => summary.id === pageId)!;
   }
 
   async pages(): Promise<PageSummary[]> {
@@ -916,10 +1213,28 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const finalMutationVersion = await readMaterialMutationVersion(page);
     assertCurrent();
 
+    const targetCoverage = inspection.metadata?.targetCoverage as
+      | {
+          semanticInteractiveCount?: number;
+          registeredTargetCount?: number;
+          acquisitionErrors?: unknown[];
+          semanticOutcomes?: Record<string, number>;
+        }
+      | undefined;
+    const accountedTargets =
+      (targetCoverage?.registeredTargetCount ?? 0) +
+      Object.entries(targetCoverage?.semanticOutcomes ?? {})
+        .filter(([reason]) => reason !== "targeted")
+        .reduce((sum, [, count]) => sum + count, 0);
+    const targetAcquisitionUnstable =
+      (targetCoverage?.acquisitionErrors?.length ?? 0) > 0 ||
+      (targetCoverage?.semanticInteractiveCount ?? 0) > accountedTargets;
+
     if (
       finalState.revision !== state.revision ||
-      finalMutationVersion !== state.mutationVersion ||
-      page.url() !== inspection.url
+      page.url() !== inspection.url ||
+      (finalMutationVersion !== state.mutationVersion &&
+        targetAcquisitionUnstable)
     ) {
       this.inspector.forgetObservation(inspection.observationId);
       await this.inspector
@@ -932,6 +1247,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
           "The browser changed while the observation was being collected.",
         retryable: true,
       });
+    }
+
+    if (finalMutationVersion !== state.mutationVersion) {
+      state = this.pageRegistry.update(pageId, {
+        mutationVersion: finalMutationVersion,
+      });
+      inspection.mutationVersion = finalMutationVersion;
     }
 
     const pageState = pageStateObservation.assessment;
@@ -972,6 +1294,32 @@ export class PlaywrightBrowserSession implements BrowserSession {
         frameProvenance: true,
         openShadowDom: true,
         screenshotModes: ["viewport", "full-page", "target", "region"],
+        capabilityAtlasVersion: BROWSER_CAPABILITY_ATLAS_VERSION,
+        interactionKinds: [...BROWSER_INTERACTION_KINDS],
+        semanticStates: [
+          "checked",
+          "selectedValues",
+          "value",
+          "focused",
+          "expanded",
+          "pressed",
+          "selected",
+          "current",
+          "busy",
+          "invalid",
+          "required",
+          "readOnly",
+          "open",
+          "valueNow",
+          "valueMin",
+          "valueMax",
+          "valueText",
+          "orientation",
+          "hasPopup",
+          "controls",
+          "activeDescendant",
+        ],
+        humanBoundaries: [...BROWSER_HUMAN_BOUNDARIES],
       },
 
       metadata: {
@@ -999,7 +1347,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async resolveTarget(
     request: TargetResolutionRequest,
   ): Promise<TargetResolution> {
-    const observation = await this.readObservation(request.observationId);
+    const observation = await this.readObservation(request.observationId, {
+      allowMutationDrift: true,
+    });
 
     const canonicalTargets = this.inspector.targetsForObservation(
       observation.observationId,
@@ -1019,10 +1369,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
     return groundTarget(authoritativeObservation, request.intent);
   }
 
-  async readObservation(observationId: string): Promise<BrowserObservation> {
+  async readObservation(
+    observationId: string,
+    options: { allowMutationDrift?: boolean } = {},
+  ): Promise<BrowserObservation> {
     this.ensureOpen();
 
-    await this.assertObservationCurrent(observationId);
+    await this.assertObservationCurrent(observationId, options);
 
     const observation = this.observationSnapshots.get(observationId);
 
@@ -1034,7 +1387,19 @@ export class PlaywrightBrowserSession implements BrowserSession {
       });
     }
 
-    return observation;
+    const canonicalTargets = this.inspector.targetsForObservation(
+      observation.observationId,
+    );
+
+    return canonicalTargets === undefined
+      ? observation
+      : {
+          ...observation,
+          targets: canonicalTargets.map((target) => ({
+            ...target,
+            sessionId: this.id,
+          })),
+        };
   }
 
   async pageStateIdentity(
@@ -1083,6 +1448,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private async assertObservationCurrent(
     observationId: string,
+    options: { allowMutationDrift?: boolean } = {},
   ): Promise<ObservationAuthority> {
     const authority = this.observationAuthorities.get(observationId);
 
@@ -1125,7 +1491,8 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
     if (
       state.revision !== authority.revision ||
-      mutationVersion !== authority.mutationVersion ||
+      (!options.allowMutationDrift &&
+        mutationVersion !== authority.mutationVersion) ||
       page.url() !== authority.url ||
       viewportChanged
     ) {
@@ -1191,200 +1558,406 @@ export class PlaywrightBrowserSession implements BrowserSession {
     request: BrowserInteractionRequest,
     context: BrowserInteractionContext,
   ): Promise<ActionResult> {
-    this.ensureOpen();
-
-    await this.assertObservationCurrent(context.observationId);
-
-    if (
-      request.kind === "coordinate_click" &&
-      request.observationId !== context.observationId
-    ) {
-      throw new RoveError({
-        code: "OBSERVATION_STALE",
-        message:
-          "Coordinate interaction must use the same current observation authority.",
-        retryable: true,
-      });
-    }
-
-    switch (request.kind) {
-      case "click":
-        return this.runTargetInteraction(
-          "click",
-          request.target,
-          request.dialog,
-          "Click",
-          async (resolved) => {
-            await resolved.locator.click({
-              timeout: this.actionTimeoutMs,
-            });
-          },
-        );
-
-      case "hover":
-        return this.runTargetInteraction(
-          "hover",
-          request.target,
-          request.dialog,
-          "Hover",
-          async (resolved) => {
-            await resolved.locator.hover({
-              timeout: this.actionTimeoutMs,
-            });
-          },
-        );
-
-      case "clear":
-        return this.runTargetInteraction(
-          "clear",
-          request.target,
-          request.dialog,
-          "Clear",
-          async (resolved) => {
-            if (!resolved.state.editable) {
-              throw new RoveError({
-                code: "TARGET_NOT_INTERACTIVE",
-                message: "The target does not accept text.",
-              });
-            }
-
-            await this.replaceEditableValue(resolved.locator, "");
-          },
-        );
-
-      case "fill":
-        return this.runTargetInteraction(
-          "fill",
-          request.target,
-          request.dialog,
-          "Fill",
-          async (resolved) => {
-            if (!resolved.state.editable) {
-              throw new RoveError({
-                code: "TARGET_NOT_INTERACTIVE",
-                message: "The target does not accept text.",
-              });
-            }
-
-            void isSensitiveTarget(resolved.state.identity);
-
-            await this.replaceEditableValue(resolved.locator, request.value);
-          },
-        );
-
-      case "select":
-        return this.runTargetInteraction(
-          "select",
-          request.target,
-          request.dialog,
-          "Select",
-          async (resolved) => {
-            if (resolved.state.identity.tag !== "select") {
-              throw new RoveError({
-                code: "TARGET_NOT_INTERACTIVE",
-                message: "The target is not a native selectable control.",
-              });
-            }
-
-            await resolved.locator.selectOption(request.values, {
-              timeout: this.actionTimeoutMs,
-            });
-          },
-        );
-
-      case "check":
-        return this.runTargetInteraction(
-          "check",
-          request.target,
-          request.dialog,
-          "Check",
-          async (resolved) => {
-            await this.applyCheckedState(resolved, true);
-          },
-        );
-
-      case "uncheck":
-        return this.runTargetInteraction(
-          "uncheck",
-          request.target,
-          request.dialog,
-          "Uncheck",
-          async (resolved) => {
-            await this.applyCheckedState(resolved, false);
-          },
-        );
-
-      case "drag": {
-        if (request.destination.pageId !== request.target.pageId) {
-          throw new RoveError({
-            code: "INVALID_CONFIGURATION",
-            message:
-              "Drag source and destination must belong to the same page.",
-          });
-        }
-
-        const destination = await this.resolveActionTarget(request.destination);
-
-        return this.runTargetInteraction(
-          "drag",
-          request.target,
-          request.dialog,
-          "Drag",
-          async (resolved) => {
-            await resolved.locator.dragTo(destination.locator, {
-              timeout: this.actionTimeoutMs,
-            });
-          },
-        );
+    try {
+      return await this.interactWithDispatchEvidence(request, context);
+    } catch (error) {
+      if (
+        error instanceof InteractionDispatchError ||
+        error instanceof InteractionNotDispatchedError
+      ) {
+        throw error;
       }
 
-      case "upload": {
-        const upload = context.upload;
+      // Every dispatching implementation below converts failures after its
+      // activation boundary to InteractionDispatchError. Reaching this wrapper
+      // with another error is Browser-owned proof that activation was not
+      // entered.
+      throw new InteractionNotDispatchedError(error);
+    }
+  }
 
-        if (upload === undefined) {
-          throw new RoveError({
-            code: "INVALID_CONFIGURATION",
-            message:
-              "Upload interaction requires an internally materialized Rove file artifact.",
-          });
+  private async interactWithDispatchEvidence(
+    request: BrowserInteractionRequest,
+    context: BrowserInteractionContext,
+  ): Promise<ActionResult> {
+    this.ensureOpen();
+
+    const targetScoped =
+      request.kind !== "coordinate_click" &&
+      "target" in request &&
+      request.target !== undefined;
+    const authority = await this.assertObservationCurrent(
+      context.observationId,
+      { allowMutationDrift: targetScoped },
+    );
+
+    try {
+      if (
+        request.kind === "coordinate_click" &&
+        request.observationId !== context.observationId
+      ) {
+        throw new RoveError({
+          code: "OBSERVATION_STALE",
+          message:
+            "Coordinate interaction must use the same current observation authority.",
+          retryable: true,
+        });
+      }
+
+      switch (request.kind) {
+        case "click":
+          return this.runTargetInteraction(
+            "click",
+            request.target,
+            request.dialog,
+            "Click",
+            async (resolved) => {
+              await resolved.locator.click({
+                timeout: this.actionTimeoutMs,
+              });
+            },
+            context.activityBoundaryId,
+          );
+
+        case "double_click":
+          return this.runTargetInteraction(
+            "double_click",
+            request.target,
+            request.dialog,
+            "Double click",
+            async (resolved) => {
+              await resolved.locator.dblclick({
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "secondary_click":
+          return this.runTargetInteraction(
+            "secondary_click",
+            request.target,
+            request.dialog,
+            "Secondary click",
+            async (resolved) => {
+              await resolved.locator.click({
+                button: "right",
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "modified_click":
+          return this.runTargetInteraction(
+            "modified_click",
+            request.target,
+            request.dialog,
+            "Modified click",
+            async (resolved) => {
+              await resolved.locator.click({
+                modifiers: request.modifiers,
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "hover":
+          return this.runTargetInteraction(
+            "hover",
+            request.target,
+            request.dialog,
+            "Hover",
+            async (resolved) => {
+              await resolved.locator.hover({
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "focus":
+          return this.runTargetInteraction(
+            "focus",
+            request.target,
+            request.dialog,
+            "Focus",
+            async (resolved) => {
+              await resolved.locator.focus({ timeout: this.actionTimeoutMs });
+            },
+          );
+
+        case "blur":
+          return this.runTargetInteraction(
+            "blur",
+            request.target,
+            request.dialog,
+            "Blur",
+            async (resolved) => {
+              await resolved.locator.blur({ timeout: this.actionTimeoutMs });
+            },
+          );
+
+        case "press":
+          if (request.target !== undefined) {
+            return this.runTargetInteraction(
+              "press",
+              request.target,
+              request.dialog,
+              "Press",
+              async (resolved) => {
+                await resolved.locator.press(request.key, {
+                  timeout: this.actionTimeoutMs,
+                });
+              },
+            );
+          }
+          return this.runPageKeyInteraction(
+            "press",
+            request.key,
+            authority.pageId,
+            request.dialog,
+          );
+
+        case "clear":
+          return this.runTargetInteraction(
+            "clear",
+            request.target,
+            request.dialog,
+            "Clear",
+            async (resolved) => {
+              if (!resolved.state.editable) {
+                throw new RoveError({
+                  code: "TARGET_NOT_INTERACTIVE",
+                  message: "The target does not accept text.",
+                });
+              }
+
+              await this.replaceEditableValue(resolved.locator, "");
+            },
+          );
+
+        case "fill":
+          return this.runTargetInteraction(
+            "fill",
+            request.target,
+            request.dialog,
+            "Fill",
+            async (resolved) => {
+              if (!resolved.state.editable) {
+                throw new RoveError({
+                  code: "TARGET_NOT_INTERACTIVE",
+                  message: "The target does not accept text.",
+                });
+              }
+
+              void isSensitiveTarget(resolved.state.identity);
+
+              await this.replaceEditableValue(resolved.locator, request.value);
+            },
+          );
+
+        case "type_sequential":
+          return this.runTargetInteraction(
+            "type_sequential",
+            request.target,
+            request.dialog,
+            "Sequential type",
+            async (resolved) => {
+              if (!resolved.state.editable) {
+                throw new RoveError({
+                  code: "TARGET_NOT_INTERACTIVE",
+                  message: "The target does not accept text.",
+                });
+              }
+              await resolved.locator.fill("", {
+                timeout: this.actionTimeoutMs,
+              });
+              await resolved.locator.pressSequentially(request.value, {
+                delay: request.delayMs,
+                timeout: this.actionTimeoutMs,
+              });
+              await this.assertEditableValue(resolved.locator, request.value);
+            },
+          );
+
+        case "select_text":
+          return this.runTargetInteraction(
+            "select_text",
+            request.target,
+            request.dialog,
+            "Select text",
+            async (resolved) => {
+              if (!resolved.state.editable) {
+                throw new RoveError({
+                  code: "TARGET_NOT_INTERACTIVE",
+                  message:
+                    "The target does not contain selectable editable text.",
+                });
+              }
+              await resolved.locator.selectText({
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "select":
+          return this.runTargetInteraction(
+            "select",
+            request.target,
+            request.dialog,
+            "Select",
+            async (resolved) => {
+              if (resolved.state.identity.tag !== "select") {
+                throw new RoveError({
+                  code: "TARGET_NOT_INTERACTIVE",
+                  message: "The target is not a native selectable control.",
+                });
+              }
+
+              await resolved.locator.selectOption(request.values, {
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+
+        case "check":
+          return this.runTargetInteraction(
+            "check",
+            request.target,
+            request.dialog,
+            "Check",
+            async (resolved) => {
+              await this.applyCheckedState(resolved, true);
+            },
+          );
+
+        case "uncheck":
+          return this.runTargetInteraction(
+            "uncheck",
+            request.target,
+            request.dialog,
+            "Uncheck",
+            async (resolved) => {
+              await this.applyCheckedState(resolved, false);
+            },
+          );
+
+        case "drag": {
+          if (request.destination.pageId !== request.target.pageId) {
+            throw new RoveError({
+              code: "INVALID_CONFIGURATION",
+              message:
+                "Drag source and destination must belong to the same page.",
+            });
+          }
+
+          const destination = await this.resolveActionTarget(
+            request.destination,
+          );
+
+          return this.runTargetInteraction(
+            "drag",
+            request.target,
+            request.dialog,
+            "Drag",
+            async (resolved, phases) => {
+              await this.runTrustedStagedDrag(
+                this.pageRegistry.pageFor(request.target.pageId),
+                resolved.locator,
+                destination.locator,
+                phases,
+              );
+            },
+          );
         }
 
-        return this.runTargetInteraction(
-          "upload",
-          request.target,
-          request.dialog,
-          "Upload",
-          async (resolved) => {
-            if (
-              resolved.state.identity.tag !== "input" ||
-              resolved.state.identity.type !== "file"
-            ) {
-              throw new RoveError({
-                code: "TARGET_NOT_INTERACTIVE",
-                message: "The target is not a file input.",
-              });
-            }
+        case "upload": {
+          const uploads =
+            context.uploads ??
+            (context.upload === undefined ? undefined : [context.upload]);
 
-            await resolved.locator.setInputFiles(
-              {
+          if (uploads === undefined || uploads.length === 0) {
+            throw new RoveError({
+              code: "INVALID_CONFIGURATION",
+              message:
+                "Upload interaction requires an internally materialized Rove file artifact.",
+            });
+          }
+
+          return this.runTargetInteraction(
+            "upload",
+            request.target,
+            request.dialog,
+            "Upload",
+            async (resolved) => {
+              const files = uploads.map((upload) => ({
                 name: upload.filename,
                 mimeType: "application/octet-stream",
                 buffer: Buffer.from(upload.bytes),
-              },
-              {
-                timeout: this.actionTimeoutMs,
-              },
+              }));
+
+              if (
+                resolved.state.identity.tag === "input" &&
+                resolved.state.identity.type === "file"
+              ) {
+                await resolved.locator.setInputFiles(files, {
+                  timeout: this.actionTimeoutMs,
+                });
+
+                return;
+              }
+
+              const page = this.pageRegistry.pageFor(request.target.pageId);
+
+              const [chooser] = await Promise.all([
+                page.waitForEvent("filechooser", {
+                  timeout: this.actionTimeoutMs,
+                }),
+                resolved.locator.click({ timeout: this.actionTimeoutMs }),
+              ]);
+
+              await chooser.setFiles(files, { timeout: this.actionTimeoutMs });
+            },
+          );
+        }
+
+        case "clipboard": {
+          const modifier = process.platform === "darwin" ? "Meta" : "Control";
+          const key = `${modifier}+${request.operation === "copy" ? "C" : request.operation === "cut" ? "X" : "V"}`;
+          if (request.target === undefined) {
+            return this.runPageKeyInteraction(
+              "clipboard",
+              key,
+              authority.pageId,
+              request.dialog,
             );
-          },
-        );
+          }
+          return this.runTargetInteraction(
+            "clipboard",
+            request.target,
+            request.dialog,
+            `Clipboard ${request.operation}`,
+            async (resolved) => {
+              await resolved.locator.focus({ timeout: this.actionTimeoutMs });
+              await resolved.locator.press(key, {
+                timeout: this.actionTimeoutMs,
+              });
+            },
+          );
+        }
+
+        case "precise_scroll":
+          return this.runPreciseScroll(request, authority.pageId);
+
+        case "coordinate_click":
+          return this.runCoordinateClick(request);
       }
-
-      case "precise_scroll":
-        return this.runPreciseScroll(request);
-
-      case "coordinate_click":
-        return this.runCoordinateClick(request);
+    } finally {
+      // Dispatch-local download boundaries are armed by runTargetInteraction.
     }
+
+    throw new RoveError({
+      code: "INVALID_CONFIGURATION",
+      message: "Unsupported browser interaction kind.",
+    });
   }
 
   private async runTargetInteraction(
@@ -1392,15 +1965,38 @@ export class PlaywrightBrowserSession implements BrowserSession {
     target: TargetReference,
     dialog: DialogDirective | undefined,
     actionName: string,
-    operation: (resolved: ResolvedTarget) => Promise<void>,
+    operation: (
+      resolved: ResolvedTarget,
+      phases: ActionPhaseRecord[],
+    ) => Promise<void>,
+    activityBoundaryId?: string,
   ): Promise<ActionResult> {
     const page = this.pageRegistry.pageFor(target.pageId);
 
     const beforePages = this.pageRegistry.summaries();
+    const previous = this.pageRegistry.stateFor(target.pageId);
 
     const resolved = await this.resolveActionTarget(target);
-
-    const previous = this.pageRegistry.stateFor(target.pageId);
+    if (
+      (action === "focus" || action === "press" || action === "clipboard") &&
+      !resolved.state.focusable
+    ) {
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The target cannot receive keyboard focus.",
+        details: {
+          action,
+          reason: "target_not_focusable",
+        },
+      });
+    }
+    const phases: ActionPhaseRecord[] = [
+      {
+        phase: "preflight",
+        status: "completed",
+        strategy: "revision_scoped_target",
+      },
+    ];
 
     const popup = this.context
       .waitForEvent("page", {
@@ -1411,14 +2007,116 @@ export class PlaywrightBrowserSession implements BrowserSession {
     let dispatched = false;
     let operationCompleted = false;
 
+    if (activityBoundaryId !== undefined) {
+      const href = await resolved.locator.getAttribute("href");
+      const targetFrameUrl = await resolved.locator.evaluate(
+        () => location.href,
+      );
+      const isChromiumPdfViewerDownload =
+        href === null &&
+        resolved.state.identity.name === "Download" &&
+        targetFrameUrl === CHROMIUM_PDF_VIEWER_URL &&
+        (await page.evaluate(() => document.contentType)) === "application/pdf";
+      if (href !== null || isChromiumPdfViewerDownload) {
+        const expectedUrl =
+          href === null ? page.url() : new URL(href, page.url()).href;
+        const strategy =
+          href === null ? "chromium_pdf_viewer" : "trusted_anchor";
+        if (strategy === "trusted_anchor") {
+          await page.evaluate(
+            ({ boundaryId }) => {
+              const scopedWindow = window as unknown as {
+                __roveDownloadCorrelation?: {
+                  id: string;
+                  activations: Array<{ url: string; trusted: boolean }>;
+                };
+                __roveDownloadCorrelationInstalled?: boolean;
+              };
+              scopedWindow.__roveDownloadCorrelation = {
+                id: boundaryId,
+                activations: [],
+              };
+              if (scopedWindow.__roveDownloadCorrelationInstalled === true) {
+                return;
+              }
+              scopedWindow.__roveDownloadCorrelationInstalled = true;
+              document.addEventListener(
+                "click",
+                (event) => {
+                  const path = event.composedPath();
+                  const anchor = path.find(
+                    (item): item is HTMLAnchorElement =>
+                      item instanceof HTMLAnchorElement && item.href !== "",
+                  );
+                  const current = scopedWindow.__roveDownloadCorrelation;
+                  if (anchor !== undefined && current !== undefined) {
+                    current.activations.push({
+                      url: anchor.href,
+                      trusted: event.isTrusted,
+                    });
+                  }
+                },
+                true,
+              );
+            },
+            { boundaryId: activityBoundaryId },
+          );
+        }
+        this.downloadCorrelationWindows.set(target.pageId, {
+          id: activityBoundaryId,
+          expectedUrl,
+          strategy,
+          dispatched: false,
+          eventCount: 0,
+        });
+        setTimeout(() => {
+          if (
+            this.downloadCorrelationWindows.get(target.pageId)?.id ===
+            activityBoundaryId
+          ) {
+            this.downloadCorrelationWindows.delete(target.pageId);
+          }
+        }, this.actionTimeoutMs);
+      } else {
+        this.downloadCorrelationWindows.set(target.pageId, {
+          id: activityBoundaryId,
+          strategy: "trusted_action_download",
+          dispatched: false,
+          eventCount: 0,
+        });
+        setTimeout(() => {
+          if (
+            this.downloadCorrelationWindows.get(target.pageId)?.id ===
+            activityBoundaryId
+          ) {
+            this.downloadCorrelationWindows.delete(target.pageId);
+          }
+        }, this.actionTimeoutMs);
+      }
+    }
+
     try {
       await this.withDialogDirective(target.pageId, dialog, async () => {
         dispatched = true;
+        const downloadBoundary = this.downloadCorrelationWindows.get(
+          target.pageId,
+        );
+        if (
+          downloadBoundary !== undefined &&
+          downloadBoundary.id === activityBoundaryId
+        ) {
+          downloadBoundary.dispatched = true;
+        }
 
         await this.evidenceRecorder.withAgentAction(page, () =>
-          operation(resolved),
+          operation(resolved, phases),
         );
         operationCompleted = true;
+        phases.push({
+          phase: "commit",
+          status: "completed",
+          strategy: "trusted_browser_input",
+        });
       });
 
       if (this.pageRegistry.summaries().length === beforePages.length) {
@@ -1430,8 +2128,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
         target.pageId,
         previous,
         beforePages,
+        phases,
       );
     } catch (error) {
+      if (
+        activityBoundaryId !== undefined &&
+        this.downloadCorrelationWindows.get(target.pageId)?.id ===
+          activityBoundaryId
+      ) {
+        this.downloadCorrelationWindows.delete(target.pageId);
+      }
       if (!dispatched) {
         throw error;
       }
@@ -1451,6 +2157,16 @@ export class PlaywrightBrowserSession implements BrowserSession {
         target.pageId,
         previous,
         beforePages,
+        operationCompleted
+          ? phases
+          : [
+              ...phases,
+              {
+                phase: "commit",
+                status: "uncertain",
+                strategy: "trusted_browser_input",
+              },
+            ],
       ).catch(() => undefined);
 
       throw new InteractionDispatchError(
@@ -1463,8 +2179,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
   private async runPreciseScroll(
     request: Extract<BrowserInteractionRequest, { kind: "precise_scroll" }>,
+    observedPageId?: string,
   ): Promise<ActionResult> {
-    const pageId = request.target?.pageId ?? this.requireActivePageId();
+    const pageId =
+      request.target?.pageId ?? observedPageId ?? this.requireActivePageId();
 
     const page = this.pageRegistry.pageFor(pageId);
 
@@ -1757,6 +2475,13 @@ export class PlaywrightBrowserSession implements BrowserSession {
   ): Promise<void> {
     await locator.fill(value, { timeout: this.actionTimeoutMs });
 
+    await this.assertEditableValue(locator, value);
+  }
+
+  private async assertEditableValue(
+    locator: Locator,
+    value: string,
+  ): Promise<void> {
     const exact = await locator.evaluate((element, expected) => {
       if (
         element instanceof HTMLInputElement ||
@@ -1785,6 +2510,130 @@ export class PlaywrightBrowserSession implements BrowserSession {
         message:
           "The editable target did not retain the exact replacement value.",
       });
+    }
+  }
+
+  private async runPageKeyInteraction(
+    action: "press" | "clipboard",
+    key: string,
+    pageId: string,
+    dialog: DialogDirective | undefined,
+  ): Promise<ActionResult> {
+    const page = this.pageRegistry.pageFor(pageId);
+    const beforePages = this.pageRegistry.summaries();
+    const previous = this.pageRegistry.stateFor(pageId);
+    const phases: ActionPhaseRecord[] = [
+      { phase: "preflight", status: "completed", strategy: "active_page" },
+    ];
+    let dispatched = false;
+    try {
+      await this.withDialogDirective(pageId, dialog, async () => {
+        await this.evidenceRecorder.withAgentAction(page, async () => {
+          dispatched = true;
+          await page.keyboard.press(key);
+        });
+      });
+      phases.push({
+        phase: "commit",
+        status: "completed",
+        strategy: "trusted_keyboard_input",
+      });
+      return await this.synchronizeAfterAction(
+        action,
+        pageId,
+        previous,
+        beforePages,
+        phases,
+      );
+    } catch (error) {
+      if (!dispatched) throw error;
+      const result = await this.synchronizeAfterAction(
+        action,
+        pageId,
+        previous,
+        beforePages,
+        [
+          ...phases,
+          {
+            phase: "commit",
+            status: "uncertain",
+            strategy: "trusted_keyboard_input",
+          },
+        ],
+      ).catch(() => undefined);
+      throw new InteractionDispatchError(
+        actionError(error, action === "press" ? "Press" : "Clipboard"),
+        result,
+        "dispatch",
+      );
+    }
+  }
+
+  private async runTrustedStagedDrag(
+    page: Page,
+    source: Locator,
+    destination: Locator,
+    phases: ActionPhaseRecord[],
+  ): Promise<void> {
+    const [sourceBounds, destinationBounds] = await Promise.all([
+      source.boundingBox({ timeout: this.actionTimeoutMs }),
+      destination.boundingBox({ timeout: this.actionTimeoutMs }),
+    ]);
+    if (sourceBounds === null || destinationBounds === null) {
+      throw new RoveError({
+        code: "TARGET_NOT_VISIBLE",
+        message:
+          "Drag source and destination require visible interaction bounds.",
+      });
+    }
+
+    const start = {
+      x: sourceBounds.x + sourceBounds.width / 2,
+      y: sourceBounds.y + sourceBounds.height / 2,
+    };
+    const end = {
+      x: destinationBounds.x + destinationBounds.width / 2,
+      y: destinationBounds.y + destinationBounds.height / 2,
+    };
+    const distance = Math.hypot(end.x - start.x, end.y - start.y);
+    const threshold = Math.min(12, Math.max(6, distance * 0.08));
+    const unit =
+      distance === 0
+        ? { x: 1, y: 0 }
+        : {
+            x: (end.x - start.x) / distance,
+            y: (end.y - start.y) / distance,
+          };
+
+    let pressed = false;
+    let released = false;
+    try {
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      pressed = true;
+      phases.push({
+        phase: "engage",
+        status: "completed",
+        strategy: "pointer_down_threshold_dwell",
+      });
+      await page.mouse.move(
+        start.x + unit.x * threshold,
+        start.y + unit.y * threshold,
+        { steps: 2 },
+      );
+      await page.waitForTimeout(125);
+      await page.mouse.move(end.x, end.y, { steps: 12 });
+      await page.mouse.move(end.x, end.y, { steps: 2 });
+      await page.waitForTimeout(80);
+      phases.push({
+        phase: "progress",
+        status: "completed",
+        strategy: "trusted_pointer_interpolation",
+      });
+      await page.mouse.up();
+      released = true;
+    } finally {
+      if (pressed && !released) await page.mouse.up().catch(() => undefined);
     }
   }
 
@@ -1833,7 +2682,20 @@ export class PlaywrightBrowserSession implements BrowserSession {
     };
     const delta = deltas[options.direction];
     try {
-      await page.mouse.wheel(delta[0], delta[1]);
+      const moved = await scrollDomSurface(page, delta[0], delta[1]);
+
+      if (!moved) {
+        const fallbackKey =
+          options.direction === "down"
+            ? "PageDown"
+            : options.direction === "up"
+              ? "PageUp"
+              : options.direction === "right"
+                ? "ArrowRight"
+                : "ArrowLeft";
+
+        await page.keyboard.press(fallbackKey);
+      }
     } catch (error) {
       throw actionError(error, "Scroll");
     }
@@ -1858,7 +2720,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const authority =
       options.observationId === undefined
         ? undefined
-        : await this.assertObservationCurrent(options.observationId);
+        : await this.assertObservationCurrent(options.observationId, {
+            allowMutationDrift: true,
+          });
 
     const pageId =
       options.target?.pageId ?? authority?.pageId ?? this.requireActivePageId();
@@ -1966,7 +2830,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
           });
         }
 
-        await this.assertObservationCurrent(options.observationId);
+        await this.assertObservationCurrent(options.observationId, {
+          allowMutationDrift: true,
+        });
       }
 
       const state = await this.pageRegistry.syncMetadata(pageId);
@@ -1987,6 +2853,11 @@ export class PlaywrightBrowserSession implements BrowserSession {
           pageId,
           revision: state.revision,
           mutationVersion,
+          ...(authority === undefined
+            ? {}
+            : {
+                observationMutationVersion: authority.mutationVersion,
+              }),
           url: state.url,
           mode,
           viewport,
@@ -2089,6 +2960,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     pageId: string,
     previous: PageState,
     beforePages: PageSummary[],
+    phases?: ActionPhaseRecord[],
   ): Promise<ActionResult> {
     const page = this.pageRegistry.pageFor(pageId);
     this.observationAuthorities.clear();
@@ -2167,6 +3039,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
       currentRevision: current.revision,
       url: current.url,
       ...(openedPages.length === 0 ? {} : { openedPages }),
+      ...(phases === undefined
+        ? {}
+        : {
+            phases: [
+              ...phases,
+              {
+                phase: "synchronize" as const,
+                status: "completed" as const,
+                strategy: "revision_and_mutation_reconciliation",
+              },
+            ],
+          }),
     };
   }
 
@@ -2179,21 +3063,18 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const beforePages = this.pageRegistry.summaries();
     let dispatched = false;
     try {
-      const response = await this.evidenceRecorder.withAgentAction(
-        page,
-        () => {
-          dispatched = true;
-          return action === "back"
-            ? page.goBack({
-                waitUntil: "commit",
-                timeout: this.actionTimeoutMs,
-              })
-            : page.goForward({
-                waitUntil: "commit",
-                timeout: this.actionTimeoutMs,
-              });
-        },
-      );
+      const response = await this.evidenceRecorder.withAgentAction(page, () => {
+        dispatched = true;
+        return action === "back"
+          ? page.goBack({
+              waitUntil: "commit",
+              timeout: this.actionTimeoutMs,
+            })
+          : page.goForward({
+              waitUntil: "commit",
+              timeout: this.actionTimeoutMs,
+            });
+      });
       if (response === null) {
         const observed = this.pageRegistry.stateFor(pageId);
         if (
@@ -2371,11 +3252,15 @@ export class PlaywrightBrowserSession implements BrowserSession {
 
       const shutdownCdp =
         browserCdp ??
-        (await this.browser.newBrowserCDPSession().catch(() => undefined));
+        (await settleBrowserShutdownStep(() =>
+          this.browser.newBrowserCDPSession(),
+        ));
 
       if (shutdownCdp !== undefined) {
-        await shutdownCdp.send("Browser.close").catch(() => undefined);
-        await shutdownCdp.detach().catch(() => undefined);
+        await settleBrowserShutdownStep(() =>
+          shutdownCdp.send("Browser.close"),
+        );
+        await settleBrowserShutdownStep(() => shutdownCdp.detach());
       }
 
       await this.ownedRuntimeCleanup().catch(() => undefined);
@@ -2539,6 +3424,37 @@ export class PlaywrightBrowserSession implements BrowserSession {
     } catch {
       return null;
     }
+  }
+
+  async show(): Promise<void> {
+    this.ensureOpen();
+    const pageId =
+      this.pageRegistry.activeId() ?? this.pageRegistry.summaries()[0]?.id;
+    if (pageId === undefined) {
+      throw new RoveError({
+        code: "BROWSER_CLOSED",
+        message: "The browser has no page to show.",
+      });
+    }
+    const page = this.pageRegistry.pageFor(pageId);
+    const windowState = await this.browserWindowState();
+    if (
+      windowState?.windowState === "minimized" &&
+      this.browserCdp !== undefined
+    ) {
+      await this.browserCdp.send("Browser.setWindowBounds", {
+        windowId: windowState.windowId,
+        bounds: { windowState: "normal" },
+      });
+    }
+    try {
+      await page.bringToFront();
+    } catch (error) {
+      if (isBrowserClosedError(error)) throw browserClosedError();
+      throw error;
+    }
+    this.pageRegistry.activate(pageId);
+    await this.pageRegistry.syncMetadata(pageId);
   }
 
   hostIdentity(): BrowserHostIdentity | null {

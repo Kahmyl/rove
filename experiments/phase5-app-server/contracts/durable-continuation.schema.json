@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rove.local/contracts/durable-continuation.schema.json",
+  "title": "PendingHumanAttention",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roveTaskId",
+    "codexThreadId",
+    "originatingCodexTurnId",
+    "roveSessionId",
+    "handoffGeneration",
+    "requestedInstruction",
+    "continuationPolicy",
+    "status",
+    "freshInspectionRequired"
+  ],
+  "properties": {
+    "roveTaskId": { "type": "string" },
+    "codexThreadId": { "type": "string" },
+    "originatingCodexTurnId": { "type": "string" },
+    "roveSessionId": { "type": "string" },
+    "handoffId": {
+      "type": "string",
+      "pattern": "^handoff_[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "observationFingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "handoffGeneration": { "type": "integer", "minimum": 1 },
+    "requestedInstruction": { "type": "string", "minLength": 1 },
+    "continuationPolicy": {
+      "enum": ["resume_after_control_return", "explicit_user_response"]
+    },
+    "status": {
+      "enum": ["pending", "consumed", "cancelled", "superseded"]
+    },
+    "continuationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "returnEventId",
+        "kind",
+        "dispatchStatus",
+        "payload"
+      ],
+      "properties": {
+        "commandId": { "type": "string", "minLength": 1 },
+        "returnEventId": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["turn/start", "turn/steer"] },
+        "dispatchStatus": {
+          "enum": ["not_started", "possibly_started", "terminal"]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "roveContinuationCommandId",
+            "authoredBy",
+            "instruction"
+          ],
+          "properties": {
+            "roveContinuationCommandId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authoredBy": { "const": "host" },
+            "instruction": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "consumedEventId": { "type": "string" },
+    "freshInspectionRequired": { "type": "boolean" },
+    "preHandoffObservationSeq": { "type": "integer", "minimum": 0 },
+    "returnEventId": { "type": "string", "minLength": 1 },
+    "returnObservationSeq": { "type": "integer", "minimum": 0 }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["handoffId"] },
+      "then": { "required": ["observationFingerprint"] },
+      "else": { "not": { "required": ["observationFingerprint"] } }
+    },
+    {
+      "if": { "required": ["returnEventId"] },
+      "then": {
+        "properties": { "freshInspectionRequired": { "const": false } }
+      },
+      "else": { "not": { "required": ["returnObservationSeq"] } }
+    },
+    {
+      "if": { "required": ["continuationCommand"] },
+      "then": { "required": ["returnEventId"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "consumed" } } },
+      "then": {
+        "required": ["consumedEventId", "continuationCommand"],
+        "properties": {
+          "freshInspectionRequired": { "const": false },
+          "continuationCommand": {
+            "properties": { "dispatchStatus": { "const": "terminal" } }
+          }
+        }
+      },
+      "else": { "not": { "required": ["consumedEventId"] } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "pending" } } },
+      "then": {
+        "properties": {
+          "continuationCommand": {
+            "properties": {
+              "dispatchStatus": {
+                "enum": ["not_started", "possibly_started"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "enum": ["cancelled", "superseded"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "continuationCommand": {
+            "properties": {
+              "dispatchStatus": {
+                "enum": ["possibly_started", "terminal"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-rove-invariants": [
+    "production observations persist an exact handoff ID and a digest over immutable task, thread, turn, session, handoff, generation, instruction, policy, and pre-handoff observation data",
+    "legacy generation-only records omit both handoffId and observationFingerprint and remain explicitly supported during migration",
+    "exact observation replay is a no-op in every lifecycle state while changed immutable observation data is rejected",
+    "one return event is consumed at most once",
+    "possibly_started is durably recorded before wire dispatch and consumed only after terminal Codex truth",
+    "the stable command id is present in the host-authored Codex payload and recovered from thread truth",
+    "an active matching turn is steered; an idle thread receives one new turn; a different active turn leaves the continuation pending",
+    "explicit-user-response handoffs never auto-continue",
+    "post-return continuation requires fresh browser inspection",
+    "the exact Return receipt is persisted before thread eligibility is evaluated and survives restart",
+    "host continuation is not rendered as a user-authored message"
+  ]
+}

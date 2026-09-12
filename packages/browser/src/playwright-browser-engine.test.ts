@@ -286,6 +286,27 @@ describe("PlaywrightBrowserEngine", () => {
     expect(pages.find((page) => page.id === "page_02")?.active).toBe(true);
   });
 
+  it("opens an explicit URL in a fresh active page", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    const opened = await session.openPage(server.url);
+
+    expect(opened).toMatchObject({
+      id: "page_02",
+      url: new URL("/", server.url).href,
+      title: "Rove Inspection Fixture",
+      active: true,
+      revision: 1,
+    });
+
+    const pages = await session.pages();
+
+    expect(pages).toHaveLength(2);
+    expect(pages.find((page) => page.id === "page_01")?.active).toBe(false);
+    expect(pages.find((page) => page.id === "page_02")?.active).toBe(true);
+  });
+
   it("switches active pages", async () => {
     const server = await startServer();
     const session = await startSession();
@@ -302,6 +323,18 @@ describe("PlaywrightBrowserEngine", () => {
 
     expect(pages.find((page) => page.id === "page_01")?.active).toBe(true);
     expect(pages.find((page) => page.id === "page_02")?.active).toBe(false);
+  });
+
+  it("shows the active managed page without changing browser identity", async () => {
+    const session = await startSession();
+    const before = await session.pages();
+
+    await expect(session.show()).resolves.toBeUndefined();
+
+    const after = await session.pages();
+    expect(after.find((page) => page.active)?.id).toBe(
+      before.find((page) => page.active)?.id,
+    );
   });
 
   it("rejects switching to an unknown page", async () => {

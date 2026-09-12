@@ -1,33 +1,45 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent,
-} from "react";
+import { useRef, useState, type PointerEvent } from "react";
 
-import type { Session } from "@rove/protocol";
+import type {
+  DesktopSurfaceSnapshot,
+  FollowerPresentationMode,
+} from "../shared/desktop-api.js";
 
-import type { FollowerPresentationMode } from "../shared/desktop-api.js";
-
-import roveMarkUrl from "./assets/rove-mark.svg";
+import roveMarkUrl from "./assets/rove-mark.png";
 
 import {
   toCompactFollowerViewModel,
   type CompactFollowerPrimaryAction,
 } from "./follower-state.js";
 
-export function FollowerApp() {
-  const [session, setSession] = useState<Session | null>(null);
+export interface FollowerAppProps {
+  desktop: DesktopSurfaceSnapshot | null;
+  connectionError: string | null;
+  refresh(): Promise<void>;
+}
 
-  const [loading, setLoading] = useState(true);
+function followerPresentation(
+  desktop: DesktopSurfaceSnapshot | null,
+): FollowerPresentationMode {
+  const expanded = desktop?.surface.presentation === "expanded";
+  const fullscreen = desktop?.surface.browserContext === "fullscreen";
+  if (fullscreen) return expanded ? "fullscreen_expanded" : "fullscreen_micro";
+  return expanded ? "windowed_expanded" : "windowed_compact";
+}
 
+export function FollowerApp({
+  desktop,
+  connectionError,
+  refresh,
+}: FollowerAppProps) {
   const [busy, setBusy] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
 
-  const [offline, setOffline] = useState(false);
-
-  const [presentation, setPresentation] =
-    useState<FollowerPresentationMode>("windowed_compact");
+  const session =
+    desktop?.notice === null ? (desktop.companion?.session ?? null) : null;
+  const loading = desktop === null;
+  const offline = connectionError !== null || operationError !== null;
+  const presentation = followerPresentation(desktop);
 
   const dragPointer = useRef<number | null>(null);
 
@@ -58,34 +70,6 @@ export function FollowerApp() {
     if (dragPointer.current === event.pointerId) dragPointer.current = null;
   };
 
-  const refresh = useCallback(async () => {
-    try {
-      const [nextSession, nextPresentation] = await Promise.all([
-        window.rove.getLiveSession(),
-        window.rove.getFollowerPresentation(),
-      ]);
-
-      setSession(nextSession);
-      setPresentation(nextPresentation);
-
-      setOffline(false);
-    } catch {
-      setSession(null);
-
-      setOffline(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-
-    const timer = window.setInterval(() => void refresh(), 500);
-
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-
   const view = toCompactFollowerViewModel(session);
 
   const expanded = presentation.endsWith("_expanded");
@@ -105,8 +89,11 @@ export function FollowerApp() {
       }
 
       await refresh();
-    } catch {
-      setOffline(true);
+      setOperationError(null);
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause.message : "The Rove operation failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -115,16 +102,24 @@ export function FollowerApp() {
   const openRove = async () => {
     try {
       await window.rove.openRove();
-    } catch {
-      setOffline(true);
+      await refresh();
+      setOperationError(null);
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause.message : "The Rove operation failed.",
+      );
     }
   };
 
   const setExpansion = async (next: boolean) => {
     try {
-      setPresentation(await window.rove.setFollowerExpanded(next));
-    } catch {
-      setOffline(true);
+      await window.rove.transitionSurface(next ? "expand" : "collapse");
+      await refresh();
+      setOperationError(null);
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause.message : "The Rove operation failed.",
+      );
     }
   };
 
@@ -161,8 +156,11 @@ export function FollowerApp() {
       if (action === "pause") await window.rove.pauseSession();
       else await window.rove.finishSession();
       await refresh();
-    } catch {
-      setOffline(true);
+      setOperationError(null);
+    } catch (cause) {
+      setOperationError(
+        cause instanceof Error ? cause.message : "The Rove operation failed.",
+      );
     } finally {
       setBusy(false);
     }

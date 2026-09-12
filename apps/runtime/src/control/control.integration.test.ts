@@ -105,6 +105,7 @@ describe("Milestone 7 requested handoff", () => {
     const { runtime } = await harness();
     const session = await runtime.startSession({
       mode: "agent",
+      browser: { mode: "temporary" },
       startUrl: `${fixture.url}/handoff`,
     });
     active.push({ runtime, id: session.id });
@@ -199,7 +200,10 @@ describe("Milestone 7 requested handoff", () => {
 
   it("wakes a pending wait when the session completes", async () => {
     const { runtime } = await harness();
-    const session = await runtime.startSession({ mode: "agent" });
+    const session = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: session.id });
     const pending = runtime.waitForControl(session.id, {
       afterSeq: 1,
@@ -217,9 +221,18 @@ describe("Milestone 7 requested handoff", () => {
 describe("Milestone 7 mode transitions and all-page invalidation", () => {
   it("supports voluntary Companion takeover and preserves Capture ownership", async () => {
     const { runtime } = await harness();
-    const agent = await runtime.startSession({ mode: "agent" });
-    const companion = await runtime.startSession({ mode: "companion" });
-    const capture = await runtime.startSession({ mode: "capture" });
+    const agent = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
+    const companion = await runtime.startSession({
+      mode: "companion",
+      browser: { mode: "temporary" },
+    });
+    const capture = await runtime.startSession({
+      mode: "capture",
+      browser: { mode: "temporary" },
+    });
     active.push(
       { runtime, id: agent.id },
       { runtime, id: companion.id },
@@ -328,7 +341,10 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
       close: async () => undefined,
     } as BrowserSession;
     const { runtime } = await harness({ start: async () => fake });
-    const session = await runtime.startSession({ mode: "agent" });
+    const session = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: session.id });
     const slow = runtime.navigate(session.id, {
       url: "https://example.test/slow",
@@ -453,7 +469,10 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
       close: async () => undefined,
     } as BrowserSession;
     const { runtime, browser } = await harness({ start: async () => fake });
-    const session = await runtime.startSession({ mode: "companion" });
+    const session = await runtime.startSession({
+      mode: "companion",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: session.id });
     await browser.get(session.id).switchPage("page_02");
     const inspection2 = await runtime.inspectBrowser(session.id);
@@ -487,7 +506,10 @@ describe("Milestone 7 mode transitions and all-page invalidation", () => {
 
   it("fails the session and wakes waiters when the human closes the browser", async () => {
     const { runtime, browser } = await harness();
-    const session = await runtime.startSession({ mode: "companion" });
+    const session = await runtime.startSession({
+      mode: "companion",
+      browser: { mode: "temporary" },
+    });
     active.push({ runtime, id: session.id });
     const taken = await runtime.takeHumanControl(session.id);
     const pending = runtime.waitForControl(session.id, {

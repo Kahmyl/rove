@@ -1128,6 +1128,133 @@ describe("production page-state semantic conformance", () => {
 
     expect(definitions).toHaveLength(7);
   }, 30_000);
+
+  it("allows only routine, non-consequential blocking dialogs", async () => {
+    const definitions = [
+      {
+        id: "production-routine-welcome-modal",
+        title: "Calendar",
+        body: `
+          <main>
+            <h1>Calendar</h1>
+            <button>Create</button>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Calendar now supports dark mode</h2>
+            <p>Choose the appearance that works best for you.</p>
+            <button>Got it</button>
+          </div>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-calendar-notification-prompt",
+        title: "Calendar",
+        body: `
+          <main>
+            <h1>Calendar</h1>
+            <button>Rove acceptance review, 3:00 PM</button>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Want to get better notifications?</h2>
+            <p>Calendar needs permission to display notifications through your browser. Click Continue to give that permission.</p>
+            <a href="#learn">Learn more about notifications</a>
+            <button>Dismiss</button>
+            <button>Ask me later</button>
+            <button>Continue</button>
+          </div>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-calendar-create-event-modal",
+        title: "Calendar",
+        body: `
+          <main>
+            <h1>Calendar</h1>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Create event</h2>
+            <label>Title <input type="text" /></label>
+            <label>Description <textarea></textarea></label>
+            <button>Save</button>
+          </div>
+        `,
+        expectedPrimaryState: "ready",
+        expectedPropositions: {
+          interstitialPresented: false,
+          primaryContentAvailable: true,
+        },
+      },
+      {
+        id: "production-terms-modal-with-dismiss-remains-blocking",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+            <button>Continue working</button>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Review updated terms</h2>
+            <p>Please review the privacy policy and updated terms.</p>
+            <button>Not now</button>
+            <button>Accept</button>
+          </div>
+        `,
+        expectedPrimaryState: "unknown_interstitial",
+        expectedPropositions: {
+          interstitialPresented: true,
+        },
+      },
+      {
+        id: "production-consent-form-with-save-remains-blocking",
+        title: "Privacy choices",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Privacy consent</h2>
+            <label>Preference <select><option>Required only</option></select></label>
+            <button>Save preferences</button>
+          </div>
+        `,
+        expectedPrimaryState: "unknown_interstitial",
+        expectedPropositions: {
+          interstitialPresented: true,
+        },
+      },
+      {
+        id: "production-continue-modal-remains-blocking",
+        title: "Workspace",
+        body: `
+          <main>
+            <h1>Workspace</h1>
+          </main>
+          <div role="dialog" aria-modal="true">
+            <h2>Review this dialog</h2>
+            <button>Continue</button>
+          </div>
+        `,
+        expectedPrimaryState: "unknown_interstitial",
+        expectedPropositions: {
+          interstitialPresented: true,
+        },
+      },
+    ];
+
+    for (const definition of definitions) {
+      await checkDefinition(definition);
+    }
+  }, 30_000);
   it("keeps lexical blockers message-local and recognizes multi-step authentication", async () => {
     const definitions = [
       {

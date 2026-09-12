@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-07",
+  "command": [
+    "codex app-server generate-ts --experimental --out <temporary>/ts",
+    "codex app-server generate-json-schema --experimental --out <temporary>/json"
+  ],
+  "cliVersion": "0.153.4",
+  "executable": {
+    "configured": "codex",
+    "resolved": "/Applications/ChatGPT.app/Contents/Resources/codex",
+    "sha256": "c147aa90d34139599711fb568102ceefc6319ca1ac5cb6f4056ca46a1834edd9"
+  },
+  "files": 1243,
+  "bytes": 4623543,
+  "aggregateSha256": "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5",
+  "runtimeValidatorCatalogSha256": "625e426cc3fcd6e11b3f2e0aaa95ae03682738daba86e5e634ad59a2e0ea27d0",
+  "canonicalBundles": {
+    "legacyJson": {
+      "path": "json/codex_app_server_protocol.schemas.json",
+      "bytes": 815279,
+      "sha256": "b06f77062369d481a59cc70720c12b89cb9dd49c385863923262102d3ad6c978"
+    },
+    "v2Json": {
+      "path": "json/codex_app_server_protocol.v2.schemas.json",
+      "bytes": 706653,
+      "sha256": "e5f798fd1343c539f01fedea0e8a84a43c080fcca4615c80eb04a5edab4f7d0a"
+    },
+    "clientRequestTs": {
+      "path": "ts/ClientRequest.ts",
+      "bytes": 25377,
+      "sha256": "83418e6f3f8100fa59b0324afaaf45c8d258db3dd42a10769d9c337c93b910f2"
+    },
+    "serverRequestTs": {
+      "path": "ts/ServerRequest.ts",
+      "bytes": 2315,
+      "sha256": "1c5837adbfbdd005f387478ba87840808d1353b47b82dcf63739a78bb1c8d3be"
+    }
+  }
+}

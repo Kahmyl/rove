@@ -38,6 +38,40 @@ export const browserProfileSchema = z.discriminatedUnion("mode", [
   existingProfileSchema,
 ]);
 
+export const browserWorkspaceIdSchema = z.string().regex(/^wrk_[a-f0-9-]{36}$/);
+
+export const browserSessionIdentitySchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("workspace"),
+    workspaceId: browserWorkspaceIdSchema.optional(),
+  }),
+  z.object({
+    mode: z.literal("temporary"),
+  }),
+]);
+
+export const browserWorkspaceSchema = z.object({
+  id: browserWorkspaceIdSchema,
+  displayName: z.string().min(1).max(80),
+  browser: z.enum(["chrome", "chromium"]),
+  userDataDir: z.string().min(1),
+  storageLayout: z.enum(["workspace", "legacy_profile"]),
+  createdAt: z.string().datetime(),
+  lastUsedAt: z.string().datetime(),
+});
+
+export const browserWorkspaceStatusSchema = z.object({
+  selectedWorkspaceId: browserWorkspaceIdSchema.optional(),
+  workspaces: z.array(browserWorkspaceSchema),
+});
+
+export const createBrowserWorkspaceRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(80),
+});
+
+export const renameBrowserWorkspaceRequestSchema =
+  createBrowserWorkspaceRequestSchema;
+
 export const browserHostIdentitySchema = z.object({
   kind: z.literal("owned_process"),
   processId: z.number().int().positive(),
@@ -105,25 +139,94 @@ export const browserRuntimeCapabilitiesSchema = z.object({
   ),
 });
 
-export const sessionSchema = z.object({
-  id: z.string().startsWith("ses_"),
-  mode: sessionModeSchema,
-  status: sessionStatusSchema,
-  controller: controllerSchema,
-  activePageId: z.string().optional(),
-  handoff: humanHandoffSchema.optional(),
-  profile: browserProfileSchema,
-  browserRuntime: browserRuntimeCapabilitiesSchema.optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  endedAt: z.string().datetime().optional(),
-});
+export const sessionSchema = z
+  .object({
+    id: z.string().startsWith("ses_"),
+    bootstrapId: z.string().startsWith("boot_").optional(),
+    mode: sessionModeSchema,
+    status: sessionStatusSchema,
+    controller: controllerSchema,
+    activePageId: z.string().optional(),
+    handoff: humanHandoffSchema.optional(),
+    ownershipGeneration: z.number().int().positive().optional(),
+    activeHandoffId: z.string().startsWith("handoff_").optional(),
+    // Stable request-time identity. Unlike ownershipGeneration, this value
+    // does not advance when the human takes browser ownership.
+    activeHandoffGeneration: z.number().int().positive().optional(),
+    lastReturnedHandoffId: z.string().startsWith("handoff_").optional(),
+    profile: browserProfileSchema,
+    workspace: browserWorkspaceSchema.optional(),
+    browserRuntime: browserRuntimeCapabilitiesSchema.optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    endedAt: z.string().datetime().optional(),
+  })
+  .superRefine((value, context) => {
+    // Historical records may have activeHandoffId without the new field and
+    // remain readable for bounded cleanup. A generation without its exact
+    // handoff identity is never meaningful.
+    if (
+      value.activeHandoffGeneration !== undefined &&
+      value.activeHandoffId === undefined
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["activeHandoffGeneration"],
+        message: "Active handoff generation requires an active handoff ID.",
+      });
+  });
 
-export const startSessionRequestSchema = z.object({
-  mode: sessionModeSchema,
-  profile: browserProfileSchema.optional().default({ mode: "temporary" }),
-  startUrl: z.string().url().optional(),
-});
+export const runtimeSessionInventorySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    session: sessionSchema,
+    browserIdentity: browserSessionIdentitySchema,
+    attachment: z.enum(["attached", "missing"]),
+    recovery: z.enum([
+      "not_needed",
+      "relaunchable",
+      "cleanup_required",
+      "unrecoverable",
+    ]),
+    profileOwnership: z.enum(["owned", "released", "claimable", "conflicting"]),
+    legacyEffects: z
+      .enum(["not_applicable", "acknowledgement_required", "acknowledged"])
+      .optional(),
+    diagnostic: z.string().trim().min(1).max(240).optional(),
+  })
+  .strict();
+
+export const startSessionRequestSchema = z
+  .object({
+    bootstrapId: z.string().startsWith("boot_").optional(),
+    mode: sessionModeSchema,
+    browser: browserSessionIdentitySchema.optional(),
+    /** Rolling-upgrade input only; current MCP clients never advertise it. */
+    profile: z
+      .union([
+        temporaryProfileSchema,
+        z.object({ mode: z.literal("persistent"), name: z.literal("default") }),
+      ])
+      .optional(),
+    startUrl: z.string().url().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.browser !== undefined && value.profile !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Specify browser identity only once.",
+      });
+    }
+  })
+  .transform(({ profile, browser, ...value }) => ({
+    ...value,
+    browser:
+      browser ??
+      (profile?.mode === "temporary"
+        ? ({ mode: "temporary" } as const)
+        : ({ mode: "workspace" } as const)),
+  }));
 
 export const httpUrlSchema = z
   .string()
@@ -143,7 +246,19 @@ export const targetKindSchema = z.enum([
   "radio",
   "tab",
   "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
   "option",
+  "switch",
+  "combobox",
+  "listbox",
+  "slider",
+  "spinbutton",
+  "treeitem",
+  "gridcell",
+  "row",
+  "disclosure",
+  "media",
   "control",
 ]);
 

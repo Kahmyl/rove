@@ -1,5 +1,12 @@
 # Browser safety orchestration
 
+> Architecture notice (2026-09-07): contextual action authorization is the
+> agent-facing authority described by
+> `docs/adr/ADR-contextual-authority-workspaces-unified-surface.md`. Runtime
+> retains `PagePolicyDecision` only for internal orchestration and compatibility;
+> MCP inspection exposes page semantics as evidence and defers mutation authority
+> to a grounded `browser.interact` proposal.
+
 Rove is a user-authorized browser assistant. This layer keeps automation at a
 human scale, separates browser perception from operational policy, hands
 human-only steps back to the user when appropriate, and stops unsafe or
@@ -44,16 +51,22 @@ MCP remains an adapter. It does not own page policy or control state.
 
 ## Inspection contract
 
-Runtime-returned `browser.inspect` results expose:
+Agent-facing MCP `browser.inspect` results expose:
 
 - `metadata.pageState` — observational page-state perception;
 - `metadata.pageStatePropositions` — bounded F1 propositions when available;
-- `metadata.pagePolicy` — the Runtime's `PagePolicyDecision`.
+- `metadata.actionAuthority` — the contextual authorization model and the fact
+  that a decision is deferred until `browser.interact`.
+
+The Runtime may retain `metadata.pagePolicy` internally for orchestration and
+adapter compatibility. The MCP projection deliberately withholds that obsolete
+page-wide verdict so an unfamiliar ordinary dialog is not mistaken for a command
+to stop.
 
 Inspection is observational. Calling `browser.inspect` repeatedly cannot change
 the session's `status`, `controller`, or `handoff`.
 
-The policy dispositions mean:
+Internal legacy policy dispositions mean:
 
 | Disposition        | Operational meaning                                                                                                               |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -62,8 +75,10 @@ The policy dispositions mean:
 | `request_human`    | Human collaboration is appropriate. Automatic handoff is still performed only by the Runtime orchestrator at an allowed boundary. |
 | `stop`             | Autonomous mutation must stop for the current state. No automatic handoff occurs.                                                 |
 
-An MCP agent should interpret these semantics rather than follow a hard-coded
-tool-call sequence.
+An MCP agent treats these states as evidence. It stops for authentication,
+human verification, access restriction, instability, confirmation, or an actual
+action rejection—not solely because an ordinary modal is semantically
+unfamiliar.
 
 ## Page-state behavior
 
@@ -79,9 +94,9 @@ The authoritative F2 behavior is:
 | `unknown_interstitial`    | `stop`             | no automatic handoff                                            |
 | `error`                   | `stop`             | no automatic handoff                                            |
 
-Capture Mode starts human-owned. Page policy remains visible, but authentication
-or human verification does not convert an `active / human` Capture session into
-`awaiting_human / null`.
+Capture Mode starts human-owned. Internal page policy remains available to
+Runtime orchestration, but authentication or human verification does not convert
+an `active / human` Capture session into `awaiting_human / null`.
 
 `control.request_human` remains an explicit agent capability and is broader
 than automatic policy. For example, an agent may explicitly request human
@@ -90,22 +105,31 @@ review of an unknown interstitial even though its automatic page policy is
 
 ## Mutation authorization and freshness
 
-A successful inspection records both perception and the corresponding
-`PagePolicyDecision`. Later autonomous mutation requires the recorded decision
-to allow mutation and still requires the existing F1/runtime safety checks,
-including:
+A successful inspection records perception and the corresponding internal
+`PagePolicyDecision`. Agent-facing target mutation uses the consolidated
+`browser.interact` path and requires a contextual authorization decision plus
+the existing F1/runtime safety checks, including:
 
 - fresh page revision;
 - fresh semantic page-state identity;
 - valid revision-scoped target references;
+- target-scoped revalidation after material mutation drift, including exact
+  frame/root/element provenance, semantic identity and state, visibility,
+  enabled/actionable state, geometry, occlusion, and ambiguity;
 - action budget;
 - repeated-action protection.
 
-Out-of-band navigation, semantic decision changes, or human-to-agent handback
-therefore require a fresh inspection before mutation.
+Out-of-band navigation, semantic decision changes, viewport/scroll changes, or
+human-to-agent handback therefore require a fresh inspection before mutation.
+Unrelated background DOM churn alone does not: it triggers fail-closed
+revalidation of the exact grounded target immediately before dispatch. Page and
+coordinate actions continue to require strict whole-observation freshness.
 
-After human control returns, all page target references are invalidated before
-agent ownership is restored.
+Ambiguous legacy target-only `browser.click`, `browser.type`, and
+`browser.press` operations are not advertised in the MCP catalog. This prevents
+the old page-wide gate from competing with contextual authority. After human
+control returns, all page target references are invalidated before agent
+ownership is restored.
 
 ## Responsible browsing boundary
 

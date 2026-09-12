@@ -4,6 +4,7 @@ import {
   type PagePerceptionAssessment,
   type Session,
 } from "@rove/protocol";
+import { randomUUID } from "node:crypto";
 
 import { BrowserService } from "../browser/browser.service.js";
 import { ObservationService } from "../observation/observation.service.js";
@@ -115,6 +116,7 @@ export class OwnershipTransitionService {
         ...session,
         status: "active",
         controller: "human",
+        ownershipGeneration: transition.generation,
       });
     } catch (error) {
       this.ownershipFence.completeTransition(transition, session.controller);
@@ -174,10 +176,16 @@ export class OwnershipTransitionService {
         ...session,
         status: "active",
         controller: "agent",
+        ownershipGeneration: transition.generation,
+        ...(session.activeHandoffId === undefined
+          ? {}
+          : { lastReturnedHandoffId: session.activeHandoffId }),
         ...(activePageId === undefined ? {} : { activePageId }),
       };
 
       delete next.handoff;
+      delete next.activeHandoffId;
+      delete next.activeHandoffGeneration;
 
       const persisted = await this.sessions.update(next);
 
@@ -230,7 +238,12 @@ export class OwnershipTransitionService {
     let next: Session;
 
     try {
-      next = { ...session, status: "paused", controller: null };
+      next = {
+        ...session,
+        status: "paused",
+        controller: null,
+        ownershipGeneration: transition.generation,
+      };
       delete next.handoff;
       next = await this.sessions.update(next);
     } catch (error) {
@@ -256,10 +269,14 @@ export class OwnershipTransitionService {
     const existing = await this.sessions.get(sessionId);
 
     if (existing.status === "completed" || existing.status === "failed") {
-      throw new RoveError({
-        code: "SESSION_ALREADY_ENDED",
-        message: "Rove session has already ended.",
-      });
+      await hooks.flushHumanActivity();
+      await hooks.flushBrowserEvidence();
+      hooks.clearRuntimeState();
+      this.interactionPolicy.clear(sessionId);
+      await this.browser.close(sessionId);
+      await hooks.releaseProfileLock();
+      this.ownershipFence.clear(sessionId);
+      return existing;
     }
 
     const transition = this.ownershipFence.beginTransition(sessionId);
@@ -331,6 +348,7 @@ export class OwnershipTransitionService {
     await transition.waitForDrain();
 
     const requestedAt = new Date().toISOString();
+    const activeHandoffId = `handoff_${randomUUID().replaceAll("-", "")}`;
 
     let next: Session;
 
@@ -339,6 +357,9 @@ export class OwnershipTransitionService {
         ...session,
         status: "awaiting_human",
         controller: null,
+        ownershipGeneration: transition.generation,
+        activeHandoffId,
+        activeHandoffGeneration: transition.generation,
         handoff: {
           reason,
           requestedAt,
@@ -398,6 +419,7 @@ export class OwnershipTransitionService {
   ): ControlStatus {
     return {
       sessionId: session.id,
+      generation: this.ownershipFence.generation(session.id),
       status: session.status,
       controller: session.controller,
       updatedAt: session.updatedAt,
@@ -406,6 +428,15 @@ export class OwnershipTransitionService {
         : {
             handoff: session.handoff,
           }),
+      ...(session.activeHandoffId === undefined
+        ? {}
+        : { activeHandoffId: session.activeHandoffId }),
+      ...(session.activeHandoffGeneration === undefined
+        ? {}
+        : { activeHandoffGeneration: session.activeHandoffGeneration }),
+      ...(session.lastReturnedHandoffId === undefined
+        ? {}
+        : { lastReturnedHandoffId: session.lastReturnedHandoffId }),
       ...(observationSeq === undefined
         ? {}
         : {

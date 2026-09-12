@@ -20,6 +20,8 @@ const INTERACTIVE_ROLES = new Set([
   "spinbutton",
   "switch",
   "treeitem",
+  "gridcell",
+  "row",
 ]);
 
 function normalizeName(value: string | undefined): string | undefined {
@@ -31,15 +33,58 @@ function normalizeName(value: string | undefined): string | undefined {
 }
 
 export function classifyKind(candidate: DomCandidate): TargetKind | undefined {
+  // Valid explicit ARIA widget roles refine otherwise generic native hosts
+  // such as <button role="switch"> and <input role="combobox">.
+  switch (candidate.role) {
+    case "button":
+      return "button";
+    case "link":
+      return "link";
+    case "checkbox":
+      return "checkbox";
+    case "radio":
+      return "radio";
+    case "tab":
+      return "tab";
+    case "menuitem":
+      return "menuitem";
+    case "menuitemcheckbox":
+      return "menuitemcheckbox";
+    case "menuitemradio":
+      return "menuitemradio";
+    case "option":
+      return "option";
+    case "switch":
+      return "switch";
+    case "combobox":
+      return "combobox";
+    case "listbox":
+      return "listbox";
+    case "slider":
+      return "slider";
+    case "spinbutton":
+      return "spinbutton";
+    case "treeitem":
+      return "treeitem";
+    case "gridcell":
+      return "gridcell";
+    case "row":
+      return "row";
+  }
+
   // Native semantics have priority.
   if (candidate.tag === "a") return "link";
   if (candidate.tag === "button") return "button";
   if (candidate.tag === "textarea") return "textarea";
   if (candidate.tag === "select") return "select";
+  if (candidate.tag === "summary") return "disclosure";
+  if (candidate.tag === "audio" || candidate.tag === "video") return "media";
 
   if (candidate.tag === "input") {
     if (candidate.type === "checkbox") return "checkbox";
     if (candidate.type === "radio") return "radio";
+    if (candidate.type === "range") return "slider";
+    if (candidate.type === "number") return "spinbutton";
     return "input";
   }
 
@@ -59,8 +104,28 @@ export function classifyKind(candidate: DomCandidate): TargetKind | undefined {
       return "tab";
     case "menuitem":
       return "menuitem";
+    case "menuitemcheckbox":
+      return "menuitemcheckbox";
+    case "menuitemradio":
+      return "menuitemradio";
     case "option":
       return "option";
+    case "switch":
+      return "switch";
+    case "combobox":
+      return "combobox";
+    case "listbox":
+      return "listbox";
+    case "slider":
+      return "slider";
+    case "spinbutton":
+      return "spinbutton";
+    case "treeitem":
+      return "treeitem";
+    case "gridcell":
+      return "gridcell";
+    case "row":
+      return "row";
   }
 
   if (

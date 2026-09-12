@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildMcpProcessEnvironment,
-  McpProcess,
-} from "./mcp-process.js";
+import { buildMcpProcessEnvironment, McpProcess } from "./mcp-process.js";
 
 describe("buildMcpProcessEnvironment", () => {
   it("connects managed MCP to the managed Runtime", () => {

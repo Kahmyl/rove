@@ -5,11 +5,13 @@ import type {
   ControlWaitResult,
   Evidence,
   EvidenceReadResult,
+  GeneratedFileArtifactRequest,
   InspectOptions,
   NavigateRequest,
   ObservationPage,
   ObservationQuery,
   PageInspection,
+  PageSummary,
   PressRequest,
   ScreenshotOptions,
   SessionSnapshot,
@@ -20,6 +22,14 @@ import type {
   TargetResolution,
   TargetResolutionRequest,
   VerifiedInteractionRequest,
+  AdvanceSemanticTransactionRequest,
+  BeginSemanticTransactionRequest,
+  SemanticTransactionAdvanceResult,
+  SemanticTransactionSnapshot,
+  SemanticTransactionVerificationResult,
+  VerifySemanticTransactionRequest,
+  LocalFileGrantRequest,
+  LocalFileGrantResult,
 } from "@rove/protocol";
 
 export interface ScrollInput {
@@ -42,6 +52,10 @@ export interface RuntimeClient {
     input: ObservationQuery,
   ): Promise<ObservationPage>;
   navigate(sessionId: string, input: NavigateRequest): Promise<ActionResult>;
+  openPage(sessionId: string, input: NavigateRequest): Promise<PageSummary>;
+  pages(sessionId: string): Promise<PageSummary[]>;
+  switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
+  closePage(sessionId: string, pageId: string): Promise<void>;
   inspect(sessionId: string, input: InspectOptions): Promise<PageInspection>;
   resolveTarget(
     sessionId: string,
@@ -51,6 +65,26 @@ export interface RuntimeClient {
     sessionId: string,
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt>;
+  beginSemanticTransaction(
+    sessionId: string,
+    input: BeginSemanticTransactionRequest,
+  ): Promise<SemanticTransactionSnapshot>;
+  advanceSemanticTransaction(
+    sessionId: string,
+    input: AdvanceSemanticTransactionRequest,
+  ): Promise<SemanticTransactionAdvanceResult>;
+  verifySemanticTransaction(
+    sessionId: string,
+    input: VerifySemanticTransactionRequest,
+  ): Promise<SemanticTransactionVerificationResult>;
+  getSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot>;
+  cancelSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot>;
   click(
     sessionId: string,
     input: { target: TargetReference },
@@ -61,6 +95,15 @@ export interface RuntimeClient {
   back(sessionId: string): Promise<ActionResult>;
   forward(sessionId: string): Promise<ActionResult>;
   screenshot(sessionId: string, input: ScreenshotOptions): Promise<Evidence>;
+  createFileArtifact(
+    sessionId: string,
+    input: GeneratedFileArtifactRequest,
+  ): Promise<Evidence>;
+  requestLocalFileGrant(
+    sessionId: string,
+    input: LocalFileGrantRequest,
+    signal?: AbortSignal,
+  ): Promise<LocalFileGrantResult>;
   saveRecord(sessionId: string, input: SaveRecordInput): Promise<Evidence>;
   listEvidence(sessionId: string): Promise<Evidence[]>;
   readEvidence(

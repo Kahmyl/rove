@@ -73,9 +73,9 @@ describe("compactFollowerWindowOptions", () => {
     expect(
       compactFollowerWindowOptions("/tmp/rove/main", "win32").type,
     ).toBeUndefined();
-    expect(
-      compactFollowerWindowOptions("/tmp/rove/main", "linux").type,
-    ).toBe("dock");
+    expect(compactFollowerWindowOptions("/tmp/rove/main", "linux").type).toBe(
+      "dock",
+    );
     expect(
       compactFollowerWindowOptions("/tmp/rove/main", "linux").focusable,
     ).toBe(false);
@@ -85,6 +85,5 @@ describe("compactFollowerWindowOptions", () => {
     expect(
       compactFollowerWindowOptions("/tmp/rove/main", "darwin").focusable,
     ).toBeUndefined();
-
   });
 });

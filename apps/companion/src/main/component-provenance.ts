@@ -21,12 +21,14 @@ function developmentCommit(): string | undefined {
   const injected = validCommit(process.env.ROVE_BUILD_GIT_COMMIT);
   if (injected !== undefined) return injected;
   try {
-    return validCommit(execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 2_000,
-    }));
+    return validCommit(
+      execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 2_000,
+      }),
+    );
   } catch {
     return undefined;
   }

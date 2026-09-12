@@ -1,0 +1,1769 @@
+{
+  "status": "failed",
+  "stage": "preflight",
+  "error": "page.evaluate: Error: Error invoking remote method 'rove:product-intent': Error: Unsupported renderer product intent.",
+  "taskId": "task_c869f2ba-7298-4293-a39a-60b412b6d983",
+  "task": {
+    "taskId": "task_c869f2ba-7298-4293-a39a-60b412b6d983",
+    "lifecycle": {
+      "phase": "failed",
+      "reason": "Persisted task workspace is outside the protected per-task root and requires explicit recovery."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_c869f2ba-7298-4293-a39a-60b412b6d983",
+      "stage": "turn_started"
+    },
+    "roveSessionId": "ses_a3ae39a2b79b4587b45f05d9b1e1caa2",
+    "codexThreadId": "01a08730-bea2-7d63-a6b0-0eada49b837f",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "retry_cleanup"
+    ],
+    "runtime": {
+      "status": "completed",
+      "controller": null,
+      "recovery": "cleanup_required"
+    },
+    "conversation": {
+      "turnStatus": "unknown",
+      "archived": true,
+      "turnOrder": [],
+      "itemCount": 0
+    },
+    "attachmentCount": 0
+  },
+  "evidence": {
+    "assistantMessages": [],
+    "toolCalls": [],
+    "driveUrls": [],
+    "receiptIds": [],
+    "observationIds": [],
+    "evidenceIds": [],
+    "pageIds": [],
+    "downloadFilenameMentions": 0,
+    "downloadSizes": [],
+    "mimeTypes": []
+  },
+  "surface": {
+    "revision": 4,
+    "account": "logged_in",
+    "tasks": [
+      {
+        "taskId": "task_c869f2ba-7298-4293-a39a-60b412b6d983",
+        "lifecycle": {
+          "phase": "failed",
+          "reason": "Persisted task workspace is outside the protected per-task root and requires explicit recovery."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_c869f2ba-7298-4293-a39a-60b412b6d983",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_a3ae39a2b79b4587b45f05d9b1e1caa2",
+        "codexThreadId": "01a08730-bea2-7d63-a6b0-0eada49b837f",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "retry_cleanup"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": true,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_2ceb66aa-7968-4f18-8f78-b3b6c5626aaf",
+        "lifecycle": {
+          "phase": "failed",
+          "reason": "Persisted task workspace is outside the protected per-task root and requires explicit recovery."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_2ceb66aa-7968-4f18-8f78-b3b6c5626aaf",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_74063f96f3ec40dd8ad22ae6061039d8",
+        "codexThreadId": "01a08744-3bb8-7081-b53e-2b240ced9ce2",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": false,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_c315826a-db15-4ce7-82c0-bcd674c33bde",
+        "lifecycle": {
+          "phase": "failed",
+          "reason": "Persisted task workspace is outside the protected per-task root and requires explicit recovery."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_c315826a-db15-4ce7-82c0-bcd674c33bde",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_b33de56986c74b4d85d28063b5b25fe5",
+        "codexThreadId": "01a0877b-5323-7e12-aca4-03235b7efc75",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": false,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a6f6e6d5-6735-4110-bfa0-c9af62254396",
+        "lifecycle": {
+          "phase": "failed",
+          "reason": "Command archive_codex_thread requires truth-based reconciliation."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_a6f6e6d5-6735-4110-bfa0-c9af62254396",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_bd9f15b1b4e94b14aae0db286486aca4",
+        "codexThreadId": "01a0887b-9a4a-7a03-b632-a34e2eaa4dff",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": false,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fb04c0cb-092b-43a1-a9ef-20d2575d4d94",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_fb04c0cb-092b-43a1-a9ef-20d2575d4d94",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_3a35d5bb76a045429abfaf0d2fc8dbf8",
+        "codexThreadId": "01a0887d-66d8-75d3-8496-48955a2e828e",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0887d-7ce2-75d2-971d-31b7474574d9"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_dcab432c-e57c-465c-b3ab-c59848a343e9",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_dcab432c-e57c-465c-b3ab-c59848a343e9",
+          "stage": "turn_started",
+          "turnId": "01a08887-7bbd-7900-bfb2-b2f6384f80c8"
+        },
+        "roveSessionId": "ses_b8c5730913a94aa582041ce75eac10b7",
+        "codexThreadId": "01a08887-65fc-7e30-97a7-bdb9df9124bc",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a08887-7bbd-7900-bfb2-b2f6384f80c8"
+          ],
+          "itemCount": 1
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_94663651-20ce-4718-9079-83d74b685a8d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_94663651-20ce-4718-9079-83d74b685a8d",
+          "stage": "turn_started",
+          "turnId": "01a0888a-ba14-71c0-b58d-320d5efe3a9a"
+        },
+        "roveSessionId": "ses_2e734d391198464f862808e03271690e",
+        "codexThreadId": "01a0888a-a467-7a60-b348-6031fee5a03d",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0888a-ba14-71c0-b58d-320d5efe3a9a"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_49609412-c6c0-4af9-b53a-3e039c1a8190",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_49609412-c6c0-4af9-b53a-3e039c1a8190",
+          "stage": "turn_started",
+          "turnId": "01a0888c-847e-7331-ab30-8b684e757167"
+        },
+        "roveSessionId": "ses_f7fff73e9d54454abaf30124f54c4529",
+        "codexThreadId": "01a0888c-6d23-7813-b12f-42a3498856b4",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0888c-847e-7331-ab30-8b684e757167"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_cb18d18c-45c6-4c74-827e-dc46c7b6f4db",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_cb18d18c-45c6-4c74-827e-dc46c7b6f4db",
+          "stage": "turn_started",
+          "turnId": "01a0888c-fd62-71b0-b020-8f1f6e8b1ec1"
+        },
+        "roveSessionId": "ses_c9c4dc137b8549b49bef59d6e7722e9b",
+        "codexThreadId": "01a0888c-e5da-7743-a4d5-e437f59e0f70",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0888c-fd62-71b0-b020-8f1f6e8b1ec1"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_7c4aa66d-cbdb-46d8-975b-581bd5a23c57",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_7c4aa66d-cbdb-46d8-975b-581bd5a23c57",
+          "stage": "turn_started",
+          "turnId": "01a08895-fbe6-7ba1-ac5c-20be57a58619"
+        },
+        "roveSessionId": "ses_5502e169f3204250b97ff1d64cda4a8a",
+        "codexThreadId": "01a08895-e60c-7490-ac54-f20470e8a94f",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08895-fbe6-7ba1-ac5c-20be57a58619"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_32d46544-6087-4882-bbce-a2bae4d10a8d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_32d46544-6087-4882-bbce-a2bae4d10a8d",
+          "stage": "turn_started",
+          "turnId": "01a08896-7bfa-73a0-9874-2e809197ab99"
+        },
+        "roveSessionId": "ses_b095ace532104729bf411de9b230b1fb",
+        "codexThreadId": "01a08896-66a7-78e1-8419-60830bf53a7c",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08896-7bfa-73a0-9874-2e809197ab99"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_683b74b7-a109-49d3-b81c-e8d322691b3d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_683b74b7-a109-49d3-b81c-e8d322691b3d",
+          "stage": "turn_started",
+          "turnId": "01a08897-24af-7d93-a892-13b2bf6cefae"
+        },
+        "roveSessionId": "ses_3a048e39cea84673800952a447f0d79b",
+        "codexThreadId": "01a08897-0eb4-7ac0-9c77-47a4631d73a6",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08897-24af-7d93-a892-13b2bf6cefae"
+          ],
+          "itemCount": 10
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_b7a91e08-ce3b-49b3-82a4-2bf92dd82fee",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_b7a91e08-ce3b-49b3-82a4-2bf92dd82fee",
+          "stage": "turn_started",
+          "turnId": "01a08898-4f35-7d23-8ecc-8f1f81ab4806"
+        },
+        "roveSessionId": "ses_f9dbbe2e77b743a6a092602b638da46a",
+        "codexThreadId": "01a08898-38f9-7872-834e-d60ada299aa6",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08898-4f35-7d23-8ecc-8f1f81ab4806"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_ad5b2816-aaed-4a4e-a698-7c46f07a3183",
+        "lifecycle": {
+          "phase": "failed",
+          "reason": "Command archive_codex_thread requires truth-based reconciliation."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_ad5b2816-aaed-4a4e-a698-7c46f07a3183",
+          "stage": "turn_started"
+        },
+        "roveSessionId": "ses_c787327fac2543c7acb6baf115c93051",
+        "codexThreadId": "01a08899-1508-7be2-aaa1-c18eddd6ce8e",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "archive"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "unknown",
+          "archived": false,
+          "turnOrder": [],
+          "itemCount": 0
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_317d58f2-339f-4ec4-932c-e69301f11ebb",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_317d58f2-339f-4ec4-932c-e69301f11ebb",
+          "stage": "turn_started",
+          "turnId": "01a088a2-d5fe-7052-9a79-fa7b7b6ce3a2"
+        },
+        "roveSessionId": "ses_81d3154146d5410484da698e12e38fe8",
+        "codexThreadId": "01a088a2-bff9-7920-b74a-f40f54f1ce13",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088a2-d5fe-7052-9a79-fa7b7b6ce3a2"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fc4a1144-1360-4143-823a-72cebc4d0939",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_fc4a1144-1360-4143-823a-72cebc4d0939",
+          "stage": "turn_started",
+          "turnId": "01a088a3-5604-7fa3-a634-52930d731fc5"
+        },
+        "roveSessionId": "ses_0328a3ba64df431d98df946077011675",
+        "codexThreadId": "01a088a3-3f9e-79d3-bd72-c341b6515971",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088a3-5604-7fa3-a634-52930d731fc5"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_c21c4024-c5be-4fc3-8d4b-58dd22ac0b26",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_c21c4024-c5be-4fc3-8d4b-58dd22ac0b26",
+          "stage": "turn_started",
+          "turnId": "01a088a4-0ed4-70e2-944e-9f3f5259f935"
+        },
+        "roveSessionId": "ses_f9db62820b4e40ebafafb4afaa560837",
+        "codexThreadId": "01a088a3-f707-7823-bb7d-c6c78d46deed",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088a4-0ed4-70e2-944e-9f3f5259f935"
+          ],
+          "itemCount": 7
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_443f1051-8ec7-43cd-be91-b102712ada1b",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_443f1051-8ec7-43cd-be91-b102712ada1b",
+          "stage": "turn_started",
+          "turnId": "01a088a4-fa82-79c2-9315-d26a307abf46"
+        },
+        "roveSessionId": "ses_3d03f5c516e0494da92ada22064c3049",
+        "codexThreadId": "01a088a4-e212-7682-9542-7766cc4a45e5",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088a4-fa82-79c2-9315-d26a307abf46"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_45184e20-f466-465f-a3e0-a6bcd898737d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_45184e20-f466-465f-a3e0-a6bcd898737d",
+          "stage": "turn_started",
+          "turnId": "01a088a5-cd2b-78c1-9863-64b9970502fe"
+        },
+        "roveSessionId": "ses_bc9f16c04ee44b91b5656f72ae2cb8ac",
+        "codexThreadId": "01a088a5-b77a-7a80-8464-b780d19f9cf9",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a088a5-cd2b-78c1-9863-64b9970502fe"
+          ],
+          "itemCount": 11
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a8c0cb3b-75b6-4a4e-9c7a-38ae111f311d",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_a8c0cb3b-75b6-4a4e-9c7a-38ae111f311d",
+          "stage": "turn_started",
+          "turnId": "01a088ac-261e-7180-9949-b5d4bf2b51b8"
+        },
+        "roveSessionId": "ses_fb397e0b8f4744bc8592b56f8ae2d0c7",
+        "codexThreadId": "01a088ac-0fc9-7293-a06b-11305ead292d",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088ac-261e-7180-9949-b5d4bf2b51b8"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_fec94a93-94be-45de-ab51-1ac838159b34",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_fec94a93-94be-45de-ab51-1ac838159b34",
+          "stage": "turn_started",
+          "turnId": "01a088ac-9980-7853-8414-1c5a8331b716"
+        },
+        "roveSessionId": "ses_d7dac20060d74ee481ec7aa5d72d7d20",
+        "codexThreadId": "01a088ac-842c-79a3-9e51-2817617ce5c5",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088ac-9980-7853-8414-1c5a8331b716"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_0355aeab-d652-45f7-8bbb-a11a8c52bc3b",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_0355aeab-d652-45f7-8bbb-a11a8c52bc3b",
+          "stage": "turn_started",
+          "turnId": "01a088ad-41c7-7860-a5bc-19e0cc1c803f"
+        },
+        "roveSessionId": "ses_a143c940873d4d22a870c4f43b15fc17",
+        "codexThreadId": "01a088ad-2c7e-79e3-9cb7-af9dae96d0e5",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088ad-41c7-7860-a5bc-19e0cc1c803f"
+          ],
+          "itemCount": 11
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_3fc96d98-a71b-4e59-b7fe-ded4d663ef65",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_3fc96d98-a71b-4e59-b7fe-ded4d663ef65",
+          "stage": "turn_started",
+          "turnId": "01a088b0-0e6c-7e50-8e43-4bf88b0f6c21"
+        },
+        "roveSessionId": "ses_ca11de510bc94959b7794f3060b1c3dc",
+        "codexThreadId": "01a088af-f73b-7603-aadb-a7a1e587dc0b",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "interrupted",
+          "archived": true,
+          "turnOrder": [
+            "01a088b0-0e6c-7e50-8e43-4bf88b0f6c21"
+          ],
+          "itemCount": 13
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_9de4c66a-9cb8-4da0-9ee8-041ce8845bd9",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_9de4c66a-9cb8-4da0-9ee8-041ce8845bd9",
+          "stage": "turn_started",
+          "turnId": "01a088b7-2f4a-72f0-a6a7-c1136c96ffcb"
+        },
+        "roveSessionId": "ses_e2c790a3602840aaabd756adbf6a3396",
+        "codexThreadId": "01a088b7-17b6-7a01-8c52-b3391c49243c",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a088b7-2f4a-72f0-a6a7-c1136c96ffcb"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_09076fee-964c-461f-8a50-5347a8319304",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_09076fee-964c-461f-8a50-5347a8319304",
+          "stage": "turn_started",
+          "turnId": "01a08932-dfe7-71f0-8615-ed94930dd4af"
+        },
+        "roveSessionId": "ses_6794739a311a43dd80947384bfe0cf9c",
+        "codexThreadId": "01a08932-c990-7333-9592-d5aae3398c84",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08932-dfe7-71f0-8615-ed94930dd4af"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a1d4d3b9-0386-4be1-8a17-ea1075a391dc",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_a1d4d3b9-0386-4be1-8a17-ea1075a391dc",
+          "stage": "turn_started",
+          "turnId": "01a08933-8768-7ca2-b4c5-963a2781e7b1"
+        },
+        "roveSessionId": "ses_60ea77bbf9a9455180de9a927bd54642",
+        "codexThreadId": "01a08933-7054-76d0-b340-64a837986d40",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08933-8768-7ca2-b4c5-963a2781e7b1"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_5f6f9ce9-53fd-4f83-9483-4f5da3380bbf",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_5f6f9ce9-53fd-4f83-9483-4f5da3380bbf",
+          "stage": "turn_started",
+          "turnId": "01a08934-27c9-7422-888b-ee842660af8f"
+        },
+        "roveSessionId": "ses_4f62d31fad48412c9e36b684d2cb5bfc",
+        "codexThreadId": "01a08934-119d-7590-9742-e4dfc56bf402",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08934-27c9-7422-888b-ee842660af8f"
+          ],
+          "itemCount": 10
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_6a64a9d3-9110-4c4f-a353-86020f22ec98",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_6a64a9d3-9110-4c4f-a353-86020f22ec98",
+          "stage": "turn_started",
+          "turnId": "01a08935-97aa-7ad2-9f7c-91d5aeacb65c"
+        },
+        "roveSessionId": "ses_eb5bebf82b9f4431ba6fddb5dbf96c98",
+        "codexThreadId": "01a08935-7e90-7bb0-b16b-b4b829eb5792",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08935-97aa-7ad2-9f7c-91d5aeacb65c"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_18ce5df6-447c-431c-8428-4888bc5c6b3c",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_18ce5df6-447c-431c-8428-4888bc5c6b3c",
+          "stage": "turn_started",
+          "turnId": "01a08936-9c75-7460-afda-890898201ce1"
+        },
+        "roveSessionId": "ses_d5667afdc9084f6d96ff7f1614aae03f",
+        "codexThreadId": "01a08936-848b-7801-babe-1cc198ef8fa5",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08936-9c75-7460-afda-890898201ce1"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_72b06347-0492-443f-afbf-ba72f23bcdc3",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_72b06347-0492-443f-afbf-ba72f23bcdc3",
+          "stage": "turn_started",
+          "turnId": "01a08937-a448-7b21-a88b-b23ae97c7942"
+        },
+        "roveSessionId": "ses_19e63fc4a27645e794a822ab25d349b2",
+        "codexThreadId": "01a08937-896b-7c03-998e-1d1fc9152ac8",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08937-a448-7b21-a88b-b23ae97c7942"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_99c03d5a-b0b5-4af0-9bfe-158303eaa1ce",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_99c03d5a-b0b5-4af0-9bfe-158303eaa1ce",
+          "stage": "turn_started",
+          "turnId": "01a08938-485e-7a51-9999-bfecab43d64e"
+        },
+        "roveSessionId": "ses_cc4e0bffa3a9482cbbc18a30a5713aee",
+        "codexThreadId": "01a08938-30d3-7ac2-bf12-eff405332b34",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08938-485e-7a51-9999-bfecab43d64e"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_9013bc0a-0f2d-4092-b5d7-775d8222ddce",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_9013bc0a-0f2d-4092-b5d7-775d8222ddce",
+          "stage": "turn_started",
+          "turnId": "01a08939-54f5-71b2-a728-d4059969e4ca"
+        },
+        "roveSessionId": "ses_a8deecadab444bb5a52dd1f7f6810e64",
+        "codexThreadId": "01a08939-3bf5-7732-ba8e-89ba26f01b42",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08939-54f5-71b2-a728-d4059969e4ca"
+          ],
+          "itemCount": 6
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_0c2ff321-c752-4eef-b7a3-a37b02ec5afa",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_0c2ff321-c752-4eef-b7a3-a37b02ec5afa",
+          "stage": "turn_started",
+          "turnId": "01a0893a-13f4-7720-a442-2b3e32c8dd4f"
+        },
+        "roveSessionId": "ses_4ac3c08e2c434163b4e05944383bd18c",
+        "codexThreadId": "01a08939-fd70-7ec2-9b32-00a75651d798",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0893a-13f4-7720-a442-2b3e32c8dd4f"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_e7cc4341-345b-42aa-9fbd-cf946a0c5bf9",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_e7cc4341-345b-42aa-9fbd-cf946a0c5bf9",
+          "stage": "turn_started",
+          "turnId": "01a0893b-0c03-7131-9270-832a0d4a927d"
+        },
+        "roveSessionId": "ses_4faa991e23504ca69ec80f4f75d8e875",
+        "codexThreadId": "01a0893a-f5cd-7ec3-a732-b06d3bc78e18",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0893b-0c03-7131-9270-832a0d4a927d"
+          ],
+          "itemCount": 5
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_4aa709df-cf5e-499a-b392-d851f1d6e2d8",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_4aa709df-cf5e-499a-b392-d851f1d6e2d8",
+          "stage": "turn_started",
+          "turnId": "01a08943-f179-7c00-a691-184333c91338"
+        },
+        "roveSessionId": "ses_e84e0a2be60b4b539e0715707875e362",
+        "codexThreadId": "01a08943-d880-7b42-9f06-4e2b52775986",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08943-f179-7c00-a691-184333c91338"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_ac03ad16-51d2-42a2-9a5b-f9e27504e37c",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_ac03ad16-51d2-42a2-9a5b-f9e27504e37c",
+          "stage": "turn_started",
+          "turnId": "01a08944-e654-7f53-8012-d6471d4f6f04"
+        },
+        "roveSessionId": "ses_10cdfc4c74ce49b6a98326d1ba3ead2b",
+        "codexThreadId": "01a08944-cca5-7aa3-b6a5-435ffab2d767",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08944-e654-7f53-8012-d6471d4f6f04"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_967be768-78fb-4bb9-a0ee-f4724f5ceead",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_967be768-78fb-4bb9-a0ee-f4724f5ceead",
+          "stage": "turn_started",
+          "turnId": "01a08949-9223-7b13-a2b1-a744e5cf3a12"
+        },
+        "roveSessionId": "ses_37eda2fb1ead40a7912fd91891583403",
+        "codexThreadId": "01a08949-78a5-72b1-a109-b746be791d5b",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "temporary"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08949-9223-7b13-a2b1-a744e5cf3a12"
+          ],
+          "itemCount": 9
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_f0b08719-91f1-425a-9015-ee4cab1decb8",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_f0b08719-91f1-425a-9015-ee4cab1decb8",
+          "stage": "turn_started",
+          "turnId": "01a08964-00d0-74d3-8091-a64dab4af7c3"
+        },
+        "roveSessionId": "ses_20649d3256314391bd3c157caf0ec862",
+        "codexThreadId": "01a08963-e7ba-7622-b81f-a28eceeb4dcb",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08964-00d0-74d3-8091-a64dab4af7c3"
+          ],
+          "itemCount": 7
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_f2190b13-1a24-4206-bae5-4a2accfd69f4",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_f2190b13-1a24-4206-bae5-4a2accfd69f4",
+          "stage": "turn_started",
+          "turnId": "01a08965-9146-7e90-b715-01a80ea20a12"
+        },
+        "roveSessionId": "ses_543a1b8483744cbf98faf36911ac127d",
+        "codexThreadId": "01a08965-7738-7531-8ffb-12c7c0a41fd7",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08965-9146-7e90-b715-01a80ea20a12"
+          ],
+          "itemCount": 7
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+          "stage": "turn_started",
+          "turnId": "01a08974-2399-7841-96d4-ab890a057817"
+        },
+        "roveSessionId": "ses_28b5216ebed14a2cb99645be4a0102a3",
+        "codexThreadId": "01a08974-0bef-72d0-9930-6addf1dea0b4",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08974-2399-7841-96d4-ab890a057817"
+          ],
+          "itemCount": 8
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_376243a8-dddd-4d5c-bf64-fb0088e3c9c8",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_376243a8-dddd-4d5c-bf64-fb0088e3c9c8",
+          "stage": "turn_started",
+          "turnId": "01a0897f-a6c6-7470-bccd-3514d2dd749a"
+        },
+        "roveSessionId": "ses_9c005ddb6df547d6adf1c8b2d737bb05",
+        "codexThreadId": "01a0897f-8dbc-7c41-983e-a7e63570ebda",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0897f-a6c6-7470-bccd-3514d2dd749a"
+          ],
+          "itemCount": 26
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_a8100df5-412f-4542-87b7-47fb02769ec4",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_a8100df5-412f-4542-87b7-47fb02769ec4",
+          "stage": "turn_started",
+          "turnId": "01a08987-c977-7953-b202-7506ebc025dd"
+        },
+        "roveSessionId": "ses_c4b10499d9ec49c09f78198c7122d6fe",
+        "codexThreadId": "01a08987-b222-7c61-b6c7-a2e6ea0de692",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a08987-c977-7953-b202-7506ebc025dd"
+          ],
+          "itemCount": 20
+        },
+        "attachmentCount": 0
+      },
+      {
+        "taskId": "task_6a2c651a-54d3-4ce9-95c5-56e83bededf4",
+        "lifecycle": {
+          "phase": "closed",
+          "reason": "Observation reduced from authoritative facts."
+        },
+        "bootstrapStage": "complete",
+        "initialLaunch": {
+          "operationId": "intent_6a2c651a-54d3-4ce9-95c5-56e83bededf4",
+          "stage": "turn_started",
+          "turnId": "01a0898a-f309-7c93-b8d1-c450bd0e6e29"
+        },
+        "roveSessionId": "ses_90a19909f1da4c62a0eaacee9db8ee5f",
+        "codexThreadId": "01a0898a-dbcf-7ea3-bec7-1cbb26cd51dd",
+        "executionMode": "agent",
+        "browserIdentity": {
+          "mode": "workspace",
+          "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+        },
+        "approvalsReviewer": "auto_review",
+        "availableActions": [
+          "resume"
+        ],
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "recovery": "cleanup_required"
+        },
+        "conversation": {
+          "turnStatus": "completed",
+          "archived": true,
+          "turnOrder": [
+            "01a0898a-f309-7c93-b8d1-c450bd0e6e29"
+          ],
+          "itemCount": 31
+        },
+        "attachmentCount": 0
+      }
+    ],
+    "attention": [
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-b2d33fc3-fc75-442b-bea6-76e21d9f904a",
+        "taskId": "task_45184e20-f466-465f-a3e0-a6bcd898737d",
+        "threadId": "01a088a5-b77a-7a80-8464-b780d19f9cf9",
+        "turnId": "01a088a5-cd2b-78c1-9863-64b9970502fe",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-d6109eb6-387a-4ae2-b2d9-c0ce4ffc9c22",
+        "taskId": "task_3fc96d98-a71b-4e59-b7fe-ded4d663ef65",
+        "threadId": "01a088af-f73b-7603-aadb-a7a1e587dc0b",
+        "turnId": "01a088b0-0e6c-7e50-8e43-4bf88b0f6c21",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-6456c5c9-016c-4015-bb92-8082389a2d1d",
+        "taskId": "task_9de4c66a-9cb8-4da0-9ee8-041ce8845bd9",
+        "threadId": "01a088b7-17b6-7a01-8c52-b3391c49243c",
+        "turnId": "01a088b7-2f4a-72f0-a6a7-c1136c96ffcb",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-fe89bae7-8d9e-414b-9bcc-8fa778cdcac8",
+        "taskId": "task_18ce5df6-447c-431c-8428-4888bc5c6b3c",
+        "threadId": "01a08936-848b-7801-babe-1cc198ef8fa5",
+        "turnId": "01a08936-9c75-7460-afda-890898201ce1",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-ab228864-c10b-4ab6-ac4e-6428147e69aa",
+        "taskId": "task_99c03d5a-b0b5-4af0-9bfe-158303eaa1ce",
+        "threadId": "01a08938-30d3-7ac2-bf12-eff405332b34",
+        "turnId": "01a08938-485e-7a51-9999-bfecab43d64e",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-593e0771-fea4-49b8-a746-cf87bad5b93f",
+        "taskId": "task_4aa709df-cf5e-499a-b392-d851f1d6e2d8",
+        "threadId": "01a08943-d880-7b42-9f06-4e2b52775986",
+        "turnId": "01a08943-f179-7c00-a691-184333c91338",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-0b83eff1-f2e7-4289-9608-e9503a3005ff",
+        "taskId": "task_ac03ad16-51d2-42a2-9a5b-f9e27504e37c",
+        "threadId": "01a08944-cca5-7aa3-b6a5-435ffab2d767",
+        "turnId": "01a08944-e654-7f53-8012-d6471d4f6f04",
+        "status": "cancelled"
+      },
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-d5a3c153-76ce-4f8a-ae93-6a60603d958f",
+        "taskId": "task_967be768-78fb-4bb9-a0ee-f4724f5ceead",
+        "threadId": "01a08949-78a5-72b1-a109-b746be791d5b",
+        "turnId": "01a08949-9223-7b13-a2b1-a744e5cf3a12",
+        "status": "resolved"
+      }
+    ],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "companion": null
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/drive-20260909-181822-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_c869f2ba-7298-4293-a39a-60b412b6d983",
+      "lifecycle": {
+        "phase": "failed",
+        "reason": "Persisted task workspace is outside the protected per-task root and requires explicit recovery."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_c869f2ba-7298-4293-a39a-60b412b6d983",
+        "stage": "turn_started"
+      },
+      "roveSessionId": "ses_a3ae39a2b79b4587b45f05d9b1e1caa2",
+      "codexThreadId": "01a08730-bea2-7d63-a6b0-0eada49b837f",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "retry_cleanup"
+      ],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "unknown",
+        "archived": true,
+        "turnOrder": [],
+        "itemCount": 0
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

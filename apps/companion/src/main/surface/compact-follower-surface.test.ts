@@ -74,10 +74,7 @@ class FakeFollowerWindow implements CompactFollowerWindowHandle {
     if (event === "move") this.moveListener = listener;
   }
 
-  setAlwaysOnTop(
-    flag: boolean,
-    level?: "floating" | "screen-saver",
-  ): void {
+  setAlwaysOnTop(flag: boolean, level?: "floating" | "screen-saver"): void {
     this.alwaysOnTopCalls.push({
       flag,
       ...(level === undefined ? {} : { level }),
@@ -260,10 +257,9 @@ describe("CompactFollowerSurface", () => {
       "browser_top_right",
       "windowed_compact",
     );
-    follower.beginDrag(
-      { x: 920, y: 40 },
-      [{ x: 0, y: 0, width: 1_000, height: 700 }],
-    );
+    follower.beginDrag({ x: 920, y: 40 }, [
+      { x: 0, y: 0, width: 1_000, height: 700 },
+    ]);
     follower.updateDrag({ x: 600, y: 300 });
 
     expect(window.bounds).toEqual({ x: 900, y: 20, width: 64, height: 56 });
@@ -297,10 +293,9 @@ describe("CompactFollowerSurface", () => {
       "browser_top_right",
       "windowed_compact",
     );
-    follower.beginDrag(
-      { x: 920, y: 40 },
-      [{ x: 0, y: 0, width: 1_000, height: 700 }],
-    );
+    follower.beginDrag({ x: 920, y: 40 }, [
+      { x: 0, y: 0, width: 1_000, height: 700 },
+    ]);
     follower.updateDrag({ x: 600, y: 300 });
 
     expect(window.bounds).toEqual({

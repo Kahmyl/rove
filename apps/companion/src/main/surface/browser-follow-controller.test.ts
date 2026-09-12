@@ -452,6 +452,43 @@ describe("decideBrowserFollow", () => {
 });
 
 describe("BrowserFollowController", () => {
+  it("transfers the unified surface back to the follower when the owned browser regains foreground", async () => {
+    const surface = new FakeSurface();
+    surface.enabled = false;
+    const onOwnedBrowserForeground = vi.fn(() => {
+      surface.enabled = true;
+    });
+    const controller = new BrowserFollowController(
+      {
+        getBrowserWindowState: vi.fn(async () =>
+          windowState({ documentFocused: false }),
+        ),
+      },
+      { getAllDisplays: () => [display] },
+      surface,
+      {
+        browserIdentity: {
+          getBrowserHostIdentity: vi.fn(async () => ({
+            kind: "owned_process" as const,
+            processId: 410,
+          })),
+        },
+        foreground: {
+          getForegroundProcessId: vi.fn(async () => 410),
+        },
+        followerProcessId: 411,
+        onOwnedBrowserForeground,
+      },
+    );
+
+    controller.setSession(session);
+    await controller.reconcileNow();
+
+    expect(onOwnedBrowserForeground).toHaveBeenCalledOnce();
+    expect(surface.shown).toHaveLength(1);
+    expect(surface.visible).toBe(true);
+  });
+
   it("suppresses duplicate geometry and applies movement", async () => {
     let state = windowState();
 
@@ -863,6 +900,24 @@ describe("BrowserFollowController authority revocation", () => {
         foregroundProcessId: null,
       }),
     ).toEqual({ kind: "hidden", reason: "foreground_unavailable" });
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        state: windowState({ documentFocused: false }),
+        surfaceFocused: false,
+        foregroundProcessId: 4321,
+      }),
+    ).toMatchObject({ kind: "visible" });
+
+    expect(
+      decideBrowserFollow({
+        ...base,
+        state: windowState({ documentFocused: false }),
+        surfaceFocused: false,
+        foregroundProcessId: 4321,
+      }),
+    ).toMatchObject({ kind: "visible" });
 
     expect(
       decideBrowserFollow({

@@ -1,0 +1,2038 @@
+import type {
+  CodexAccountCatalogService,
+  CodexCatalogSnapshot,
+} from "./account-catalog.js";
+import type { CodexHostHealth } from "./app-server-host.js";
+import type {
+  AttentionRequest,
+  AttentionKind,
+  AttentionStatus,
+} from "./attention.js";
+import type {
+  ProductTaskPort,
+  ExecutionMode,
+  BrowserIdentity,
+  ProductTaskSnapshot,
+  ApprovalsReviewer,
+} from "./product-task-port.js";
+import type {
+  CodexTurnStatus,
+  ProjectedConversationItem,
+} from "./conversations.js";
+import type {
+  AttachmentRuntimeMaterializer,
+  TaskAttachmentAuthority,
+  TaskAttachmentDescriptor,
+  TaskFileAttention,
+} from "./task-attachments.js";
+import type { TaskAcceptance, TaskPortableValue } from "@rove/protocol";
+
+export const LOCAL_PRODUCT_API_VERSION = 7 as const;
+export interface ProductTaskLaunchInput {
+  outcome: string;
+  executionMode: ExecutionMode;
+  browserIdentity: BrowserIdentity;
+  approvalsReviewer: ApprovalsReviewer;
+  model?: string;
+  reasoningEffort?: string;
+  attachmentIds?: readonly string[];
+}
+export type LocalProductCommand =
+  | { type: "account.refresh" }
+  | { type: "account.token.refresh" }
+  | { type: "account.login"; loginType: "chatgpt" | "deviceCode" }
+  | { type: "account.login.cancel"; loginId: string }
+  | { type: "account.logout" }
+  | { type: "attachments.pick" }
+  | { type: "attachments.remove"; attachmentId: string }
+  | { type: "attachments.replace"; attachmentId: string }
+  | {
+      type: "task.attachment.reselect";
+      taskId: string;
+      attachmentId: string;
+    }
+  | {
+      type: "file-attention.select";
+      requestId: string;
+      taskId: string;
+      sessionId: string;
+    }
+  | {
+      type: "file-attention.cancel";
+      requestId: string;
+      taskId: string;
+      sessionId: string;
+    }
+  | { type: "task.launch"; operationId: string; input: ProductTaskLaunchInput }
+  | {
+      type: "task.message";
+      taskId: string;
+      operationId: string;
+      outcome: string;
+      attachmentIds?: readonly string[];
+    }
+  | { type: "task.close"; taskId: string; operationId: string }
+  | { type: "task.return-control"; taskId: string; operationId: string }
+  | { type: "task.thread.read"; taskId: string }
+  | { type: "task.thread.archive"; taskId: string; operationId?: string }
+  | { type: "task.thread.unarchive"; taskId: string; operationId?: string }
+  | { type: "task.effects.acknowledge"; taskId: string }
+  | {
+      type: "task.effects.authorize-repeat";
+      taskId: string;
+      effectId: string;
+    }
+  | {
+      type: "task.effects.closeout";
+      taskId: string;
+      operationId: string;
+    }
+  | {
+      type: "attention.decide";
+      requestId: string;
+      taskId: string;
+      threadId?: string;
+      turnId?: string;
+      itemId?: string;
+      generation: number;
+      decision: "accept" | "decline" | "cancel";
+      answers?: Record<string, readonly string[]>;
+      form?: Record<string, string | number | boolean | readonly string[]>;
+    }
+  | {
+      type: "attention.respond";
+      requestId: string;
+      taskId: string;
+      threadId?: string;
+      turnId?: string;
+      itemId?: string;
+      generation: number;
+      result: unknown;
+    };
+/** The complete renderer-write surface. Addressing and policy are host-owned. */
+export type RendererProductIntent =
+  | { type: "account.refresh" }
+  | { type: "account.token.refresh" }
+  | { type: "account.login"; loginType: "chatgpt" | "deviceCode" }
+  | { type: "account.login.cancel"; loginId: string }
+  | { type: "account.logout" }
+  | { type: "attachments.pick" }
+  | { type: "attachments.remove"; attachmentId: string }
+  | { type: "attachments.replace"; attachmentId: string }
+  | {
+      type: "task.attachment.reselect";
+      taskId: string;
+      attachmentId: string;
+    }
+  | {
+      type: "file-attention.select";
+      requestId: string;
+      taskId: string;
+      sessionId: string;
+    }
+  | {
+      type: "file-attention.cancel";
+      requestId: string;
+      taskId: string;
+      sessionId: string;
+    }
+  | { type: "task.launch"; operationId: string; input: ProductTaskLaunchInput }
+  | {
+      type: "task.message";
+      taskId: string;
+      operationId: string;
+      outcome: string;
+      attachmentIds?: readonly string[];
+    }
+  | { type: "task.stop"; taskId: string; operationId: string }
+  | { type: "task.return-control"; taskId: string; operationId: string }
+  | { type: "task.restore"; taskId: string; operationId: string }
+  | { type: "task.archive"; taskId: string; operationId: string }
+  | { type: "task.effects.acknowledge"; taskId: string }
+  | {
+      type: "task.effects.authorize-repeat";
+      taskId: string;
+      effectId: string;
+    }
+  | {
+      type: "attention.decide";
+      taskId: string;
+      requestId: string;
+      generation: number;
+      decision: "accept" | "decline" | "cancel";
+      answers?: Record<string, readonly string[]>;
+      form?: Record<string, string | number | boolean | readonly string[]>;
+    };
+export interface ProductHostProjection {
+  state: CodexHostHealth["state"];
+  ready: boolean;
+  restartAttempt: number;
+  error?: string;
+  compatibility?: {
+    version: string;
+    platform: string;
+    architecture: string;
+    source: "development" | "packaged";
+  };
+}
+export interface ProductAttentionProjection {
+  authority: AttentionRequest["authority"];
+  kind: AttentionKind;
+  requestId: string;
+  taskId: string;
+  threadId?: string;
+  turnId?: string;
+  itemId?: string;
+  generation: number;
+  status: AttentionStatus;
+  sequence: number;
+  title: string;
+  instruction?: string;
+  context?: readonly { label: string; value: string }[];
+  questions?: readonly ProductAttentionQuestion[];
+  elicitation?: ProductElicitationProjection;
+  continuationPolicy?: "resume_after_control_return" | "explicit_user_response";
+}
+export interface ProductAttentionQuestion {
+  id: string;
+  header: string;
+  question: string;
+  isOther: boolean;
+  isSecret: boolean;
+  options: readonly { label: string; description: string }[] | null;
+}
+export interface ProductElicitationField {
+  id: string;
+  title: string;
+  description?: string;
+  required: boolean;
+  type:
+    | "string"
+    | "number"
+    | "integer"
+    | "boolean"
+    | "single_select"
+    | "multi_select";
+  options?: readonly { value: string; label: string }[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+  format?: "email" | "uri" | "date" | "date-time";
+  default?: string | number | boolean | readonly string[];
+}
+export interface ProductElicitationProjection {
+  mode: "form" | "url";
+  message: string;
+  serverName?: string;
+  fields?: readonly ProductElicitationField[];
+  unsupportedReason?: string;
+}
+export interface ProductConversationProjection {
+  activeTurnId?: string;
+  turnStatus: CodexTurnStatus;
+  explicitSummary?: string;
+  archived: boolean;
+  items: Readonly<Record<string, ProjectedConversationItem>>;
+  turnOrder: readonly string[];
+}
+export interface ProductTaskProjection {
+  taskId: string;
+  executionMode: ExecutionMode;
+  browserIdentity: BrowserIdentity;
+  selectionSource: ProductTaskSnapshot["context"]["selectionSource"];
+  selectedAt: string;
+  bootstrapStage: ProductTaskSnapshot["context"]["bootstrap"]["stage"];
+  initialLaunch?: {
+    operationId: string;
+    inputDigest: string;
+    stage: NonNullable<
+      ProductTaskSnapshot["context"]["initialLaunch"]
+    >["stage"];
+    turnId?: string;
+  };
+  roveSessionId?: string;
+  codexThreadId?: string;
+  model?: string;
+  reasoningEffort?: string;
+  approvalsReviewer: ApprovalsReviewer;
+  conversation?: ProductConversationProjection;
+  lifecycle: ProductTaskSnapshot["lifecycle"];
+  availableActions: ProductTaskSnapshot["availableActions"];
+  runtime?: ProductTaskSnapshot["runtime"];
+  attachments?: readonly TaskAttachmentDescriptor[];
+  operation?: {
+    type: "finish";
+    operationId: string;
+    status: "accepted" | "deferred-for-convergence";
+    reason: string;
+  };
+}
+export type TrustedExternalIntent =
+  | { purpose: "account_login"; loginId: string }
+  | {
+      purpose: "mcp_elicitation";
+      taskId: string;
+      requestId: string;
+      generation: number;
+    };
+export interface LocalProductSnapshot {
+  version: typeof LOCAL_PRODUCT_API_VERSION;
+  host: ProductHostProjection;
+  catalog: CodexCatalogSnapshot;
+  attention: readonly ProductAttentionProjection[];
+  tasks: readonly ProductTaskProjection[];
+  recoveryWarnings: readonly string[];
+  draftAttachments: readonly TaskAttachmentDescriptor[];
+  fileAttention: readonly TaskFileAttention[];
+  currentTaskId?: string;
+}
+export type LocalProductResult =
+  CodexCatalogSnapshot | object | string | boolean | undefined;
+export interface ProductAttentionPort {
+  refresh?(): Promise<void>;
+  list(): readonly AttentionRequest[];
+  requireExact(identity: {
+    authority: AttentionRequest["authority"];
+    requestId: string;
+    taskId: string;
+    threadId?: string;
+    turnId?: string;
+    itemId?: string;
+    generation: number;
+  }): AttentionRequest;
+}
+export function validateTrustedExternalUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Trusted external URL is malformed.");
+  }
+  if (url.protocol !== "https:")
+    throw new Error("Only HTTPS external URLs are permitted.");
+  return value;
+}
+function nonempty(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0)
+    throw new Error(`Invalid ${label}.`);
+  return value;
+}
+function stableOperationId(value: unknown, label: string): string {
+  const id = nonempty(value, label);
+  if (
+    !/^intent_[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
+      id,
+    )
+  )
+    throw new Error(`Invalid ${label}.`);
+  return id;
+}
+function exactCommand(
+  command: Record<string, unknown>,
+  allowed: readonly string[],
+): void {
+  const invalid = Object.keys(command).find((key) => !allowed.includes(key));
+  if (invalid !== undefined)
+    throw new Error(
+      `Local product command contains unsupported field ${invalid}.`,
+    );
+}
+function boundedText(value: unknown, maximum = 280): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim().slice(0, maximum)
+    : undefined;
+}
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+function isApprovalsReviewer(value: unknown): value is ApprovalsReviewer {
+  return value === "auto_review" || value === "user";
+}
+const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
+  Record<RendererProductIntent["type"], readonly string[]>
+> = {
+  "account.refresh": ["type"],
+  "account.token.refresh": ["type"],
+  "account.login": ["type", "loginType"],
+  "account.login.cancel": ["type", "loginId"],
+  "account.logout": ["type"],
+  "attachments.pick": ["type"],
+  "attachments.remove": ["type", "attachmentId"],
+  "attachments.replace": ["type", "attachmentId"],
+  "task.attachment.reselect": ["type", "taskId", "attachmentId"],
+  "file-attention.select": ["type", "requestId", "taskId", "sessionId"],
+  "file-attention.cancel": ["type", "requestId", "taskId", "sessionId"],
+  "task.launch": ["type", "operationId", "input"],
+  "task.message": ["type", "taskId", "operationId", "outcome", "attachmentIds"],
+  "task.stop": ["type", "taskId", "operationId"],
+  "task.return-control": ["type", "taskId", "operationId"],
+  "task.restore": ["type", "taskId", "operationId"],
+  "task.archive": ["type", "taskId", "operationId"],
+  "task.effects.acknowledge": ["type", "taskId"],
+  "task.effects.authorize-repeat": ["type", "taskId", "effectId"],
+  "attention.decide": [
+    "type",
+    "taskId",
+    "requestId",
+    "generation",
+    "decision",
+    "answers",
+    "form",
+  ],
+};
+export function assertRendererProductIntent(
+  intent: unknown,
+): asserts intent is RendererProductIntent {
+  const value = record(intent);
+  if (!value || typeof value.type !== "string")
+    throw new Error("Invalid renderer product intent.");
+  const shape =
+    RENDERER_PRODUCT_INTENT_SHAPES[value.type as RendererProductIntent["type"]];
+  if (shape === undefined)
+    throw new Error("Unsupported renderer product intent.");
+  exactCommand(value, shape);
+}
+function safeText(value: unknown, maximum = 500): string | undefined {
+  const text = boundedText(value, maximum);
+  if (text === undefined) return undefined;
+  return text
+    .replace(
+      /\b(token|password|cookie|authorization|secret)=([^\s&]+)/gi,
+      "$1=[redacted]",
+    )
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]");
+}
+function exactBoundedText(value: unknown, maximum: number): string | undefined {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximum
+    ? value
+    : undefined;
+}
+function exactBoundedString(
+  value: unknown,
+  maximum: number,
+): string | undefined {
+  return typeof value === "string" && value.length <= maximum
+    ? value
+    : undefined;
+}
+function validCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(0);
+  parsed.setUTCHours(0, 0, 0, 0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+function validRfc3339DateTime(value: string): boolean {
+  const match =
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/.exec(
+      value,
+    );
+  if (!match || !validCalendarDate(match[1]!)) return false;
+  const hour = Number(match[2]);
+  const minute = Number(match[3]);
+  const second = Number(match[4]);
+  const offsetHour = match[6] === undefined ? 0 : Number(match[6]);
+  const offsetMinute = match[7] === undefined ? 0 : Number(match[7]);
+  return (
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59 &&
+    !Number.isNaN(Date.parse(value))
+  );
+}
+function assertFieldValue(
+  field: ProductElicitationField,
+  value: string | number | boolean | readonly string[],
+  prefix = `Field ${field.id}`,
+): void {
+  if (field.type === "boolean") {
+    if (typeof value !== "boolean")
+      throw new Error(`${prefix} has an invalid default.`);
+    return;
+  }
+  if (field.type === "number" || field.type === "integer") {
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      (field.type === "integer" && !Number.isInteger(value)) ||
+      (field.minimum !== undefined && value < field.minimum) ||
+      (field.maximum !== undefined && value > field.maximum)
+    )
+      throw new Error(`${prefix} has an invalid default.`);
+    return;
+  }
+  if (field.type === "multi_select") {
+    if (
+      !Array.isArray(value) ||
+      (field.minItems !== undefined && value.length < field.minItems) ||
+      (field.maxItems !== undefined && value.length > field.maxItems) ||
+      new Set(value).size !== value.length ||
+      value.some(
+        (entry) =>
+          typeof entry !== "string" ||
+          !field.options?.some((option) => option.value === entry),
+      )
+    )
+      throw new Error(`${prefix} has an invalid default.`);
+    return;
+  }
+  if (typeof value !== "string")
+    throw new Error(`${prefix} has an invalid default.`);
+  const length = Array.from(value).length;
+  if (
+    (field.minLength !== undefined && length < field.minLength) ||
+    length > (field.maxLength ?? 2_000) ||
+    (field.type === "single_select" &&
+      !field.options?.some((option) => option.value === value)) ||
+    (field.format === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
+    (field.format === "uri" && !URL.canParse(value)) ||
+    (field.format === "date" && !validCalendarDate(value)) ||
+    (field.format === "date-time" && !validRfc3339DateTime(value))
+  )
+    throw new Error(`${prefix} has an invalid default.`);
+}
+function projectQuestions(
+  value: unknown,
+): ProductAttentionQuestion[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const questions = value.slice(0, 3).flatMap((raw) => {
+    const item = record(raw);
+    const id = exactBoundedText(item?.id, 120);
+    const header = safeText(item?.header, 80);
+    const question = safeText(item?.question, 500);
+    if (!item || !id || !header || !question) return [];
+    const options = Array.isArray(item.options)
+      ? item.options.slice(0, 3).flatMap((rawOption) => {
+          const option = record(rawOption);
+          const label = exactBoundedText(option?.label, 160);
+          const description = safeText(option?.description, 280);
+          return label && description ? [{ label, description }] : [];
+        })
+      : null;
+    return [
+      {
+        id,
+        header,
+        question,
+        isOther: item.isOther === true,
+        isSecret: item.isSecret === true,
+        options,
+      },
+    ];
+  });
+  return questions.length === 0 ? undefined : questions;
+}
+function schemaOptions(
+  schema: Record<string, unknown>,
+): { value: string; label: string }[] | undefined {
+  const optionKeys = ["enum", "oneOf", "anyOf"].filter(
+    (key) => schema[key] !== undefined,
+  );
+  if (optionKeys.length > 1)
+    throw new Error("This form combines unsupported option constraints.");
+  if (schema.enumNames !== undefined && schema.enum === undefined)
+    throw new Error("This form contains orphaned option labels.");
+  if (schema.oneOf !== undefined && !Array.isArray(schema.oneOf))
+    throw new Error("This form contains an invalid oneOf constraint.");
+  if (schema.anyOf !== undefined && !Array.isArray(schema.anyOf))
+    throw new Error("This form contains an invalid anyOf constraint.");
+  if (schema.enum !== undefined && !Array.isArray(schema.enum))
+    throw new Error("This form contains an invalid enum constraint.");
+  const titledOptions = Array.isArray(schema.oneOf)
+    ? schema.oneOf
+    : Array.isArray(schema.anyOf)
+      ? schema.anyOf
+      : undefined;
+  if (titledOptions) {
+    if (titledOptions.length === 0)
+      throw new Error("This form contains an empty titled option constraint.");
+    if (titledOptions.length > 20)
+      throw new Error("This form has more than 20 options.");
+    const options = titledOptions.map((raw) => {
+      const option = record(raw);
+      if (option) exactCommand(option, ["const", "title"]);
+      const value = exactBoundedString(option?.const, 2_000);
+      const label = exactBoundedString(option?.title, 120);
+      if (value === undefined || label === undefined)
+        throw new Error("This form contains an invalid titled option.");
+      return { value, label };
+    });
+    if (new Set(options.map((option) => option.value)).size !== options.length)
+      throw new Error("This form contains duplicate options.");
+    return options;
+  }
+  if (Array.isArray(schema.enum)) {
+    if (schema.enum.length === 0)
+      throw new Error("This form contains an empty enum constraint.");
+    if (schema.enum.length > 20)
+      throw new Error("This form has more than 20 options.");
+    if (
+      schema.enumNames !== undefined &&
+      (!Array.isArray(schema.enumNames) ||
+        schema.enumNames.length !== schema.enum.length ||
+        schema.enumNames.some((entry) => typeof entry !== "string"))
+    )
+      throw new Error("This form contains invalid option labels.");
+    const names = Array.isArray(schema.enumNames) ? schema.enumNames : [];
+    const options = schema.enum.map((raw, index) => {
+      const value = exactBoundedString(raw, 2_000);
+      if (value === undefined)
+        throw new Error("This form contains an invalid option.");
+      const rawLabel = names[index];
+      const label =
+        rawLabel === undefined ? value : exactBoundedString(rawLabel, 120);
+      if (label === undefined)
+        throw new Error("This form contains an invalid option label.");
+      return { value, label };
+    });
+    if (new Set(options.map((option) => option.value)).size !== options.length)
+      throw new Error("This form contains duplicate options.");
+    return options;
+  }
+  const items = record(schema.items);
+  if (items) return schemaOptions(items);
+  return undefined;
+}
+const FORM_TOP_LEVEL_KEYS = [
+  "$schema",
+  "type",
+  "properties",
+  "required",
+] as const;
+const FORM_FIELD_KEYS = [
+  "type",
+  "title",
+  "description",
+  "enum",
+  "enumNames",
+  "oneOf",
+  "anyOf",
+  "minimum",
+  "maximum",
+  "minLength",
+  "maxLength",
+  "minItems",
+  "maxItems",
+  "format",
+  "default",
+  "items",
+] as const;
+function assertSupportedFieldSchema(
+  id: string,
+  schema: Record<string, unknown>,
+): void {
+  exactCommand(schema, FORM_FIELD_KEYS);
+  const rawType = schema.type;
+  const common = new Set(["type", "title", "description", "default"]);
+  const allowed =
+    rawType === "string"
+      ? schema.enum !== undefined || schema.enumNames !== undefined
+        ? new Set([...common, "enum", "enumNames"])
+        : schema.oneOf !== undefined
+          ? new Set([...common, "oneOf"])
+          : new Set([...common, "minLength", "maxLength", "format"])
+      : rawType === "number" || rawType === "integer"
+        ? new Set([...common, "minimum", "maximum"])
+        : rawType === "boolean"
+          ? common
+          : rawType === "array"
+            ? new Set([...common, "items", "minItems", "maxItems"])
+            : new Set<string>();
+  const inapplicable = Object.keys(schema).find((key) => !allowed.has(key));
+  if (inapplicable !== undefined)
+    throw new Error(`Field ${id} uses unsupported constraint ${inapplicable}.`);
+  if (rawType === "array") {
+    const items = record(schema.items);
+    if (!items) throw new Error(`Field ${id} has an unsupported array schema.`);
+    if (items.anyOf !== undefined) {
+      exactCommand(items, ["anyOf"]);
+    } else {
+      exactCommand(items, ["type", "enum"]);
+    }
+    if (items.anyOf === undefined && items.type !== "string")
+      throw new Error(`Field ${id} has an unsupported array item type.`);
+  }
+}
+function projectElicitation(
+  payload: Record<string, unknown>,
+): ProductElicitationProjection | undefined {
+  if (payload.mode === "url") {
+    const message = safeText(payload.message, 500);
+    if (!message) return undefined;
+    const serverName = safeText(payload.serverName, 120);
+    return {
+      mode: "url",
+      message,
+      ...(serverName === undefined ? {} : { serverName }),
+    };
+  }
+  if (!["form", "openai/form", "openaiForm"].includes(String(payload.mode)))
+    return undefined;
+  const requested = record(payload.requestedSchema);
+  const properties = record(requested?.properties);
+  const message = safeText(payload.message, 500);
+  if (!message) return undefined;
+  const serverName = safeText(payload.serverName, 120);
+  const unsupported = (reason: string): ProductElicitationProjection => ({
+    mode: "form",
+    message,
+    ...(serverName === undefined ? {} : { serverName }),
+    fields: [],
+    unsupportedReason: safeText(reason, 280) ?? "This form is unsupported.",
+  });
+  if (!requested || !properties || requested.type !== "object")
+    return unsupported("This form has no supported object schema.");
+  try {
+    exactCommand(requested, FORM_TOP_LEVEL_KEYS);
+  } catch (error) {
+    return unsupported(
+      error instanceof Error ? error.message : "This form is unsupported.",
+    );
+  }
+  if (
+    requested.$schema !== undefined &&
+    exactBoundedString(requested.$schema, 2_000) === undefined
+  )
+    return unsupported("This form has invalid schema metadata.");
+  if (Object.keys(properties).length > 16)
+    return unsupported("This form has more than 16 fields.");
+  if (requested.required !== undefined && !Array.isArray(requested.required))
+    return unsupported("This form has an invalid required-field list.");
+  const requiredEntries = Array.isArray(requested.required)
+    ? requested.required
+    : [];
+  const required = new Set(
+    requiredEntries.filter(
+      (entry): entry is string => typeof entry === "string",
+    ),
+  );
+  if (
+    requiredEntries.some((entry) => typeof entry !== "string") ||
+    required.size !== requiredEntries.length ||
+    [...required].some((id) => !(id in properties))
+  )
+    return unsupported("This form has an invalid required-field list.");
+  let fields: ProductElicitationField[];
+  try {
+    fields = Object.entries(properties).map(([id, raw]) => {
+      if (id.length === 0 || id.length > 120)
+        throw new Error("This form contains an invalid field identity.");
+      const schema = record(raw);
+      if (!schema) throw new Error("This form contains an invalid field.");
+      assertSupportedFieldSchema(id, schema);
+      const options = schemaOptions(schema);
+      const rawType = schema.type;
+      if (
+        !["string", "number", "integer", "boolean", "array"].includes(
+          String(rawType),
+        )
+      )
+        throw new Error(`Field ${id} has an unsupported type.`);
+      if (rawType === "array" && !options)
+        throw new Error(`Field ${id} has an unsupported array schema.`);
+      const type: ProductElicitationField["type"] =
+        rawType === "boolean"
+          ? "boolean"
+          : rawType === "number" || rawType === "integer"
+            ? rawType
+            : rawType === "array" && options
+              ? "multi_select"
+              : options
+                ? "single_select"
+                : "string";
+      const description = exactBoundedString(schema.description, 280);
+      if (schema.description !== undefined && description === undefined)
+        throw new Error(`Field ${id} has an invalid description.`);
+      const title = exactBoundedString(schema.title, 120);
+      if (schema.title !== undefined && title === undefined)
+        throw new Error(`Field ${id} has an invalid title.`);
+      const field: ProductElicitationField = {
+        id,
+        title: title ?? id,
+        required: required.has(id),
+        type,
+        ...(description === undefined ? {} : { description }),
+        ...(options === undefined ? {} : { options }),
+      };
+      for (const name of ["minimum", "maximum"] as const)
+        if (schema[name] !== undefined) {
+          if (
+            typeof schema[name] !== "number" ||
+            !Number.isFinite(schema[name])
+          )
+            throw new Error(`Field ${id} has an invalid ${name}.`);
+          field[name] = Number(schema[name]);
+        }
+      for (const name of ["minLength", "maxLength"] as const)
+        if (schema[name] !== undefined) {
+          if (!Number.isInteger(schema[name]) || Number(schema[name]) < 0)
+            throw new Error(`Field ${id} has an invalid ${name}.`);
+          field[name] = Number(schema[name]);
+        }
+      for (const name of ["minItems", "maxItems"] as const)
+        if (schema[name] !== undefined) {
+          if (!Number.isInteger(schema[name]) || Number(schema[name]) < 0)
+            throw new Error(`Field ${id} has an invalid ${name}.`);
+          field[name] = Number(schema[name]);
+        }
+      if (schema.format !== undefined) {
+        if (
+          !["email", "uri", "date", "date-time"].includes(String(schema.format))
+        )
+          throw new Error(`Field ${id} has an unsupported format.`);
+        field.format = schema.format as NonNullable<
+          ProductElicitationField["format"]
+        >;
+      }
+      if (
+        (field.minimum !== undefined &&
+          field.maximum !== undefined &&
+          field.minimum > field.maximum) ||
+        (field.minLength !== undefined &&
+          field.maxLength !== undefined &&
+          field.minLength > field.maxLength) ||
+        (field.minItems !== undefined &&
+          field.maxItems !== undefined &&
+          field.minItems > field.maxItems)
+      )
+        throw new Error(`Field ${id} has contradictory constraints.`);
+      if (schema.default !== undefined) {
+        const value = schema.default;
+        const valid =
+          (type === "boolean" && typeof value === "boolean") ||
+          ((type === "number" || type === "integer") &&
+            typeof value === "number" &&
+            Number.isFinite(value)) ||
+          ((type === "string" || type === "single_select") &&
+            typeof value === "string") ||
+          (type === "multi_select" &&
+            Array.isArray(value) &&
+            value.every((entry) => typeof entry === "string"));
+        if (!valid) throw new Error(`Field ${id} has an invalid default.`);
+        field.default = value as NonNullable<
+          ProductElicitationField["default"]
+        >;
+        assertFieldValue(field, field.default);
+      }
+      return field;
+    });
+  } catch (error) {
+    return unsupported(
+      error instanceof Error ? error.message : "This form is unsupported.",
+    );
+  }
+  return {
+    mode: "form",
+    message,
+    ...(serverName === undefined ? {} : { serverName }),
+    fields,
+  };
+}
+function attentionTitle(kind: AttentionKind): string {
+  return {
+    command_approval: "Command approval",
+    file_approval: "File change approval",
+    network_approval: "Network approval",
+    permission_approval: "Permission request",
+    mcp_elicitation: "Tool needs information",
+    user_input: "Codex needs your input",
+    control_handoff: "Browser control handoff",
+  }[kind];
+}
+function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
+  const context: { label: string; value: string }[] = [];
+  const pushContext = (label: string, value: unknown, maximum = 500) => {
+    const projected = safeText(value, maximum);
+    if (projected) context.push({ label, value: projected });
+  };
+  if (entry.kind === "command_approval") {
+    pushContext("Command", entry.payload.command, 800);
+    pushContext("Reason", entry.payload.reason);
+    if (Array.isArray(entry.payload.availableDecisions))
+      pushContext(
+        "Available decisions",
+        entry.payload.availableDecisions.slice(0, 8).join(", "),
+        200,
+      );
+  } else if (entry.kind === "network_approval") {
+    const network = record(entry.payload.networkApprovalContext);
+    pushContext("Host", network?.host, 253);
+    pushContext("Protocol", network?.protocol, 40);
+    pushContext("Reason", entry.payload.reason);
+  } else if (entry.kind === "file_approval") {
+    pushContext("Reason", entry.payload.reason);
+    context.push({ label: "Scope", value: "Proposed file changes" });
+  } else if (entry.kind === "permission_approval") {
+    const permissions = record(entry.payload.permissions);
+    if (permissions?.network !== null && permissions?.network !== undefined)
+      context.push({ label: "Permission", value: "Additional network access" });
+    if (
+      permissions?.fileSystem !== null &&
+      permissions?.fileSystem !== undefined
+    )
+      context.push({
+        label: "Permission",
+        value: "Additional filesystem access",
+      });
+    pushContext("Reason", entry.payload.reason);
+  }
+  const questions =
+    entry.kind === "user_input"
+      ? projectQuestions(entry.payload.questions)
+      : undefined;
+  const elicitation =
+    entry.kind === "mcp_elicitation"
+      ? projectElicitation(entry.payload)
+      : undefined;
+  return {
+    authority: entry.authority,
+    kind: entry.kind,
+    requestId: entry.requestId,
+    taskId: entry.taskId,
+    ...(entry.threadId === undefined ? {} : { threadId: entry.threadId }),
+    ...(entry.turnId === undefined ? {} : { turnId: entry.turnId }),
+    ...(entry.itemId === undefined ? {} : { itemId: entry.itemId }),
+    generation: entry.generation,
+    status: entry.status,
+    sequence: entry.sequence,
+    title: attentionTitle(entry.kind),
+    ...(context.length === 0 ? {} : { context: context.slice(0, 8) }),
+    ...(questions === undefined ? {} : { questions }),
+    ...(elicitation === undefined ? {} : { elicitation }),
+    ...(entry.authority === "rove_control" &&
+    (entry.payload.policy === "resume_after_control_return" ||
+      entry.payload.policy === "explicit_user_response")
+      ? { continuationPolicy: entry.payload.policy }
+      : {}),
+    ...(() => {
+      const instruction =
+        safeText(entry.payload.instruction) ??
+        safeText(entry.payload.reason) ??
+        safeText(entry.payload.prompt) ??
+        safeText(entry.payload.message);
+      return instruction === undefined ? {} : { instruction };
+    })(),
+  };
+}
+function projectConversation(
+  conversation: NonNullable<ProductTaskSnapshot["conversation"]>,
+): ProductConversationProjection {
+  const items = Object.fromEntries(
+    Object.entries(conversation.items)
+      .slice(-128)
+      .map(([id, item]) => [
+        id,
+        {
+          id: item.id,
+          turnId: item.turnId,
+          kind: item.kind,
+          status: item.status,
+          ...(item.phase === undefined ? {} : { phase: item.phase }),
+          ...(item.startedAt === undefined
+            ? {}
+            : { startedAt: item.startedAt }),
+          ...(item.completedAt === undefined
+            ? {}
+            : { completedAt: item.completedAt }),
+          ...(item.clientId === undefined ? {} : { clientId: item.clientId }),
+          ...(item.attachments?.length
+            ? {
+                attachments: item.attachments
+                  .slice(0, 100)
+                  .map((attachment) => ({
+                    filename: attachment.filename.slice(0, 255),
+                    kind: attachment.kind,
+                  })),
+              }
+            : {}),
+          ...(item.authoredBy === undefined
+            ? {}
+            : { authoredBy: item.authoredBy }),
+          ...(safeText(item.text, 2_000) === undefined
+            ? {}
+            : { text: safeText(item.text, 2_000) }),
+          ...(safeText(item.title, 500) === undefined
+            ? {}
+            : { title: safeText(item.title, 500) }),
+          ...(safeText(item.progress, 500) === undefined
+            ? {}
+            : { progress: safeText(item.progress, 500) }),
+        },
+      ]),
+  ) as Record<string, ProjectedConversationItem>;
+  const explicitSummary = safeText(conversation.explicitSummary, 2_000);
+  return {
+    ...(conversation.activeTurnId === undefined
+      ? {}
+      : { activeTurnId: conversation.activeTurnId }),
+    turnStatus: conversation.turnStatus,
+    ...(explicitSummary === undefined ? {} : { explicitSummary }),
+    archived: conversation.archived,
+    items,
+    turnOrder: conversation.turnOrder.slice(-64),
+  };
+}
+function projectTask(
+  task: ProductTaskSnapshot,
+  attachments: readonly TaskAttachmentDescriptor[] = [],
+): ProductTaskProjection {
+  const { context } = task;
+  return {
+    taskId: context.roveTaskId,
+    executionMode: context.executionMode,
+    browserIdentity:
+      context.browserIdentity.mode === "temporary"
+        ? { mode: "temporary" }
+        : {
+            mode: "workspace",
+            workspaceId: context.browserIdentity.workspaceId,
+          },
+    selectionSource: context.selectionSource,
+    selectedAt: context.selectedAt.slice(0, 40),
+    bootstrapStage: context.bootstrap.stage,
+    ...(context.initialLaunch === undefined
+      ? {}
+      : {
+          initialLaunch: {
+            operationId: context.initialLaunch.operationId,
+            inputDigest: context.initialLaunch.inputDigest,
+            stage: context.initialLaunch.stage,
+            ...(context.initialLaunch.turnId === undefined
+              ? {}
+              : { turnId: context.initialLaunch.turnId }),
+          },
+        }),
+    ...(context.roveSessionId === undefined
+      ? {}
+      : { roveSessionId: context.roveSessionId }),
+    ...(context.codexThreadId === undefined
+      ? {}
+      : { codexThreadId: context.codexThreadId }),
+    ...(context.policy.model === undefined
+      ? {}
+      : { model: context.policy.model }),
+    ...(context.policy.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: context.policy.reasoningEffort.slice(0, 40) }),
+    approvalsReviewer: context.policy.approvalsReviewer,
+    ...(task.conversation === undefined
+      ? {}
+      : { conversation: projectConversation(task.conversation) }),
+    lifecycle: task.lifecycle ?? {
+      phase: "cleanup_required",
+      reason: "Lifecycle projection is unavailable.",
+    },
+    availableActions: [...(task.availableActions ?? [])],
+    attachments,
+    ...(task.runtime === undefined ? {} : { runtime: task.runtime }),
+    ...(context.lifecycle?.closeOperation === undefined
+      ? {}
+      : {
+          operation: {
+            type: "finish",
+            operationId: context.lifecycle.closeOperation.operationId,
+            status:
+              context.lifecycle.closeOperation.stage === "complete"
+                ? ("accepted" as const)
+                : ("deferred-for-convergence" as const),
+            reason:
+              context.lifecycle.lastConvergence?.reason ??
+              "Task cleanup is converging.",
+          },
+        }),
+  };
+}
+function hostProjection(health: CodexHostHealth): ProductHostProjection {
+  return {
+    state: health.state,
+    ready: health.ready,
+    restartAttempt: health.restartAttempt,
+    ...(health.lastError === undefined
+      ? {}
+      : { error: health.lastError.slice(0, 500) }),
+    ...(health.executable === undefined
+      ? {}
+      : {
+          compatibility: {
+            version: health.executable.baseline.cliVersion.slice(0, 80),
+            platform: health.executable.baseline.platformOs.slice(0, 80),
+            architecture: health.executable.baseline.architecture.slice(0, 80),
+            source: health.executable.source,
+          },
+        }),
+  };
+}
+function answerMap(
+  entry: AttentionRequest,
+  input: Record<string, readonly string[]> | undefined,
+): Record<string, { answers: string[] }> {
+  const questions = projectQuestions(entry.payload.questions) ?? [];
+  if (questions.length === 0)
+    throw new Error("Request has no answerable questions.");
+  const supplied = input ?? {};
+  if (
+    Object.keys(supplied).some(
+      (id) => !questions.some((item) => item.id === id),
+    )
+  )
+    throw new Error("Answer contains an unknown question identity.");
+  return Object.fromEntries(
+    questions.map((question) => {
+      const answers = supplied[question.id];
+      if (!Array.isArray(answers) || answers.length === 0 || answers.length > 8)
+        throw new Error(`Question ${question.id} requires an answer.`);
+      const values = answers.map((value) =>
+        nonempty(value, "question answer").slice(0, 2_000),
+      );
+      if (
+        question.options &&
+        !question.isOther &&
+        values.some(
+          (value) =>
+            !question.options!.some((option) => option.label === value),
+        )
+      )
+        throw new Error(
+          `Question ${question.id} contains an unavailable option.`,
+        );
+      return [question.id, { answers: values }];
+    }),
+  );
+}
+function formContent(
+  entry: AttentionRequest,
+  input:
+    Record<string, string | number | boolean | readonly string[]> | undefined,
+): Record<string, string | number | boolean | string[]> {
+  const projection = projectElicitation(entry.payload);
+  if (!projection || projection.unsupportedReason)
+    throw new Error(
+      projection?.unsupportedReason ?? "This form cannot be submitted.",
+    );
+  const fields = projection.fields ?? [];
+  const supplied = input ?? {};
+  if (
+    Object.keys(supplied).some((id) => !fields.some((field) => field.id === id))
+  )
+    throw new Error("Form contains an unknown field identity.");
+  const content: Record<string, string | number | boolean | string[]> = {};
+  for (const field of fields) {
+    const value = supplied[field.id] ?? field.default;
+    if (value === undefined) {
+      if (field.required)
+        throw new Error(`Form field ${field.id} is required.`);
+      continue;
+    }
+    if (field.type === "boolean") {
+      if (typeof value !== "boolean")
+        throw new Error(`Form field ${field.id} must be boolean.`);
+      content[field.id] = value;
+    } else if (field.type === "number" || field.type === "integer") {
+      if (typeof value !== "number" || !Number.isFinite(value))
+        throw new Error(`Form field ${field.id} must be numeric.`);
+      if (field.type === "integer" && !Number.isInteger(value))
+        throw new Error(`Form field ${field.id} must be an integer.`);
+      if (field.minimum !== undefined && value < field.minimum)
+        throw new Error(`Form field ${field.id} is below its minimum.`);
+      if (field.maximum !== undefined && value > field.maximum)
+        throw new Error(`Form field ${field.id} is above its maximum.`);
+      content[field.id] = value;
+    } else if (field.type === "multi_select") {
+      if (!Array.isArray(value))
+        throw new Error(`Form field ${field.id} must be a bounded selection.`);
+      const values = value.map((item) => {
+        const projected = exactBoundedString(item, 2_000);
+        if (projected === undefined)
+          throw new Error(`Form field ${field.id} has an invalid selection.`);
+        return projected;
+      });
+      if (field.minItems !== undefined && values.length < field.minItems)
+        throw new Error(`Form field ${field.id} has too few selections.`);
+      if (field.maxItems !== undefined && values.length > field.maxItems)
+        throw new Error(`Form field ${field.id} has too many selections.`);
+      if (new Set(values).size !== values.length)
+        throw new Error(`Form field ${field.id} has duplicate selections.`);
+      if (
+        values.some(
+          (item) => !field.options?.some((option) => option.value === item),
+        )
+      )
+        throw new Error(
+          `Form field ${field.id} contains an unavailable option.`,
+        );
+      content[field.id] = values;
+    } else {
+      if (typeof value !== "string")
+        throw new Error(`Form field ${field.id} must be text.`);
+      const length = Array.from(value).length;
+      if (length > (field.maxLength ?? 2_000))
+        throw new Error(`Form field ${field.id} exceeds its maximum length.`);
+      if (field.minLength !== undefined && length < field.minLength)
+        throw new Error(`Form field ${field.id} is below its minimum length.`);
+      if (
+        field.type === "single_select" &&
+        !field.options?.some((option) => option.value === value)
+      )
+        throw new Error(
+          `Form field ${field.id} contains an unavailable option.`,
+        );
+      if (field.format === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+        throw new Error(`Form field ${field.id} must be an email address.`);
+      if (field.format === "uri") {
+        try {
+          new URL(value);
+        } catch {
+          throw new Error(`Form field ${field.id} must be a URI.`);
+        }
+      }
+      if (field.format === "date" && !validCalendarDate(value))
+        throw new Error(`Form field ${field.id} must be a date.`);
+      if (field.format === "date-time" && !validRfc3339DateTime(value))
+        throw new Error(`Form field ${field.id} must be a date-time.`);
+      content[field.id] = value;
+    }
+  }
+  return content;
+}
+
+/** Trusted host product service. Renderer writes enter only through executeRendererIntent. */
+export class LocalProductApi {
+  private currentTaskId: string | undefined;
+  private readonly health: () => CodexHostHealth;
+  private readonly account: CodexAccountCatalogService;
+  private readonly tasks: ProductTaskPort;
+  private readonly attention: ProductAttentionPort;
+  private readonly taskCwd: string;
+  private readonly recoveryWarnings: () => readonly string[];
+  private readonly attachments: TaskAttachmentAuthority | undefined;
+  private readonly attachmentRuntime: AttachmentRuntimeMaterializer | undefined;
+  private readonly legacyEffects:
+    | {
+        acknowledgeLegacyEffectScope(sessionId: string): Promise<void>;
+        authorizeEffectRepetition?(
+          sessionId: string,
+          effectId: string,
+        ): Promise<object>;
+      }
+    | undefined;
+  constructor(
+    health: () => CodexHostHealth,
+    account: CodexAccountCatalogService,
+    tasks: ProductTaskPort | object,
+    _broker: object,
+    attention: ProductAttentionPort,
+    taskCwd: string = process.cwd(),
+    recoveryWarnings: () => readonly string[] = () => [],
+    attachments?: TaskAttachmentAuthority,
+    attachmentRuntime?: AttachmentRuntimeMaterializer,
+    legacyEffects?: {
+      acknowledgeLegacyEffectScope(sessionId: string): Promise<void>;
+      authorizeEffectRepetition?(
+        sessionId: string,
+        effectId: string,
+      ): Promise<object>;
+    },
+  ) {
+    this.health = health;
+    this.account = account;
+    this.tasks = tasks as ProductTaskPort;
+    this.attention = attention;
+    this.taskCwd = taskCwd;
+    this.recoveryWarnings = recoveryWarnings;
+    this.attachments = attachments;
+    this.attachmentRuntime = attachmentRuntime;
+    this.legacyEffects = legacyEffects;
+  }
+  snapshot(): LocalProductSnapshot {
+    return {
+      version: LOCAL_PRODUCT_API_VERSION,
+      host: hostProjection(this.health()),
+      catalog: this.account.snapshot(),
+      attention: this.attention.list().slice(-256).map(projectAttention),
+      tasks: [],
+      recoveryWarnings: [...this.recoveryWarnings()]
+        .slice(-64)
+        .map((value) => value.slice(0, 500)),
+      draftAttachments: this.attachments?.listDrafts() ?? [],
+      fileAttention: this.attachments?.listAttention() ?? [],
+    };
+  }
+  async readSnapshot(): Promise<LocalProductSnapshot> {
+    await this.attention.refresh?.();
+    const projectedAttention = this.attention
+      .list()
+      .slice(-256)
+      .map(projectAttention);
+    const tasks = (await this.tasks.productTasks())
+      .slice(-256)
+      .map((task) =>
+        projectTask(
+          task,
+          this.attachments?.listForTask?.(task.context.roveTaskId) ?? [],
+        ),
+      );
+    const current = tasks.find((task) => task.taskId === this.currentTaskId);
+    const blockers = [...tasks]
+      .reverse()
+      .filter((task) => !["closed", "failed"].includes(task.lifecycle.phase));
+    if (
+      current === undefined ||
+      ["closed", "failed"].includes(current.lifecycle.phase)
+    )
+      this.currentTaskId = blockers[0]?.taskId;
+    return {
+      ...this.snapshot(),
+      tasks,
+      attention: projectedAttention,
+      ...(this.currentTaskId === undefined
+        ? {}
+        : { currentTaskId: this.currentTaskId }),
+    };
+  }
+  async prepareReturnControl(sessionId: string): Promise<string> {
+    return this.tasks.taskIdForRuntimeSession(
+      nonempty(sessionId, "Runtime session id"),
+    );
+  }
+  async completeReturnControl(sessionId: string) {
+    const taskId = await this.tasks.taskIdForRuntimeSession(
+      nonempty(sessionId, "Runtime session id"),
+    );
+    this.requireAccepted(
+      await this.tasks.submit({
+        type: "return_control",
+        taskId,
+        operationId: `intent_${crypto.randomUUID()}`,
+      }),
+    );
+    return "dispatched";
+  }
+  private requireAccepted(acceptance: TaskAcceptance): TaskAcceptance {
+    const disposition = acceptance.projection.operationDisposition;
+    if (disposition?.status === "rejected") throw new Error(disposition.reason);
+    return acceptance;
+  }
+  async resolveTrustedExternalUrl(
+    intent: TrustedExternalIntent,
+  ): Promise<string> {
+    const value = record(intent);
+    if (!value) throw new Error("Invalid trusted external intent.");
+    if (value.purpose === "account_login") {
+      exactCommand(value, ["purpose", "loginId"]);
+      return this.account.trustedLoginUrl(nonempty(value.loginId, "login id"));
+    }
+    if (value.purpose !== "mcp_elicitation")
+      throw new Error("Unknown trusted external purpose.");
+    exactCommand(value, ["purpose", "taskId", "requestId", "generation"]);
+    const requestId = nonempty(value.requestId, "request id");
+    const taskId = nonempty(value.taskId, "task id");
+    if (!Number.isInteger(value.generation) || Number(value.generation) < 0)
+      throw new Error("Invalid request generation.");
+    const entry = this.attention
+      .list()
+      .find(
+        (candidate) =>
+          candidate.authority === "codex" &&
+          candidate.taskId === taskId &&
+          candidate.requestId === requestId &&
+          candidate.generation === Number(value.generation),
+      );
+    if (entry === undefined)
+      throw new Error("Stale or mismatched attention response.");
+    if (
+      entry.status !== "pending" ||
+      entry.kind !== "mcp_elicitation" ||
+      entry.payload.mode !== "url"
+    )
+      throw new Error("MCP URL elicitation is no longer active.");
+    return nonempty(entry.payload.url, "MCP elicitation URL");
+  }
+  async executeRendererIntent(intent: unknown): Promise<LocalProductResult> {
+    assertRendererProductIntent(intent);
+    const value = intent as unknown as Record<string, unknown>;
+    if (
+      value.type === "account.refresh" ||
+      value.type === "account.token.refresh" ||
+      value.type === "account.logout"
+    )
+      return this.execute({ type: value.type });
+    if (value.type === "account.login") {
+      if (value.loginType !== "chatgpt" && value.loginType !== "deviceCode")
+        throw new Error("Invalid account login type.");
+      return this.execute({ type: value.type, loginType: value.loginType });
+    }
+    if (value.type === "account.login.cancel")
+      return this.execute({
+        type: value.type,
+        loginId: nonempty(value.loginId, "login id"),
+      });
+    if (value.type === "attachments.pick") {
+      if (!this.attachments)
+        throw new Error("File attachments are unavailable.");
+      return this.attachments.selectDrafts();
+    }
+    if (
+      value.type === "attachments.remove" ||
+      value.type === "attachments.replace"
+    ) {
+      if (!this.attachments)
+        throw new Error("File attachments are unavailable.");
+      const attachmentId = nonempty(value.attachmentId, "attachment id");
+      if (value.type === "attachments.remove") {
+        await this.attachments.removeDraft(attachmentId);
+        return undefined;
+      }
+      return this.attachments.replaceDraft(attachmentId);
+    }
+    if (value.type === "task.attachment.reselect") {
+      if (!this.attachments || !this.attachmentRuntime)
+        throw new Error("File attachments are unavailable.");
+      const taskId = nonempty(value.taskId, "task id");
+      const attachmentId = nonempty(value.attachmentId, "attachment id");
+      const task = await this.tasks.readTask(taskId);
+      if (!task) throw new Error("Task is unavailable.");
+      const sessionId = nonempty(
+        task.context.roveSessionId,
+        "Runtime session id",
+      );
+      return (
+        (await this.attachments.reselectTaskAttachment(
+          attachmentId,
+          taskId,
+          sessionId,
+          this.attachmentRuntime,
+        )) ?? undefined
+      );
+    }
+    if (
+      value.type === "file-attention.select" ||
+      value.type === "file-attention.cancel"
+    ) {
+      if (!this.attachments)
+        throw new Error("File attachments are unavailable.");
+      const identity = {
+        requestId: nonempty(value.requestId, "file request id"),
+        taskId: nonempty(value.taskId, "task id"),
+        sessionId: nonempty(value.sessionId, "session id"),
+      };
+      const attention = this.attachments
+        .listAttention()
+        .find(
+          (entry) =>
+            entry.requestId === identity.requestId &&
+            entry.taskId === identity.taskId &&
+            entry.sessionId === identity.sessionId,
+        );
+      if (!attention) throw new Error("Stale or mismatched file request.");
+      if (
+        ["reconciliation_required", "cleanup_required"].includes(
+          attention.status,
+        )
+      )
+        throw new Error(
+          "File grant reconciliation requires the attachment subsystem port.",
+        );
+      else if (value.type === "file-attention.select")
+        await this.attachments.selectPending(identity);
+      else await this.attachments.cancelPending(identity);
+      return undefined;
+    }
+    if (value.type === "task.launch") {
+      if (!record(value.input)) throw new Error("Invalid product task launch.");
+      return this.execute({
+        type: value.type,
+        operationId: stableOperationId(
+          value.operationId,
+          "launch operation id",
+        ),
+        input: value.input as unknown as ProductTaskLaunchInput,
+      });
+    }
+    const taskId = nonempty(value.taskId, "task id");
+    if (value.type === "task.message") {
+      await this.requireTaskAction(taskId, "message");
+      const attachmentIds = value.attachmentIds ?? [];
+      if (
+        !Array.isArray(attachmentIds) ||
+        attachmentIds.some((id) => typeof id !== "string") ||
+        JSON.stringify([...attachmentIds].sort()) !==
+          JSON.stringify(
+            (this.attachments?.listDrafts() ?? [])
+              .map((attachment) => attachment.id)
+              .sort(),
+          )
+      )
+        throw new Error("Task message attachment selection is stale.");
+      return this.execute({
+        type: value.type,
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "message operation id",
+        ),
+        outcome: nonempty(value.outcome, "task outcome"),
+        attachmentIds: [...attachmentIds],
+      });
+    }
+    if (value.type === "task.stop") {
+      const task = await this.taskProjection(taskId);
+      // A user-selected Finish remains a close request even when the current
+      // projection also offers cleanup recovery. Cleanup retry is only the
+      // fallback for a task that cannot accept a fresh Finish intent.
+      const intentType = task.availableActions.includes("finish")
+        ? "finish"
+        : task.availableActions.includes("retry_cleanup")
+          ? "retry_cleanup"
+          : null;
+      if (intentType === null)
+        throw new Error("Finish is not available for this task.");
+      return this.tasks.submit({
+        type: intentType,
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "finish operation id",
+        ),
+      });
+    }
+    if (value.type === "task.return-control")
+      return this.execute({
+        type: value.type,
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "Return Control operation id",
+        ),
+      });
+    if (value.type === "task.restore") {
+      await this.requireTaskAction(taskId, "resume");
+      return this.execute({
+        type: "task.thread.unarchive",
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "resume operation id",
+        ),
+      });
+    }
+    if (value.type === "task.archive") {
+      const task = await this.taskProjection(taskId);
+      const operationId = stableOperationId(
+        value.operationId,
+        "archive operation id",
+      );
+      if (task.availableActions.includes("finish")) {
+        return this.tasks.submit({
+          type: "finish",
+          taskId,
+          operationId,
+        });
+      }
+      if (task.availableActions.includes("retry_cleanup")) {
+        return this.tasks.submit({
+          type: "retry_cleanup",
+          taskId,
+          operationId,
+        });
+      }
+      if (!task.availableActions.includes("archive"))
+        throw new Error("Archive is not available for this task.");
+      return this.execute({
+        type: "task.thread.archive",
+        taskId,
+        operationId,
+      });
+    }
+    if (value.type === "task.effects.acknowledge") {
+      await this.requireTaskAction(taskId, "acknowledge_legacy_effects");
+      return this.execute({ type: value.type, taskId });
+    }
+    if (value.type === "task.effects.authorize-repeat")
+      return this.execute({
+        type: value.type,
+        taskId,
+        effectId: nonempty(value.effectId, "effect id"),
+      });
+    const requestId = nonempty(value.requestId, "request id");
+    if (!Number.isInteger(value.generation) || Number(value.generation) < 0)
+      throw new Error("Invalid request generation.");
+    if (
+      value.decision !== "accept" &&
+      value.decision !== "decline" &&
+      value.decision !== "cancel"
+    )
+      throw new Error("Invalid attention decision.");
+    const answers =
+      value.answers === undefined ? undefined : record(value.answers);
+    const form = value.form === undefined ? undefined : record(value.form);
+    if (value.answers !== undefined && answers === undefined)
+      throw new Error("Invalid attention answers.");
+    if (value.form !== undefined && form === undefined)
+      throw new Error("Invalid attention form.");
+    const entry = this.attention
+      .list()
+      .find(
+        (candidate) =>
+          candidate.authority === "codex" &&
+          candidate.status === "pending" &&
+          candidate.taskId === taskId &&
+          candidate.requestId === requestId &&
+          candidate.generation === Number(value.generation),
+      );
+    const responseTask = await this.tasks.readTask(taskId);
+    if (
+      responseTask &&
+      (responseTask.lifecycle.phase === "failed" ||
+        responseTask.context.bootstrap.stage !== "complete")
+    )
+      throw new Error(
+        "Task requires explicit recovery before attention can be answered.",
+      );
+    if (entry === undefined || !responseTask)
+      throw new Error("Stale or mismatched attention response.");
+    if (entry.kind === "user_input") {
+      if (form !== undefined)
+        throw new Error("User-input attention does not accept form content.");
+    } else if (entry.kind === "mcp_elicitation") {
+      if (answers !== undefined)
+        throw new Error("MCP elicitation does not accept question answers.");
+      if (entry.payload.mode === "url" && form !== undefined)
+        throw new Error("URL elicitation does not accept form content.");
+    } else if (answers !== undefined || form !== undefined) {
+      throw new Error("Approval attention does not accept response content.");
+    }
+    return this.execute({
+      type: "attention.decide",
+      requestId,
+      taskId,
+      ...(entry.threadId === undefined ? {} : { threadId: entry.threadId }),
+      ...(entry.turnId === undefined ? {} : { turnId: entry.turnId }),
+      ...(entry.itemId === undefined ? {} : { itemId: entry.itemId }),
+      generation: Number(value.generation),
+      decision: value.decision,
+      ...(answers === undefined
+        ? {}
+        : { answers: answers as Record<string, readonly string[]> }),
+      ...(form === undefined
+        ? {}
+        : {
+            form: form as Record<
+              string,
+              string | number | boolean | readonly string[]
+            >,
+          }),
+    });
+  }
+  private async taskProjection(taskId: string): Promise<ProductTaskSnapshot> {
+    const task = (await this.tasks.productTasks()).find(
+      (entry) => entry.context.roveTaskId === taskId,
+    );
+    if (!task) throw new Error("Task lifecycle record was not found.");
+    return task;
+  }
+  private async requireTaskAction(
+    taskId: string,
+    action: ProductTaskSnapshot["availableActions"][number],
+  ): Promise<void> {
+    if (!(await this.taskProjection(taskId)).availableActions.includes(action))
+      throw new Error(
+        `${action.replaceAll("_", " ")} is not available for this task.`,
+      );
+  }
+  async execute(command: LocalProductCommand): Promise<LocalProductResult> {
+    if (command === null || typeof command !== "object")
+      throw new Error("Invalid local product command.");
+    const shapes: Record<LocalProductCommand["type"], readonly string[]> = {
+      "account.refresh": ["type"],
+      "account.token.refresh": ["type"],
+      "account.login": ["type", "loginType"],
+      "account.login.cancel": ["type", "loginId"],
+      "account.logout": ["type"],
+      "attachments.pick": ["type"],
+      "attachments.remove": ["type", "attachmentId"],
+      "attachments.replace": ["type", "attachmentId"],
+      "task.attachment.reselect": ["type", "taskId", "attachmentId"],
+      "file-attention.select": ["type", "requestId", "taskId", "sessionId"],
+      "file-attention.cancel": ["type", "requestId", "taskId", "sessionId"],
+      "task.launch": ["type", "operationId", "input"],
+      "task.message": [
+        "type",
+        "taskId",
+        "operationId",
+        "outcome",
+        "attachmentIds",
+      ],
+      "task.close": ["type", "taskId", "operationId"],
+      "task.return-control": ["type", "taskId", "operationId"],
+      "task.thread.read": ["type", "taskId"],
+      "task.thread.archive": ["type", "taskId", "operationId"],
+      "task.thread.unarchive": ["type", "taskId", "operationId"],
+      "task.effects.acknowledge": ["type", "taskId"],
+      "task.effects.authorize-repeat": ["type", "taskId", "effectId"],
+      "task.effects.closeout": ["type", "taskId", "operationId"],
+      "attention.decide": [
+        "type",
+        "requestId",
+        "taskId",
+        "threadId",
+        "turnId",
+        "itemId",
+        "generation",
+        "decision",
+        "answers",
+        "form",
+      ],
+      "attention.respond": [
+        "type",
+        "requestId",
+        "taskId",
+        "threadId",
+        "turnId",
+        "itemId",
+        "generation",
+        "result",
+      ],
+    };
+    const shape = shapes[command.type];
+    if (shape === undefined)
+      throw new Error("Unsupported local product command.");
+    exactCommand(command as unknown as Record<string, unknown>, shape);
+    switch (command.type) {
+      case "account.refresh":
+        return this.account.refresh();
+      case "account.token.refresh":
+        return this.account.refreshManagedToken();
+      case "account.login":
+        return this.account.login(command.loginType);
+      case "account.login.cancel":
+        return this.account.cancelLogin(nonempty(command.loginId, "login id"));
+      case "account.logout":
+        await this.account.logout();
+        return undefined;
+      case "task.launch": {
+        const input = command.input;
+        const operationId = stableOperationId(
+          command.operationId,
+          "launch operation id",
+        );
+        if (input === null || typeof input !== "object")
+          throw new Error("Invalid product task launch.");
+        exactCommand(input as unknown as Record<string, unknown>, [
+          "outcome",
+          "executionMode",
+          "browserIdentity",
+          "approvalsReviewer",
+          "model",
+          "reasoningEffort",
+          "attachmentIds",
+        ]);
+        const outcome = nonempty(input.outcome, "task outcome").slice(
+          0,
+          16_000,
+        );
+        if (!isApprovalsReviewer(input.approvalsReviewer))
+          throw new Error("Invalid product approvals reviewer.");
+        const attachmentIds = input.attachmentIds ?? [];
+        if (
+          !Array.isArray(attachmentIds) ||
+          attachmentIds.some((id) => typeof id !== "string") ||
+          JSON.stringify([...attachmentIds].sort()) !==
+            JSON.stringify(
+              (this.attachments?.listDrafts() ?? [])
+                .map((attachment) => attachment.id)
+                .sort(),
+            )
+        )
+          throw new Error("Task launch attachment selection is stale.");
+        const existingTasks = await this.tasks.productTasks();
+        const requestedWorkspaceId =
+          input.browserIdentity.mode === "workspace"
+            ? input.browserIdentity.workspaceId
+            : undefined;
+        if (
+          requestedWorkspaceId !== undefined &&
+          existingTasks.some(
+            (task) =>
+              task.context.initialLaunch?.operationId !== operationId &&
+              !["closed", "failed"].includes(task.lifecycle.phase) &&
+              task.context.browserIdentity.mode === "workspace" &&
+              task.context.browserIdentity.workspaceId ===
+                requestedWorkspaceId &&
+              task.runtime?.profileOwnership !== "released",
+          )
+        )
+          throw new Error(
+            "That browser profile is still attached to another task. Choose Guest, another persistent profile, or finish the old task to release it.",
+          );
+        const started = await this.tasks.submit({
+          type: "launch",
+          operationId,
+          outcome,
+          executionMode: input.executionMode,
+          browserIdentity: input.browserIdentity,
+          approvalsReviewer: input.approvalsReviewer,
+          cwd: this.taskCwd,
+          ...(input.model === undefined ? {} : { model: input.model }),
+          ...(input.reasoningEffort === undefined
+            ? {}
+            : { reasoningEffort: input.reasoningEffort }),
+          attachmentIds: [...attachmentIds],
+        });
+        this.currentTaskId = started.aggregate.taskId;
+        return started;
+      }
+      case "task.message": {
+        const taskId = nonempty(command.taskId, "task id");
+        const outcome = nonempty(command.outcome, "task outcome").slice(
+          0,
+          16_000,
+        );
+        const attachmentIds = command.attachmentIds ?? [];
+        if (
+          !Array.isArray(attachmentIds) ||
+          attachmentIds.some((id) => typeof id !== "string") ||
+          JSON.stringify([...attachmentIds].sort()) !==
+            JSON.stringify(
+              (this.attachments?.listDrafts() ?? [])
+                .map((attachment) => attachment.id)
+                .sort(),
+            )
+        )
+          throw new Error("Task message attachment selection is stale.");
+        const explicitContinuation = this.attention
+          .list()
+          .some(
+            (entry) =>
+              entry.authority === "rove_control" &&
+              entry.kind === "control_handoff" &&
+              entry.status === "pending" &&
+              entry.taskId === taskId &&
+              entry.payload.policy === "explicit_user_response",
+          );
+        return this.tasks.submit({
+          type: explicitContinuation
+            ? "explicit_continuation_response"
+            : "message",
+          taskId,
+          message: outcome,
+          attachmentIds: [...attachmentIds],
+          operationId: stableOperationId(
+            command.operationId,
+            "message operation id",
+          ),
+        });
+      }
+      case "task.close":
+        return this.tasks.submit({
+          type: "finish",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: stableOperationId(
+            command.operationId,
+            "finish operation id",
+          ),
+        });
+      case "task.return-control": {
+        const operationId = stableOperationId(
+          command.operationId,
+          "Return Control operation id",
+        );
+        return this.tasks.submit({
+          type: "return_control",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId,
+        });
+      }
+      case "task.thread.read":
+        return (
+          (await this.tasks.readTask(nonempty(command.taskId, "task id"))) ?? {}
+        );
+      case "task.thread.archive":
+        return this.tasks.submit({
+          type: "archive",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: command.operationId ?? `intent_${crypto.randomUUID()}`,
+        });
+      case "task.thread.unarchive":
+        return this.tasks.submit({
+          type: "unarchive",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: command.operationId ?? `intent_${crypto.randomUUID()}`,
+        });
+      case "task.effects.acknowledge": {
+        if (!this.legacyEffects)
+          throw new Error("Legacy effect acknowledgement is unavailable.");
+        const task = await this.tasks.readTask(
+          nonempty(command.taskId, "task id"),
+        );
+        const sessionId = nonempty(
+          task?.context.roveSessionId,
+          "Runtime session id",
+        );
+        await this.legacyEffects.acknowledgeLegacyEffectScope(sessionId);
+        return true;
+      }
+      case "task.effects.authorize-repeat": {
+        if (!this.legacyEffects?.authorizeEffectRepetition)
+          throw new Error("Effect repetition authorization is unavailable.");
+        const effectId = nonempty(command.effectId, "effect id");
+        if (!/^[a-f0-9]{64}$/.test(effectId))
+          throw new Error("Invalid effect id.");
+        const task = await this.tasks.readTask(
+          nonempty(command.taskId, "task id"),
+        );
+        const sessionId = nonempty(
+          task?.context.roveSessionId,
+          "Runtime session id",
+        );
+        return this.legacyEffects.authorizeEffectRepetition(
+          sessionId,
+          effectId,
+        );
+      }
+      case "task.effects.closeout": {
+        if (!this.legacyEffects)
+          throw new Error("Legacy effect closeout is unavailable.");
+        const taskId = nonempty(command.taskId, "task id");
+        const task = await this.tasks.readTask(taskId);
+        const sessionId = nonempty(
+          task?.context.roveSessionId,
+          "Runtime session id",
+        );
+        await this.legacyEffects.acknowledgeLegacyEffectScope(sessionId);
+        return this.tasks.submit({
+          type: "finish",
+          taskId,
+          operationId: stableOperationId(
+            command.operationId,
+            "legacy effect closeout operation id",
+          ),
+        });
+      }
+      case "attention.respond": {
+        const responseTask = await this.tasks.readTask(command.taskId);
+        if (
+          !responseTask ||
+          responseTask.lifecycle.phase === "failed" ||
+          responseTask.context.bootstrap.stage !== "complete"
+        )
+          throw new Error(
+            "Task requires explicit recovery before attention can be answered.",
+          );
+        this.requireAccepted(
+          await this.tasks.submit({
+            type: "attention_response",
+            taskId: command.taskId,
+            operationId: `intent_${crypto.randomUUID()}`,
+            requestId: command.requestId,
+            generation: command.generation,
+            response: command.result as TaskPortableValue,
+          }),
+        );
+        return undefined;
+      }
+      case "attention.decide": {
+        const task = await this.tasks.readTask(command.taskId);
+        if (
+          !task ||
+          task.lifecycle.phase === "failed" ||
+          task.context.bootstrap.stage !== "complete"
+        )
+          throw new Error(
+            "Task requires explicit recovery before attention can be answered.",
+          );
+        const entry = this.attention.requireExact({
+          authority: "codex",
+          requestId: command.requestId,
+          taskId: command.taskId,
+          ...(command.threadId === undefined
+            ? {}
+            : { threadId: command.threadId }),
+          ...(command.turnId === undefined ? {} : { turnId: command.turnId }),
+          ...(command.itemId === undefined ? {} : { itemId: command.itemId }),
+          generation: command.generation,
+        });
+        let result: unknown;
+        if (
+          entry.kind === "command_approval" ||
+          entry.kind === "file_approval" ||
+          entry.kind === "network_approval"
+        ) {
+          if (command.decision === "cancel")
+            throw new Error("Approval requests do not support cancel.");
+          const legacy =
+            entry.method === "execCommandApproval" ||
+            entry.method === "applyPatchApproval";
+          result = {
+            decision:
+              command.decision === "accept"
+                ? legacy
+                  ? "approved"
+                  : "accept"
+                : legacy
+                  ? "abort"
+                  : "decline",
+          };
+        } else if (entry.kind === "permission_approval") {
+          if (command.decision === "cancel")
+            throw new Error("Permission approvals do not support cancel.");
+          result = {
+            permissions:
+              command.decision === "accept" &&
+              entry.payload.permissions !== null &&
+              typeof entry.payload.permissions === "object"
+                ? entry.payload.permissions
+                : {},
+            scope: "turn",
+            strictAutoReview: false,
+          };
+        } else if (entry.kind === "mcp_elicitation") {
+          const mode = entry.payload.mode;
+          result = {
+            _meta: null,
+            action: command.decision,
+            content:
+              command.decision === "accept"
+                ? mode === "url"
+                  ? null
+                  : formContent(entry, command.form)
+                : null,
+          };
+        } else {
+          if (command.decision !== "accept")
+            throw new Error("User-input requests require submitted answers.");
+          result = {
+            answers: answerMap(entry, command.answers),
+          };
+        }
+        this.requireAccepted(
+          await this.tasks.submit({
+            type: "attention_response",
+            taskId: command.taskId,
+            operationId: `intent_${crypto.randomUUID()}`,
+            requestId: command.requestId,
+            generation: command.generation,
+            response: result as TaskPortableValue,
+          }),
+        );
+        return undefined;
+      }
+    }
+  }
+}

@@ -1,0 +1,491 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_557e43cf-ab08-4977-be72-a67584fc7862",
+    "displayName": "Rove Maps Research Acceptance 20260911-015139",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 22700,
+    "ownedProcessPids": [
+      22700,
+      22720,
+      22721,
+      22722,
+      22759,
+      22778,
+      22785
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+    "operationId": "intent_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+    "sessionId": "ses_2ec0767850e44cfc9f14e788078018fa",
+    "threadId": "01a08f18-b4bb-7342-a55c-1ef07278929e",
+    "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8"
+  },
+  "terminalRevision": 1955,
+  "terminalTask": {
+    "taskId": "task_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+      "stage": "turn_started",
+      "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8"
+    },
+    "roveSessionId": "ses_2ec0767850e44cfc9f14e788078018fa",
+    "codexThreadId": "01a08f18-b4bb-7342-a55c-1ef07278929e",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_557e43cf-ab08-4977-be72-a67584fc7862"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08f18-c389-7580-8cfc-ac80df57acf8"
+      ],
+      "itemCount": 31
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": true,
+    "violations": [],
+    "marker": {
+      "journey": "maps",
+      "status": "passed",
+      "place": "Lekki Conservation Centre, Lagos",
+      "origin": "Murtala Muhammed International Airport",
+      "destination": "Lekki Conservation Centre",
+      "directionsShown": true,
+      "transit": "selected",
+      "transitUnavailableObservationId": null,
+      "routeOptions": [
+        {
+          "duration": "1 hr 19 min"
+        },
+        {
+          "duration": "1 hr 27 min"
+        },
+        {
+          "duration": "1 hr 48 min"
+        },
+        {
+          "duration": "1 hr 41 min"
+        },
+        {
+          "duration": "1 hr 55 min"
+        },
+        {
+          "duration": "1 hr 44 min"
+        }
+      ],
+      "routeObservationId": "bobs_e567e7ecde0746008cf6c3b2208bd65f",
+      "placeScreenshotEvidenceId": "ev_7c7ce52bbca442ec9bd54f2fec5f88e4",
+      "routeScreenshotEvidenceId": "ev_7c252c53486340b6a8c23a954e552679",
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [
+        "bobs_03603f7e47894e72a1d91e8fb02e7c94",
+        "bobs_1996512855b742c0b31aab15be7f4e09",
+        "bobs_e567e7ecde0746008cf6c3b2208bd65f"
+      ],
+      "screenshotEvidenceIds": [
+        "ev_7c7ce52bbca442ec9bd54f2fec5f88e4",
+        "ev_7c252c53486340b6a8c23a954e552679"
+      ],
+      "receiptIds": [
+        "rcpt_57c82138f7e74136baee0c697d49b44e"
+      ]
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_2ec0767850e44cfc9f14e788078018fa",
+    "pageIds": [
+      "page_01",
+      "page_02"
+    ],
+    "observationIds": [
+      "obs_dfce33ea1792440086d9eb88c07fb4f7",
+      "obs_31ae852f3ac843a480359aaced6fabe1",
+      "obs_3c6862b77bf941c09796175bd0584d93",
+      "obs_e48a1a233ab04bde857cccc0b8a6aaea",
+      "obs_f31f90b7c18846dfb83bbee4fc7db384",
+      "obs_28160c30850e4ea0a794e0006eafd111",
+      "obs_fa8d589ee0cf4f4d8a5290bc1cfb2f40",
+      "obs_47a4f0d968f145eaac113191382b4df6",
+      "obs_35bf46b02dde48dca143092c56ae33fe",
+      "obs_20abd7eb73974441a4070f1d05b7f9db",
+      "obs_49bd79d5f2644df5947801867782885f",
+      "obs_a883f88a0e9743f98c7c5104cde194b2",
+      "obs_f9d5b1a6c8e74ad3baf69f88bce11f25",
+      "obs_b0ee42fc8b534e11a39dccc178312b4f",
+      "obs_36aa3657e42c47d58ca2f28aa22075a3",
+      "obs_afa23f81cc9a4720907808a3f1c67bee",
+      "obs_efa347c54acd490990227f7f40294f1e",
+      "obs_dbc051f784ea442aa15ff0d1a56d1791",
+      "obs_5f152ae1dd9b44edb87327a81a3822ad",
+      "obs_0027460934984db192e9f8593d491681",
+      "obs_8cecb391bd73411b93337ed0764dbe4a",
+      "obs_ed5478963e164aa581b3903f46f3a8d3",
+      "obs_b17a2b513ee14e78b2fd5cca2fc45300",
+      "obs_2a4cd5e144b94b738b35d0431b295a64",
+      "obs_b69dcb9d789747698074775fa4238369",
+      "obs_acca62cca77a4ab88106599bdcaeaa98",
+      "obs_dd4b0b69f8b044299c1c8423c8cfc7bf",
+      "obs_3e215f88880f43eb9c2c102f8aa052b9",
+      "obs_0ad3d492e01a4422bb62ed1a06d50118",
+      "obs_6b69bdc4b95d4c8e91aa5d673dd6efab",
+      "obs_368ef1c65b4f4e28b08147729bf43308",
+      "obs_a3b75ec1ac4249d4a8439ee3f1b53ac8",
+      "obs_b442e355ae1f41489e17ed480719ba55",
+      "obs_c55b4df8cf3f400d8bd3bbe64ba04fbd",
+      "obs_5d106a66927f474e8b2af690b89621c1",
+      "obs_03b357a41cb54c5994a45a6c00d3b276",
+      "obs_fdf488be8af14641a157993c9444986c",
+      "obs_a57ecc696b95462a973da51a99e325cf",
+      "bobs_03603f7e47894e72a1d91e8fb02e7c94",
+      "bobs_1996512855b742c0b31aab15be7f4e09",
+      "bobs_e567e7ecde0746008cf6c3b2208bd65f"
+    ],
+    "evidenceIds": [
+      "ev_7c252c53486340b6a8c23a954e552679",
+      "ev_7c7ce52bbca442ec9bd54f2fec5f88e4",
+      "ev_0a22dc0eff504c858a151aadeeeac33c",
+      "ev_0e451e112c224786a62b81e5218a5133",
+      "ev_11cdabdde5574b89afb178244d6dbf1c",
+      "ev_16eb9e55d9844a84969e9a72abd30f3a",
+      "ev_1b144474e0194a379dde906cee84f74a",
+      "ev_223d12f4c9c646948ce6c00a56fb6446",
+      "ev_22557045f300402593c5a237af787c15",
+      "ev_23ca0025960245bb9d6754f7c2a7f200",
+      "ev_259dcc543855407e87bd6babad2ae9e9",
+      "ev_27577273fe9548cdb29dfc6378fd7e3b",
+      "ev_3069f64874b640c4a76285ac4291a401",
+      "ev_36bc9c09fd174da7a6c7bc0b6ad3706c",
+      "ev_3ab130c6f00a40b38b758a9ad79e420d",
+      "ev_3d1ba0d17ab1402bae3ae1d895ea74d6",
+      "ev_3eb6ac00dc8d4cc8ac18186dfe2c3009",
+      "ev_421bc4c0313b4060872ef74b6f9f5ab2",
+      "ev_45fe8e6d226d41d3ace9bd4eff2aa669",
+      "ev_46e9f48a15eb472195f37db617f3f83b",
+      "ev_47ff1fae9b0c4e1bb3c8fe81e6327e0d",
+      "ev_4bb14098fef34b1db7a006c0c4dbab07",
+      "ev_4bfd5c5726d84d02b486bde787476afe",
+      "ev_4f35470ff6d843718682d291d1dc0976",
+      "ev_56d35c2054f740329e46e97dff097064",
+      "ev_57afda94af7c4397b2f7dda6b266ce6f",
+      "ev_590fdb86bffc40ada1ae2400c40bdb33",
+      "ev_5b770ef6c3c242dfb53049011747dab1",
+      "ev_6f453509058845c6814c4c39fc8470de",
+      "ev_761422e16a0645729e6e98163f39f8cb",
+      "ev_76bf62aabee24cbeb95da55be869d335",
+      "ev_78b75246ac77478f905df99001d16993",
+      "ev_7f789522ba81456eb79398ced043e0bc",
+      "ev_807187014d84479aa9f5c10f5cb95013",
+      "ev_81fa23a30dd049338cb6a104fce22171",
+      "ev_89f087c2a5974f9598c4785b3611f31f",
+      "ev_8a435e4ce28648889e87fe3d115317a4",
+      "ev_8d68448534c54111b4d6939bbb1e5d7b",
+      "ev_8de2558bf5e74a4ba565180b16adb6d7",
+      "ev_940dedf7ba404e459605d52eefd9b461",
+      "ev_9a65da1c762644e6af40309020362a74",
+      "ev_9c99b7aacada49fbbf13021388e4bbb9",
+      "ev_ae9049c341e34dde833478b47e8f3bae",
+      "ev_afd3de6a50e54789b6b272b3b72a2780",
+      "ev_b34c482437ca4cd792b06dbab71d2c69",
+      "ev_b353eeaaea314e2b884944f275fcf4d4",
+      "ev_c01703306dbf4d4b935ad4d7b27785d1",
+      "ev_c15a6b86c2474d069e6aa1478dd89e28",
+      "ev_c2db47cc25f741259b664a41498c54fa",
+      "ev_c36103b0ab624f57a71ae80632d65c97",
+      "ev_c3eae2a38d07485faa4edfd6101c5a6d",
+      "ev_cb95da5b4b4c47bdade1e53d96f8e999",
+      "ev_cb9a58a3e2a04c369210b98b8434995e",
+      "ev_d02b66b9d10346588b4de3fb2d922a10",
+      "ev_dbc50bc5810e4da29dac084feff4ea94",
+      "ev_e4dffc805a6b4441bee32ee062a0fad0",
+      "ev_ef78070eba02434899589bf7ab3e7d1d",
+      "ev_f1709aa00f8e46389278d7b53455a7d3",
+      "ev_f28b504095e044e3aedaf3961f0a748b",
+      "ev_ff669657f0cb4aff92e9d8bc440b3ab4"
+    ],
+    "screenshotEvidenceIds": [
+      "ev_7c252c53486340b6a8c23a954e552679",
+      "ev_7c7ce52bbca442ec9bd54f2fec5f88e4"
+    ],
+    "receipts": [
+      {
+        "id": "rcpt_57c82138f7e74136baee0c697d49b44e",
+        "observationId": "obs_fdf488be8af14641a157993c9444986c",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_005bf7d5043e8a33016aa39bdc959887d28a785919044ae0d7",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "text": "I’ll inspect the place in Google Maps, capture its layout, then check airport directions and public transit routes and capture the route view."
+      },
+      {
+        "id": "msg_005bf7d5043e8a33016aa39bf4e34c87d2a4af3ab0801fd976",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "text": "Google Maps redirected to a required cookie-consent page. Please make your consent choice in the browser; Rove’s route policy requires human control for this choice. I’ll resume the map and route inspection afterward."
+      },
+      {
+        "id": "msg_005bf7d5043e8a33016aa39c54a90087d2b2562b7a18c68429",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "text": "The place screenshot is captured. Its information panel sits on the left; the map is extremely zoomed in at a 10 m scale, showing mostly green reserve land and an “Amagold Arts & Crafts” marker. I’ll now load the airport-to-centre route choices."
+      },
+      {
+        "id": "msg_005bf7d5043e8a33016aa39c9b029487d2a3aea3935c99e227",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "text": "Public transit is selected, with six listed options from 1 hr 19 min to 1 hr 55 min. Maps warns that its timetables may be outdated. The second screenshot shows the wider Lagos region, with a dark-blue selected route through Mile 2 and lighter alternatives toward Lekki."
+      },
+      {
+        "id": "msg_005bf7d5043e8a33016aa39cb0ad4087d2907aae3db17da0ba",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"maps\",\"status\":\"passed\",\"place\":\"Lekki Conservation Centre, Lagos\",\"origin\":\"Murtala Muhammed International Airport\",\"destination\":\"Lekki Conservation Centre\",\"directionsShown\":true,\"transit\":\"selected\",\"transitUnavailableObservationId\":null,\"routeOptions\":[{\"duration\":\"1 hr 19 min\"},{\"duration\":\"1 hr 27 min\"},{\"duration\":\"1 hr 48 min\"},{\"duration\":\"1 hr 41 min\"},{\"duration\":\"1 hr 55 min\"},{\"duration\":\"1 hr 44 min\"}],\"routeObservationId\":\"bobs_e567e7ecde0746008cf6c3b2208bd65f\",\"placeScreenshotEvidenceId\":\"ev_7c7ce52bbca442ec9bd54f2fec5f88e4\",\"routeScreenshotEvidenceId\":\"ev_7c252c53486340b6a8c23a954e552679\",\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[\"bobs_03603f7e47894e72a1d91e8fb02e7c94\",\"bobs_1996512855b742c0b31aab15be7f4e09\",\"bobs_e567e7ecde0746008cf6c3b2208bd65f\"],\"screenshotEvidenceIds\":[\"ev_7c7ce52bbca442ec9bd54f2fec5f88e4\",\"ev_7c252c53486340b6a8c23a954e552679\"],\"receiptIds\":[\"rcpt_57c82138f7e74136baee0c697d49b44e\"]}\n\nBoth viewport screenshots were captured at **1200 × 728 CSS pixels** on **page_01**.\n\n**Place view:** The white information panel occupies the left side beside a narrow navigation rail; the map occupies roughly the right 60%. The panel shows a canopy-walkway photo, name, 4.3 rating, Overview/Tickets/Reviews/About tabs, and Directions, Save, Nearby, Send to phone, and Share controls. Search sits above the panel; category buttons run across the map’s top. Layers is at bottom-left of the map; location, zoom, and Street View controls are bottom-right.\n\nThe map is **extremely close**, at **20z with a 10 m scale**. It shows mostly pale-green land and an “Amagold Arts & Crafts” marker, without a visible destination pin; it is not a wider regional view.\n\n**Directions:** Public transit was selected and confirmed by an applied receipt. Initially, Maps also offered driving **56 min, 41.4 km**, motorcycle **57 min, 42.9 km**, and walking **1 day**.\n\n| Transit duration | Displayed time | Main route labels |\n|---|---|---"
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-dda7fcd9-05ac-4e95-9ebd-1cdac4ce94e6",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-c87e4c61-5fee-440f-8a1f-8bb7cd760b7f",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-2d680914-ebbe-4e44-ac2d-262f4d1435b0",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "control.request_human"
+      },
+      {
+        "id": "exec-c21f0070-a722-4420-9c66-08257ad1350e",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "control.wait"
+      },
+      {
+        "id": "exec-2bb98bb4-77c0-4dda-8579-4449f82455f4",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "control.wait"
+      },
+      {
+        "id": "exec-5b3882b6-0db0-4e65-a74f-1b381959a6d1",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "control.wait"
+      },
+      {
+        "id": "exec-570b1ab5-58d7-4be4-84b8-f713be4c68ae",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-05a5883c-2bee-4c7f-ae55-c5bff470851d",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-72621a11-8ee5-4e05-9f56-c2ce644db646",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-a5507766-b0a9-470c-a4df-2b4826b3836b",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-f9029a52-b150-40c1-a0aa-26703e79f4fe",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.navigate"
+      },
+      {
+        "id": "exec-03ee8fbb-5b15-47d1-a92d-684d247be078",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-86cd3925-1026-4823-8523-84fd3538a2ae",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-fd72f1cb-8abb-4329-b473-892153227d59",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-a64fcc05-54f4-413c-a6c5-ca6c0dbbe81d",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-d677ed4a-3edd-4e46-8d48-135d21faa3a8",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-d5290f77-09a9-456a-a208-b3bdf0bfe3b8",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-631b88cf-432b-450f-8572-c8b119609425",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "session.observations"
+      },
+      {
+        "id": "exec-25e847e2-3e0e-4d4e-a030-c4246b0bec52",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "browser.pages"
+      },
+      {
+        "id": "exec-d5dcf054-268d-486e-bc46-9fc0722f0ffb",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8",
+        "status": "completed",
+        "title": "evidence.list"
+      }
+    ],
+    "mapsUrls": [],
+    "observationIds": [
+      "bobs_e567e7ecde0746008cf6c3b2208bd65f",
+      "bobs_03603f7e47894e72a1d91e8fb02e7c94",
+      "bobs_1996512855b742c0b31aab15be7f4e09"
+    ],
+    "evidenceIds": [
+      "ev_7c7ce52bbca442ec9bd54f2fec5f88e4",
+      "ev_7c252c53486340b6a8c23a954e552679"
+    ],
+    "pageIds": [
+      "page_01"
+    ],
+    "visibleDurations": [
+      "1 hr",
+      "19 min",
+      "55 min",
+      "27 min",
+      "48 min",
+      "41 min",
+      "44 min",
+      "56 min",
+      "57 min"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/maps-20260911-071221-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Observation reduced from authoritative facts."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_eae0ce1b-6c01-41a3-8edc-550264f8d23b",
+        "stage": "turn_started",
+        "turnId": "01a08f18-c389-7580-8cfc-ac80df57acf8"
+      },
+      "roveSessionId": "ses_2ec0767850e44cfc9f14e788078018fa",
+      "codexThreadId": "01a08f18-b4bb-7342-a55c-1ef07278929e",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_557e43cf-ab08-4977-be72-a67584fc7862"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08f18-c389-7580-8cfc-ac80df57acf8"
+        ],
+        "itemCount": 31
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [
+      {
+        "authority": "rove_control",
+        "kind": "control_handoff",
+        "requestId": "control:exec-2d680914-ebbe-4e44-ac2d-262f4d1435b0",
+        "status": "resolved"
+      }
+    ],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": [
+      "run_owned_attention"
+    ]
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 7,
+    "residualProcessIds": []
+  }
+}

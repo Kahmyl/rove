@@ -1,20 +1,21 @@
 import type {
   BrowserTargetGeometry,
   BrowserViewport,
+  PageTargetState,
   PerceivedControl,
   StructuralScope,
-  TargetCapability,
 } from "@rove/protocol";
 
 import type { Frame, Locator } from "playwright";
+import { perceivedControlFor } from "../capabilities/browser-capability-registry.js";
+import type { DomCandidate } from "./dom-types.js";
 
 export interface TargetSnapshot {
   geometry: BrowserTargetGeometry;
   perceived: PerceivedControl;
-  state: {
-    checked?: boolean;
-    selectedValues?: string[];
-  };
+  state: PageTargetState;
+  nodeToken: string;
+  rootToken: string;
 }
 
 export async function readTargetSnapshots(
@@ -51,54 +52,29 @@ export async function readTargetSnapshots(
       return elements.flatMap((element) => {
         const marker = element.getAttribute("data-rove-target");
         if (marker === null) return [];
-        const html = element as HTMLElement;
+        const scopedWindow = window as unknown as {
+          __roveNodeIdentity?: {
+            counter: number;
+            tokens: WeakMap<object, string>;
+          };
+        };
+        const identities = (scopedWindow.__roveNodeIdentity ??= {
+          counter: 0,
+          tokens: new WeakMap<object, string>(),
+        });
+        const tokenFor = (value: object): string => {
+          const existing = identities.tokens.get(value);
+          if (existing !== undefined) return existing;
+          identities.counter += 1;
+          const token = `node_${identities.counter}`;
+          identities.tokens.set(value, token);
+          return token;
+        };
+        const semanticRoot = element.getRootNode();
+        const nodeToken = tokenFor(element);
+        const rootToken = tokenFor(semanticRoot);
         const field = element instanceof HTMLInputElement ? element : undefined;
         const tag = element.tagName.toLowerCase();
-        const role = normalize(element.getAttribute("role"))?.toLowerCase();
-        const capabilities: TargetCapability[] = [];
-        const addCapability = (capability: TargetCapability) => {
-          if (!capabilities.includes(capability)) capabilities.push(capability);
-        };
-        if (
-          tag === "button" ||
-          tag === "a" ||
-          role === "button" ||
-          role === "link" ||
-          role === "tab" ||
-          role === "menuitem"
-        )
-          addCapability("activate");
-        if (
-          tag === "textarea" ||
-          html.isContentEditable ||
-          (field !== undefined &&
-            ![
-              "button",
-              "submit",
-              "reset",
-              "checkbox",
-              "radio",
-              "file",
-              "hidden",
-            ].includes(field.type))
-        )
-          addCapability("fill");
-        if (tag === "select") addCapability("select");
-        if (
-          field?.type === "checkbox" ||
-          role === "checkbox" ||
-          role === "switch"
-        ) {
-          addCapability("check");
-          addCapability("uncheck");
-        }
-        if (field?.type === "radio" || role === "radio") addCapability("check");
-        if (field?.type === "file") addCapability("upload");
-        addCapability("hover");
-        addCapability("scroll");
-        if (html.draggable || element.getAttribute("draggable") === "true")
-          addCapability("drag");
-
         const scopes: StructuralScope[] = [];
         const addScope = (kind: StructuralScope["kind"], node: Element) => {
           const ariaLabel = normalize(node.getAttribute("aria-label"));
@@ -141,6 +117,20 @@ export async function readTargetSnapshots(
             addScope("card", current);
           if (currentRole === "group" || currentTag === "fieldset")
             addScope("group", current);
+          if (
+            currentRole === "list" ||
+            currentTag === "ul" ||
+            currentTag === "ol"
+          )
+            addScope("list", current);
+          if (currentRole === "listbox") addScope("listbox", current);
+          if (currentRole === "tree") addScope("tree", current);
+          if (currentRole === "grid" || currentRole === "treegrid")
+            addScope("grid", current);
+          if (currentRole === "table" || currentTag === "table")
+            addScope("table", current);
+          if (currentRole === "menu" || currentRole === "menubar")
+            addScope("menu", current);
           current = current.parentElement;
         }
 
@@ -201,7 +191,35 @@ export async function readTargetSnapshots(
           };
         }
 
-        const state: TargetSnapshot["state"] = {};
+        const state: PageTargetState = {};
+        const setState = <Key extends keyof PageTargetState>(
+          key: Key,
+          value: PageTargetState[Key] | undefined,
+        ) => {
+          if (value !== undefined) state[key] = value;
+        };
+        const aria = (name: string) =>
+          normalize(element.getAttribute(`aria-${name}`))?.toLowerCase();
+        const ariaBoolean = (name: string): boolean | undefined => {
+          const value = aria(name);
+          return value === "true"
+            ? true
+            : value === "false"
+              ? false
+              : undefined;
+        };
+        const ariaNumber = (name: string): number | undefined => {
+          const value = aria(name);
+          if (value === undefined) return undefined;
+          const number = Number(value);
+          return Number.isFinite(number) ? number : undefined;
+        };
+        const root = semanticRoot;
+        const activeElement =
+          root instanceof Document || root instanceof ShadowRoot
+            ? root.activeElement
+            : element.ownerDocument.activeElement;
+        state.focused = activeElement === element;
         if (
           field !== undefined &&
           (field.type === "checkbox" || field.type === "radio")
@@ -212,12 +230,172 @@ export async function readTargetSnapshots(
             .map((option) => option.value)
             .slice(0, 100);
         }
+        if (state.checked === undefined)
+          setState("checked", ariaBoolean("checked"));
+        setState("expanded", ariaBoolean("expanded"));
+        const pressed = aria("pressed");
+        setState(
+          "pressed",
+          pressed === "mixed"
+            ? "mixed"
+            : pressed === "true"
+              ? true
+              : pressed === "false"
+                ? false
+                : undefined,
+        );
+        setState("selected", ariaBoolean("selected"));
+        if (state.selected === undefined) {
+          const selectionOwner = element.closest('[aria-selected="true"]');
+          const selectionOwnerRole = selectionOwner
+            ?.getAttribute("role")
+            ?.trim()
+            .toLowerCase();
+          if (
+            selectionOwner !== null &&
+            selectionOwner !== element &&
+            ["row", "option", "treeitem"].includes(selectionOwnerRole ?? "")
+          ) {
+            // Composite widgets commonly expose item selection on the owning
+            // row while the actionable/name-bearing target is a descendant.
+            // Carry that semantic item state onto the descendant target so
+            // callers do not have to understand application DOM boundaries.
+            state.selected = true;
+          }
+        }
+        const ariaCurrent = aria("current");
+        setState(
+          "current",
+          ariaCurrent === "true"
+            ? true
+            : ariaCurrent === "false" || ariaCurrent === undefined
+              ? undefined
+              : ariaCurrent,
+        );
+        setState("busy", ariaBoolean("busy"));
+        const invalid = aria("invalid");
+        setState(
+          "invalid",
+          invalid === "true"
+            ? true
+            : invalid === "false" || invalid === undefined
+              ? undefined
+              : invalid,
+        );
+        setState(
+          "required",
+          field?.required ??
+            (element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+              ? element.required
+              : undefined) ??
+            ariaBoolean("required"),
+        );
+        setState(
+          "readOnly",
+          field?.readOnly ??
+            (element instanceof HTMLTextAreaElement
+              ? element.readOnly
+              : undefined) ??
+            ariaBoolean("readonly"),
+        );
+        const open =
+          element instanceof HTMLDetailsElement
+            ? element.open
+            : element.parentElement instanceof HTMLDetailsElement &&
+                tag === "summary"
+              ? element.parentElement.open
+              : undefined;
+        setState("open", open);
+        if (state.expanded === undefined) setState("expanded", open);
+        setState(
+          "valueNow",
+          field !== undefined && ["number", "range"].includes(field.type)
+            ? Number.isFinite(field.valueAsNumber)
+              ? field.valueAsNumber
+              : undefined
+            : ariaNumber("valuenow"),
+        );
+        setState(
+          "valueMin",
+          field !== undefined && ["number", "range"].includes(field.type)
+            ? field.min.length > 0
+              ? Number(field.min)
+              : undefined
+            : ariaNumber("valuemin"),
+        );
+        setState(
+          "valueMax",
+          field !== undefined && ["number", "range"].includes(field.type)
+            ? field.max.length > 0
+              ? Number(field.max)
+              : undefined
+            : ariaNumber("valuemax"),
+        );
+        setState(
+          "valueText",
+          normalize(element.getAttribute("aria-valuetext")),
+        );
+        const orientation = aria("orientation");
+        setState(
+          "orientation",
+          orientation === "vertical" || orientation === "horizontal"
+            ? orientation
+            : undefined,
+        );
+        const hasPopup = aria("haspopup");
+        setState(
+          "hasPopup",
+          hasPopup === "true"
+            ? true
+            : hasPopup === "false" || hasPopup === undefined
+              ? undefined
+              : hasPopup,
+        );
+        setState(
+          "controls",
+          element
+            .getAttribute("aria-controls")
+            ?.split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 100),
+        );
+        setState(
+          "activeDescendant",
+          normalize(element.getAttribute("aria-activedescendant")),
+        );
+        const secretSignal = [
+          field?.type,
+          field?.autocomplete,
+          element.getAttribute("aria-label"),
+          element.getAttribute("placeholder"),
+          element.getAttribute("name"),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        const sensitive =
+          field?.type === "password" ||
+          /(?:password|passcode|one-time-code|otp|secret|token)/.test(
+            secretSignal,
+          );
+        if (
+          !sensitive &&
+          field !== undefined &&
+          !["checkbox", "radio", "file"].includes(field.type)
+        ) {
+          state.value = field.value.slice(0, 100_000);
+        } else if (!sensitive && element instanceof HTMLTextAreaElement) {
+          state.value = element.value.slice(0, 100_000);
+        }
         return [
           {
             marker,
+            nodeToken,
+            rootToken,
             geometry,
             perceived: {
-              capabilities: dedupe(capabilities, (item) => item),
+              capabilities: [],
               scopes: dedupe(
                 scopes,
                 (item) => `${item.kind}:${item.label ?? ""}`,
@@ -235,6 +413,8 @@ export async function readTargetSnapshots(
     snapshots.map((snapshot) => [
       snapshot.marker,
       {
+        nodeToken: snapshot.nodeToken,
+        rootToken: snapshot.rootToken,
         geometry: {
           ...snapshot.geometry,
           ...(snapshot.geometry.bounds === null
@@ -280,167 +460,139 @@ function dedupe<T>(values: T[], key: (value: T) => string): T[] {
 export async function readPerceivedControl(
   locator: Locator,
 ): Promise<PerceivedControl> {
-  return locator
-    .evaluate((element) => {
-      const normalize = (
-        value: string | null | undefined,
-      ): string | undefined => {
-        const result = value?.replace(/\s+/g, " ").trim();
+  const value = await locator.evaluate((element) => {
+    const normalize = (
+      value: string | null | undefined,
+    ): string | undefined => {
+      const result = value?.replace(/\s+/g, " ").trim();
 
-        return result && result.length > 0 ? result.slice(0, 500) : undefined;
-      };
+      return result && result.length > 0 ? result.slice(0, 500) : undefined;
+    };
 
-      const html = element as HTMLElement;
+    const html = element as HTMLElement;
 
-      const input = element instanceof HTMLInputElement ? element : undefined;
+    const input = element instanceof HTMLInputElement ? element : undefined;
 
-      const tag = html.tagName.toLowerCase();
+    const tag = html.tagName.toLowerCase();
 
-      const role = normalize(element.getAttribute("role"))?.toLowerCase();
+    const role = normalize(element.getAttribute("role"))?.toLowerCase();
 
-      const capabilities: TargetCapability[] = [];
+    const scopes: StructuralScope[] = [];
 
-      const addCapability = (capability: TargetCapability) => {
-        if (!capabilities.includes(capability)) {
-          capabilities.push(capability);
-        }
-      };
+    const addScope = (kind: StructuralScope["kind"], node: Element) => {
+      const ariaLabel = normalize(node.getAttribute("aria-label"));
 
-      if (
-        tag === "button" ||
-        tag === "a" ||
-        role === "button" ||
-        role === "link" ||
-        role === "tab" ||
-        role === "menuitem"
-      ) {
-        addCapability("activate");
+      const labelledby = node
+        .getAttribute("aria-labelledby")
+        ?.split(/\s+/)
+        .filter(Boolean)
+        .map((id) => document.getElementById(id)?.textContent ?? "")
+        .join(" ");
+
+      const heading = node.querySelector(
+        "h1,h2,h3,h4,h5,h6,legend",
+      )?.textContent;
+
+      const label = ariaLabel ?? normalize(labelledby) ?? normalize(heading);
+
+      scopes.push({
+        kind,
+        ...(label === undefined ? {} : { label }),
+      });
+    };
+
+    let current: Element | null = element.parentElement;
+
+    while (current !== null) {
+      const currentRole = normalize(
+        current.getAttribute("role"),
+      )?.toLowerCase();
+
+      const currentTag = current.tagName.toLowerCase();
+
+      if (currentTag === "form") {
+        addScope("form", current);
       }
 
       if (
-        tag === "textarea" ||
-        html.isContentEditable ||
-        (input !== undefined &&
-          ![
-            "button",
-            "submit",
-            "reset",
-            "checkbox",
-            "radio",
-            "file",
-            "hidden",
-          ].includes(input.type))
+        currentTag === "dialog" ||
+        currentRole === "dialog" ||
+        currentRole === "alertdialog"
       ) {
-        addCapability("fill");
+        addScope("dialog", current);
       }
 
-      if (tag === "select") {
-        addCapability("select");
+      if (currentTag === "tr" || currentRole === "row") {
+        addScope("row", current);
+      }
+
+      if (currentRole === "region" || currentTag === "section") {
+        addScope("region", current);
       }
 
       if (
-        input?.type === "checkbox" ||
-        role === "checkbox" ||
-        role === "switch"
+        currentTag === "article" ||
+        current.getAttribute("data-card") !== null
       ) {
-        addCapability("check");
-        addCapability("uncheck");
+        addScope("card", current);
       }
 
-      if (input?.type === "radio" || role === "radio") {
-        addCapability("check");
+      if (currentRole === "group" || currentTag === "fieldset") {
+        addScope("group", current);
       }
 
-      if (input?.type === "file") {
-        addCapability("upload");
+      if (
+        currentRole === "list" ||
+        currentTag === "ul" ||
+        currentTag === "ol"
+      ) {
+        addScope("list", current);
       }
 
-      addCapability("hover");
-      addCapability("scroll");
+      if (currentRole === "listbox") addScope("listbox", current);
+      if (currentRole === "tree") addScope("tree", current);
+      if (currentRole === "grid" || currentRole === "treegrid")
+        addScope("grid", current);
+      if (currentRole === "table" || currentTag === "table")
+        addScope("table", current);
+      if (currentRole === "menu" || currentRole === "menubar")
+        addScope("menu", current);
 
-      if (html.draggable || element.getAttribute("draggable") === "true") {
-        addCapability("drag");
-      }
+      current = current.parentElement;
+    }
 
-      const scopes: StructuralScope[] = [];
+    return {
+      candidate: {
+        marker: "direct",
+        tag,
+        ...(input === undefined ? {} : { type: input.type.toLowerCase() }),
+        ...(role === undefined ? {} : { role }),
+        text: (html.innerText ?? element.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim(),
+        visible: true,
+        disabled:
+          element.getAttribute("aria-disabled")?.toLowerCase() === "true" ||
+          ("disabled" in html && html.disabled === true),
+        contentEditable: html.isContentEditable,
+        tabIndex: html.tabIndex,
+        attributes: {
+          ...(element.getAttribute("aria-expanded") === null
+            ? {}
+            : { "aria-expanded": element.getAttribute("aria-expanded")! }),
+          ...(element.getAttribute("draggable") === null
+            ? {}
+            : { draggable: element.getAttribute("draggable")! }),
+        },
+      },
+      scopes,
+    };
+  });
 
-      const addScope = (kind: StructuralScope["kind"], node: Element) => {
-        const ariaLabel = normalize(node.getAttribute("aria-label"));
-
-        const labelledby = node
-          .getAttribute("aria-labelledby")
-          ?.split(/\s+/)
-          .filter(Boolean)
-          .map((id) => document.getElementById(id)?.textContent ?? "")
-          .join(" ");
-
-        const heading = node.querySelector(
-          "h1,h2,h3,h4,h5,h6,legend",
-        )?.textContent;
-
-        const label = ariaLabel ?? normalize(labelledby) ?? normalize(heading);
-
-        scopes.push({
-          kind,
-          ...(label === undefined ? {} : { label }),
-        });
-      };
-
-      let current: Element | null = element.parentElement;
-
-      while (current !== null) {
-        const currentRole = normalize(
-          current.getAttribute("role"),
-        )?.toLowerCase();
-
-        const currentTag = current.tagName.toLowerCase();
-
-        if (currentTag === "form") {
-          addScope("form", current);
-        }
-
-        if (
-          currentTag === "dialog" ||
-          currentRole === "dialog" ||
-          currentRole === "alertdialog"
-        ) {
-          addScope("dialog", current);
-        }
-
-        if (currentTag === "tr" || currentRole === "row") {
-          addScope("row", current);
-        }
-
-        if (currentRole === "region" || currentTag === "section") {
-          addScope("region", current);
-        }
-
-        if (
-          currentTag === "article" ||
-          current.getAttribute("data-card") !== null
-        ) {
-          addScope("card", current);
-        }
-
-        if (currentRole === "group" || currentTag === "fieldset") {
-          addScope("group", current);
-        }
-
-        current = current.parentElement;
-      }
-
-      return {
-        capabilities,
-        scopes,
-      };
-    })
-    .then((value) => ({
-      capabilities: dedupe(value.capabilities, (item) => item),
-      scopes: dedupe(
-        value.scopes,
-        (item) => `${item.kind}:${item.label ?? ""}`,
-      ),
-    }));
+  return perceivedControlFor(
+    value.candidate as DomCandidate,
+    dedupe(value.scopes, (item) => `${item.kind}:${item.label ?? ""}`),
+  );
 }
 
 export async function readVerificationState(
@@ -449,6 +601,7 @@ export async function readVerificationState(
 ): Promise<{
   checked?: boolean;
   selectedValues?: string[];
+  value?: string;
 }> {
   return locator.evaluate((element, isSensitive) => {
     if (
@@ -466,6 +619,14 @@ export async function readVerificationState(
           .map((option) => option.value)
           .slice(0, 100),
       };
+    }
+
+    if (
+      !isSensitive &&
+      (element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement)
+    ) {
+      return { value: element.value.slice(0, 100_000) };
     }
 
     return {};

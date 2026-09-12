@@ -140,4 +140,44 @@ describe("Phase 2 perceived controls", () => {
       target: { pageId: observation.pageId },
     });
   });
+
+  it("uses whole-token name fallback against canonical target authority", async () => {
+    const server = await startFixtureServer();
+    servers.push(server);
+    const session = await new PlaywrightBrowserEngine().start({
+      browser: "chromium",
+      headless: true,
+      profile: { mode: "temporary" },
+    });
+    sessions.push(session);
+    await session.navigate(`${server.url}/token-sequence-grounding`);
+
+    const observation = await session.inspect({ targetLimit: 1 });
+    expect(observation.targets).toHaveLength(1);
+    expect(observation.targets?.[0]?.name).not.toBe(
+      "2026 Quarterly Report (PDF)",
+    );
+
+    const resolution = await session.resolveTarget({
+      observationId: observation.observationId,
+      intent: {
+        capability: "activate",
+        text: "Quarterly Report PDF",
+      },
+    });
+
+    expect(resolution).toMatchObject({
+      status: "selected",
+      target: { pageId: observation.pageId },
+      reason: "grounded",
+    });
+    expect(resolution.alternatives[0]).toMatchObject({
+      target: resolution.target,
+      evidence: expect.arrayContaining([
+        "capability_match",
+        "partial_name_match",
+        "actionable",
+      ]),
+    });
+  });
 });

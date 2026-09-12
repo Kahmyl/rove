@@ -34,7 +34,9 @@ export interface BrowserFollowWindowStateSource {
 }
 
 export interface BrowserFollowBrowserIdentitySource {
-  getBrowserHostIdentity(sessionId: string): Promise<BrowserHostIdentity | null>;
+  getBrowserHostIdentity(
+    sessionId: string,
+  ): Promise<BrowserHostIdentity | null>;
 }
 
 export interface BrowserFollowForegroundSource {
@@ -151,6 +153,7 @@ export interface BrowserFollowControllerOptions {
   browserIdentity?: BrowserFollowBrowserIdentitySource;
   foreground?: BrowserFollowForegroundSource;
   followerProcessId?: number;
+  onOwnedBrowserForeground?: () => void;
 }
 
 interface DisplayIntersection {
@@ -413,7 +416,9 @@ function placeAtUserPosition(
           : intersection(fullscreenConstraint, display.bounds),
     }))
     .filter(
-      (candidate): candidate is {
+      (
+        candidate,
+      ): candidate is {
         display: BrowserFollowDisplay;
         constraint: BrowserFollowRectangle;
       } =>
@@ -516,7 +521,8 @@ export function decideBrowserFollow(
   if (
     !state.documentFocused &&
     !input.surfaceFocused &&
-    !followerIsNativeForeground
+    !followerIsNativeForeground &&
+    input.enforceNativeForeground !== true
   ) {
     return {
       kind: "hidden",
@@ -666,9 +672,11 @@ export class BrowserFollowController {
   private readonly intervalMs: number;
   private readonly freshnessMs: number;
   private readonly gap: number;
-  private readonly browserIdentity: BrowserFollowBrowserIdentitySource | undefined;
+  private readonly browserIdentity:
+    BrowserFollowBrowserIdentitySource | undefined;
   private readonly foreground: BrowserFollowForegroundSource | undefined;
   private readonly followerProcessId: number | null;
+  private readonly onOwnedBrowserForeground: (() => void) | undefined;
 
   constructor(
     private readonly windowState: BrowserFollowWindowStateSource,
@@ -685,8 +693,12 @@ export class BrowserFollowController {
     this.browserIdentity = options.browserIdentity;
     this.foreground = options.foreground;
     this.followerProcessId = options.followerProcessId ?? null;
+    this.onOwnedBrowserForeground = options.onOwnedBrowserForeground;
 
-    if ((this.browserIdentity === undefined) !== (this.foreground === undefined)) {
+    if (
+      (this.browserIdentity === undefined) !==
+      (this.foreground === undefined)
+    ) {
       throw new Error(
         "Browser identity and foreground sources must be configured together.",
       );
@@ -835,6 +847,13 @@ export class BrowserFollowController {
       }
 
       const [windowResult, browserIdentity, foregroundProcessId] = result;
+
+      if (
+        browserIdentity !== null &&
+        foregroundProcessId === browserIdentity.processId
+      ) {
+        this.onOwnedBrowserForeground?.();
+      }
 
       const presentation = this.surface.followPresentation(
         windowResult?.windowState ?? null,

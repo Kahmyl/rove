@@ -1,17 +1,26 @@
-import { spawn } from "node:child_process";
+import { execFile as execFileCallback, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCallback);
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const artifactsRoot = join(repositoryRoot, "release", "artifacts");
 const runtimeToken = "rove-packaged-runtime-smoke-token";
 const mcpToken = "rove-packaged-mcp-smoke-token";
+const codexSha256 =
+  "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a";
+const codeModeHostSha256 =
+  "038b9c6b60baacbfacba1fe81cf603c22b73697810e013d4efda040f1a7294e7";
+const codeModeHostBytes = 62_768_576;
 
 async function firstExisting(paths) {
   for (const path of paths) {
@@ -107,6 +116,17 @@ function launch(executable, entrypoint, environment) {
   return { child, output: () => output };
 }
 
+function launchDesktop(executable, environment) {
+  const child = spawn(executable, ["--rove-manage-services"], {
+    env: { ...process.env, ...environment },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk.toString()));
+  child.stderr.on("data", (chunk) => (output += chunk.toString()));
+  return { child, output: () => output };
+}
+
 async function waitForHealth(url, service, child) {
   const startedAt = Date.now();
 
@@ -163,14 +183,77 @@ const mcpBaseUrl = `http://127.0.0.1:${mcpPort}`;
 
 let runtime;
 let mcp;
+let desktop;
 
 try {
+  const codexPath = join(resourcesPath, "services", "codex", "codex");
+  const codeModeHostPath = join(
+    resourcesPath,
+    "services",
+    "codex",
+    "codex-code-mode-host",
+  );
+  const compatibilityPath = join(
+    resourcesPath,
+    "services",
+    "codex",
+    "compatibility.json",
+  );
   await Promise.all([
     access(executable),
     access(join(resourcesPath, "services", "runtime", "dist", "main.js")),
     access(join(resourcesPath, "services", "mcp", "dist", "main.js")),
+    access(codexPath),
+    access(codeModeHostPath),
+    access(compatibilityPath),
     access(join(resourcesPath, "browsers")),
   ]);
+
+  // Validate the complete pinned component set before any packaged service or
+  // native Desktop process can start.
+  const [codexBytes, codeModeHostBytesOnDisk, codeModeHostStat, compatibility] =
+    await Promise.all([
+      readFile(codexPath),
+      readFile(codeModeHostPath),
+      stat(codeModeHostPath),
+      readFile(compatibilityPath, "utf8").then(JSON.parse),
+    ]);
+  const packagedCodexDigest = createHash("sha256")
+    .update(codexBytes)
+    .digest("hex");
+  const packagedCodeModeHostDigest = createHash("sha256")
+    .update(codeModeHostBytesOnDisk)
+    .digest("hex");
+  if (packagedCodexDigest !== codexSha256)
+    throw new Error("Packaged Codex digest does not match 0.153.4.");
+  if (
+    packagedCodeModeHostDigest !== codeModeHostSha256 ||
+    codeModeHostBytesOnDisk.byteLength !== codeModeHostBytes ||
+    (codeModeHostStat.mode & 0o111) === 0
+  )
+    throw new Error("Packaged Codex code-mode host identity is invalid.");
+  if (
+    compatibility.version !== "0.153.4" ||
+    compatibility.platform !== "macos" ||
+    compatibility.architecture !== "arm64" ||
+    compatibility.sha256 !== codexSha256 ||
+    compatibility.codeModeHost?.filename !== "codex-code-mode-host" ||
+    compatibility.codeModeHost?.sha256 !== codeModeHostSha256 ||
+    compatibility.codeModeHost?.bytes !== codeModeHostBytes ||
+    compatibility.codeModeHost?.platform !== "macos" ||
+    compatibility.codeModeHost?.architecture !== "arm64"
+  )
+    throw new Error("Packaged Codex compatibility manifest is invalid.");
+
+  const helperHelp = await execFile(codeModeHostPath, ["--help"], {
+    timeout: 15_000,
+  });
+  if (
+    !/Usage: codex-code-mode-host/.test(
+      `${helperHelp.stdout}\n${helperHelp.stderr}`,
+    )
+  )
+    throw new Error("Packaged Codex code-mode host help probe failed.");
 
   runtime = launch(
     executable,
@@ -195,7 +278,10 @@ try {
       authorization: `Bearer ${runtimeToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ mode: "agent" }),
+    body: JSON.stringify({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    }),
   });
 
   if (!sessionResponse.ok) {
@@ -239,11 +325,24 @@ try {
 
   await waitForHealth(`${mcpBaseUrl}/health`, "MCP", mcp.child);
 
+  const version = await execFile(codexPath, ["--version"], { timeout: 5_000 });
+  if (!/0\.153\.4/.test(`${version.stdout}\n${version.stderr}`))
+    throw new Error("Packaged Codex version probe did not match 0.153.4.");
+
+  desktop = launchDesktop(executable, {
+    ROVE_HOME: join(temporaryHome, "desktop"),
+    ROVE_BROWSER_HEADLESS: "true",
+    ROVE_BROWSER: "chromium",
+  });
+  await delay(5_000);
+  if (desktop.child.exitCode !== null || desktop.child.signalCode !== null)
+    throw new Error("Packaged Desktop exited during native startup smoke.");
+
   process.stdout.write(
     `Packaged Rove smoke test passed (${process.platform}/${process.arch}).\n`,
   );
 } catch (error) {
-  const serviceOutput = [runtime?.output(), mcp?.output()]
+  const serviceOutput = [runtime?.output(), mcp?.output(), desktop?.output()]
     .filter(Boolean)
     .join("\n")
     .slice(-8_000);
@@ -256,5 +355,6 @@ try {
 } finally {
   await stop(mcp?.child);
   await stop(runtime?.child);
+  await stop(desktop?.child);
   await rm(temporaryHome, { recursive: true, force: true });
 }

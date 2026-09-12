@@ -21,6 +21,28 @@ function normalize(value: string | undefined): string {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function textTokens(value: string): string[] {
+  return (
+    value
+      .normalize("NFKC")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  );
+}
+
+function containsTokenSequence(
+  container: readonly string[],
+  candidate: readonly string[],
+): boolean {
+  if (candidate.length === 0 || candidate.length > container.length) {
+    return false;
+  }
+
+  return container.some((_, start) =>
+    candidate.every((token, offset) => container[start + offset] === token),
+  );
+}
+
 function textClass(
   requested: string | undefined,
   actual: string | undefined,
@@ -36,12 +58,26 @@ function textClass(
     return 0;
   }
 
+  const leftTokens = textTokens(left);
+  const rightTokens = textTokens(right);
+
+  if (leftTokens.length === 0 || rightTokens.length === 0) {
+    return 0;
+  }
+
   if (left === right) {
     return 3;
   }
 
   if (left.includes(right) || right.includes(left)) {
     return 2;
+  }
+
+  if (
+    containsTokenSequence(leftTokens, rightTokens) ||
+    containsTokenSequence(rightTokens, leftTokens)
+  ) {
+    return 1;
   }
 
   return 0;
@@ -86,6 +122,14 @@ function capabilityClass(
   }
 
   return actual?.includes(requested) ? 2 : 0;
+}
+
+function kindClass(
+  requested: PageTarget["kind"] | undefined,
+  actual: PageTarget["kind"],
+): number {
+  if (requested === undefined) return 0;
+  return requested === actual ? 3 : 0;
 }
 
 function frameClass(requested: string | undefined, target: PageTarget): number {
@@ -157,12 +201,17 @@ function rankTarget(
     intent.capability,
     target.perceived?.capabilities,
   );
+  const kind = kindClass(intent.kind, target.kind);
 
   const frame = frameClass(intent.frameLabel, target);
 
   const isActionable = actionable(target);
 
   const evidence: string[] = [];
+
+  if (kind === 3) {
+    evidence.push("kind_match");
+  }
 
   if (capability === 2) {
     evidence.push("capability_match");
@@ -176,7 +225,7 @@ function rankTarget(
 
   if (text === 3) {
     evidence.push("exact_name_match");
-  } else if (text === 2) {
+  } else if (text > 0) {
     evidence.push("partial_name_match");
   }
 
@@ -202,17 +251,18 @@ function rankTarget(
     // Ordinal evidence only.
     //
     // Safety ordering:
-    // 1. requested capability
-    // 2. exact requested scope label
-    // 3. requested scope kind
-    // 4. exact/partial accessible name
-    // 5. requested frame
+    // 1. exact requested target kind
+    // 2. requested capability
+    // 3. exact requested scope label
+    // 4. requested scope kind
+    // 5. exact/partial accessible name
+    // 6. requested frame
     //
     // Actionability is intentionally NOT
     // part of candidate promotion. A
     // non-actionable strongest candidate
     // blocks fallback to a weaker target.
-    rank: [capability, exactScopeLabel, scopeKind, text, frame],
+    rank: [kind, capability, exactScopeLabel, scopeKind, text, frame],
   };
 }
 
@@ -223,6 +273,7 @@ export function groundTarget(
   const targets = observation.targets ?? [];
 
   const hasConstraint =
+    intent.kind !== undefined ||
     intent.capability !== undefined ||
     normalize(intent.text) !== "" ||
     intent.scope !== undefined ||
@@ -243,6 +294,26 @@ export function groundTarget(
       status: "unresolved",
       alternatives: [],
       reason: "semantic_gap",
+    };
+  }
+
+  if (
+    intent.kind !== undefined &&
+    !targets.some((target) => target.kind === intent.kind)
+  ) {
+    return {
+      observationId: observation.observationId,
+      status: "unresolved",
+      alternatives: targets.slice(0, 10).map((target) => ({
+        target: {
+          pageId: observation.pageId,
+          revision: observation.revision,
+          ref: target.ref,
+        },
+        actionable: actionable(target),
+        evidence: ["kind_mismatch"],
+      })),
+      reason: "no_candidate",
     };
   }
 

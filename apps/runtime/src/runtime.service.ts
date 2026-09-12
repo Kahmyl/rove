@@ -1,7 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { setTimeout as wait } from "node:timers/promises";
 import type { RoveConfig } from "@rove/config";
+import {
+  FileEffectJournalStore,
+  type EffectJournalRecord,
+  type EffectJournalStore,
+} from "@rove/storage";
 import {
   RoveError,
   type ActionResult,
@@ -27,19 +34,42 @@ import {
   type StartSessionRequest,
   type TypeRequest,
   type RequestHumanRequest,
+  type RuntimeSessionInventory,
+  MAX_GENERATED_FILE_BYTES,
+  MAX_GRANTED_FILE_BYTES,
+  fileArtifactMimeTypeSchema,
+  fileArtifactNameSchema,
   requestHumanRequestSchema,
   controlWaitRequestSchema,
   verifiedInteractionRequestSchema,
   type ActionReceipt,
   type BrowserObservation,
+  type BrowserActionProposal,
   type TargetResolution,
   type TargetResolutionRequest,
   type VerifiedInteractionRequest,
+  startSessionRequestSchema,
+  type BrowserProfileConfig,
+  type BrowserWorkspace,
+  type BrowserWorkspaceStatus,
+  beginSemanticTransactionRequestSchema,
+  advanceSemanticTransactionRequestSchema,
+  verifySemanticTransactionRequestSchema,
+  semanticTransactionReferenceSchema,
+  transactionCommitEffect,
+  type BeginSemanticTransactionRequest,
+  type AdvanceSemanticTransactionRequest,
+  type VerifySemanticTransactionRequest,
+  type SemanticTransactionSnapshot,
+  type SemanticTransactionAdvanceResult,
+  type SemanticTransactionVerificationResult,
+  type ExpectedEffect,
 } from "@rove/protocol";
 import {
+  BrowserWorkspaceRegistry,
   RoveProfileLock,
-  RoveProfileManager,
   InteractionDispatchError,
+  InteractionNotDispatchedError,
 } from "@rove/browser";
 import type { BrowserActivity } from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
@@ -52,6 +82,7 @@ import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { OwnershipTransitionService } from "./control/ownership-transition.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
+import { detectDownloadMimeType } from "./evidence/download-mime.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { PagePolicyOrchestrator } from "./orchestration/page-policy-orchestrator.js";
 import {
@@ -59,29 +90,136 @@ import {
   type PageInspectionPolicyRecord,
 } from "./policy/interaction-policy.js";
 import { SessionService } from "./session/session.service.js";
-import { ROVE_CONFIG } from "./tokens.js";
+import { EFFECT_JOURNAL_STORE, ROVE_CONFIG } from "./tokens.js";
 import {
   classifyActionOutcome,
   interactionSignature,
   interactionTarget,
+  interactionActionProposal,
   verifyExpectedEffects,
+  verifyExpectedCurrentStates,
 } from "./interaction/verified-interaction.js";
 import { ConsequenceReplayFence } from "./interaction/consequence-replay-fence.js";
+import { SemanticTransactionStore } from "./interaction/semantic-transaction-store.js";
 import { RUNTIME_PROVENANCE } from "./runtime-provenance.js";
 
+function normalizedIdentity(value: string | undefined): string {
+  return (value ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function sameExpectedTarget(
+  effect: ExpectedEffect,
+  source: SemanticTransactionSnapshot["source"],
+): boolean {
+  if (!("target" in effect)) return false;
+  return (
+    normalizedIdentity(effect.target.name) ===
+      normalizedIdentity(source.name) &&
+    (effect.target.kind === undefined ||
+      source.kind === undefined ||
+      effect.target.kind === source.kind)
+  );
+}
+
+function hasBoundedTransferCommitEvidence(
+  transaction: SemanticTransactionSnapshot,
+  request: AdvanceSemanticTransactionRequest,
+): boolean {
+  if (request.phase !== "commit") return true;
+
+  return request.expectedEffects.some((effect) => {
+    if (!sameExpectedTarget(effect, transaction.source)) return false;
+
+    if (transaction.destination.verification === "within_scope") {
+      return (
+        effect.kind === "target_within_scope" &&
+        effect.scope.kind === transaction.destination.scope.kind &&
+        normalizedIdentity(effect.scope.label) ===
+          normalizedIdentity(transaction.destination.scope.label)
+      );
+    }
+
+    if (
+      request.action.kind === "clipboard" &&
+      request.action.operation === "paste"
+    ) {
+      return effect.kind === "target_present";
+    }
+
+    return (
+      effect.kind === "target_absent" || effect.kind === "target_within_scope"
+    );
+  });
+}
+
+function isTrustedClipboardPrepare(
+  transaction: SemanticTransactionSnapshot,
+  request: AdvanceSemanticTransactionRequest,
+): boolean {
+  return (
+    request.phase === "prepare" &&
+    transaction.mechanism === "keyboard" &&
+    request.action.kind === "clipboard" &&
+    request.action.target === undefined &&
+    (request.action.operation === "copy" ||
+      request.action.operation === "cut") &&
+    request.expectedEffects.length === 0
+  );
+}
+
+function observationHasSelectedSource(
+  observation: BrowserObservation,
+  transaction: SemanticTransactionSnapshot,
+): boolean {
+  return (
+    observation.pageId === transaction.sourceAuthority.pageId &&
+    (observation.targets ?? []).some(
+      (target) =>
+        normalizedIdentity(target.name) ===
+          normalizedIdentity(transaction.source.name) &&
+        (transaction.source.kind === undefined ||
+          target.kind === transaction.source.kind) &&
+        target.state?.selected === true,
+    )
+  );
+}
+
 const MAX_INLINE_SCREENSHOT_BYTES = 2 * 1024 * 1024;
+const CONSEQUENTIAL_RECONCILIATION_DELAYS_MS = [
+  250, 750, 1_500, 2_500,
+] as const;
+
+interface DownloadEffectSignal {
+  state: "observed" | "contradicted" | "unresolved";
+  filename?: string;
+  observationId?: string;
+  evidenceId?: string;
+  code?: string;
+}
+
+interface DownloadEffectWaiter {
+  resolve: (signal: DownloadEffectSignal) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}
 
 @Injectable()
 export class RuntimeService implements RoveRuntime {
   private readonly consequenceReplayFence = new ConsequenceReplayFence();
+  private readonly semanticTransactions = new SemanticTransactionStore();
 
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
   private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
   private readonly profileLocks = new Map<string, RoveProfileLock>();
+  private readonly downloadEffectWaiters = new Map<
+    string,
+    DownloadEffectWaiter
+  >();
+  private readonly browserWorkspaces: BrowserWorkspaceRegistry;
   private readonly interactionPolicy = new InteractionPolicy();
   private readonly ownershipTransitions: OwnershipTransitionService;
   private readonly pagePolicyOrchestrator: PagePolicyOrchestrator;
+  private readonly effectJournalReady: Promise<void>;
 
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
@@ -97,7 +235,17 @@ export class RuntimeService implements RoveRuntime {
     @Inject(ROVE_CONFIG) private readonly config: RoveConfig,
     @Inject(BrowserOwnershipFence)
     private readonly ownershipFence: BrowserOwnershipFence = new BrowserOwnershipFence(),
+    @Inject(EFFECT_JOURNAL_STORE)
+    private readonly effectJournal: EffectJournalStore = new FileEffectJournalStore(
+      config.home,
+    ),
   ) {
+    this.browserWorkspaces = new BrowserWorkspaceRegistry(this.config.home);
+    this.effectJournalReady = this.initializeEffectJournalCutover();
+    // Keep construction non-blocking without allowing an intentionally deferred
+    // initialization failure to surface as an unhandled rejection. Operations
+    // that depend on the journal still await the original rejecting promise.
+    void this.effectJournalReady.catch(() => undefined);
     this.ownershipTransitions = new OwnershipTransitionService(
       this.sessions,
       this.control,
@@ -113,39 +261,100 @@ export class RuntimeService implements RoveRuntime {
     );
   }
 
+  async listBrowserWorkspaces(): Promise<BrowserWorkspaceStatus> {
+    return this.browserWorkspaces.status();
+  }
+
+  async createBrowserWorkspace(displayName: string): Promise<BrowserWorkspace> {
+    // The cutover inventory must be durable before any post-cutover scope can
+    // be created; otherwise a concurrent startup can misclassify fresh work
+    // as historical uncertainty and can outlive the caller during shutdown.
+    await this.effectJournalReady;
+    return this.browserWorkspaces.create({
+      displayName,
+      browser: this.config.browser.preferredBrowser,
+    });
+  }
+
+  async selectBrowserWorkspace(
+    workspaceId: string,
+  ): Promise<BrowserWorkspaceStatus> {
+    await this.effectJournalReady;
+    await this.browserWorkspaces.select(workspaceId);
+    return this.browserWorkspaces.status();
+  }
+
+  async renameBrowserWorkspace(
+    workspaceId: string,
+    displayName: string,
+  ): Promise<BrowserWorkspaceStatus> {
+    await this.effectJournalReady;
+    await this.browserWorkspaces.rename(workspaceId, displayName);
+    return this.browserWorkspaces.status();
+  }
+
+  async deleteBrowserWorkspace(
+    workspaceId: string,
+  ): Promise<BrowserWorkspaceStatus> {
+    await this.effectJournalReady;
+    const inUse = (await this.sessions.list()).some(
+      (session) =>
+        session.workspace?.id === workspaceId &&
+        session.status !== "completed" &&
+        session.status !== "failed",
+    );
+    if (inUse) {
+      throw new RoveError({
+        code: "PROFILE_LOCKED",
+        message:
+          "Finish the task using this browser profile before deleting it.",
+      });
+    }
+    return this.browserWorkspaces.delete(workspaceId);
+  }
+
   async startSession(request: StartSessionRequest): Promise<Session> {
-    let session = await this.sessions.start(request);
-    this.ownershipFence.initialize(session.id, session.controller);
+    await this.effectJournalReady;
+    const input = startSessionRequestSchema.parse(request);
+    let workspace: BrowserWorkspace | undefined;
+    let profile: BrowserProfileConfig = { mode: "temporary" };
+    if (input.browser.mode === "workspace") {
+      workspace = await this.browserWorkspaces.resolveForSession(
+        "workspaceId" in input.browser ? input.browser.workspaceId : undefined,
+      );
+      profile = { mode: "persistent", name: workspace.id };
+    }
+    let session = await this.sessions.start(input, {
+      profile,
+      ...(workspace === undefined ? {} : { workspace }),
+    });
+    if (this.browser.has(session.id)) return session;
+    this.ownershipFence.initialize(
+      session.id,
+      session.controller,
+      session.ownershipGeneration ?? 1,
+    );
     let profileLock: RoveProfileLock | undefined;
     try {
-      const persistentProfile = await new RoveProfileManager(
-        this.config.home,
-      ).resolvePersistentProfile(
-        session.profile,
-        this.config.browser.preferredBrowser,
-      );
-      if (persistentProfile !== undefined) {
-        profileLock = await RoveProfileLock.acquire(
-          persistentProfile.userDataDir,
-          {
-            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
-            sessionId: session.id,
-          },
-        );
+      if (workspace !== undefined) {
+        profileLock = await RoveProfileLock.acquire(workspace.userDataDir, {
+          runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+          sessionId: session.id,
+        });
       }
 
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
-        browser: this.config.browser.preferredBrowser,
+        browser: workspace?.browser ?? this.config.browser.preferredBrowser,
         ...(this.config.browser.executablePath === undefined
           ? {}
           : {
               executablePath: this.config.browser.executablePath,
             }),
         profile: session.profile,
-        ...(persistentProfile === undefined
+        ...(workspace === undefined
           ? {}
-          : { profileUserDataDir: persistentProfile.userDataDir }),
+          : { profileUserDataDir: workspace.userDataDir }),
         ownership: {
           runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
           sessionId: session.id,
@@ -191,7 +400,14 @@ export class RuntimeService implements RoveRuntime {
       await this.observations.append(session.id, {
         actor: "system",
         type: "session_started",
-        data: { mode: session.mode, controller: session.controller },
+        data: {
+          mode: session.mode,
+          controller: session.controller,
+          browserIdentity:
+            workspace === undefined
+              ? { mode: "temporary" }
+              : { mode: "workspace", workspaceId: workspace.id },
+        },
       });
 
       if (assessment !== undefined) {
@@ -251,23 +467,209 @@ export class RuntimeService implements RoveRuntime {
     return this.browser.windowState(sessionId);
   }
 
-  async listActiveSessions(mode?: SessionMode): Promise<Session[]> {
-    const sessions = await Promise.all(
-      this.browser
-        .sessionIds()
-        .map((sessionId) => this.sessions.get(sessionId)),
-    );
+  async showBrowser(sessionId: string): Promise<boolean> {
+    await this.sessions.get(sessionId);
+    return this.browser.show(sessionId);
+  }
 
-    return sessions.filter(
-      (session) =>
-        (session.status === "active" ||
-          session.status === "paused" ||
-          session.status === "awaiting_human") &&
-        (mode === undefined || session.mode === mode),
+  async listActiveSessions(mode?: SessionMode): Promise<Session[]> {
+    return (await this.listSessionInventory(mode))
+      .map((entry) => entry.session)
+      .filter((session) =>
+        ["starting", "active", "paused", "awaiting_human"].includes(
+          session.status,
+        ),
+      );
+  }
+
+  async listSessionInventory(
+    mode?: SessionMode,
+  ): Promise<RuntimeSessionInventory[]> {
+    const sessions = (await this.sessions.list()).filter(
+      (session) => mode === undefined || session.mode === mode,
+    );
+    return Promise.all(
+      sessions.map((session) => this.sessionInventory(session)),
     );
   }
 
+  async recoverSession(sessionId: string): Promise<RuntimeSessionInventory> {
+    return this.coordinator.execute(sessionId, async () => {
+      let session = await this.sessions.get(sessionId);
+      const before = await this.sessionInventory(session);
+      if (before.attachment === "attached" || before.recovery === "not_needed")
+        return before;
+      if (["completed", "failed"].includes(session.status)) {
+        await this.browser.close(sessionId);
+        await this.releaseProfileLock(sessionId);
+        this.ownershipFence.clear(sessionId);
+        return this.sessionInventory(await this.sessions.get(sessionId));
+      }
+      if (
+        session.profile.mode !== "persistent" ||
+        session.workspace === undefined
+      ) {
+        session = await this.sessions.update({
+          ...session,
+          status: "failed",
+          controller: null,
+          endedAt: new Date().toISOString(),
+        });
+        return this.sessionInventory(session);
+      }
+      if (before.recovery !== "relaunchable") return before;
+      this.ownershipFence.initialize(
+        session.id,
+        session.controller,
+        session.ownershipGeneration ?? 1,
+      );
+      let profileLock: RoveProfileLock | undefined;
+      try {
+        profileLock = await RoveProfileLock.acquire(
+          session.workspace.userDataDir,
+          {
+            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+            sessionId: session.id,
+          },
+        );
+        const browser = await this.browser.start(session.id, {
+          headless: this.config.browser.headless,
+          browser: session.workspace.browser,
+          ...(this.config.browser.executablePath === undefined
+            ? {}
+            : { executablePath: this.config.browser.executablePath }),
+          profile: session.profile,
+          profileUserDataDir: session.workspace.userDataDir,
+          ownership: {
+            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+            sessionId: session.id,
+          },
+          timeouts: {
+            launchMs: this.config.timeouts.launchMs,
+            navigationMs: this.config.timeouts.navigationMs,
+            actionMs: this.config.timeouts.actionMs,
+            inspectMs: this.config.timeouts.inspectMs,
+          },
+        });
+        this.profileLocks.set(session.id, profileLock);
+        profileLock = undefined;
+        browser.onActivity((activity) => {
+          this.persistBrowserActivity(session.id, activity);
+        });
+        const activePageId = (await browser.pages()).find(
+          (page) => page.active,
+        )?.id;
+        session = await this.sessions.update({
+          ...session,
+          ...(activePageId === undefined ? {} : { activePageId }),
+          browserRuntime: browser.capabilities,
+        });
+        return this.sessionInventory(session);
+      } catch (error) {
+        this.ownershipFence.clear(session.id);
+        await this.browser.close(session.id).catch(() => undefined);
+        await profileLock?.release().catch(() => undefined);
+        await this.releaseProfileLock(session.id);
+        throw error;
+      }
+    });
+  }
+
+  private async sessionInventory(
+    session: Session,
+  ): Promise<RuntimeSessionInventory> {
+    const attachment = this.browser.has(session.id) ? "attached" : "missing";
+    const terminal = ["completed", "failed"].includes(session.status);
+    const browserIdentity =
+      session.workspace === undefined
+        ? ({ mode: "temporary" } as const)
+        : ({ mode: "workspace", workspaceId: session.workspace.id } as const);
+    let profileOwnership: RuntimeSessionInventory["profileOwnership"] =
+      "released";
+    if (session.workspace !== undefined) {
+      profileOwnership = this.profileLocks.has(session.id)
+        ? "owned"
+        : await RoveProfileLock.ownershipStatus(session.workspace.userDataDir, {
+            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+            sessionId: session.id,
+          });
+      if (terminal && profileOwnership === "claimable")
+        profileOwnership = "released";
+      if (terminal && profileOwnership === "conflicting") {
+        const workspaceLockPath = resolve(
+          session.workspace.userDataDir,
+          "profile.lock",
+        );
+        if (
+          [...this.profileLocks.entries()].some(
+            ([activeSessionId, lock]) =>
+              activeSessionId !== session.id &&
+              lock.lockPath === workspaceLockPath,
+          )
+        )
+          profileOwnership = "released";
+      }
+    }
+    let recovery: RuntimeSessionInventory["recovery"];
+    const cutover = await this.effectJournal.cutover();
+    const legacyScopes = [
+      `task:${session.bootstrapId ?? session.id}`,
+      `workspace:${session.workspace?.id ?? session.id}`,
+    ]
+      .map((scope) => cutover?.legacyScopes[scope])
+      .filter((entry) => entry !== undefined);
+    const legacyEffects: NonNullable<RuntimeSessionInventory["legacyEffects"]> =
+      legacyScopes.some((entry) => entry.acknowledgedAt === undefined)
+        ? "acknowledgement_required"
+        : legacyScopes.length > 0
+          ? "acknowledged"
+          : "not_applicable";
+    let diagnostic: string | undefined;
+    if (terminal) {
+      recovery = "cleanup_required";
+      diagnostic = "The persisted session is terminal.";
+    } else if (
+      attachment === "attached" &&
+      (session.workspace === undefined || profileOwnership === "owned")
+    ) {
+      recovery = "not_needed";
+    } else if (
+      attachment === "missing" &&
+      session.workspace !== undefined &&
+      profileOwnership === "claimable"
+    ) {
+      recovery = "relaunchable";
+      diagnostic = "The named browser workspace can be reattached.";
+    } else if (attachment === "missing" && session.workspace === undefined) {
+      recovery = "unrecoverable";
+      diagnostic = "The Temporary browser attachment cannot be restored.";
+    } else {
+      recovery = "cleanup_required";
+      diagnostic = "Browser attachment or profile ownership is conflicting.";
+    }
+    return {
+      schemaVersion: 1,
+      session,
+      browserIdentity,
+      attachment,
+      recovery,
+      profileOwnership,
+      legacyEffects,
+      ...(diagnostic === undefined ? {} : { diagnostic }),
+    };
+  }
+
   async endSession(sessionId: string): Promise<Session> {
+    const session = await this.sessions.get(sessionId);
+    if (
+      !["completed", "failed"].includes(session.status) &&
+      !this.ownershipFence.has(sessionId)
+    )
+      this.ownershipFence.initialize(
+        sessionId,
+        session.controller,
+        session.ownershipGeneration ?? 1,
+      );
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.endSession(sessionId, {
         flushHumanActivity: () => this.flushHumanActivity(sessionId),
@@ -275,6 +677,7 @@ export class RuntimeService implements RoveRuntime {
         clearRuntimeState: () => {
           this.lastAgentActionAt.delete(sessionId);
           this.consequenceReplayFence.clearSession(sessionId);
+          this.semanticTransactions.clearSession(sessionId);
         },
         releaseProfileLock: () => this.releaseProfileLock(sessionId),
       }),
@@ -333,335 +736,1146 @@ export class RuntimeService implements RoveRuntime {
     );
   }
 
+  async beginSemanticTransaction(
+    sessionId: string,
+    request: BeginSemanticTransactionRequest,
+  ): Promise<SemanticTransactionSnapshot> {
+    const input = beginSemanticTransactionRequestSchema.parse(request);
+    await this.requireActive(sessionId);
+
+    const existing = this.semanticTransactions.existingFor(
+      sessionId,
+      input.consequenceKey,
+    );
+    if (existing !== undefined) {
+      if (
+        existing.kind !== input.kind ||
+        existing.mechanism !== input.mechanism ||
+        existing.sourceAuthority.pageId !== input.sourceTarget.pageId ||
+        existing.sourceAuthority.revision !== input.sourceTarget.revision ||
+        existing.sourceAuthority.ref !== input.sourceTarget.ref ||
+        JSON.stringify(existing.destination) !==
+          JSON.stringify(input.destination)
+      ) {
+        throw new RoveError({
+          code: "TRANSACTION_CONFLICT",
+          message:
+            "The consequence key already identifies a different semantic transaction.",
+        });
+      }
+      return existing;
+    }
+
+    this.consequenceReplayFence.assertAvailable(
+      sessionId,
+      input.consequenceKey,
+    );
+
+    const transaction = await this.ownershipFence.runAgentBrowserOperation(
+      sessionId,
+      async (lease) => {
+        const observation = await this.browser
+          .get(sessionId)
+          .readObservation(input.observationId);
+        lease.assertCurrent();
+        if (
+          input.sourceTarget.pageId !== observation.pageId ||
+          input.sourceTarget.revision !== observation.revision
+        ) {
+          throw new RoveError({
+            code: "TARGET_STALE",
+            message:
+              "The transaction source does not belong to the current observation revision.",
+            retryable: true,
+          });
+        }
+        const source = observation.targets?.find(
+          (target) => target.ref === input.sourceTarget.ref,
+        );
+        if (source === undefined) {
+          throw new RoveError({
+            code: "TARGET_NOT_FOUND",
+            message:
+              "The transaction source is not present in the observation.",
+          });
+        }
+        if (source.name === undefined) {
+          throw new RoveError({
+            code: "TARGET_NOT_INTERACTIVE",
+            message:
+              "The transaction source requires a stable accessible name for destination verification.",
+          });
+        }
+        return this.semanticTransactions.begin(sessionId, input, {
+          name: source.name,
+          kind: source.kind,
+        });
+      },
+    );
+
+    try {
+      await this.observations.append(sessionId, {
+        actor: "agent",
+        type: "semantic_transaction_begun",
+        data: {
+          transactionId: transaction.transactionId,
+          kind: transaction.kind,
+          mechanism: transaction.mechanism,
+          source: transaction.source,
+          destination: transaction.destination,
+        },
+        pageId: input.sourceTarget.pageId,
+        pageRevision: input.sourceTarget.revision,
+      });
+      return transaction;
+    } catch (error) {
+      return this.semanticTransactions.recordDegradation(
+        sessionId,
+        transaction.transactionId,
+        error instanceof RoveError ? error.code : "EVIDENCE_WRITE_FAILED",
+      );
+    }
+  }
+
+  async advanceSemanticTransaction(
+    sessionId: string,
+    request: AdvanceSemanticTransactionRequest,
+  ): Promise<SemanticTransactionAdvanceResult> {
+    const input = advanceSemanticTransactionRequestSchema.parse(request);
+    await this.requireActive(sessionId);
+    const transaction = this.semanticTransactions.acquireAdvance(
+      sessionId,
+      input.transactionId,
+      input.observationId,
+    );
+    try {
+      const commit = input.phase === "commit";
+      if (!hasBoundedTransferCommitEvidence(transaction, input)) {
+        throw new RoveError({
+          code: "TRANSACTION_STATE_INVALID",
+          message:
+            "A transfer commit must verify the exact source target changed location, or appeared after an explicit paste; unrelated or pre-existing page text is not commit evidence.",
+        });
+      }
+      const trustedClipboardPrepare = isTrustedClipboardPrepare(
+        transaction,
+        input,
+      );
+      if (trustedClipboardPrepare) {
+        const sourceSelected =
+          await this.ownershipFence.runAgentBrowserOperation(
+            sessionId,
+            async (lease) => {
+              const observation = await this.browser
+                .get(sessionId)
+                .readObservation(input.observationId);
+              lease.assertCurrent();
+              return observationHasSelectedSource(observation, transaction);
+            },
+          );
+        if (!sourceSelected) {
+          throw new RoveError({
+            code: "TRANSACTION_STATE_INVALID",
+            message:
+              "Trusted clipboard staging requires the exact transaction source to be selected in the supplied observation.",
+          });
+        }
+      }
+      const receipt = await this.interact(sessionId, {
+        observationId: input.observationId,
+        action: input.action,
+        expectedEffects: input.expectedEffects,
+        consequential: commit,
+        ...(commit
+          ? {
+              consequenceKey: transaction.consequenceKey,
+              effect: transactionCommitEffect(input.effect),
+            }
+          : input.effect === undefined
+            ? {}
+            : { effect: input.effect }),
+      });
+      let updated = this.semanticTransactions.recordStep(
+        sessionId,
+        input.transactionId,
+        input.phase,
+        receipt,
+        { acceptCompletedPrepareDispatch: trustedClipboardPrepare },
+      );
+      try {
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: "semantic_transaction_advanced",
+          data: {
+            transactionId: updated.transactionId,
+            phase: input.phase,
+            receiptId: receipt.receiptId,
+            outcome: receipt.outcome,
+            status: updated.status,
+          },
+          ...(receipt.target === undefined
+            ? {}
+            : { pageId: receipt.target.pageId }),
+          ...(receipt.currentRevision === undefined
+            ? {}
+            : { pageRevision: receipt.currentRevision }),
+        });
+      } catch (error) {
+        updated = this.semanticTransactions.recordDegradation(
+          sessionId,
+          updated.transactionId,
+          error instanceof RoveError ? error.code : "EVIDENCE_WRITE_FAILED",
+        );
+      }
+      return { transaction: updated, receipt };
+    } catch (error) {
+      this.semanticTransactions.releaseAdvance(sessionId, input.transactionId);
+      throw error;
+    }
+  }
+
+  async verifySemanticTransaction(
+    sessionId: string,
+    request: VerifySemanticTransactionRequest,
+  ): Promise<SemanticTransactionVerificationResult> {
+    const input = verifySemanticTransactionRequestSchema.parse(request);
+    await this.requireActive(sessionId);
+    const transaction = this.semanticTransactions.get(
+      sessionId,
+      input.transactionId,
+    );
+    if (transaction.status !== "committed") {
+      throw new RoveError({
+        code: "TRANSACTION_STATE_INVALID",
+        message: "Only a committed semantic transaction can be verified.",
+      });
+    }
+
+    const verification = await this.ownershipFence.runAgentBrowserOperation(
+      sessionId,
+      async (lease) => {
+        const browser = this.browser.get(sessionId);
+        const observation = await browser.readObservation(input.observationId);
+        lease.assertCurrent();
+
+        if (
+          transaction.destination.verification === "destination_observation" &&
+          input.additionalExpectedEffects.length === 0
+        ) {
+          throw new RoveError({
+            code: "TRANSACTION_STATE_INVALID",
+            message:
+              "Remote destination verification requires at least one independent destination-context effect, such as the exact destination URL or breadcrumb.",
+          });
+        }
+
+        const requiredEffects: ExpectedEffect[] =
+          transaction.destination.verification === "within_scope"
+            ? [
+                {
+                  kind: "target_within_scope",
+                  target: transaction.source,
+                  scope: transaction.destination.scope,
+                },
+              ]
+            : [
+                {
+                  kind: "target_present",
+                  target: transaction.source,
+                },
+              ];
+        const effects = verifyExpectedCurrentStates(
+          [...requiredEffects, ...input.additionalExpectedEffects],
+          observation,
+        );
+        const outcome = classifyActionOutcome(effects);
+        const updated = this.semanticTransactions.recordVerification(
+          sessionId,
+          input.transactionId,
+          input.observationId,
+          outcome,
+          effects,
+        );
+        if (outcome === "unknown") {
+          this.consequenceReplayFence.recordUnknown(
+            sessionId,
+            transaction.consequenceKey,
+          );
+        }
+        return { transaction: updated, outcome, effects };
+      },
+    );
+
+    try {
+      await this.observations.append(sessionId, {
+        actor: "agent",
+        type: "semantic_transaction_verified",
+        data: {
+          transactionId: verification.transaction.transactionId,
+          outcome: verification.outcome,
+          status: verification.transaction.status,
+          effects: verification.effects.map((effect) => ({
+            kind: effect.effect.kind,
+            state: effect.state,
+          })),
+        },
+      });
+    } catch (error) {
+      verification.transaction = this.semanticTransactions.recordDegradation(
+        sessionId,
+        verification.transaction.transactionId,
+        error instanceof RoveError ? error.code : "EVIDENCE_WRITE_FAILED",
+      );
+    }
+    return verification;
+  }
+
+  async getSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    await this.sessions.get(sessionId);
+    return this.semanticTransactions.get(sessionId, transactionId);
+  }
+
+  async cancelSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    semanticTransactionReferenceSchema.parse({ transactionId });
+    await this.requireActive(sessionId);
+    let transaction = this.semanticTransactions.cancel(
+      sessionId,
+      transactionId,
+    );
+    try {
+      await this.observations.append(sessionId, {
+        actor: "agent",
+        type: "semantic_transaction_cancelled",
+        data: { transactionId },
+      });
+    } catch (error) {
+      transaction = this.semanticTransactions.recordDegradation(
+        sessionId,
+        transactionId,
+        error instanceof RoveError ? error.code : "EVIDENCE_WRITE_FAILED",
+      );
+    }
+    return transaction;
+  }
+
   async interact(
     sessionId: string,
     request: VerifiedInteractionRequest,
   ): Promise<ActionReceipt> {
     const input = verifiedInteractionRequestSchema.parse(request);
+    await this.effectJournalReady;
+    const effectSession = await this.sessions.get(sessionId);
+    const taskScope = effectSession.bootstrapId ?? effectSession.id;
+    const browserWorkspaceScope =
+      effectSession.workspace?.id ?? effectSession.id;
+    let journalRecord: EffectJournalRecord | undefined;
+    const journalExecution: {
+      state:
+        "not_started" | "definitely_not_dispatched" | "may_have_dispatched";
+    } = { state: "not_started" };
+    let journalFinalized = false;
 
-    const { receipt } = await this.mutateValue(
-      sessionId,
-      async (lease) => {
-        await this.paceAgentAction(sessionId);
+    try {
+      const { receipt } = await this.mutateValue(
+        sessionId,
+        async (lease) => {
+          await this.paceAgentAction(sessionId);
 
-        lease.assertCurrent();
+          lease.assertCurrent();
 
-        const browser = this.browser.get(sessionId);
-
-        const predecessor = await browser.readObservation(input.observationId);
-
-        lease.assertCurrent();
-
-        const beforePages = await browser.pages();
-
-        lease.assertCurrent();
-
-        if (input.consequential && input.consequenceKey !== undefined) {
-          this.consequenceReplayFence.assertAvailable(
-            sessionId,
-            input.consequenceKey,
+          const downloadEffect = input.expectedEffects.find(
+            (effect) => effect.kind === "download_completed",
           );
-        }
+          const browser = this.browser.get(sessionId);
 
-        const signature = interactionSignature(input.action);
+          const predecessor = await browser.readObservation(
+            input.observationId,
+          );
 
-        await this.authorizeMutation(sessionId, signature, lease);
+          lease.assertCurrent();
 
-        lease.assertCurrent();
+          const beforePages = await browser.pages();
 
-        const upload =
-          input.action.kind === "upload"
-            ? await this.evidence.readFilePayload(
-                sessionId,
-                input.action.evidenceId,
-              )
-            : undefined;
+          lease.assertCurrent();
 
-        lease.assertCurrent();
+          if (input.consequential && input.consequenceKey !== undefined) {
+            this.consequenceReplayFence.assertAvailable(
+              sessionId,
+              input.consequenceKey,
+            );
+          }
 
-        let result: ActionResult | undefined;
+          const signature = interactionSignature(input.action);
 
-        let dispatched = false;
+          await this.authorizeMutation(
+            sessionId,
+            signature,
+            lease,
+            interactionActionProposal(input, predecessor),
+          );
 
-        let dispatchFailure: unknown;
-        let dispatchFailureStage: InteractionDispatchError["stage"] | undefined;
-        const degradations: NonNullable<ActionReceipt["degradations"]> = [];
+          lease.assertCurrent();
 
-        try {
-          result = await browser.interact(input.action, {
-            observationId: input.observationId,
-            ...(upload === undefined
-              ? {}
-              : {
-                  upload,
-                }),
-          });
+          if (input.consequential && input.consequenceKey !== undefined) {
+            await this.assertLegacyScopeAcknowledged(
+              taskScope,
+              browserWorkspaceScope,
+            );
+            const conflicts = await this.effectJournal.findPotentialConflicts(
+              browserWorkspaceScope,
+            );
+            let authorizedAttemptId: string | undefined;
+            if (conflicts.length > 0) {
+              const authorizedRecord = conflicts.find(
+                (record) =>
+                  record.repeatAuthorization !== undefined &&
+                  record.repeatAuthorization.consumedAt === undefined,
+              );
+              if (!authorizedRecord)
+                throw new RoveError({
+                  code: "CONSEQUENTIAL_ACTION_UNRESOLVED",
+                  message:
+                    "This browser workspace has an unresolved prior consequential outcome.",
+                  retryable: false,
+                  details: {
+                    effectIds: conflicts.map((entry) => entry.effectId),
+                  },
+                });
+              authorizedAttemptId = `effect_attempt_${randomUUID()}`;
+              try {
+                await this.effectJournal.consumeRepeatAuthorization(
+                  authorizedRecord.effectId,
+                  authorizedRecord.version,
+                  authorizedAttemptId,
+                  new Date().toISOString(),
+                );
+              } catch {
+                throw new RoveError({
+                  code: "CONSEQUENTIAL_ACTION_UNRESOLVED",
+                  message:
+                    "The one-use workspace authorization is no longer available.",
+                  retryable: false,
+                  details: {
+                    effectIds: conflicts.map((entry) => entry.effectId),
+                  },
+                });
+              }
+            }
+            const actionFingerprint = createHash("sha256")
+              .update(JSON.stringify(input.action))
+              .digest("hex");
+            const existing =
+              authorizedAttemptId === undefined
+                ? await this.effectJournal.find(
+                    taskScope,
+                    browserWorkspaceScope,
+                    input.consequenceKey,
+                  )
+                : null;
+            if (existing) {
+              if (
+                existing.state === "not_applied" &&
+                existing.actionFingerprint === actionFingerprint
+              ) {
+                journalRecord = await this.effectJournal.update(
+                  existing.effectId,
+                  existing.version,
+                  {
+                    state: "prepared",
+                    updatedAt: new Date().toISOString(),
+                    observationId: input.observationId,
+                    ownershipGeneration: lease.token.generation,
+                  },
+                );
+              } else {
+                this.consequenceReplayFence.recordUnknown(
+                  sessionId,
+                  input.consequenceKey,
+                );
+                throw new RoveError({
+                  code: "ACTION_OUTCOME_UNKNOWN",
+                  message:
+                    "This consequential operation already has durable effect history and cannot be automatically replayed.",
+                });
+              }
+            }
+            if (!journalRecord)
+              journalRecord = await this.effectJournal.prepare({
+                taskScope,
+                browserWorkspaceScope,
+                consequenceKey: input.consequenceKey,
+                actionFingerprint,
+                ...(authorizedAttemptId === undefined
+                  ? {}
+                  : { attemptId: authorizedAttemptId }),
+                state: "prepared",
+                ownershipGeneration: lease.token.generation,
+                cutoverEpoch: "phase5-effect-journal-v1",
+                preparedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+          }
 
-          dispatched = true;
-        } catch (error) {
-          if (!(error instanceof InteractionDispatchError)) {
+          let uploads;
+          try {
+            uploads =
+              input.action.kind === "upload"
+                ? await Promise.all(
+                    (
+                      input.action.evidenceIds ?? [input.action.evidenceId!]
+                    ).map((evidenceId) =>
+                      this.evidence.readFilePayload(sessionId, evidenceId),
+                    ),
+                  )
+                : undefined;
+          } catch (error) {
+            if (journalRecord) {
+              journalRecord = await this.effectJournal.update(
+                journalRecord.effectId,
+                journalRecord.version,
+                {
+                  state: "not_applied",
+                  updatedAt: new Date().toISOString(),
+                },
+              );
+              journalFinalized = true;
+            }
             throw error;
           }
 
-          dispatched = true;
-          result = error.result;
-          dispatchFailure = error.original;
-          dispatchFailureStage = error.stage;
-          degradations.push({
-            stage:
-              error.stage === "post_action_synchronization"
-                ? "page_synchronization"
-                : "action_dispatch",
-            code:
-              error.original instanceof RoveError
-                ? error.original.code
-                : "ACTION_OUTCOME_UNKNOWN",
-          });
-        }
-
-        lease.assertCurrent();
-
-        let synchronizationFailed = false;
-
-        try {
-          await this.syncActivePage(sessionId, lease);
-        } catch (error) {
           lease.assertCurrent();
-          synchronizationFailed = true;
-          degradations.push({
-            stage: "page_synchronization",
-            code:
-              error instanceof RoveError
-                ? error.code
-                : "RUNTIME_PROTOCOL_ERROR",
-          });
-        }
 
-        lease.assertCurrent();
+          const downloadBoundary =
+            downloadEffect === undefined
+              ? undefined
+              : this.registerDownloadEffectBoundary();
 
-        let successor: BrowserObservation | undefined;
+          let result: ActionResult | undefined;
 
-        if (!synchronizationFailed) {
+          let dispatched = false;
+
+          let dispatchFailure: unknown;
+          let dispatchFailureStage:
+            InteractionDispatchError["stage"] | undefined;
+          const degradations: NonNullable<ActionReceipt["degradations"]> = [];
+
           try {
-            successor = await browser.inspect();
+            journalExecution.state = "may_have_dispatched";
+            result = await browser.interact(input.action, {
+              observationId: input.observationId,
+              ...(downloadBoundary === undefined
+                ? {}
+                : { activityBoundaryId: downloadBoundary.id }),
+              ...(uploads === undefined
+                ? {}
+                : {
+                    uploads,
+                  }),
+            });
 
+            dispatched = true;
+          } catch (error) {
+            if (error instanceof InteractionNotDispatchedError) {
+              journalExecution.state = "definitely_not_dispatched";
+              downloadBoundary?.cancel();
+              throw error.original;
+            }
+            if (!(error instanceof InteractionDispatchError)) {
+              downloadBoundary?.cancel();
+              throw error;
+            }
+
+            dispatched = true;
+            result = error.result;
+            dispatchFailure = error.original;
+            dispatchFailureStage = error.stage;
+            degradations.push({
+              stage:
+                error.stage === "post_action_synchronization"
+                  ? "page_synchronization"
+                  : "action_dispatch",
+              code:
+                error.original instanceof RoveError
+                  ? error.original.code
+                  : "ACTION_OUTCOME_UNKNOWN",
+            });
+          }
+
+          const downloadSignal =
+            downloadBoundary === undefined
+              ? undefined
+              : await downloadBoundary.result;
+
+          try {
             lease.assertCurrent();
           } catch (error) {
+            if (
+              downloadBoundary !== undefined &&
+              input.consequential &&
+              input.consequenceKey !== undefined
+            ) {
+              this.consequenceReplayFence.recordUnknown(
+                sessionId,
+                input.consequenceKey,
+              );
+            }
+            throw error;
+          }
+
+          let synchronizationFailed = false;
+
+          try {
+            await this.syncActivePage(sessionId, lease);
+          } catch (error) {
             lease.assertCurrent();
+            synchronizationFailed = true;
             degradations.push({
-              stage: "successor_inspection",
+              stage: "page_synchronization",
               code:
                 error instanceof RoveError
                   ? error.code
                   : "RUNTIME_PROTOCOL_ERROR",
             });
           }
-        }
-
-        let afterPages: PageSummary[] | undefined;
-
-        try {
-          afterPages = await browser.pages();
 
           lease.assertCurrent();
-        } catch (error) {
-          lease.assertCurrent();
-          degradations.push({
-            stage: "page_inventory",
-            code:
-              error instanceof RoveError
-                ? error.code
-                : "RUNTIME_PROTOCOL_ERROR",
-          });
-        }
 
-        const effects = verifyExpectedEffects(
-          input.expectedEffects,
-          predecessor,
-          successor,
-          result,
-          beforePages,
-          afterPages,
-        );
+          let successor: BrowserObservation | undefined;
 
-        let outcome = classifyActionOutcome(effects);
+          if (!synchronizationFailed) {
+            try {
+              successor = await browser.inspect();
 
-        if (dispatchFailure !== undefined && successor === undefined) {
-          outcome = "unknown";
-        }
+              lease.assertCurrent();
+            } catch (error) {
+              lease.assertCurrent();
+              degradations.push({
+                stage: "successor_inspection",
+                code:
+                  error instanceof RoveError
+                    ? error.code
+                    : "RUNTIME_PROTOCOL_ERROR",
+              });
+            }
+          }
 
-        const target = interactionTarget(input.action);
+          let afterPages: PageSummary[] | undefined;
 
-        const receipt: ActionReceipt = {
-          receiptId: `rcpt_${randomUUID().replaceAll("-", "")}`,
-          sessionId,
-          action: input.action.kind,
-          dispatched,
-          dispatchStatus:
-            dispatchFailureStage === "dispatch" ? "uncertain" : "completed",
-          outcome,
-          consequential: input.consequential,
-          ...(input.consequenceKey === undefined
-            ? {}
-            : {
-                consequenceKey: input.consequenceKey,
-              }),
-          predecessorObservationId: input.observationId,
-          ...(successor === undefined
-            ? {}
-            : {
-                successorObservationId: successor.observationId,
-              }),
-          ...(target === undefined
-            ? {}
-            : {
-                target,
-              }),
-          effects,
-          degradations,
-          ...(result?.pageChanged === undefined
-            ? {}
-            : {
-                pageChanged: result.pageChanged,
-              }),
-          ...(result?.previousRevision === undefined
-            ? {}
-            : {
-                previousRevision: result.previousRevision,
-              }),
-          ...(result?.currentRevision === undefined
-            ? {}
-            : {
-                currentRevision: result.currentRevision,
-              }),
-          ...(result?.url === undefined
-            ? {}
-            : {
-                url: result.url,
-              }),
-          ...(result?.openedPages === undefined
-            ? {}
-            : {
-                openedPages: result.openedPages,
-              }),
-        };
+          try {
+            afterPages = await browser.pages();
 
-        if (
-          input.consequential &&
-          input.consequenceKey !== undefined &&
-          outcome === "unknown"
-        ) {
-          this.consequenceReplayFence.recordUnknown(
-            sessionId,
-            input.consequenceKey,
+            lease.assertCurrent();
+          } catch (error) {
+            lease.assertCurrent();
+            degradations.push({
+              stage: "page_inventory",
+              code:
+                error instanceof RoveError
+                  ? error.code
+                  : "RUNTIME_PROTOCOL_ERROR",
+            });
+          }
+
+          let effects = verifyExpectedEffects(
+            input.expectedEffects,
+            predecessor,
+            successor,
+            result,
+            beforePages,
+            afterPages,
           );
-        }
 
-        lease.assertCurrent();
+          if (downloadEffect !== undefined && downloadSignal !== undefined) {
+            effects = effects.map((verification) => {
+              if (verification.effect !== downloadEffect) return verification;
+              const filenameMatches =
+                downloadEffect.filename === undefined ||
+                downloadEffect.filename === downloadSignal.filename;
+              return {
+                effect: downloadEffect,
+                state:
+                  downloadSignal.state === "observed" && !filenameMatches
+                    ? "contradicted"
+                    : downloadSignal.state,
+                ...(downloadSignal.observationId === undefined
+                  ? {}
+                  : { observationId: downloadSignal.observationId }),
+                ...(downloadSignal.evidenceId === undefined
+                  ? {}
+                  : { evidenceId: downloadSignal.evidenceId }),
+                ...(downloadSignal.code === undefined && filenameMatches
+                  ? {}
+                  : {
+                      code: downloadSignal.code ?? "DOWNLOAD_FILENAME_MISMATCH",
+                    }),
+              };
+            });
+          }
 
-        await this.observations
-          .append(sessionId, {
-            actor: "agent",
-            type: "agent_interaction_receipt",
-            data: {
-              receiptId: receipt.receiptId,
-              action: receipt.action,
-              dispatched: receipt.dispatched,
-              outcome: receipt.outcome,
-              consequential: receipt.consequential,
-              ...(target === undefined
-                ? {}
-                : {
-                    targetRef: target.ref,
-                  }),
-              ...(successor === undefined
-                ? {}
-                : {
-                    successorObservationId: successor.observationId,
-                  }),
-              effects: effects.map((effect) => ({
-                kind: effect.effect.kind,
-                state: effect.state,
-              })),
-            },
-            ...(result?.pageId === undefined
-              ? target === undefined
-                ? {}
-                : {
-                    pageId: target.pageId,
-                  }
-              : {
-                  pageId: result.pageId,
-                }),
-            ...(result?.currentRevision === undefined
+          let outcome = classifyActionOutcome(effects);
+
+          if (dispatchFailure !== undefined && successor === undefined) {
+            outcome = "unknown";
+          }
+
+          // A click can finish before a client-rendered application commits its
+          // asynchronous mutation or navigation. Do not turn that short
+          // observation race into a false negative (and, for consequential
+          // actions, a dangerous caller retry). Reconcile the already-dispatched
+          // action against a few bounded successor observations; this never
+          // redispatches the operation.
+          if (
+            dispatched &&
+            input.expectedEffects.some(
+              (effect) => effect.kind !== "download_completed",
+            ) &&
+            outcome !== "applied"
+          ) {
+            for (const delayMs of CONSEQUENTIAL_RECONCILIATION_DELAYS_MS) {
+              await wait(delayMs);
+              lease.assertCurrent();
+
+              try {
+                await this.syncActivePage(sessionId, lease);
+                successor = await browser.inspect();
+                lease.assertCurrent();
+                afterPages = await browser.pages();
+                lease.assertCurrent();
+
+                effects = verifyExpectedEffects(
+                  input.expectedEffects,
+                  predecessor,
+                  successor,
+                  result,
+                  beforePages,
+                  afterPages,
+                );
+                if (
+                  downloadEffect !== undefined &&
+                  downloadSignal !== undefined
+                ) {
+                  effects = effects.map((verification) =>
+                    verification.effect.kind === "download_completed"
+                      ? {
+                          effect: downloadEffect,
+                          state:
+                            downloadSignal.state === "observed" &&
+                            downloadEffect.filename !== undefined &&
+                            downloadEffect.filename !== downloadSignal.filename
+                              ? "contradicted"
+                              : downloadSignal.state,
+                          ...(downloadSignal.observationId === undefined
+                            ? {}
+                            : {
+                                observationId: downloadSignal.observationId,
+                              }),
+                          ...(downloadSignal.evidenceId === undefined
+                            ? {}
+                            : { evidenceId: downloadSignal.evidenceId }),
+                          ...(downloadSignal.code === undefined
+                            ? downloadSignal.state === "observed" &&
+                              downloadEffect.filename !== undefined &&
+                              downloadEffect.filename !==
+                                downloadSignal.filename
+                              ? { code: "DOWNLOAD_FILENAME_MISMATCH" }
+                              : {}
+                            : { code: downloadSignal.code }),
+                        }
+                      : verification,
+                  );
+                }
+                outcome = classifyActionOutcome(effects);
+
+                if (outcome === "applied") break;
+              } catch (error) {
+                lease.assertCurrent();
+                outcome = "unknown";
+
+                if (
+                  !degradations.some(
+                    (item) => item.stage === "successor_inspection",
+                  )
+                ) {
+                  degradations.push({
+                    stage: "successor_inspection",
+                    code:
+                      error instanceof RoveError
+                        ? error.code
+                        : "RUNTIME_PROTOCOL_ERROR",
+                  });
+                }
+              }
+            }
+          }
+
+          const target = interactionTarget(input.action);
+          const receiptUrl = successor?.url ?? result?.url;
+          const receiptCurrentRevision =
+            successor?.revision ?? result?.currentRevision;
+          const receiptPageChanged =
+            result?.pageChanged === true ||
+            (successor !== undefined &&
+              (successor.url !== predecessor.url ||
+                successor.revision !== predecessor.revision));
+
+          const receipt: ActionReceipt = {
+            receiptId: `rcpt_${randomUUID().replaceAll("-", "")}`,
+            sessionId,
+            action: input.action.kind,
+            dispatched,
+            dispatchStatus:
+              dispatchFailureStage === "dispatch" && outcome !== "applied"
+                ? "uncertain"
+                : "completed",
+            outcome,
+            consequential: input.consequential,
+            ...(input.consequenceKey === undefined
               ? {}
               : {
-                  pageRevision: result.currentRevision,
+                  consequenceKey: input.consequenceKey,
                 }),
-          })
-          .catch((error: unknown) => {
-            degradations.push({
-              stage: "receipt_persistence",
-              code:
-                error instanceof RoveError
-                  ? error.code
-                  : "EVIDENCE_WRITE_FAILED",
-            });
-          });
+            predecessorObservationId: input.observationId,
+            ...(successor === undefined
+              ? {}
+              : {
+                  successorObservationId: successor.observationId,
+                }),
+            ...(target === undefined
+              ? {}
+              : {
+                  target,
+                }),
+            effects,
+            ...(result?.phases === undefined ? {} : { phases: result.phases }),
+            degradations,
+            ...(result?.pageChanged === undefined && successor === undefined
+              ? {}
+              : {
+                  pageChanged: receiptPageChanged,
+                }),
+            ...(result?.previousRevision === undefined
+              ? {}
+              : {
+                  previousRevision: result.previousRevision,
+                }),
+            ...(receiptCurrentRevision === undefined
+              ? {}
+              : {
+                  currentRevision: receiptCurrentRevision,
+                }),
+            ...(receiptUrl === undefined
+              ? {}
+              : {
+                  url: receiptUrl,
+                }),
+            ...(result?.openedPages === undefined
+              ? {}
+              : {
+                  openedPages: result.openedPages,
+                }),
+          };
 
-        lease.assertCurrent();
-
-        let assessment: PageInspectionPolicyRecord | undefined;
-
-        if (successor !== undefined) {
-          try {
-            assessment = this.interactionPolicy.recordInspection(
+          if (
+            input.consequential &&
+            input.consequenceKey !== undefined &&
+            outcome === "unknown"
+          ) {
+            this.consequenceReplayFence.recordUnknown(
               sessionId,
-              successor,
+              input.consequenceKey,
             );
-          } catch (error) {
-            degradations.push({
-              stage: "page_policy",
-              code:
-                error instanceof RoveError
-                  ? error.code
-                  : "RUNTIME_PROTOCOL_ERROR",
-            });
           }
-        }
 
-        lease.assertCurrent();
+          lease.assertCurrent();
 
-        return {
-          receipt,
-          assessment,
-        };
-      },
-      async ({ assessment }) => {
-        if (assessment === undefined) {
-          return;
-        }
-
-        await this.pagePolicyOrchestrator
-          .orchestrate(
-            sessionId,
-            assessment.policyDecision,
-            assessment.pageState,
-            "post_action",
-          )
-          .catch((error: unknown) => {
-            receipt.degradations?.push({
-              stage: "page_policy",
-              code:
-                error instanceof RoveError
-                  ? error.code
-                  : "RUNTIME_PROTOCOL_ERROR",
+          let receiptPersistenceFailed = false;
+          await this.observations
+            .append(sessionId, {
+              actor: "agent",
+              type: "agent_interaction_receipt",
+              data: {
+                receiptId: receipt.receiptId,
+                action: receipt.action,
+                dispatched: receipt.dispatched,
+                outcome: receipt.outcome,
+                consequential: receipt.consequential,
+                ...(target === undefined
+                  ? {}
+                  : {
+                      targetRef: target.ref,
+                    }),
+                ...(successor === undefined
+                  ? {}
+                  : {
+                      successorObservationId: successor.observationId,
+                    }),
+                effects: effects.map((effect) => ({
+                  kind: effect.effect.kind,
+                  state: effect.state,
+                  ...(effect.observationId === undefined
+                    ? {}
+                    : { observationId: effect.observationId }),
+                  ...(effect.evidenceId === undefined
+                    ? {}
+                    : { evidenceId: effect.evidenceId }),
+                  ...(effect.code === undefined ? {} : { code: effect.code }),
+                })),
+              },
+              ...(result?.pageId === undefined
+                ? target === undefined
+                  ? {}
+                  : {
+                      pageId: target.pageId,
+                    }
+                : {
+                    pageId: result.pageId,
+                  }),
+              ...(result?.currentRevision === undefined
+                ? {}
+                : {
+                    pageRevision: result.currentRevision,
+                  }),
+            })
+            .catch((error: unknown) => {
+              receiptPersistenceFailed = true;
+              degradations.push({
+                stage: "receipt_persistence",
+                code:
+                  error instanceof RoveError
+                    ? error.code
+                    : "EVIDENCE_WRITE_FAILED",
+              });
             });
-          });
-      },
-    );
 
-    return receipt;
+          if (receiptPersistenceFailed) {
+            outcome = "unknown";
+            receipt.outcome = "unknown";
+            receipt.dispatchStatus = "uncertain";
+          }
+
+          if (journalRecord) {
+            const evidenceReference = effects.find(
+              (effect) => effect.evidenceId !== undefined,
+            );
+            const observationReference = effects.find(
+              (effect) => effect.observationId !== undefined,
+            );
+            const state = receiptPersistenceFailed
+              ? "unresolved"
+              : outcome === "applied"
+                ? "applied"
+                : outcome === "not_applied"
+                  ? "not_applied"
+                  : "unresolved";
+            try {
+              journalRecord = await this.effectJournal.update(
+                journalRecord.effectId,
+                journalRecord.version,
+                {
+                  state,
+                  updatedAt: new Date().toISOString(),
+                  ...(observationReference?.observationId
+                    ? { observationId: observationReference.observationId }
+                    : successor?.observationId
+                      ? { observationId: successor.observationId }
+                      : {}),
+                  ...(evidenceReference?.evidenceId
+                    ? { evidenceId: evidenceReference.evidenceId }
+                    : {}),
+                },
+              );
+              journalFinalized = true;
+            } catch {
+              this.consequenceReplayFence.recordUnknown(
+                sessionId,
+                input.consequenceKey!,
+              );
+              throw new RoveError({
+                code: "ACTION_OUTCOME_UNKNOWN",
+                message:
+                  "The action may have completed, but its durable effect record could not be finalized.",
+              });
+            }
+            if (state === "unresolved") {
+              this.consequenceReplayFence.recordUnknown(
+                sessionId,
+                input.consequenceKey!,
+              );
+            }
+          }
+
+          lease.assertCurrent();
+
+          let assessment: PageInspectionPolicyRecord | undefined;
+
+          if (successor !== undefined) {
+            try {
+              assessment = this.interactionPolicy.recordInspection(
+                sessionId,
+                successor,
+              );
+            } catch (error) {
+              degradations.push({
+                stage: "page_policy",
+                code:
+                  error instanceof RoveError
+                    ? error.code
+                    : "RUNTIME_PROTOCOL_ERROR",
+              });
+            }
+          }
+
+          lease.assertCurrent();
+
+          return {
+            receipt,
+            assessment,
+          };
+        },
+        async ({ assessment }) => {
+          if (assessment === undefined) {
+            return;
+          }
+
+          await this.pagePolicyOrchestrator
+            .orchestrate(
+              sessionId,
+              assessment.policyDecision,
+              assessment.pageState,
+              "post_action",
+            )
+            .catch((error: unknown) => {
+              receipt.degradations?.push({
+                stage: "page_policy",
+                code:
+                  error instanceof RoveError
+                    ? error.code
+                    : "RUNTIME_PROTOCOL_ERROR",
+              });
+            });
+        },
+      );
+
+      return receipt;
+    } catch (error) {
+      if (journalRecord && !journalFinalized) {
+        try {
+          journalRecord = await this.effectJournal.update(
+            journalRecord.effectId,
+            journalRecord.version,
+            {
+              state:
+                journalExecution.state === "may_have_dispatched"
+                  ? "unresolved"
+                  : "not_applied",
+              updatedAt: new Date().toISOString(),
+            },
+          );
+          journalFinalized = true;
+          if (
+            journalExecution.state === "may_have_dispatched" &&
+            input.consequenceKey
+          )
+            this.consequenceReplayFence.recordUnknown(
+              sessionId,
+              input.consequenceKey,
+            );
+        } catch {
+          if (input.consequenceKey)
+            this.consequenceReplayFence.recordUnknown(
+              sessionId,
+              input.consequenceKey,
+            );
+          throw new RoveError({
+            code: "ACTION_OUTCOME_UNKNOWN",
+            message:
+              "The action could not be completed with a durable effect record.",
+          });
+        }
+      }
+      throw error;
+    }
+  }
+
+  async acknowledgeLegacyEffectScope(sessionId: string): Promise<void> {
+    await this.effectJournalReady;
+    const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
+    const browserScope = session.workspace?.id ?? session.id;
+    const at = new Date().toISOString();
+    await this.effectJournal.acknowledgeLegacyScope(`task:${taskScope}`, at);
+    await this.effectJournal.acknowledgeLegacyScope(
+      `workspace:${browserScope}`,
+      at,
+    );
+  }
+
+  async authorizeEffectRepetition(
+    sessionId: string,
+    effectId: string,
+    authorizationId: string,
+  ): Promise<EffectJournalRecord> {
+    await this.effectJournalReady;
+    const session = await this.sessions.get(sessionId);
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const record = await this.effectJournal.findById(effectId);
+    if (!record || record.browserWorkspaceScope !== browserWorkspaceScope)
+      throw new RoveError({
+        code: "ACTION_NOT_AUTHORIZED",
+        message: "The effect does not belong to this browser workspace.",
+      });
+    return this.effectJournal.authorizeRepeat(
+      effectId,
+      authorizationId,
+      new Date().toISOString(),
+    );
+  }
+
+  private async initializeEffectJournalCutover(): Promise<void> {
+    const existing = await this.effectJournal.cutover();
+    if (existing) return;
+    const [sessions, workspaceStatus] = await Promise.all([
+      this.sessions.list(),
+      this.browserWorkspaces.status(),
+    ]);
+    const scopes = sessions.flatMap((session) => [
+      `task:${session.bootstrapId ?? session.id}`,
+      `workspace:${session.workspace?.id ?? session.id}`,
+    ]);
+    scopes.push(
+      ...workspaceStatus.workspaces.map(
+        (workspace) => `workspace:${workspace.id}`,
+      ),
+    );
+    await this.effectJournal.establishCutover(
+      "phase5-effect-journal-v1",
+      new Date().toISOString(),
+      [...new Set(scopes)],
+    );
+  }
+
+  private async assertLegacyScopeAcknowledged(
+    taskScope: string,
+    browserScope: string,
+  ): Promise<void> {
+    const cutover = await this.effectJournal.cutover();
+    const blocked = [`task:${taskScope}`, `workspace:${browserScope}`].find(
+      (scope) =>
+        cutover?.legacyScopes[scope] !== undefined &&
+        cutover.legacyScopes[scope]?.acknowledgedAt === undefined,
+    );
+    if (blocked)
+      throw new RoveError({
+        code: "ACTION_OUTCOME_UNKNOWN",
+        message:
+          "This pre-cutover task or browser workspace requires explicit acknowledgement before fresh consequential work.",
+      });
   }
 
   navigate(sessionId: string, request: NavigateRequest): Promise<ActionResult> {
@@ -677,7 +1891,70 @@ export class RuntimeService implements RoveRuntime {
           currentRevision: result.currentRevision,
         },
       }),
+      {
+        action: "navigate",
+        effect: "navigate",
+        explicitlyAuthorized: true,
+        freshlyGrounded: true,
+        outcomeCanBeVerified: true,
+      },
     );
+  }
+
+  async openPage(
+    sessionId: string,
+    request: NavigateRequest,
+  ): Promise<PageSummary> {
+    const { page } = await this.mutateValue(
+      sessionId,
+      async (lease) => {
+        await this.authorizeMutation(
+          sessionId,
+          `open_page:${request.url}`,
+          lease,
+          {
+            action: "open_page",
+            effect: "navigate",
+            explicitlyAuthorized: true,
+            freshlyGrounded: true,
+            outcomeCanBeVerified: true,
+          },
+        );
+
+        const page = await this.browser.get(sessionId).openPage(request.url);
+
+        lease.assertCurrent();
+        await this.syncActivePage(sessionId, lease);
+        lease.assertCurrent();
+
+        await this.observations.append(sessionId, {
+          actor: "agent",
+          type: "agent_page_opened",
+          pageId: page.id,
+          pageRevision: page.revision,
+          data: { pageId: page.id, url: page.url },
+        });
+
+        lease.assertCurrent();
+        const assessment = await this.assessBrowser(
+          sessionId,
+          this.browser.get(sessionId),
+          lease,
+        );
+
+        return { page, assessment };
+      },
+      async ({ assessment }) => {
+        await this.pagePolicyOrchestrator.orchestrate(
+          sessionId,
+          assessment.policyDecision,
+          assessment.pageState,
+          "post_action",
+        );
+      },
+    );
+
+    return page;
   }
 
   click(sessionId: string, request: ClickRequest): Promise<ActionResult> {
@@ -732,6 +2009,13 @@ export class RuntimeService implements RoveRuntime {
         type: "agent_scrolled",
         data: { direction: request.direction, amount: request.amount ?? 600 },
       }),
+      {
+        action: "scroll",
+        effect: "reversible_ui",
+        explicitlyAuthorized: true,
+        freshlyGrounded: true,
+        outcomeCanBeVerified: true,
+      },
     );
   }
 
@@ -741,6 +2025,13 @@ export class RuntimeService implements RoveRuntime {
       "back",
       () => this.browser.get(sessionId).back(),
       () => ({ type: "browser_back", data: {} }),
+      {
+        action: "back",
+        effect: "recover",
+        explicitlyAuthorized: true,
+        freshlyGrounded: true,
+        outcomeCanBeVerified: true,
+      },
     );
   }
 
@@ -750,6 +2041,13 @@ export class RuntimeService implements RoveRuntime {
       "forward",
       () => this.browser.get(sessionId).forward(),
       () => ({ type: "browser_forward", data: {} }),
+      {
+        action: "forward",
+        effect: "recover",
+        explicitlyAuthorized: true,
+        freshlyGrounded: true,
+        outcomeCanBeVerified: true,
+      },
     );
   }
 
@@ -770,7 +2068,18 @@ export class RuntimeService implements RoveRuntime {
     const { page } = await this.mutateValue(
       sessionId,
       async (lease) => {
-        await this.authorizeMutation(sessionId, `switch_page:${pageId}`, lease);
+        await this.authorizeMutation(
+          sessionId,
+          `switch_page:${pageId}`,
+          lease,
+          {
+            action: "switch_page",
+            effect: "recover",
+            explicitlyAuthorized: true,
+            freshlyGrounded: true,
+            outcomeCanBeVerified: true,
+          },
+        );
 
         const page = await this.browser.get(sessionId).switchPage(pageId);
 
@@ -818,7 +2127,13 @@ export class RuntimeService implements RoveRuntime {
     await this.mutateValue(
       sessionId,
       async (lease) => {
-        await this.authorizeMutation(sessionId, `close_page:${pageId}`, lease);
+        await this.authorizeMutation(sessionId, `close_page:${pageId}`, lease, {
+          action: "close_page",
+          effect: "recover",
+          explicitlyAuthorized: true,
+          freshlyGrounded: true,
+          outcomeCanBeVerified: true,
+        });
 
         await this.browser.get(sessionId).closePage(pageId);
 
@@ -924,7 +2239,11 @@ export class RuntimeService implements RoveRuntime {
   }
 
   async getControlStatus(sessionId: string): Promise<ControlStatus> {
-    return this.toControlStatus(await this.sessions.get(sessionId));
+    const [session, observations] = await Promise.all([
+      this.sessions.get(sessionId),
+      this.observations.list(sessionId, { limit: 1_000 }),
+    ]);
+    return this.toControlStatus(session, observations.items.at(-1)?.seq);
   }
 
   async requestHuman(
@@ -986,9 +2305,77 @@ export class RuntimeService implements RoveRuntime {
     return item;
   }
 
+  async materializeFileEvidence(
+    sessionId: string,
+    input: {
+      filename: string;
+      mimeType: string;
+      bytes: Uint8Array;
+      source: "agent_generated" | "user_file_grant";
+      grantId?: string;
+    },
+  ): Promise<Evidence> {
+    await this.sessions.get(sessionId);
+    const filename = fileArtifactNameSchema.parse(input.filename);
+    const mimeType = fileArtifactMimeTypeSchema.parse(input.mimeType);
+    if (
+      input.source === "user_file_grant" &&
+      (input.grantId === undefined ||
+        !/^grant_[a-f0-9]{32}$/u.test(input.grantId))
+    ) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message:
+          "User-selected file evidence requires a valid opaque grant ID.",
+      });
+    }
+    if (input.source === "agent_generated" && input.grantId !== undefined) {
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Agent-generated file evidence cannot claim a user grant.",
+      });
+    }
+    const limit =
+      input.source === "agent_generated"
+        ? MAX_GENERATED_FILE_BYTES
+        : MAX_GRANTED_FILE_BYTES;
+    if (input.bytes.byteLength > limit) {
+      throw new RoveError({
+        code: "FILE_ARTIFACT_TOO_LARGE",
+        message: `File artifact exceeds the ${limit} byte limit for ${input.source}.`,
+        details: { limitBytes: limit, source: input.source },
+      });
+    }
+
+    const normalized = { ...input, filename, mimeType };
+    const item = await this.evidence.saveFileArtifact(sessionId, normalized);
+    await this.observations.append(sessionId, {
+      actor: input.source === "user_file_grant" ? "human" : "agent",
+      type:
+        input.source === "user_file_grant"
+          ? "local_file_granted"
+          : "file_artifact_created",
+      data: {
+        evidenceId: item.id,
+        filename,
+        mimeType,
+        sizeBytes: input.bytes.byteLength,
+        source: input.source,
+        ...(input.grantId === undefined ? {} : { grantId: input.grantId }),
+      },
+    });
+    return item;
+  }
+
   async listEvidence(sessionId: string): Promise<Evidence[]> {
     await this.sessions.get(sessionId);
     return this.evidence.list(sessionId);
+  }
+
+  async deleteFileGrant(sessionId: string, grantId: string) {
+    await this.sessions.get(sessionId);
+    const deleted = await this.evidence.deleteGrant(sessionId, grantId);
+    return { sessionId, grantId, deleted };
   }
 
   async readEvidence(
@@ -1015,6 +2402,7 @@ export class RuntimeService implements RoveRuntime {
       type: string;
       data: unknown;
     },
+    proposal?: BrowserActionProposal,
   ): Promise<ActionResult> {
     const { result } = await this.mutateValue(
       sessionId,
@@ -1023,7 +2411,7 @@ export class RuntimeService implements RoveRuntime {
 
         lease.assertCurrent();
 
-        await this.authorizeMutation(sessionId, signature, lease);
+        await this.authorizeMutation(sessionId, signature, lease, proposal);
 
         let actionResult: ActionResult;
 
@@ -1138,6 +2526,7 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     signature: string,
     lease: BrowserOwnershipLease,
+    proposal?: BrowserActionProposal,
   ): Promise<void> {
     try {
       lease.assertCurrent();
@@ -1163,12 +2552,22 @@ export class RuntimeService implements RoveRuntime {
         currentRevision,
       );
 
-      this.interactionPolicy.authorizeMutation(
-        sessionId,
-        signature,
-        Date.now(),
-        identity,
-      );
+      if (proposal === undefined) {
+        this.interactionPolicy.authorizeMutation(
+          sessionId,
+          signature,
+          Date.now(),
+          identity,
+        );
+      } else {
+        this.interactionPolicy.authorizeAction(
+          sessionId,
+          signature,
+          proposal,
+          Date.now(),
+          identity,
+        );
+      }
 
       lease.assertCurrent();
     } catch (error) {
@@ -1286,8 +2685,20 @@ export class RuntimeService implements RoveRuntime {
       this.humanActivityQueues.get(sessionId) ?? Promise.resolve();
 
     const next = previous
-      .then(() => this.persistDownloadEvidence(sessionId, activity))
-      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const signal = await this.persistDownloadEvidence(
+            sessionId,
+            activity,
+          );
+          this.resolveDownloadEffectBoundary(activity, signal);
+        } catch {
+          this.resolveDownloadEffectBoundary(activity, {
+            state: "unresolved",
+            code: "DOWNLOAD_PERSISTENCE_FAILED",
+          });
+        }
+      })
       .finally(() => {
         if (this.humanActivityQueues.get(sessionId) === next) {
           this.humanActivityQueues.delete(sessionId);
@@ -1300,14 +2711,14 @@ export class RuntimeService implements RoveRuntime {
   private async persistDownloadEvidence(
     sessionId: string,
     activity: BrowserActivity,
-  ): Promise<void> {
+  ): Promise<DownloadEffectSignal> {
     const data = activity.data as Record<string, unknown>;
     const path = typeof data.path === "string" ? data.path : undefined;
     const filename =
       typeof data.filename === "string" ? data.filename : "download";
 
     if (path === undefined) {
-      await this.observations.append(sessionId, {
+      const observation = await this.observations.append(sessionId, {
         actor: "browser",
         type: "download_failed",
         data: {
@@ -1319,10 +2730,16 @@ export class RuntimeService implements RoveRuntime {
           ? {}
           : { pageRevision: activity.pageRevision }),
       });
-      return;
+      return {
+        state: "contradicted",
+        filename,
+        observationId: observation.id,
+        code: "DOWNLOAD_FAILED",
+      };
     }
 
     const bytes = await readFile(path);
+    const mime = await detectDownloadMimeType(bytes, filename);
     const item = await this.evidence.savePayload(
       sessionId,
       {
@@ -1339,6 +2756,14 @@ export class RuntimeService implements RoveRuntime {
           directory: data.directory,
           sizeBytes: data.sizeBytes,
           suggestedFilename: data.suggestedFilename,
+          mimeType: mime.mimeType,
+          mimeTypeBasis: mime.basis,
+          ...(mime.detectedExtension === undefined
+            ? {}
+            : { detectedExtension: mime.detectedExtension }),
+          ...(typeof data.downloadUrl === "string"
+            ? { downloadUrl: data.downloadUrl }
+            : {}),
           source: "browser_download",
         },
       },
@@ -1355,7 +2780,20 @@ export class RuntimeService implements RoveRuntime {
           typeof data.sizeBytes === "number"
             ? data.sizeBytes
             : bytes.byteLength,
+        mimeType: mime.mimeType,
+        mimeTypeBasis: mime.basis,
         managedPath: path,
+        ...(typeof data.downloadUrl === "string"
+          ? { downloadUrl: data.downloadUrl }
+          : {}),
+        ...(data.correlation === "matched" || data.correlation === "ambiguous"
+          ? { correlation: data.correlation }
+          : {}),
+        ...(data.correlationStrategy === "trusted_anchor" ||
+        data.correlationStrategy === "chromium_pdf_viewer" ||
+        data.correlationStrategy === "trusted_action_download"
+          ? { correlationStrategy: data.correlationStrategy }
+          : {}),
       },
       pageId: activity.pageId,
       ...(activity.pageRevision === undefined
@@ -1363,6 +2801,12 @@ export class RuntimeService implements RoveRuntime {
         : { pageRevision: activity.pageRevision }),
     });
     await this.controlWait.publish(sessionId, observation);
+    return {
+      state: "observed",
+      filename,
+      observationId: observation.id,
+      evidenceId: item.id,
+    };
   }
 
   private persistBrowserActivity(
@@ -1380,21 +2824,115 @@ export class RuntimeService implements RoveRuntime {
     }
 
     if (activity.type === "download_failed") {
-      void this.observations.append(sessionId, {
-        actor: "browser",
-        type: "download_failed",
-        data: activity.data,
-        pageId: activity.pageId,
-        ...(activity.pageRevision === undefined
-          ? {}
-          : {
-              pageRevision: activity.pageRevision,
-            }),
-      });
+      void this.observations
+        .append(sessionId, {
+          actor: "browser",
+          type: "download_failed",
+          data: activity.data,
+          pageId: activity.pageId,
+          ...(activity.pageRevision === undefined
+            ? {}
+            : {
+                pageRevision: activity.pageRevision,
+              }),
+        })
+        .then((observation) => {
+          this.resolveDownloadEffectBoundary(activity, {
+            state: "contradicted",
+            observationId: observation.id,
+            ...(typeof activity.data.suggestedFilename === "string"
+              ? { filename: activity.data.suggestedFilename }
+              : {}),
+            code: "DOWNLOAD_FAILED",
+          });
+        })
+        .catch(() => {
+          this.resolveDownloadEffectBoundary(activity, {
+            state: "unresolved",
+            code: "DOWNLOAD_PERSISTENCE_FAILED",
+          });
+        });
+      return;
+    }
+
+    if (activity.type === "download_correlation_unavailable") {
+      void this.observations
+        .append(sessionId, {
+          actor: "browser",
+          type: "download_correlation_unavailable",
+          data: activity.data,
+          pageId: activity.pageId,
+          ...(activity.pageRevision === undefined
+            ? {}
+            : { pageRevision: activity.pageRevision }),
+        })
+        .then((observation) => {
+          this.resolveDownloadEffectBoundary(activity, {
+            state: "unresolved",
+            observationId: observation.id,
+            code: "DOWNLOAD_CORRELATION_UNAVAILABLE",
+          });
+        })
+        .catch(() => {
+          this.resolveDownloadEffectBoundary(activity, {
+            state: "unresolved",
+            code: "DOWNLOAD_PERSISTENCE_FAILED",
+          });
+        });
       return;
     }
 
     this.enqueueHumanActivity(sessionId, activity);
+  }
+
+  private registerDownloadEffectBoundary(): {
+    id: string;
+    result: Promise<DownloadEffectSignal>;
+    cancel: () => void;
+  } {
+    const id = `dlb_${randomUUID().replaceAll("-", "")}`;
+    let resolveResult!: (signal: DownloadEffectSignal) => void;
+    const result = new Promise<DownloadEffectSignal>((resolvePromise) => {
+      resolveResult = resolvePromise;
+    });
+    const timeout = setTimeout(() => {
+      this.downloadEffectWaiters.delete(id);
+      resolveResult({ state: "unresolved", code: "DOWNLOAD_TIMEOUT" });
+    }, this.config.timeouts.actionMs);
+    this.downloadEffectWaiters.set(id, {
+      resolve: resolveResult,
+      timeout,
+    });
+    return {
+      id,
+      result,
+      cancel: () => {
+        const waiter = this.downloadEffectWaiters.get(id);
+        if (waiter === undefined) return;
+        clearTimeout(waiter.timeout);
+        this.downloadEffectWaiters.delete(id);
+        waiter.resolve({ state: "unresolved", code: "DOWNLOAD_CANCELLED" });
+      },
+    };
+  }
+
+  private resolveDownloadEffectBoundary(
+    activity: BrowserActivity,
+    signal: DownloadEffectSignal,
+  ): void {
+    const boundaryId = activity.data.actionBoundaryId;
+    if (typeof boundaryId !== "string") return;
+    const waiter = this.downloadEffectWaiters.get(boundaryId);
+    if (waiter === undefined) return;
+    if (activity.data.correlation === "ambiguous") {
+      signal = {
+        state: "unresolved",
+        code: "DOWNLOAD_CORRELATION_AMBIGUOUS",
+      };
+    }
+    clearTimeout(waiter.timeout);
+    this.downloadEffectWaiters.delete(boundaryId);
+    waiter.resolve(signal);
   }
 
   private enqueueBrowserEvidence(
@@ -1447,9 +2985,17 @@ export class RuntimeService implements RoveRuntime {
 
   private async releaseProfileLock(sessionId: string): Promise<void> {
     const lock = this.profileLocks.get(sessionId);
-    if (lock === undefined) return;
-    this.profileLocks.delete(sessionId);
+    if (lock === undefined) {
+      const session = await this.sessions.get(sessionId);
+      if (session.workspace !== undefined)
+        await RoveProfileLock.releaseClaimable(session.workspace.userDataDir, {
+          runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+          sessionId,
+        });
+      return;
+    }
     await lock.release();
+    this.profileLocks.delete(sessionId);
   }
 
   private humanObservationType(type: BrowserActivity["type"]): string {
@@ -1528,10 +3074,22 @@ export class RuntimeService implements RoveRuntime {
   ): ControlStatus {
     return {
       sessionId: session.id,
+      generation: this.ownershipFence.has(session.id)
+        ? this.ownershipFence.generation(session.id)
+        : (session.ownershipGeneration ?? 1),
       status: session.status,
       controller: session.controller,
       updatedAt: session.updatedAt,
       ...(session.handoff === undefined ? {} : { handoff: session.handoff }),
+      ...(session.activeHandoffId === undefined
+        ? {}
+        : { activeHandoffId: session.activeHandoffId }),
+      ...(session.activeHandoffGeneration === undefined
+        ? {}
+        : { activeHandoffGeneration: session.activeHandoffGeneration }),
+      ...(session.lastReturnedHandoffId === undefined
+        ? {}
+        : { lastReturnedHandoffId: session.lastReturnedHandoffId }),
       ...(observationSeq === undefined ? {} : { observationSeq }),
     };
   }

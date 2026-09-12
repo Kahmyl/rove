@@ -210,6 +210,28 @@ describe("Companion renderer state", () => {
     });
   });
 
+  it("uses the same explicit resume state as the compact presentation", () => {
+    const snapshot: CompanionSnapshot = {
+      session: {
+        ...baseSession,
+        status: "paused",
+        controller: null,
+      },
+      observationCount: 3,
+      evidenceCount: 1,
+    };
+
+    expect(toCompanionViewModel(snapshot)).toMatchObject({
+      experience: "paused",
+      kicker: "Paused",
+      title: "Agent control is paused",
+      primaryAction: "resume",
+      primaryActionLabel: "Resume",
+      canReturnControl: true,
+      canFinish: true,
+    });
+  });
+
   it("presents an interrupted Runtime session without pretending it survived", () => {
     expect(
       toCompanionViewModel(null, {

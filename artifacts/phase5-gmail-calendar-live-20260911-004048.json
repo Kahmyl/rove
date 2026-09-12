@@ -1,0 +1,445 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 46439,
+    "ownedProcessPids": [
+      46439,
+      46458,
+      46459,
+      46460,
+      46517,
+      46536
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+    "operationId": "intent_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+    "sessionId": "ses_85496318060b4db8ada179a5292fe2f6",
+    "threadId": "01a08db2-266a-7290-af94-f28336376b91",
+    "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af"
+  },
+  "terminalRevision": 901,
+  "terminalTask": {
+    "taskId": "task_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+      "stage": "turn_started",
+      "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af"
+    },
+    "roveSessionId": "ses_85496318060b4db8ada179a5292fe2f6",
+    "codexThreadId": "01a08db2-266a-7290-af94-f28336376b91",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08db2-34fa-7ab0-833e-02fa051019af"
+      ],
+      "itemCount": 28
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "final_reports_stop",
+      "journey_not_passed",
+      "screenshot_ids_count",
+      "observation_id_not_in_ledger",
+      "event_title",
+      "event_title_not_edited",
+      "calendar_mutations",
+      "receipt_ids_count",
+      "calendar_receipt_not_in_ledger",
+      "calendar_mutation_receipts",
+      "calendar_final_observation",
+      "gmail_not_returned"
+    ],
+    "marker": {
+      "journey": "gmail_calendar",
+      "status": "blocked",
+      "reason": "CONSEQUENTIAL_ACTION_UNRESOLVED: This browser workspace has an unresolved prior consequential outcome. effectIds=[fe7059b9a6bd65c3f88ab3fbdc285dca2b8a3d3814ccf4b9c8c8fe01a66e5874]. Rove blocked the title Save; no retry performed.",
+      "gmailUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD",
+      "calendarUrl": "https://calendar.google.com/calendar/u/0/r/eventedit/NmZibGxpMW5mOWlvZjdrNWQ4M25uamRubzgga2FtaWxmbGludEBt",
+      "requestedDuration": "30 minutes",
+      "schedulingPeriod": "tomorrow afternoon",
+      "emailEventTitle": "Rove acceptance review",
+      "note": "Created during Rove live acceptance.",
+      "created": true,
+      "createdEventTitle": "Rove acceptance review",
+      "titleEdited": false,
+      "eventTitle": "Rove acceptance review",
+      "eventTime": "Friday, September 11, 2026, 2:00 PM–2:30 PM GMT+01",
+      "eventDescription": "Created during Rove live acceptance.",
+      "eventCount": 1,
+      "noGuests": true,
+      "gmailReturnedOpen": false,
+      "externalMutations": [
+        "calendar_event_create"
+      ],
+      "distinctPageIds": [
+        "page_01",
+        "page_02"
+      ],
+      "durableObservationIds": [
+        "bobs_1ae34b5992ba487cb8a94ad75f7a12c9",
+        "bobs_9aeb5477a8ff471d97ef7021cf3fa35c",
+        "bobs_b5c9722037994c719e271bf34fe7df99",
+        "bobs_4c52d2325eb84f22bcdeb3e9a27300c0",
+        "bobs_ac2cedd784ac4de28d74400739145013"
+      ],
+      "screenshotEvidenceIds": [],
+      "receiptIds": [
+        "rcpt_54d9e7c87ed443558b636fe5c9fc02e3"
+      ],
+      "finalObservationId": "bobs_ac2cedd784ac4de28d74400739145013"
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_85496318060b4db8ada179a5292fe2f6",
+    "pageIds": [
+      "page_02",
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_32e22f1a5ff8430e9827fce1242eac7c",
+      "obs_ced6a2804754488ab10ecab35ebc3715",
+      "obs_fb07fcae879c4356ad2c0924997c9b36",
+      "obs_0fb814781ae04fbbb86755352792cfa1",
+      "obs_5f94f798f29547d9885571ea88de7289",
+      "obs_cf30eaaa2ce443c48ad3d90e91073273",
+      "obs_f7c6280063eb4b0ca090287c643b18c9",
+      "obs_914d0fc676404d5589821ace48f6d4c2",
+      "bobs_bbe097c1546049f59bcc028064ff80d5",
+      "bobs_53a9c364808542c5bb56adaed968c360",
+      "bobs_177e5f2d07134eb3921cf7e5cf85d183",
+      "bobs_0c5e13e9bc274fae8cbc3426e2f6d5b0"
+    ],
+    "evidenceIds": [
+      "ev_00b6c0a0e33b4996a9fe80cc71406844",
+      "ev_20b4923758424109b0a3b87a83151439",
+      "ev_2ed4d7942e7b4701b69a56a92d663539",
+      "ev_2fc6c6e4784f4d43a000ecff72ce9518",
+      "ev_35c8833b54784d01995629950bd4b33d",
+      "ev_45bf26537f13446d844b61a79d05d350",
+      "ev_4667758d8288411c8eed3bf9d66b029f",
+      "ev_6cb27af3e953464dad9ae797b9321316",
+      "ev_6d643356ce344494aceb1c0bb4e7cd71",
+      "ev_7497e389611649d0b0ee6d62e55fca77",
+      "ev_78cedb6ec66940989f26514c8aa0a68d",
+      "ev_7b4b6bf57cd04b87bc0431bdfd0c7cb5",
+      "ev_7e28e24576054a47a52660b2465e3c99",
+      "ev_8c857488be24412ba72ad8355a34e52d",
+      "ev_99fce5b3ee0c47a18a5d611bbae27dd8",
+      "ev_a5308ffc3d4b4b18abc483ce212c5821",
+      "ev_ab7409ed172647f0885d06f6f2c037c4",
+      "ev_ada530bda4b64b47aa1872046a10a39f",
+      "ev_b4dea7b4f4bc4daeada65ca7b8f6386b",
+      "ev_bb59efc05fc34b7885c973e1d76a4b4f",
+      "ev_e3ec07fd2a794c06957b3bf19bbf2267",
+      "ev_e5d68b5640094dc7be4a76d86c316616",
+      "ev_e737b2aa316744d39abe65c40942e515",
+      "ev_e87a1a8f18c54a9991ae64eced988524",
+      "ev_ecb78ea0a97548c5ab656c90bcfe8c4b",
+      "ev_f37cc27691f344bbbbad7f3f1c764b0b",
+      "ev_fab7a24e10204ab2ad4d9a35245ca78c",
+      "ev_fb2ef4e80ded4eb8b0ad6cc53c1bfdc6",
+      "ev_ff70e5f99d8e46bb8d2cb8f4bc916ff6"
+    ],
+    "screenshotEvidenceIds": [],
+    "receipts": [
+      {
+        "id": "rcpt_05c3dc359c4b4a01859f8d466714e57a",
+        "observationId": "obs_fb07fcae879c4356ad2c0924997c9b36",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_cdad534433f74bb9974e30b85ae8d382",
+        "observationId": "obs_cf30eaaa2ce443c48ad3d90e91073273",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_62087ec5a2bf4f41bde65a33b0b57360",
+        "observationId": "obs_f7c6280063eb4b0ca090287c643b18c9",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_ee73d230c5944957beced2bca4248324",
+        "observationId": "obs_914d0fc676404d5589821ace48f6d4c2",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_0c1c7c16683bf717016aa3401055e087d2be945f185719a01b",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "text": "I’ll verify the email and existing event read-only, then change only the event title and save once if every required fact is proven."
+      },
+      {
+        "id": "msg_0c1c7c16683bf717016aa34060da6887d29829f55c27a10b1c",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "text": "The opened email confirms all four requested details. I’ll now use Calendar Search to verify the existing event’s identity and fields before editing."
+      },
+      {
+        "id": "msg_0c1c7c16683bf717016aa340a0885c87d2aa0190cc9011e748",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "text": "Calendar Search shows exactly one matching event. Its details confirm September 11, 2:00–2:30 PM GMT+01, the exact description, and an empty guest list. I’ll change the title now."
+      },
+      {
+        "id": "msg_0c1c7c16683bf717016aa340bcc8b087d2ab56436b9c9fa63f",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"gmail_calendar\",\"status\":\"blocked\",\"reason\":\"CONSEQUENTIAL_ACTION_UNRESOLVED: This browser workspace has an unresolved prior consequential outcome. effectIds=[fe7059b9a6bd65c3f88ab3fbdc285dca2b8a3d3814ccf4b9c8c8fe01a66e5874]. Rove blocked the title Save; no retry performed.\",\"gmailUrl\":\"https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD\",\"calendarUrl\":\"https://calendar.google.com/calendar/u/0/r/eventedit/NmZibGxpMW5mOWlvZjdrNWQ4M25uamRubzgga2FtaWxmbGludEBt\",\"requestedDuration\":\"30 minutes\",\"schedulingPeriod\":\"tomorrow afternoon\",\"emailEventTitle\":\"Rove acceptance review\",\"note\":\"Created during Rove live acceptance.\",\"created\":true,\"createdEventTitle\":\"Rove acceptance review\",\"titleEdited\":false,\"eventTitle\":\"Rove acceptance review\",\"eventTime\":\"Friday, September 11, 2026, 2:00 PM–2:30 PM GMT+01\",\"eventDescription\":\"Created during Rove live acceptance.\",\"eventCount\":1,\"noGuests\":true,\"gmailReturnedOpen\":false,\"externalMutations\":[\"calendar_event_create\"],\"distinctPageIds\":[\"page_01\",\"page_02\"],\"durableObservationIds\":[\"bobs_1ae34b5992ba487cb8a94ad75f7a12c9\",\"bobs_9aeb5477a8ff471d97ef7021cf3fa35c\",\"bobs_b5c9722037994c719e271bf34fe7df99\",\"bobs_4c52d2325eb84f22bcdeb3e9a27300c0\",\"bobs_ac2cedd784ac4de28d74400739145013\"],\"screenshotEvidenceIds\":[],\"receiptIds\":[\"rcpt_54d9e7c87ed443558b636fe5c9fc02e3\"],\"finalObservationId\":\"bobs_ac2cedd784ac4de28d74400739145013\"}\n\nEmail and existing-event checks succeeded. The new title remains staged in the Calendar editor, unsaved. Rove’s persistent consequential-effect fence blocked Save despite the supplied historical reconciliation. I stopped without retrying or bypassing it; final screenshot and Gmail-return verification were not performed."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-14e6a940-aa05-4c84-90bc-2922f3af00bc",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-4df40bea-fafc-4c5d-b1ea-aa77900baadd",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.pages"
+      },
+      {
+        "id": "exec-c0761e40-9ad3-4949-8521-7ab8a4620a32",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.open_page"
+      },
+      {
+        "id": "exec-59145aad-c822-4dc7-9b8e-a5ee54053a59",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-e15cf71d-a280-40e6-a078-6955377efe7c",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-b71e2d49-bc8c-4a8e-bc97-92cb8c1d1d7e",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-3180a2ea-6a04-4df5-84c1-a3a421ae6b5c",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-0e8cf627-a03c-4185-8360-882449cc8382",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-825911da-bbbf-481b-b1c4-35edb482858d",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-61cc84dd-36a9-4ade-b52f-bd17b7d37e0e",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c62c96d2-d5a9-4b6a-86d6-664f682f0c08",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.switch_page"
+      },
+      {
+        "id": "exec-fad8c708-50e2-40c4-9e29-511d188c34cb",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.navigate"
+      },
+      {
+        "id": "exec-0cb2bffd-311f-4268-aa46-1d1042b39431",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-e853da44-fbfa-46ef-8fbf-07645548a4ae",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-369d2eab-16a3-4316-93e2-9f11fe25ec78",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-1fef2f7e-b14e-4c2f-b11b-8defb72fa5cd",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-bcfab397-386f-49dd-a148-d14d5cc216c1",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c5e6ec2e-edf7-43ab-9193-5ed40e6a7f2c",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-ea8be4e3-a590-4a93-986e-cb39bdf22e41",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c1301971-4558-4b15-8619-59db434c4403",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af",
+        "status": "completed",
+        "title": "browser.interact"
+      }
+    ],
+    "gmailUrls": [
+      "https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD\",\"calendarUrl\":\"https://calendar.google.com/calendar/u/0/r/eventedit/NmZibGxpMW5mOWlvZjdrNWQ4M25uamRubzgga2FtaWxmbGludEBt\",\"requestedDuration\":\"30"
+    ],
+    "calendarUrls": [
+      "https://calendar.google.com/calendar/u/0/r/eventedit/NmZibGxpMW5mOWlvZjdrNWQ4M25uamRubzgga2FtaWxmbGludEBt\",\"requestedDuration\":\"30"
+    ],
+    "observationIds": [
+      "bobs_1ae34b5992ba487cb8a94ad75f7a12c9",
+      "bobs_9aeb5477a8ff471d97ef7021cf3fa35c",
+      "bobs_b5c9722037994c719e271bf34fe7df99",
+      "bobs_4c52d2325eb84f22bcdeb3e9a27300c0",
+      "bobs_ac2cedd784ac4de28d74400739145013"
+    ],
+    "evidenceIds": [],
+    "pageIds": [
+      "page_01",
+      "page_02"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/gmail-calendar-20260911-004048-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Thread is already archived; repeated archive is reconciled."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_b45fa9ee-b4c4-4b55-91bb-0598a9ab8f33",
+        "stage": "turn_started",
+        "turnId": "01a08db2-34fa-7ab0-833e-02fa051019af"
+      },
+      "roveSessionId": "ses_85496318060b4db8ada179a5292fe2f6",
+      "codexThreadId": "01a08db2-266a-7290-af94-f28336376b91",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08db2-34fa-7ab0-833e-02fa051019af"
+        ],
+        "itemCount": 28
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

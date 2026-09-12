@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import type { BearerTokenVerifier } from "../auth/bearer-auth.js";
@@ -39,9 +44,13 @@ interface TransportSession {
   lastSeen: number;
 }
 
-export async function startStreamableHttpServer(options: StreamableHttpOptions): Promise<HttpServer> {
+export async function startStreamableHttpServer(
+  options: StreamableHttpOptions,
+): Promise<HttpServer> {
   const sessions = new Map<string, TransportSession>();
-  const allowedHosts = new Set(options.allowedHosts ?? [hostHeader(options.host, options.port)]);
+  const allowedHosts = new Set(
+    options.allowedHosts ?? [hostHeader(options.host, options.port)],
+  );
 
   const httpServer = createServer((request, response) => {
     void handleRequest(
@@ -51,15 +60,14 @@ export async function startStreamableHttpServer(options: StreamableHttpOptions):
       sessions,
       allowedHosts,
     ).catch((error: unknown) => {
-      handleUnexpectedRequestError(
-        response,
-        options.logger,
-        error,
-      );
+      handleUnexpectedRequestError(response, options.logger, error);
     });
   });
 
-  const cleanup = setInterval(() => cleanupExpiredSessions(sessions, options.logger), 60_000);
+  const cleanup = setInterval(
+    () => cleanupExpiredSessions(sessions, options.logger),
+    60_000,
+  );
   cleanup.unref();
 
   process.once("SIGINT", () => void shutdown(httpServer, sessions, cleanup));
@@ -69,12 +77,18 @@ export async function startStreamableHttpServer(options: StreamableHttpOptions):
     httpServer.once("error", reject);
     httpServer.listen(options.port, options.host, () => {
       httpServer.off("error", reject);
-      options.logger.info("Rove MCP HTTP listening.", { host: options.host, port: options.port, path: options.path });
+      options.logger.info("Rove MCP HTTP listening.", {
+        host: options.host,
+        port: options.port,
+        path: options.path,
+      });
       resolve();
     });
   }).catch((error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
-      process.stderr.write(`Rove MCP HTTP failed to bind ${options.host}:${options.port}: address already in use\n`);
+      process.stderr.write(
+        `Rove MCP HTTP failed to bind ${options.host}:${options.port}: address already in use\n`,
+      );
       process.exitCode = 1;
     }
     throw error;
@@ -91,11 +105,16 @@ async function handleRequest(
   allowedHosts: Set<string>,
 ): Promise<void> {
   if (!isAllowedHost(request, allowedHosts)) {
-    writeJson(response, 403, { error: { code: "FORBIDDEN", message: "Forbidden." } });
+    writeJson(response, 403, {
+      error: { code: "FORBIDDEN", message: "Forbidden." },
+    });
     return;
   }
 
-  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  const url = new URL(
+    request.url ?? "/",
+    `http://${request.headers.host ?? "localhost"}`,
+  );
   if (request.method === "GET" && url.pathname === "/live") {
     writeJson(response, 200, {
       status: "ok",
@@ -108,7 +127,9 @@ async function handleRequest(
     return;
   }
   if (url.pathname !== options.path) {
-    writeJson(response, 404, { error: { code: "NOT_FOUND", message: "Not found." } });
+    writeJson(response, 404, {
+      error: { code: "NOT_FOUND", message: "Not found." },
+    });
     return;
   }
 
@@ -149,14 +170,41 @@ async function handleRequest(
     return;
   }
 
-  const sessionId = typeof request.headers["mcp-session-id"] === "string" ? request.headers["mcp-session-id"] : undefined;
+  const sessionId =
+    typeof request.headers["mcp-session-id"] === "string"
+      ? request.headers["mcp-session-id"]
+      : undefined;
   let session = sessionId === undefined ? undefined : sessions.get(sessionId);
+  if (sessionId !== undefined && session === undefined) {
+    writeJson(response, 404, {
+      error: {
+        code: "MCP_SESSION_NOT_FOUND",
+        message:
+          "MCP transport session was not found; initialize a new session.",
+      },
+    });
+    return;
+  }
   if (session === undefined) {
+    if (!isInitializeRequest(body)) {
+      writeJson(response, 400, {
+        error: {
+          code: "MCP_SESSION_REQUIRED",
+          message:
+            "Initialize an MCP transport session before sending requests.",
+        },
+      });
+      return;
+    }
     const server = options.createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (createdSessionId: string) => {
-        sessions.set(createdSessionId, { server, transport, lastSeen: Date.now() });
+        sessions.set(createdSessionId, {
+          server,
+          transport,
+          lastSeen: Date.now(),
+        });
       },
     });
     transport.onclose = () => {
@@ -171,7 +219,19 @@ async function handleRequest(
   await session.transport.handleRequest(request, response, body);
 }
 
-async function handleHealth(response: ServerResponse, runtime: RuntimeClient): Promise<void> {
+function isInitializeRequest(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
+    (body as Record<string, unknown>).method === "initialize"
+  );
+}
+
+async function handleHealth(
+  response: ServerResponse,
+  runtime: RuntimeClient,
+): Promise<void> {
   try {
     const runtimeHealth = await runtime.healthCheck(2_000);
     writeJson(response, 200, {
@@ -180,13 +240,19 @@ async function handleHealth(response: ServerResponse, runtime: RuntimeClient): P
       runtime: runtimeHealth ?? null,
     });
   } catch {
-    writeJson(response, 503, { status: "unavailable", ...serviceProvenance(), dependency: "runtime" });
+    writeJson(response, 503, {
+      status: "unavailable",
+      ...serviceProvenance(),
+      dependency: "runtime",
+    });
   }
 }
 
 const TOO_LARGE = Symbol("too-large");
 
-async function readJsonBody(request: IncomingMessage): Promise<unknown | typeof TOO_LARGE> {
+async function readJsonBody(
+  request: IncomingMessage,
+): Promise<unknown | typeof TOO_LARGE> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of request) {
@@ -199,7 +265,10 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown | typeof 
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
 
-function isAllowedHost(request: IncomingMessage, allowedHosts: Set<string>): boolean {
+function isAllowedHost(
+  request: IncomingMessage,
+  allowedHosts: Set<string>,
+): boolean {
   const host = request.headers.host;
   return typeof host === "string" && allowedHosts.has(host);
 }
@@ -208,7 +277,10 @@ function hostHeader(host: string, port: number): string {
   return host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
-function cleanupExpiredSessions(sessions: Map<string, TransportSession>, logger: McpLogger): void {
+function cleanupExpiredSessions(
+  sessions: Map<string, TransportSession>,
+  logger: McpLogger,
+): void {
   const cutoff = Date.now() - SESSION_TTL_MS;
   for (const [id, session] of sessions) {
     if (session.lastSeen < cutoff) {
@@ -219,7 +291,11 @@ function cleanupExpiredSessions(sessions: Map<string, TransportSession>, logger:
   }
 }
 
-async function shutdown(httpServer: HttpServer, sessions: Map<string, TransportSession>, cleanup: NodeJS.Timeout): Promise<void> {
+async function shutdown(
+  httpServer: HttpServer,
+  sessions: Map<string, TransportSession>,
+  cleanup: NodeJS.Timeout,
+): Promise<void> {
   clearInterval(cleanup);
   for (const session of sessions.values()) await closeServer(session.server);
   sessions.clear();
@@ -238,10 +314,7 @@ function handleUnexpectedRequestError(
   error: unknown,
 ): void {
   logger.error("Rove MCP HTTP request failed.", {
-    errorType:
-      error instanceof Error
-        ? error.name
-        : typeof error,
+    errorType: error instanceof Error ? error.name : typeof error,
   });
 
   if (response.writableEnded) return;
@@ -259,7 +332,11 @@ function handleUnexpectedRequestError(
   response.end();
 }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
+function writeJson(
+  response: ServerResponse,
+  statusCode: number,
+  body: unknown,
+): void {
   response.writeHead(statusCode, { "content-type": "application/json" });
   response.end(JSON.stringify(body));
 }

@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import type {
   BrowserObservation,
-  PerceivedControl,
   BrowserViewport,
   InspectOptions,
   PageTarget,
@@ -12,6 +11,7 @@ import type {
 import type { Frame, Page } from "playwright";
 
 import type { PageState } from "../pages/page-state.js";
+import { perceivedControlFor } from "../capabilities/browser-capability-registry.js";
 
 import type { TargetRegistry } from "../targets/target-registry.js";
 
@@ -289,7 +289,11 @@ export class PageInspector {
           frame: {
             index: frame.index,
             url: frame.url,
+            instance: frame.frame,
           },
+          snapshot: acquired
+            .find((item) => item.frame.index === frame.index)!
+            .targetSnapshots.get(candidate.marker),
         })),
       );
 
@@ -302,12 +306,17 @@ export class PageInspector {
           const snapshot = frameResult.targetSnapshots.get(
             item.candidate.marker,
           )!;
-          const perceived = enrichPerceivedControl(
-            snapshot.perceived,
-            item.candidate.semanticRole,
+          const perceived = perceivedControlFor(
+            item.candidate,
+            snapshot.perceived.scopes,
           );
           const state = item.candidate.sensitive
-            ? { ...snapshot.state, selectedValues: undefined }
+            ? {
+                ...snapshot.state,
+                selectedValues: undefined,
+                value: undefined,
+                valueText: undefined,
+              }
             : snapshot.state;
 
           return {
@@ -591,26 +600,4 @@ async function extractFrameText(
     text: truncated ? text.slice(0, maxTextChars) : text,
     truncated,
   };
-}
-
-function enrichPerceivedControl(
-  perceived: PerceivedControl,
-  semanticRole: string | undefined,
-): PerceivedControl {
-  if (semanticRole === undefined) return perceived;
-  const capabilities = [...perceived.capabilities];
-  const add = (capability: (typeof capabilities)[number]) => {
-    if (!capabilities.includes(capability)) capabilities.push(capability);
-  };
-
-  if (["button", "link", "tab", "menuitem"].includes(semanticRole)) {
-    add("activate");
-  }
-  if (["checkbox", "switch"].includes(semanticRole)) {
-    add("check");
-    add("uncheck");
-  }
-  if (semanticRole === "radio") add("check");
-
-  return { ...perceived, capabilities };
 }

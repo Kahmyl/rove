@@ -105,4 +105,49 @@ describe("CompanionRuntimeClient browser window state", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it("asks Runtime to show the active managed browser without opening an external substitute", async () => {
+    const fetchImpl = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (
+          url.endsWith("/sessions?mode=companion") ||
+          url.endsWith("/sessions?mode=capture")
+        ) {
+          return new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.endsWith("/sessions?mode=agent")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "ses_show",
+                mode: "agent",
+                status: "active",
+                controller: "agent",
+                profile: { mode: "temporary" },
+                createdAt: "2026-09-12T00:00:00.000Z",
+                updatedAt: "2026-09-12T00:00:00.000Z",
+              },
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        expect(url).toContain("/sessions/ses_show/browser/show");
+        expect(init?.method).toBe("POST");
+        return new Response("true", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    ) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http:" + "//" + "127.0.0.1:47820",
+      fetchImpl,
+    });
+
+    await expect(client.showBrowser()).resolves.toBe(true);
+  });
 });

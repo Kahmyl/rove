@@ -1,13 +1,18 @@
+import type { Frame } from "playwright";
+
 import {
   TargetRegistry,
   type RegisteredTarget,
 } from "../targets/target-registry.js";
 import type { IdentifiedTargetCandidate } from "./target-identity-builder.js";
+import type { TargetSnapshot } from "./perceived-control.js";
 
 export interface TargetHandle {
   marker: string;
   frameIndex: number;
   frameUrl: string;
+  frame?: Frame;
+  snapshot?: TargetSnapshot;
   semanticRole?: string;
 }
 
@@ -21,7 +26,9 @@ export interface FramedIdentifiedTargetCandidate {
   frame: {
     index: number;
     url: string;
+    instance?: Frame;
   };
+  snapshot?: TargetSnapshot;
 }
 
 export class PageTargetRegistryStore {
@@ -55,11 +62,13 @@ export function registerIdentifiedTargets(
   registry: TargetRegistry<TargetHandle>,
   candidates: FramedIdentifiedTargetCandidate[],
 ): RegisteredInspectionTarget[] {
-  return candidates.map(({ candidate, frame }) => {
+  return candidates.map(({ candidate, frame, snapshot }) => {
     const registered = registry.register(candidate.identity, {
       marker: candidate.marker,
       frameIndex: frame.index,
       frameUrl: frame.url,
+      ...(frame.instance === undefined ? {} : { frame: frame.instance }),
+      ...(snapshot === undefined ? {} : { snapshot }),
       ...(candidate.semanticRole === undefined
         ? {}
         : { semanticRole: candidate.semanticRole }),

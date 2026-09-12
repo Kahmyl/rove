@@ -38,6 +38,25 @@ key rotation, revocation, horizontal routing, rate limits, and audit policy.
 The direct Runtime HTTP adapter remains an explicit development fallback, not
 the target production topology.
 
+### Desktop product home
+
+Desktop state has a single launch-independent location. By default the native
+Companion resolves it from Electron's stable per-user application-data base as
+`Rove/product`. Source and packaged launches use the same resolver; repository
+cwd, the generic `ROVE_HOME` used by Runtime/CLI workflows, and Electron's
+mutable Chromium `--user-data-dir` do not participate. Qualification may set
+`ROVE_DESKTOP_HOME`, but only to an absolute path. This Desktop-only override
+has precedence over the canonical default and is rejected when relative.
+
+The product home owns Runtime state, browser workspace identities, Phase 5 task
+state, and Rove's isolated Codex account home. An ordinary Codex installation's
+login is not imported or represented as Rove authentication. This is a
+pre-release boundary correction, so historical cwd-relative homes are not
+automatically migrated: Rove does not copy credentials or browser profiles
+from them. A user signs in to Rove with ChatGPT in the canonical product home,
+and that Rove-owned login is then available to later source and packaged
+launches using the same home.
+
 Docker Compose follows the same boundary: it contains `apps/control-plane` and
 `apps/mcp` only. The Companion, outbound Hub connector, Runtime, browser binary,
 profiles, and evidence storage stay on the host. MCP exposes separate liveness
@@ -61,7 +80,7 @@ while a user's Hub is offline.
 
 The browser package currently implements:
 
-- a real headed Playwright Chromium/Chrome browser lifecycle with managed persistent and explicitly requested temporary profiles;
+- a real headed Playwright Chromium/Chrome browser lifecycle with durable selected workspaces and explicitly requested temporary identities;
 - one BrowserContext per BrowserSession;
 - stable `page_01`, `page_02`, ... page identities and active-page management;
 - navigation with material page revision updates;
@@ -79,10 +98,10 @@ The browser package currently implements:
 - browser-level Chromium tab reconciliation using CDP `tab` target `embedderData.tabActive`, mapped back to stable Rove page IDs without persisting CDP target identity;
 - deterministic local fixture tests and headed manual verification.
 
-MCP defaults new sessions to the managed persistent `default` profile. Runtime applies a conservative minimum action interval in headed mode, while the browser uses configurable sequential key timing.
+MCP defaults new sessions to the workspace selected in Rove. A task may name only an existing opaque workspace ID or explicitly request a temporary identity; task start never creates storage. Runtime applies a conservative minimum action interval in headed mode, while the browser uses configurable sequential key timing.
 
-The persistent profile is a durable Rove-owned browser workspace, not a Runtime
-or session. Cookies, site storage, service workers, and ordinary site
+The browser workspace is durable Rove-owned identity, not a Runtime or task
+session. Cookies, site storage, service workers, and ordinary site
 preferences survive browser close. A separate browser-host record proves the
 single writable Chrome process using a host ID, nonce, process start identity,
 profile identity, loopback CDP endpoint, Runtime instance, session, and
@@ -91,6 +110,16 @@ a fresh page registry and fresh target authority. A concurrent active Runtime
 receives `PROFILE_LOCKED`; stale owned metadata is removed only after liveness
 and identity checks. Profile deletion remains an explicit operation, and Rove
 never substitutes a temporary profile unless the caller requested one.
+
+Phase 5 recovery keeps one persisted task authority across Desktop, Runtime,
+App Server, and renderer restarts. Runtime inventory distinguishes attachment,
+profile ownership, and recovery from persisted session status. Close advances
+through durable requested, Codex-settled, continuation-settled, Runtime-settled,
+and complete stages; restart resumes the first unfinished stage without
+replaying a browser session, Codex thread, user turn, or continuation. Terminal
+named-workspace cleanup may remove only a lock proven claimable from a dead
+owner. The source-built recovery qualification is documented in
+[the P5.9 L2 report](./experiments/2026-09-08-phase5-p59-l2-production-recovery.md).
 
 Page-state handling is split into three explicit layers:
 
@@ -102,9 +131,9 @@ Runtime page-state policy
 explicit Runtime orchestration
 ```
 
-The browser package reports observational page-state perception and propositions only. Runtime evaluates that perception into a `PagePolicyDecision`. Direct `browser.inspect` returns the perception together with `metadata.pagePolicy` and never changes session ownership. Only explicit session-start and post-action orchestration boundaries may translate policy into an automatic control transition.
+The browser package reports observational page-state perception and propositions only. Runtime evaluates that perception into an internal `PagePolicyDecision` for orchestration and compatibility. Agent-facing MCP `browser.inspect` returns the perception together with `metadata.actionAuthority`; it does not return the deprecated page-wide mutation verdict and never changes session ownership. Only explicit session-start and post-action orchestration boundaries may translate internal policy into an automatic control transition.
 
-Authentication and presented human verification may automatically request human control for Agent and Companion sessions. Access restriction, unknown interstitials, page errors, and loading/unstable states never automatically transfer ownership; policy instead blocks or defers autonomous mutation. Capture Mode remains human-owned. Explicit `control.request_human` remains available when the agent judges human assistance useful, including for stop-only states.
+Authentication and presented human verification may automatically request human control for Agent and Companion sessions. Access restriction, page errors, and loading/unstable states never automatically transfer ownership. An unfamiliar interstitial is observational evidence; contextual per-action authority may still permit freshly grounded recovery, navigation, reversible UI, or explicitly authorized verifiable task work. Capture Mode remains human-owned. Explicit `control.request_human` remains available when the agent judges human assistance useful.
 
 The architecture explicitly excludes fingerprint spoofing, automation concealment, proxy rotation, CAPTCHA solving, and other access-control evasion. Rove cannot promise that a third-party site will permit automation, even when the task itself is legitimate.
 
@@ -122,6 +151,26 @@ effect evidence, policy recording, or receipt persistence degrades, the
 `ActionReceipt` preserves the completed dispatch and reports the degradation
 separately. Consequential unknown outcomes are never recommended for blind
 replay; inspection is required to reconcile them.
+
+Multi-step dynamic workflows use semantic transactions above the primitive
+interaction layer. The caller declares a grounded source, named destination,
+observed mechanism, expected effects, and one consequence identity. Runtime
+requires a fresh observation for each later phase, makes `commit` the only
+consequential boundary, and makes `uncertain` terminal without trying another
+mechanism. A visible destination is verified by exact membership within its
+grounded scope. A remote destination is verified only after entering it, with
+exact source-target presence plus independent destination context such as its
+URL or breadcrumb. Transaction state and audit-persistence degradation are
+exposed through the private HTTP API, MCP, and outbound Hub command surface.
+For keyboard clipboard transfers, an effect-free copy/cut prepare may advance
+on trusted completed dispatch only after the supplied fresh observation proves
+the exact source is selected. The receipt remains honest about its unobservable
+page outcome; the source-bound paste is still the sole consequential boundary.
+Agent-facing observation targets may be presentation-limited, while Runtime
+grounding and effect verification read the canonical target authority retained
+for the observation. A `targetsTruncated` response therefore cannot turn a
+visibly verified effect into an unresolved transaction solely because of the
+agent presentation budget.
 
 Each Companion, MCP, Control Plane, and managed Runtime publishes a bounded
 component identity: component kind, instance and process identity, package

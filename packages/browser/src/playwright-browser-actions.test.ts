@@ -127,6 +127,341 @@ afterEach(async () => {
 });
 
 describe("Milestone 3 browser actions", () => {
+  it("executes the Wave 1-5 primitive set with phase evidence", async () => {
+    const { session } = await setup("/capability-waves");
+    let observation = await session.inspect();
+
+    const activation = observation.targets?.find(
+      (candidate) => candidate.name === "Activate with variants",
+    );
+    expect(activation?.perceived?.capabilities).toEqual(
+      expect.arrayContaining([
+        "activate",
+        "double_activate",
+        "secondary_activate",
+        "focus",
+        "press",
+      ]),
+    );
+    expect(observation.capabilities).toMatchObject({
+      capabilityAtlasVersion: "2026-09-08.1",
+      humanBoundaries: expect.arrayContaining([
+        "browser_permission",
+        "webauthn",
+        "payment",
+        "human_verification",
+        "closed_shadow_dom",
+        "browser_owned_ui",
+      ]),
+      interactionKinds: expect.arrayContaining([
+        "double_click",
+        "secondary_click",
+        "modified_click",
+        "type_sequential",
+        "clipboard",
+      ]),
+    });
+
+    const run = async (
+      action: Parameters<BrowserSession["interact"]>[0],
+      expectedDataset: string,
+    ) => {
+      const result = await session.interact(action, {
+        observationId: observation.observationId,
+      });
+      expect(result.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ phase: "preflight", status: "completed" }),
+          expect.objectContaining({ phase: "commit", status: "completed" }),
+          expect.objectContaining({
+            phase: "synchronize",
+            status: "completed",
+          }),
+        ]),
+      );
+      expect(
+        await testPage(session).evaluate(
+          (key) => document.body.dataset[key],
+          expectedDataset,
+        ),
+      ).toBe("true");
+      observation = await session.inspect();
+    };
+
+    await run(
+      {
+        kind: "double_click",
+        target: target(observation, "Activate with variants"),
+      },
+      "double",
+    );
+    await run(
+      {
+        kind: "secondary_click",
+        target: target(observation, "Activate with variants"),
+      },
+      "secondary",
+    );
+    await run(
+      {
+        kind: "modified_click",
+        target: target(observation, "Activate with variants"),
+        modifiers: ["Shift"],
+      },
+      "modified",
+    );
+
+    await session.interact(
+      { kind: "focus", target: target(observation, "Wave editor") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find((candidate) => candidate.name === "Wave editor")
+        ?.state?.focused,
+    ).toBe(true);
+    await session.interact(
+      { kind: "blur", target: target(observation, "Wave editor") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find((candidate) => candidate.name === "Wave editor")
+        ?.state?.focused,
+    ).toBe(false);
+
+    await session.interact(
+      {
+        kind: "press",
+        target: target(observation, "Priority"),
+        key: "ArrowRight",
+      },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find((candidate) => candidate.name === "Priority")
+        ?.state?.valueNow,
+    ).toBe(5);
+
+    const staticCell = target(observation, "Static folder cell");
+    const staticCapabilities = observation.targets?.find(
+      (candidate) => candidate.name === "Static folder cell",
+    )?.perceived?.capabilities;
+    expect(staticCapabilities).toEqual(
+      expect.arrayContaining([
+        "activate",
+        "double_activate",
+        "secondary_activate",
+      ]),
+    );
+    expect(staticCapabilities).not.toContain("focus");
+    expect(staticCapabilities).not.toContain("press");
+    await expect(
+      session.interact(
+        { kind: "press", target: staticCell, key: "Enter" },
+        { observationId: observation.observationId },
+      ),
+    ).rejects.toMatchObject({
+      code: "TARGET_NOT_INTERACTIVE",
+      details: {
+        action: "press",
+        reason: "target_not_focusable",
+      },
+    });
+    expect(
+      await testPage(session).evaluate(
+        () => document.body.dataset.staticGridKey,
+      ),
+    ).toBeUndefined();
+
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find(
+        (candidate) => candidate.name === "Roving folder cell",
+      )?.perceived?.capabilities,
+    ).toEqual(expect.arrayContaining(["focus", "press"]));
+    await session.interact(
+      {
+        kind: "press",
+        target: target(observation, "Roving folder cell"),
+        key: "Enter",
+      },
+      { observationId: observation.observationId },
+    );
+    expect(
+      await testPage(session).evaluate(
+        () => document.body.dataset.rovingGridKey,
+      ),
+    ).toBe("Enter");
+    observation = await session.inspect();
+
+    await session.interact(
+      { kind: "check", target: target(observation, "Notifications") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find(
+        (candidate) => candidate.name === "Notifications",
+      )?.state?.checked,
+    ).toBe(true);
+
+    await session.interact(
+      {
+        kind: "type_sequential",
+        target: target(observation, "Wave editor"),
+        value: "typed as one request",
+        delayMs: 0,
+      },
+      { observationId: observation.observationId },
+    );
+    expect(await testPage(session).locator("#editor").inputValue()).toBe(
+      "typed as one request",
+    );
+    observation = await session.inspect();
+
+    await session.interact(
+      { kind: "select_text", target: target(observation, "Wave editor") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    await session.interact(
+      {
+        kind: "clipboard",
+        operation: "copy",
+        target: target(observation, "Wave editor"),
+      },
+      { observationId: observation.observationId },
+    );
+    expect(
+      await testPage(session).evaluate(() => document.body.dataset.copied),
+    ).toBe("true");
+    observation = await session.inspect();
+    await run(
+      {
+        kind: "clipboard",
+        operation: "cut",
+        target: target(observation, "Wave editor"),
+      },
+      "cut",
+    );
+    await run(
+      {
+        kind: "clipboard",
+        operation: "paste",
+        target: target(observation, "Wave editor"),
+      },
+      "pasted",
+    );
+
+    await session.interact(
+      {
+        kind: "upload",
+        target: target(observation, "Multiple files"),
+        evidenceIds: ["ev_first", "ev_second"],
+      },
+      {
+        observationId: observation.observationId,
+        uploads: [
+          { filename: "first.txt", bytes: new TextEncoder().encode("one") },
+          { filename: "second.txt", bytes: new TextEncoder().encode("two") },
+        ],
+      },
+    );
+    expect(
+      await testPage(session).evaluate(() => document.body.dataset.files),
+    ).toBe("first.txt,second.txt");
+    observation = await session.inspect();
+
+    const dragResult = await session.interact(
+      {
+        kind: "drag",
+        target: target(observation, "Draggable card"),
+        destination: target(observation, "Drop destination"),
+      },
+      { observationId: observation.observationId },
+    );
+    expect(dragResult.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: "engage", status: "completed" }),
+        expect.objectContaining({ phase: "progress", status: "completed" }),
+      ]),
+    );
+    expect(
+      await testPage(session).evaluate(() => document.body.dataset.dropped),
+    ).toBe("true");
+    observation = await session.inspect();
+
+    const customDragResult = await session.interact(
+      {
+        kind: "drag",
+        target: target(observation, "Custom draggable card"),
+        destination: target(observation, "Custom drop destination"),
+      },
+      { observationId: observation.observationId },
+    );
+    expect(customDragResult.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: "engage", status: "completed" }),
+        expect.objectContaining({ phase: "progress", status: "completed" }),
+      ]),
+    );
+    expect(
+      await testPage(session).evaluate(
+        () => document.body.dataset.customDropped,
+      ),
+    ).toBe("true");
+  }, 20_000);
+
+  it("perceives composite widget state and protects sensitive values", async () => {
+    const { server, session } = await setup("/capability-waves");
+    let observation = await session.inspect();
+    const slider = observation.targets?.find(
+      (candidate) => candidate.name === "Priority",
+    );
+    const toggle = observation.targets?.find(
+      (candidate) => candidate.name === "Notifications",
+    );
+    const disclosure = observation.targets?.find(
+      (candidate) => candidate.name === "Advanced controls",
+    );
+
+    expect(slider).toMatchObject({
+      kind: "slider",
+      state: { valueNow: 4, valueMin: 0, valueMax: 10 },
+    });
+    expect(toggle).toMatchObject({ kind: "switch", state: { checked: false } });
+    expect(disclosure).toMatchObject({
+      kind: "disclosure",
+      state: { open: false, expanded: false },
+    });
+
+    await session.interact(
+      { kind: "click", target: target(observation, "Advanced controls") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find(
+        (candidate) => candidate.name === "Advanced controls",
+      ),
+    ).toMatchObject({ state: { open: true, expanded: true } });
+
+    await session.navigate(`${server.url}/actions`);
+    const sensitiveObservation = await session.inspect();
+    expect(
+      sensitiveObservation.targets?.find(
+        (candidate) => candidate.name === "Password",
+      )?.state?.value,
+    ).toBeUndefined();
+    expect(
+      sensitiveObservation.targets?.find(
+        (candidate) => candidate.name === "One-time code",
+      )?.state?.value,
+    ).toBeUndefined();
+  }, 10_000);
+
   it("clicks an inspected target and reports material state change", async () => {
     const { session } = await setup();
     const inspection = await session.inspect();
@@ -256,6 +591,76 @@ describe("Milestone 3 browser actions", () => {
     });
   });
 
+  it("uploads through both a file input and a grounded file-chooser trigger", async () => {
+    const { session } = await setup();
+    let inspection = await session.inspect();
+    const upload = {
+      filename: "rove-live-acceptance.txt",
+      bytes: new TextEncoder().encode("Rove live acceptance"),
+    };
+
+    await session.interact(
+      {
+        kind: "upload",
+        target: target(inspection, "Direct file"),
+        evidenceId: "ev_direct",
+      },
+      { observationId: inspection.observationId, upload },
+    );
+
+    expect(
+      await testPage(session)
+        .locator("#direct-file")
+        .evaluate((element) =>
+          element instanceof HTMLInputElement
+            ? element.files?.item(0)?.name
+            : undefined,
+        ),
+    ).toBe(upload.filename);
+
+    inspection = await session.inspect();
+
+    const chooserTrigger = await session.resolveTarget({
+      observationId: inspection.observationId,
+      intent: {
+        capability: "activate",
+        text: "File upload trigger",
+      },
+    });
+    expect(chooserTrigger).toMatchObject({
+      status: "selected",
+      reason: "grounded",
+    });
+    expect(chooserTrigger.alternatives[0]?.evidence).toEqual(
+      expect.arrayContaining(["capability_match", "exact_name_match"]),
+    );
+    if (chooserTrigger.target === undefined) {
+      throw new Error("File chooser trigger was not grounded.");
+    }
+
+    await session.interact(
+      {
+        kind: "upload",
+        target: chooserTrigger.target,
+        evidenceId: "ev_trigger",
+      },
+      { observationId: inspection.observationId, upload },
+    );
+
+    expect(
+      await testPage(session)
+        .locator("#chooser-file")
+        .evaluate((element) =>
+          element instanceof HTMLInputElement
+            ? element.files?.item(0)?.name
+            : undefined,
+        ),
+    ).toBe(upload.filename);
+    expect((await session.inspect()).text).toContain(
+      `uploaded:${upload.filename}`,
+    );
+  });
+
   it("preserves target identity when CSS supplies spacing between label fragments", async () => {
     const { session } = await setup("/styled-label-identity");
     const inspection = await session.inspect();
@@ -348,6 +753,14 @@ describe("Milestone 3 browser actions", () => {
     await expect(
       session.scroll({ direction: "down", amount: 0 }),
     ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+  });
+
+  it("scrolls the largest eligible surface inside an open shadow root", async () => {
+    const { session } = await setup("/shadow-scroll");
+
+    await session.scroll({ direction: "down", amount: 700 });
+
+    expect((await session.inspect()).text).toMatch(/shadow-scrolled:[1-9]/);
   });
 
   it("supports history and treats missing history as a successful no-op", async () => {
@@ -552,6 +965,94 @@ describe("Milestone 3 browser actions", () => {
     });
     expect(result.pageChanged).toBe(true);
   });
+
+  it("tags download activity with only the active interaction boundary", async () => {
+    const { session } = await setup("/download");
+    const activities: Array<{ type: string; data: Record<string, unknown> }> =
+      [];
+    session.onActivity((activity) => activities.push(activity));
+    const inspection = await session.inspect();
+
+    await session.interact(
+      { kind: "click", target: target(inspection, "Download file") },
+      {
+        observationId: inspection.observationId,
+        activityBoundaryId: "dlb_fixture_action",
+      },
+    );
+
+    const deadline = Date.now() + 2_000;
+    while (
+      !activities.some((activity) => activity.type === "download_completed") &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(
+      activities.find((activity) => activity.type === "download_completed"),
+    ).toMatchObject({
+      data: {
+        actionBoundaryId: "dlb_fixture_action",
+        correlation: "matched",
+        correlationStrategy: "trusted_anchor",
+      },
+    });
+  }, 15_000);
+
+  it("correlates one no-href download and marks two action-bound events ambiguous", async () => {
+    const { session } = await setup("/download");
+    const activities: Array<{ type: string; data: Record<string, unknown> }> =
+      [];
+    session.onActivity((activity) => activities.push(activity));
+    let inspection = await session.inspect();
+
+    await session.interact(
+      { kind: "click", target: target(inspection, "Button download") },
+      {
+        observationId: inspection.observationId,
+        activityBoundaryId: "dlb_dynamic_one",
+      },
+    );
+    inspection = await session.inspect();
+    await session.interact(
+      { kind: "click", target: target(inspection, "Button download twice") },
+      {
+        observationId: inspection.observationId,
+        activityBoundaryId: "dlb_dynamic_two",
+      },
+    );
+
+    const deadline = Date.now() + 2_000;
+    while (
+      activities.filter((activity) => activity.type === "download_completed")
+        .length < 3 &&
+      Date.now() < deadline
+    )
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(
+      activities.find(
+        (activity) => activity.data.actionBoundaryId === "dlb_dynamic_one",
+      ),
+    ).toMatchObject({
+      data: {
+        correlation: "matched",
+        correlationStrategy: "trusted_action_download",
+      },
+    });
+    expect(
+      activities.filter(
+        (activity) => activity.data.actionBoundaryId === "dlb_dynamic_two",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ correlation: "ambiguous" }),
+      }),
+      expect.objectContaining({
+        data: expect.objectContaining({ correlation: "ambiguous" }),
+      }),
+    ]);
+  }, 15_000);
 
   it("dismisses JavaScript dialogs without leaking dialog text", async () => {
     const { session } = await setup();

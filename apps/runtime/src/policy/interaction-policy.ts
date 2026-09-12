@@ -1,5 +1,7 @@
 import {
   RoveError,
+  type ActionAuthorization,
+  type BrowserActionProposal,
   type PageInspection,
   type PagePerceptionAssessment,
   type PagePolicyDecision,
@@ -9,6 +11,7 @@ import {
 } from "@rove/protocol";
 
 import { PageStatePolicy } from "./page-state-policy.js";
+import { ActionAuthorizationPolicy } from "./action-authorization-policy.js";
 
 interface ActionRecord {
   at: number;
@@ -108,6 +111,7 @@ function fingerprintFromInspection(
 export class InteractionPolicy {
   private readonly sessions = new Map<string, SessionPolicyState>();
   private readonly pageStatePolicy = new PageStatePolicy();
+  private readonly actionAuthorizationPolicy = new ActionAuthorizationPolicy();
 
   recordInspection(
     sessionId: string,
@@ -232,6 +236,67 @@ export class InteractionPolicy {
       });
     }
 
+    this.recordAuthorizedAction(state, signature, now);
+  }
+
+  authorizeAction(
+    sessionId: string,
+    signature: string,
+    proposal: BrowserActionProposal,
+    now = Date.now(),
+    currentIdentity?: PageStateIdentity,
+  ): ActionAuthorization {
+    const state = this.state(sessionId);
+    const inspection = state.inspection;
+
+    if (inspection === undefined) {
+      throw new RoveError({
+        code: "INSPECTION_REQUIRED",
+        message:
+          "Inspect the active page before requesting another browser action.",
+        retryable: true,
+      });
+    }
+
+    if (
+      inspection.fingerprint === undefined ||
+      currentIdentity === undefined ||
+      currentIdentity.pageId !== inspection.pageId ||
+      currentIdentity.fingerprint !== inspection.fingerprint
+    ) {
+      delete state.inspection;
+      throw new RoveError({
+        code: "INSPECTION_REQUIRED",
+        message:
+          "The page-state decision changed after the last inspection. Inspect the active page again before acting.",
+        retryable: true,
+        details: {
+          inspectedPageId: inspection.pageId,
+          currentPageId: currentIdentity?.pageId,
+        },
+      });
+    }
+
+    const authorization = this.actionAuthorizationPolicy.evaluate(proposal, {
+      pageState: inspection.pageState,
+      ...(inspection.propositions === undefined
+        ? {}
+        : { propositions: inspection.propositions }),
+    });
+
+    if (authorization.decision !== "allow") {
+      throw this.authorizationError(authorization, inspection);
+    }
+
+    this.recordAuthorizedAction(state, signature, now);
+    return authorization;
+  }
+
+  private recordAuthorizedAction(
+    state: SessionPolicyState,
+    signature: string,
+    now: number,
+  ): void {
     state.actions = state.actions.filter(
       (item) => now - item.at < ACTION_WINDOW_MS,
     );
@@ -270,6 +335,62 @@ export class InteractionPolicy {
     state.actions.push({
       at: now,
       signature,
+    });
+  }
+
+  private authorizationError(
+    authorization: ActionAuthorization,
+    inspection: RecordedInspection,
+  ): RoveError {
+    const code = (() => {
+      if (authorization.decision === "require_confirmation") {
+        return "ACTION_CONFIRMATION_REQUIRED" as const;
+      }
+      if (authorization.decision === "require_human_control") {
+        if (authorization.reason === "human_verification_required") {
+          return "HUMAN_VERIFICATION_REQUIRED" as const;
+        }
+        if (authorization.reason === "authentication_required") {
+          return "AUTHENTICATION_REQUIRED" as const;
+        }
+        return "HUMAN_CONTROL_REQUIRED" as const;
+      }
+      if (authorization.decision === "wait_and_inspect") {
+        return authorization.reason === "page_unstable"
+          ? ("PAGE_NOT_READY" as const)
+          : ("INSPECTION_REQUIRED" as const);
+      }
+      return authorization.reason === "site_access_restricted"
+        ? ("SITE_ACCESS_RESTRICTED" as const)
+        : ("ACTION_NOT_AUTHORIZED" as const);
+    })();
+
+    const message = (() => {
+      switch (authorization.decision) {
+        case "require_confirmation":
+          return "This browser action requires explicit user confirmation.";
+        case "require_human_control":
+          return "This browser action requires human control.";
+        case "wait_and_inspect":
+          return "Wait for a stable page and inspect again before acting.";
+        case "deny":
+          return "This browser action is not authorized in the current context.";
+        case "allow":
+          return "The browser action is allowed.";
+      }
+    })();
+
+    return new RoveError({
+      code,
+      message,
+      retryable: authorization.decision === "wait_and_inspect",
+      details: {
+        pageState: inspection.pageState,
+        ...(inspection.propositions === undefined
+          ? {}
+          : { propositions: inspection.propositions }),
+        actionAuthorization: authorization,
+      },
     });
   }
 

@@ -72,6 +72,8 @@ try {
       sessionId,
       reason:
         "M10 acceptance: complete the Human Action in the browser, then return control.",
+      instruction: "Inspect the page and continue the acceptance workflow.",
+      continuationPolicy: "resume_after_control_return",
     },
   );
 

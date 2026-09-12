@@ -65,7 +65,7 @@ describe("toCompactFollowerViewModel", () => {
     ).toMatchObject({
       experience: "human_controlling",
       primaryAction: "return_control",
-      primaryActionLabel: "Return",
+      primaryActionLabel: "Resume Automation",
     });
   });
 

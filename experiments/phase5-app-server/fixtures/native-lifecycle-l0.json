@@ -1,0 +1,868 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "bootstrap-before-runtime-command",
+      "patch": {
+        "record": { "bootstrap": { "stage": "intent_persisted" } },
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "starting",
+        "commandType": "advance_bootstrap_stage",
+        "confirmationType": "durable_bootstrap_stage"
+      }
+    },
+    {
+      "name": "bootstrap-runtime-dispatch-before-receipt",
+      "patch": {
+        "record": { "bootstrap": { "stage": "runtime_dispatching" } },
+        "runtime": { "sessionExists": false }
+      },
+      "expected": {
+        "phase": "starting",
+        "commandType": "lookup_or_start_runtime",
+        "confirmationType": "runtime_bootstrap_receipt"
+      }
+    },
+    {
+      "name": "bootstrap-runtime-receipt-before-binding",
+      "patch": {
+        "record": { "bootstrap": { "stage": "runtime_dispatching" } }
+      },
+      "expected": {
+        "phase": "starting",
+        "commandType": "bind_runtime_identity",
+        "confirmationType": "durable_runtime_binding"
+      }
+    },
+    {
+      "name": "bootstrap-runtime-bound-before-codex-dispatch",
+      "patch": { "record": { "bootstrap": { "stage": "runtime_bound" } } },
+      "expected": {
+        "phase": "starting",
+        "commandType": "advance_bootstrap_stage",
+        "confirmationType": "durable_bootstrap_stage"
+      }
+    },
+    {
+      "name": "bootstrap-codex-dispatch-before-receipt",
+      "patch": {
+        "record": { "bootstrap": { "stage": "thread_dispatching" } },
+        "codex": { "threadExists": false }
+      },
+      "expected": {
+        "phase": "starting",
+        "commandType": "lookup_or_start_codex_thread",
+        "confirmationType": "codex_thread_source_receipt"
+      }
+    },
+    {
+      "name": "bootstrap-codex-receipt-before-binding",
+      "patch": { "record": { "bootstrap": { "stage": "thread_dispatching" } } },
+      "expected": {
+        "phase": "starting",
+        "commandType": "bind_codex_identity",
+        "confirmationType": "durable_codex_binding"
+      }
+    },
+    {
+      "name": "finish-persists-close-intent-before-active-turn-side-effect",
+      "patch": {
+        "requestedOperation": {
+          "type": "finish",
+          "operationId": "intent_33333333-3333-4333-8333-333333333333"
+        },
+        "codex": { "turn": "active", "turnId": "turn_1" }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "persist_close_intent",
+        "confirmationType": "durable_close_intent"
+      }
+    },
+    {
+      "name": "active-turn",
+      "patch": {
+        "codex": {
+          "turn": "active",
+          "turnId": "01a0819a-eb7b-7fa2-9d33-29f824eb3d18"
+        }
+      },
+      "expected": {
+        "phase": "working",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "completed-turn",
+      "patch": { "codex": { "turn": "completed" } },
+      "expected": {
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "failed-turn",
+      "patch": { "codex": { "turn": "failed" } },
+      "expected": {
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "interrupted-turn",
+      "patch": { "codex": { "turn": "interrupted" } },
+      "expected": {
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "app-server-unavailable-open",
+      "patch": { "codex": { "availability": "unavailable" } },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "read_lifecycle_truth",
+        "confirmationType": "lifecycle_truth"
+      }
+    },
+    {
+      "name": "named-runtime-missing",
+      "patch": {
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "named-existing-session-relaunchable",
+      "patch": {
+        "runtime": {
+          "attachment": "missing",
+          "profileLock": "released",
+          "recovery": "relaunchable"
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "relaunch_named_browser",
+        "confirmationType": "runtime_session_attached"
+      }
+    },
+    {
+      "name": "temporary-runtime-missing",
+      "patch": {
+        "record": { "identity": { "browser": { "mode": "temporary" } } },
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released",
+          "browserIdentity": null
+        }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "runtime-attachment-conflict",
+      "patch": { "runtime": { "attachment": "conflicting" } },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "pending-continuation",
+      "patch": {
+        "continuation": { "status": "pending" },
+        "runtime": { "status": "awaiting_human", "controller": null }
+      },
+      "expected": {
+        "phase": "waiting_for_human",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "close-before-codex-interrupt",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "requested" }
+        },
+        "codex": { "turn": "active", "turnId": "turn_1" }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "interrupt_codex_turn",
+        "confirmationType": "codex_no_active_turn"
+      }
+    },
+    {
+      "name": "close-after-codex-interrupt-before-record",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "requested" }
+        },
+        "codex": { "turn": "interrupted" }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "advance_close_stage",
+        "confirmationType": "durable_close_stage"
+      }
+    },
+    {
+      "name": "close-pending-continuation-and-attention",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "codex_settled" }
+        },
+        "continuation": {
+          "status": "pending",
+          "freshInspectionRequired": false,
+          "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111",
+          "returnObservationSeq": 11,
+          "command": {
+            "commandId": "continuation_cmd_1",
+            "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111",
+            "kind": "turn/start",
+            "dispatchStatus": "possibly_started"
+          }
+        },
+        "attentions": [
+          { "requestId": "req_2", "generation": 2, "status": "pending" },
+          { "requestId": "req_1", "generation": 1, "status": "pending" }
+        ]
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "settle_continuation_attention",
+        "confirmationType": "continuation_attention_terminal"
+      }
+    },
+    {
+      "name": "close-continuation-consumed",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "codex_settled" }
+        },
+        "continuation": { "status": "consumed" }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "advance_close_stage",
+        "confirmationType": "durable_close_stage"
+      }
+    },
+    {
+      "name": "close-runtime-still-attached",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "continuation_settled" }
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "end_runtime_session",
+        "confirmationType": "runtime_terminal_detached"
+      }
+    },
+    {
+      "name": "close-runtime-ended-before-record",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "continuation_settled" }
+        },
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "advance_close_stage",
+        "confirmationType": "durable_close_stage"
+      }
+    },
+    {
+      "name": "close-before-complete-record",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "runtime_settled" }
+        },
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "advance_close_stage",
+        "confirmationType": "durable_close_stage"
+      }
+    },
+    {
+      "name": "repeated-close-complete",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "complete" }
+        },
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "closed",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "app-server-unavailable-during-close",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "requested" }
+        },
+        "codex": { "availability": "unavailable" }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "read_codex_thread",
+        "confirmationType": "codex_thread_truth"
+      }
+    },
+    {
+      "name": "runtime-unavailable-during-close",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "continuation_settled" }
+        },
+        "runtime": { "availability": "unavailable" }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "read_runtime_inventory",
+        "confirmationType": "runtime_inventory"
+      }
+    },
+    {
+      "name": "task-only",
+      "patch": {
+        "codex": { "threadExists": false, "turn": "none" },
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "retry-temporary-cleanup-persists-close-intent",
+      "patch": {
+        "record": { "identity": { "browser": { "mode": "temporary" } } },
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released",
+          "browserIdentity": null
+        },
+        "requestedOperation": {
+          "type": "retry_cleanup",
+          "operationId": "intent_33333333-3333-4333-8333-333333333333"
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "persist_close_intent",
+        "confirmationType": "durable_close_intent"
+      }
+    },
+    {
+      "name": "runtime-only",
+      "withoutRecord": true,
+      "patch": { "codex": { "threadExists": false, "turn": "none" } },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "thread-only",
+      "withoutRecord": true,
+      "patch": {
+        "runtime": {
+          "sessionExists": false,
+          "attachment": "missing",
+          "profileLock": "released"
+        }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "codex-attention-does-not-expose-return-control",
+      "patch": {
+        "attentions": [
+          { "requestId": "req_codex", "generation": 1, "status": "pending" }
+        ]
+      },
+      "expected": {
+        "phase": "waiting_for_human",
+        "commandType": null,
+        "confirmationType": null,
+        "allowedActions": ["finish", "respond_attention"]
+      }
+    },
+    {
+      "name": "exact-human-handoff-exposes-return-control",
+      "patch": {
+        "runtime": {
+          "status": "active",
+          "controller": "human",
+          "handoffId": "handoff_11111111111111111111111111111111",
+          "handoffGeneration": 1
+        },
+        "continuation": {
+          "status": "pending",
+          "handoffId": "handoff_11111111111111111111111111111111",
+          "generation": 1
+        },
+        "attentions": [
+          {
+            "authority": "rove_control",
+            "kind": "control_handoff",
+            "requestId": "req_handoff",
+            "sessionId": "ses_11111111111111111111111111111111",
+            "handoffId": "handoff_11111111111111111111111111111111",
+            "generation": 1,
+            "status": "pending"
+          }
+        ]
+      },
+      "expected": {
+        "phase": "waiting_for_human",
+        "commandType": null,
+        "confirmationType": null,
+        "allowedActions": ["finish", "return_control"]
+      }
+    },
+    {
+      "name": "codex-settled-rechecks-late-active-turn",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "codex_settled" }
+        },
+        "codex": { "turn": "active", "turnId": "turn_late" }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "interrupt_codex_turn",
+        "confirmationType": "codex_no_active_turn"
+      }
+    },
+    {
+      "name": "runtime-settled-rechecks-active-runtime",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "runtime_settled" }
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "end_runtime_session",
+        "confirmationType": "runtime_terminal_detached"
+      }
+    },
+    {
+      "name": "complete-rechecks-active-runtime",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "complete" }
+        }
+      },
+      "expected": {
+        "phase": "closing",
+        "commandType": "end_runtime_session",
+        "confirmationType": "runtime_terminal_detached",
+        "allowedActions": ["retry_cleanup"]
+      }
+    },
+    {
+      "name": "bootstrap-runtime-conflicting-lookup",
+      "patch": {
+        "record": { "bootstrap": { "stage": "runtime_dispatching" } },
+        "runtime": { "sessionExists": false, "bootstrapLookup": "conflicting" }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "bootstrap-codex-conflicting-lookup",
+      "patch": {
+        "record": { "bootstrap": { "stage": "thread_dispatching" } },
+        "codex": { "threadExists": false, "sourceLookup": "conflicting" }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "close-unbound-runtime-conflicting-lookup",
+      "patch": {
+        "record": {
+          "bootstrap": { "stage": "runtime_dispatching" },
+          "desiredState": "closed",
+          "closeOperation": { "stage": "requested" }
+        },
+        "runtime": { "sessionExists": false, "bootstrapLookup": "conflicting" },
+        "codex": { "threadExists": false }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null,
+        "allowedActions": []
+      }
+    },
+    {
+      "name": "close-unbound-codex-conflicting-lookup",
+      "patch": {
+        "record": {
+          "bootstrap": { "stage": "thread_dispatching" },
+          "desiredState": "closed",
+          "closeOperation": { "stage": "requested" }
+        },
+        "codex": { "threadExists": false, "sourceLookup": "conflicting" }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null,
+        "allowedActions": []
+      }
+    },
+    {
+      "name": "app-server-not-loaded-resumes",
+      "patch": { "codex": { "runtimeStatus": "notLoaded" } },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "resume_codex_thread",
+        "confirmationType": "codex_thread_loaded"
+      }
+    },
+    {
+      "name": "app-server-archived-unarchives",
+      "patch": { "codex": { "archived": true } },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "unarchive_codex_thread",
+        "confirmationType": "codex_thread_unarchived"
+      }
+    },
+    {
+      "name": "app-server-system-error-recovers",
+      "patch": { "codex": { "runtimeStatus": "systemError" } },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "recover_codex_thread",
+        "confirmationType": "codex_thread_recovery_truth"
+      }
+    },
+    {
+      "name": "uncertain-attention-reconciles-before-response",
+      "patch": {
+        "attentions": [
+          {
+            "requestId": "req_uncertain",
+            "generation": 1,
+            "status": "resolution_unknown"
+          }
+        ]
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "reconcile_attention_response",
+        "confirmationType": "attention_response_receipt"
+      }
+    },
+    {
+      "name": "message-deferred-while-thread-loads",
+      "patch": {
+        "codex": { "runtimeStatus": "notLoaded" },
+        "requestedOperation": {
+          "type": "message",
+          "taskId": "task_11111111-1111-4111-8111-111111111111",
+          "operationId": "intent_12121212-1212-4121-8121-121212121212",
+          "message": "continue"
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "resume_codex_thread",
+        "confirmationType": "codex_thread_loaded",
+        "operationDisposition": "deferred-for-convergence"
+      }
+    },
+    {
+      "name": "inapplicable-resume-rejects-without-command",
+      "patch": {
+        "requestedOperation": {
+          "type": "resume",
+          "taskId": "task_11111111-1111-4111-8111-111111111111",
+          "operationId": "intent_13131313-1313-4131-8131-131313131313"
+        }
+      },
+      "expected": {
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null,
+        "operationDisposition": "rejected"
+      }
+    },
+    {
+      "name": "repeated-archive-is-safe",
+      "patch": {
+        "record": {
+          "desiredState": "closed",
+          "closeOperation": { "stage": "complete" }
+        },
+        "codex": { "archived": true },
+        "runtime": {
+          "status": "completed",
+          "controller": null,
+          "attachment": "missing",
+          "profileLock": "released",
+          "recovery": "cleanup_required"
+        },
+        "requestedOperation": {
+          "type": "archive",
+          "taskId": "task_11111111-1111-4111-8111-111111111111",
+          "operationId": "intent_14141414-1414-4141-8141-141414141414"
+        }
+      },
+      "expected": {
+        "phase": "closed",
+        "commandType": null,
+        "confirmationType": null,
+        "operationDisposition": "accepted"
+      }
+    },
+    {
+      "name": "return-cut-ownership-confirmed-requires-inspection",
+      "patch": {
+        "runtime": {
+          "controller": "agent",
+          "lastReturnedHandoffId": "handoff_11111111111111111111111111111111",
+          "observationSeq": 11
+        },
+        "continuation": { "status": "pending" },
+        "attentions": [
+          {
+            "authority": "rove_control",
+            "kind": "control_handoff",
+            "requestId": "req_handoff",
+            "sessionId": "ses_11111111111111111111111111111111",
+            "handoffId": "handoff_11111111111111111111111111111111",
+            "generation": 1,
+            "status": "resolved"
+          }
+        ]
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "inspect_after_return",
+        "confirmationType": "fresh_inspection_proof"
+      }
+    },
+    {
+      "name": "return-cut-inspection-confirmed-records-return",
+      "patch": {
+        "runtime": {
+          "controller": "agent",
+          "lastReturnedHandoffId": "handoff_11111111111111111111111111111111",
+          "observationSeq": 11
+        },
+        "continuation": { "status": "pending" },
+        "freshInspection": {
+          "inspectionId": "inspection_1",
+          "sessionId": "ses_11111111111111111111111111111111",
+          "handoffId": "handoff_11111111111111111111111111111111",
+          "generation": 1,
+          "afterObservationSeq": 11
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "record_return_event",
+        "confirmationType": "durable_return_event"
+      }
+    },
+    {
+      "name": "return-cut-event-recorded-prepares-stable-command",
+      "patch": {
+        "runtime": {
+          "controller": "agent",
+          "lastReturnedHandoffId": "handoff_11111111111111111111111111111111",
+          "observationSeq": 11
+        },
+        "continuation": {
+          "status": "pending",
+          "freshInspectionRequired": false,
+          "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111:1",
+          "returnObservationSeq": 11
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "prepare_continuation_command",
+        "confirmationType": "durable_continuation_command"
+      }
+    },
+    {
+      "name": "return-cut-command-prepared-persists-dispatch-intent",
+      "patch": {
+        "runtime": {
+          "controller": "agent",
+          "lastReturnedHandoffId": "handoff_11111111111111111111111111111111",
+          "observationSeq": 11
+        },
+        "continuation": {
+          "status": "pending",
+          "freshInspectionRequired": false,
+          "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111:1",
+          "returnObservationSeq": 11,
+          "command": {
+            "commandId": "continuation_cmd_1",
+            "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111:1",
+            "kind": "turn/start",
+            "dispatchStatus": "not_started"
+          }
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "persist_continuation_dispatch_intent",
+        "confirmationType": "durable_continuation_dispatch"
+      }
+    },
+    {
+      "name": "return-cut-dispatch-intent-reconciles-by-command-id",
+      "patch": {
+        "runtime": {
+          "controller": "agent",
+          "lastReturnedHandoffId": "handoff_11111111111111111111111111111111",
+          "observationSeq": 11
+        },
+        "continuation": {
+          "status": "pending",
+          "freshInspectionRequired": false,
+          "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111:1",
+          "returnObservationSeq": 11,
+          "command": {
+            "commandId": "continuation_cmd_1",
+            "returnEventId": "return:ses_11111111111111111111111111111111:handoff_11111111111111111111111111111111:1",
+            "kind": "turn/start",
+            "dispatchStatus": "possibly_started"
+          }
+        }
+      },
+      "expected": {
+        "phase": "recovering",
+        "commandType": "dispatch_or_reconcile_continuation",
+        "confirmationType": "continuation_dispatch_receipt"
+      }
+    },
+    {
+      "name": "session-identity-mismatch",
+      "patch": {
+        "runtime": { "sessionId": "ses_ffffffffffffffffffffffffffffffff" }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "thread-identity-mismatch",
+      "patch": {
+        "codex": { "threadId": "99999999-9999-4999-8999-999999999999" }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    },
+    {
+      "name": "workspace-identity-mismatch",
+      "patch": {
+        "runtime": {
+          "browserIdentity": {
+            "mode": "workspace",
+            "workspaceId": "wrk_99999999-9999-4999-8999-999999999999"
+          }
+        }
+      },
+      "expected": {
+        "phase": "cleanup_required",
+        "commandType": null,
+        "confirmationType": null
+      }
+    }
+  ]
+}

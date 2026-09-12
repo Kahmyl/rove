@@ -1,9 +1,14 @@
-import { RoveError, type TargetReference } from "@rove/protocol";
+import {
+  RoveError,
+  type BrowserTargetGeometry,
+  type TargetReference,
+} from "@rove/protocol";
 import type { Frame, Locator, Page } from "playwright";
 
 import type { PageState } from "../pages/page-state.js";
 import type { TargetHandle } from "../inspection/target-registration.js";
 import type { TargetRegistry } from "./target-registry.js";
+import { readTargetSnapshots } from "../inspection/perceived-control.js";
 import {
   readTargetState,
   sameStrongIdentity,
@@ -103,11 +108,94 @@ export async function resolveTarget(options: {
       message: "The target is not interactive.",
     });
   }
+  const expected = registered.handle.snapshot;
+  if (expected !== undefined) {
+    const configured = page.viewportSize();
+    const live = await page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      deviceScaleFactor: window.devicePixelRatio,
+    }));
+    const current = (
+      await readTargetSnapshots(frame, {
+        width: configured?.width ?? live.width,
+        height: configured?.height ?? live.height,
+        scrollX: live.scrollX,
+        scrollY: live.scrollY,
+        deviceScaleFactor: live.deviceScaleFactor,
+      })
+    ).get(registered.handle.marker);
+    if (current === undefined) {
+      await options.onStale();
+      throw targetStale("The inspected target can no longer be revalidated.");
+    }
+    if (
+      current.nodeToken !== expected.nodeToken ||
+      current.rootToken !== expected.rootToken
+    ) {
+      await options.onStale();
+      throw targetStale(
+        "The inspected target or its semantic root was replaced.",
+      );
+    }
+    const expectedSemanticState = { ...expected.state };
+    const currentSemanticState = { ...current.state };
+    delete expectedSemanticState.focused;
+    delete currentSemanticState.focused;
+    if (
+      JSON.stringify(currentSemanticState) !==
+      JSON.stringify(expectedSemanticState)
+    ) {
+      await options.onStale();
+      throw targetStale("The inspected target state changed.");
+    }
+    if (current.geometry.occluded) {
+      throw new RoveError({
+        code: "TARGET_NOT_VISIBLE",
+        message: "The target is occluded.",
+      });
+    }
+    if (!sameGeometry(expected.geometry, current.geometry)) {
+      await options.onStale();
+      throw targetStale("The inspected target moved or changed geometry.");
+    }
+  }
   return { locator, state };
+}
+
+function targetStale(message: string): RoveError {
+  return new RoveError({ code: "TARGET_STALE", message, retryable: true });
+}
+
+function sameGeometry(
+  expected: BrowserTargetGeometry,
+  current: BrowserTargetGeometry,
+): boolean {
+  if (
+    expected.inViewport !== current.inViewport ||
+    expected.clipped !== current.clipped ||
+    expected.occluded !== current.occluded
+  )
+    return false;
+  if (expected.bounds === null || current.bounds === null)
+    return expected.bounds === current.bounds;
+  const tolerance = 2;
+  return (["x", "y", "width", "height"] as const).every(
+    (key) =>
+      Math.abs(expected.bounds![key] - current.bounds![key]) <= tolerance,
+  );
 }
 
 function resolveFrame(page: Page, handle: TargetHandle): Frame {
   const frames = page.frames();
+  if (handle.frame !== undefined) {
+    if (!frames.includes(handle.frame)) {
+      throw targetStale("The inspected target frame was replaced.");
+    }
+    return handle.frame;
+  }
   const indexed = frames[handle.frameIndex];
 
   if (indexed?.url() === handle.frameUrl) {

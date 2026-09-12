@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "named-desktop-restart",
+      "boundary": "DesktopHost + Runtime HTTP + App Server stdio"
+    },
+    {
+      "id": "named-runtime-restart",
+      "boundary": "managed Runtime child process + persisted inventory"
+    },
+    {
+      "id": "temporary-process-loss",
+      "boundary": "managed Runtime child process + conservative cleanup"
+    },
+    {
+      "id": "close-stage-crash-matrix",
+      "cuts": [
+        {
+          "stage": "requested",
+          "point": "after_outcome_commit_before_notification",
+          "command": "persist_close_intent",
+          "occurrence": 1
+        },
+        {
+          "stage": "codex_settled",
+          "point": "after_outcome_commit_before_notification",
+          "command": "advance_close_stage",
+          "occurrence": 1
+        },
+        {
+          "stage": "continuation_settled",
+          "point": "after_outcome_commit_before_notification",
+          "command": "advance_close_stage",
+          "occurrence": 2
+        },
+        {
+          "stage": "runtime_settled",
+          "point": "after_outcome_commit_before_notification",
+          "command": "advance_close_stage",
+          "occurrence": 3
+        },
+        {
+          "stage": "complete",
+          "point": "after_outcome_commit_before_notification",
+          "command": "advance_close_stage",
+          "occurrence": 4
+        }
+      ]
+    },
+    {
+      "id": "human-return-restart",
+      "cuts": ["before_return", "after_return_before_inspection"]
+    },
+    {
+      "id": "retained-blocker-renderer",
+      "terminalHistory": 12,
+      "cleanupBlockers": 2
+    },
+    {
+      "id": "app-server-process-restart",
+      "boundary": "JSONL stdio child process"
+    },
+    {
+      "id": "authentication-return",
+      "boundary": "stand-in-owned loopback callback listener"
+    }
+  ]
+}

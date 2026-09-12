@@ -9,7 +9,10 @@ import type { BrowserLaunchConfig } from "@rove/protocol";
 
 import type { BrowserSession } from "./engine.js";
 import { PlaywrightBrowserEngine } from "./playwright-browser-engine.js";
-import { PlaywrightBrowserSession } from "./playwright-browser-session.js";
+import {
+  PlaywrightBrowserSession,
+  settleBrowserShutdownStep,
+} from "./playwright-browser-session.js";
 import * as externalChromeRuntime from "./runtime/external-chrome-runtime.js";
 
 const temporaryDirectories: string[] = [];
@@ -34,6 +37,15 @@ afterEach(async () => {
 });
 
 describe("external Chrome engine integration", () => {
+  it("bounds a non-resolving external browser shutdown handshake", async () => {
+    const operation = vi.fn(() => new Promise<void>(() => undefined));
+
+    await expect(
+      settleBrowserShutdownStep(operation, 5),
+    ).resolves.toBeUndefined();
+    expect(operation).toHaveBeenCalledTimes(1);
+  });
+
   it("launches Chrome externally, attaches over CDP, and transfers process cleanup ownership to the session", async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), "rove-external-engine-"));
 
@@ -226,6 +238,61 @@ describe("external Chrome engine integration", () => {
       expect(send).toHaveBeenCalledWith("Browser.close");
       expect(cleanup).toHaveBeenCalledTimes(1);
     } finally {
+      await context.close().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    }
+  }, 15_000);
+
+  it("reaches owned runtime cleanup when fallback CDP acquisition does not resolve", async () => {
+    const userDataDir = await mkdtemp(
+      join(tmpdir(), "rove-owned-runtime-bounded-close-"),
+    );
+
+    temporaryDirectories.push(userDataDir);
+
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      headless: true,
+    });
+    const browser = context.browser();
+    if (browser === null) {
+      throw new Error("Persistent test context has no browser.");
+    }
+
+    const acquire = vi
+      .spyOn(browser, "newBrowserCDPSession")
+      .mockImplementation(() => new Promise(() => undefined));
+    const cleanup = vi.fn(async () => undefined);
+    const session = await PlaywrightBrowserSession.createPersistent(
+      context,
+      {
+        headless: true,
+        browser: "chrome",
+        profile: {
+          mode: "persistent",
+          name: "owned-runtime-bounded-close",
+        },
+        profileUserDataDir: userDataDir,
+      },
+      {
+        distribution: "chrome",
+        sandbox: true,
+        diagnostics: [],
+      },
+      undefined,
+      "browser_owned_runtime_bounded_close_test",
+      cleanup,
+    );
+
+    vi.useFakeTimers();
+    try {
+      const closing = session.close();
+      await vi.advanceTimersByTimeAsync(3_000);
+      await closing;
+      expect(acquire).toHaveBeenCalledTimes(1);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      acquire.mockRestore();
       await context.close().catch(() => undefined);
       await browser.close().catch(() => undefined);
     }

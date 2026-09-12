@@ -1,4 +1,7 @@
-import type { Session } from "@rove/protocol";
+import {
+  toUnifiedSessionViewModel,
+  type UnifiedSessionInput,
+} from "./unified-session-state.js";
 
 export type CompactFollowerExperience =
   | "ready"
@@ -23,14 +26,17 @@ export interface CompactFollowerViewModel {
   canStop: boolean;
 }
 
+/** Compact presentation adapter over the one canonical Rove session model. */
 export function toCompactFollowerViewModel(
-  session: Session | null,
+  session: UnifiedSessionInput | null,
 ): CompactFollowerViewModel {
-  if (session === null) {
+  const unified = toUnifiedSessionViewModel(session);
+
+  if (unified.experience === "no_session") {
     return {
       experience: "ready",
-      kicker: "Ready",
-      title: "Waiting for a session",
+      kicker: unified.kicker,
+      title: unified.title,
       primaryAction: null,
       description: "Rove will appear beside its browser when a session starts.",
       canPause: false,
@@ -38,112 +44,86 @@ export function toCompactFollowerViewModel(
     };
   }
 
-  if (session.status === "completed" || session.status === "failed") {
+  if (
+    unified.experience === "session_ended" ||
+    unified.experience === "interrupted"
+  ) {
     return {
       experience: "ready_for_review",
-      kicker: "Ready for review",
-      title:
-        session.status === "completed" ? "Session complete" : "Session stopped",
+      kicker: unified.kicker,
+      title: unified.title,
       primaryAction: null,
-      description: "Open Rove to review the session details.",
+      description: unified.description,
       canPause: false,
       canStop: false,
     };
   }
 
-  if (session.status === "paused") {
+  if (unified.experience === "paused") {
     return {
       experience: "paused",
-      kicker: "Paused",
-      title: "Agent control is paused",
+      kicker: unified.kicker,
+      title: unified.title,
       primaryAction: "return_control",
       primaryActionLabel: "Resume",
-      description: "No agent browser mutations are admitted until you resume.",
+      description: unified.description,
       canPause: false,
-      canStop: true,
+      canStop: unified.canStop,
     };
   }
 
-  const live =
-    session.status === "active" || session.status === "awaiting_human";
-
-  if (!live) {
-    return {
-      experience: "ready",
-      kicker: "Ready",
-      title: "Waiting for a session",
-      primaryAction: null,
-      description: "Open Rove for session details.",
-      canPause: false,
-      canStop: false,
-    };
-  }
-
-  if (session.mode === "capture") {
+  if (unified.experience === "capture") {
     return {
       experience: "capture",
-      kicker: "Capture mode",
-      title: "Use Rove Companion",
+      kicker: unified.kicker,
+      title: unified.title,
       primaryAction: null,
-      description:
-        "Capture remains controlled from the full Companion surface.",
+      description: unified.description,
       canPause: false,
       canStop: false,
     };
   }
 
-  const requestedHandoff =
-    session.status === "awaiting_human" &&
-    session.controller === null &&
-    session.handoff !== undefined;
-
-  if (session.status === "awaiting_human" && session.controller === null) {
-    const canTakeControl = session.mode === "companion" || requestedHandoff;
-
+  if (unified.experience === "handoff_waiting") {
     return {
       experience: "human_required",
-      kicker: "Your turn",
-      title: requestedHandoff ? "Rove needs you" : "Waiting for control",
-      primaryAction: canTakeControl ? "take_control" : null,
-      ...(canTakeControl
-        ? {
-            primaryActionLabel: "Take over",
-          }
-        : {}),
-      description: "Rove is waiting for human input before it can continue.",
+      kicker: unified.kicker,
+      title: unified.title,
+      primaryAction:
+        unified.primaryAction === "take_control" ? "take_control" : null,
+      ...(unified.primaryActionLabel === undefined
+        ? {}
+        : { primaryActionLabel: unified.primaryActionLabel }),
+      description: unified.description,
       canPause: false,
-      canStop: true,
+      canStop: unified.canStop,
     };
   }
 
-  if (session.controller === "human") {
+  if (unified.experience === "human_controlling") {
     return {
       experience: "human_controlling",
-      kicker: "You're in control",
-      title: "Browser control is yours",
+      kicker: unified.kicker,
+      title: unified.title,
       primaryAction: "return_control",
-      primaryActionLabel: "Return",
-      description:
-        "Use the browser directly, then return control when finished.",
+      primaryActionLabel: unified.primaryActionLabel ?? "Resume Automation",
+      description: unified.description,
       canPause: false,
-      canStop: true,
+      canStop: unified.canStop,
     };
   }
-
-  const canTakeControl = session.mode === "companion";
 
   return {
     experience: "agent_working",
-    kicker: "Agent working",
-    title: "Rove is working",
-    primaryAction: canTakeControl ? "take_control" : null,
-    ...(canTakeControl
-      ? {
-          primaryActionLabel: "Take over",
-        }
-      : {}),
-    description: "Rove is actively working in the owned browser.",
-    canPause: true,
-    canStop: true,
+    kicker: unified.kicker,
+    title: unified.title,
+    primaryAction:
+      unified.primaryAction === "take_control" ? "take_control" : null,
+    ...(unified.primaryActionLabel === undefined
+      ? {}
+      : { primaryActionLabel: unified.primaryActionLabel }),
+    description: unified.description,
+    canPause: unified.canPause,
+    canStop: unified.canStop,
   };
 }

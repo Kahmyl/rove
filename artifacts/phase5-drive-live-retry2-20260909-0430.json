@@ -1,0 +1,390 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 27574,
+    "ownedProcessPids": [
+      27574,
+      27598,
+      27599,
+      27606,
+      27656,
+      27660
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_464b616f-2a24-4d1e-bf2f-3b374fae2245",
+    "operationId": "intent_ac7910b0-7fe9-4264-b49a-1e4b5be1f1b0",
+    "sessionId": "ses_469653760ee5429e9f8767d1f63887ac",
+    "threadId": "01a0853e-de52-7b41-94b7-a97b99f332fa",
+    "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+  },
+  "terminalRevision": 214,
+  "terminalTask": {
+    "taskId": "task_464b616f-2a24-4d1e-bf2f-3b374fae2245",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Lifecycle is ready."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_ac7910b0-7fe9-4264-b49a-1e4b5be1f1b0",
+      "stage": "turn_started",
+      "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+    },
+    "roveSessionId": "ses_469653760ee5429e9f8767d1f63887ac",
+    "codexThreadId": "01a0853e-de52-7b41-94b7-a97b99f332fa",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+      ],
+      "itemCount": 20
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "journey_not_passed",
+      "download_observation_not_exactly_one",
+      "download_observation_not_in_ledger",
+      "download_receipt_correlation"
+    ],
+    "marker": {
+      "journey": "drive",
+      "status": "blocked",
+      "reason": "Download dispatched once, but receipt outcome is unknown: DOWNLOAD_CORRELATION_UNAVAILABLE. Durable file evidence exists, but the required correlated applied receipt is absent.",
+      "folderUrl": "https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q",
+      "breadcrumb": "My Drive > Rove Live Regression Gate 20260907 B",
+      "fileName": "rove-live-regression-gate-20260907-b.txt",
+      "fileCount": 1,
+      "historyReturned": true,
+      "historyReturnUrl": "https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q",
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [
+        "obs_fbbbc53c08184b978aae2e95d78635eb",
+        "obs_c57e013b46934ab9839b5e767cda800f",
+        "obs_54bcd00ffcae47f99a341d02563eb5ae",
+        "obs_8fcb5bb52b634f3f85fc22a82841acef",
+        "obs_31e88f4bb4c14225a1835a32b7b0ec4e"
+      ],
+      "screenshotEvidenceIds": [
+        "ev_84a8131eea444fc4aa3ad17adc5552b5"
+      ],
+      "receiptIds": [
+        "rcpt_7b1797d7512a40f7a913237d9de6347f",
+        "rcpt_678b8e86a58147c388584f1a8cec346d"
+      ],
+      "downloadObservationIds": [
+        "obs_a00dd07d1a424c9dbee6b97758cb848e",
+        "obs_31e88f4bb4c14225a1835a32b7b0ec4e"
+      ],
+      "downloadEvidenceIds": [
+        "ev_9cef9b5d0e154db9bceb9161a868c487"
+      ],
+      "actualFilename": "rove-live-regression-gate-20260907-b.txt",
+      "size": 199,
+      "mime": "text/plain",
+      "externalMutations": [
+        "download"
+      ]
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_469653760ee5429e9f8767d1f63887ac",
+    "pageIds": [
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_6c9059f89ed84b03907b16b66074a915",
+      "obs_a550495c7ecd452584aed41d8607f13f",
+      "obs_fbbbc53c08184b978aae2e95d78635eb",
+      "obs_c57e013b46934ab9839b5e767cda800f",
+      "obs_54bcd00ffcae47f99a341d02563eb5ae",
+      "obs_af8b8912bea640c1adec4f516f43c6bd",
+      "obs_a00dd07d1a424c9dbee6b97758cb848e",
+      "obs_8fcb5bb52b634f3f85fc22a82841acef",
+      "obs_31e88f4bb4c14225a1835a32b7b0ec4e",
+      "bobs_130f9127ece943e48c3ddbeaaf4410d4",
+      "bobs_892e846e9a8b4728be7755d7614055d2",
+      "bobs_042f9fa1e4ab4eed83450235b1e999a3"
+    ],
+    "evidenceIds": [
+      "ev_84a8131eea444fc4aa3ad17adc5552b5",
+      "ev_217d59d36072475e84f0328152b23b84",
+      "ev_56b165b236fa4a83ba96fee9b5c1eb4c",
+      "ev_56da5f02fb2c4631aa09feb8249d4855",
+      "ev_68041a33a7a54896a4caa0046291f6f5",
+      "ev_7f975098517b421392695c4b28dbbdeb",
+      "ev_b2aa56d62e254aae9e4383fc1bfa796a",
+      "ev_9cef9b5d0e154db9bceb9161a868c487"
+    ],
+    "screenshotEvidenceIds": [
+      "ev_84a8131eea444fc4aa3ad17adc5552b5"
+    ],
+    "receipts": [
+      {
+        "id": "rcpt_7b1797d7512a40f7a913237d9de6347f",
+        "observationId": "obs_af8b8912bea640c1adec4f516f43c6bd",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_678b8e86a58147c388584f1a8cec346d",
+        "observationId": "obs_8fcb5bb52b634f3f85fc22a82841acef",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": true,
+        "effects": [
+          {
+            "kind": "download_completed",
+            "state": "unresolved",
+            "observationId": "obs_a00dd07d1a424c9dbee6b97758cb848e",
+            "code": "DOWNLOAD_CORRELATION_UNAVAILABLE"
+          }
+        ]
+      }
+    ],
+    "downloads": [
+      {
+        "observationId": "obs_31e88f4bb4c14225a1835a32b7b0ec4e",
+        "evidenceId": "ev_9cef9b5d0e154db9bceb9161a868c487",
+        "filename": "rove-live-regression-gate-20260907-b.txt",
+        "size": 199,
+        "mime": "text/plain",
+        "mimeBasis": "filename_extension"
+      }
+    ],
+    "downloadFileEvidence": [
+      {
+        "evidenceId": "ev_9cef9b5d0e154db9bceb9161a868c487",
+        "filename": "rove-live-regression-gate-20260907-b.txt",
+        "size": 199,
+        "mime": "text/plain",
+        "mimeBasis": "filename_extension",
+        "contentSignature": null
+      }
+    ]
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_04b20056c87151d3016aa11643d70487d2be1d8faf5afd563f",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "text": "I’ll verify the folder in Rove, capture the viewport, check the history return, and download the file once while recording its actual saved filename and evidence."
+      },
+      {
+        "id": "msg_04b20056c87151d3016aa11679fe9887d2bcd875d79e20830a",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "text": "The UI shows the expected breadcrumb and one file. The viewport screenshot is captured; its breadcrumb is visually shortened, while the UI’s accessible labels contain the full names. I’m checking the return from My Drive next."
+      },
+      {
+        "id": "msg_04b20056c87151d3016aa116b6aac487d2a6dd8ecf656b58bb",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "text": "Back returned to the exact folder, and the breadcrumb and single file were verified again. The download click was dispatched once, but Rove reported `DOWNLOAD_CORRELATION_UNAVAILABLE` with an unknown outcome. I won’t retry it; I’ll check the durable evidence for any saved-file details."
+      },
+      {
+        "id": "msg_04b20056c87151d3016aa116c4ddb487d2b6f7cc83f88214d3",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"drive\",\"status\":\"blocked\",\"reason\":\"Download dispatched once, but receipt outcome is unknown: DOWNLOAD_CORRELATION_UNAVAILABLE. Durable file evidence exists, but the required correlated applied receipt is absent.\",\"folderUrl\":\"https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q\",\"breadcrumb\":\"My Drive > Rove Live Regression Gate 20260907 B\",\"fileName\":\"rove-live-regression-gate-20260907-b.txt\",\"fileCount\":1,\"historyReturned\":true,\"historyReturnUrl\":\"https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q\",\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[\"obs_fbbbc53c08184b978aae2e95d78635eb\",\"obs_c57e013b46934ab9839b5e767cda800f\",\"obs_54bcd00ffcae47f99a341d02563eb5ae\",\"obs_8fcb5bb52b634f3f85fc22a82841acef\",\"obs_31e88f4bb4c14225a1835a32b7b0ec4e\"],\"screenshotEvidenceIds\":[\"ev_84a8131eea444fc4aa3ad17adc5552b5\"],\"receiptIds\":[\"rcpt_7b1797d7512a40f7a913237d9de6347f\",\"rcpt_678b8e86a58147c388584f1a8cec346d\"],\"downloadObservationIds\":[\"obs_a00dd07d1a424c9dbee6b97758cb848e\",\"obs_31e88f4bb4c14225a1835a32b7b0ec4e\"],\"downloadEvidenceIds\":[\"ev_9cef9b5d0e154db9bceb9161a868c487\"],\"actualFilename\":\"rove-live-regression-gate-20260907-b.txt\",\"size\":199,\"mime\":\"text/plain\",\"externalMutations\":[\"download\"]}\n\nVerified the breadcrumb and exactly one file before and after navigating to My Drive and calling Back. Page `page_01` was titled “Rove Live Regression Gate 20260907 B - Google Drive”.\n\nEphemeral UI observations: `bobs_130f9127ece943e48c3ddbeaaf4410d4` before history and `bobs_151e9ffacd104d4fb789f59a33f2590e` after return.\n\nThe screenshot shows one row named “rove-live-regression-gate-20260907-b.txt”, shortened breadcrumb labels, and the full folder name in the Activity pane. Accessible breadcrumb labels confirm the exact path.\n\nDurable evidence records the saved file as **199 bytes**, with MIME `text/plain` inferred from its extension. The download receipt remains **unknown**, so the journey cannot pass. No d"
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-8b580be4-24f3-4d66-b3b4-722c495d44dc",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/session.start"
+      },
+      {
+        "id": "exec-06ebed15-4ecc-4d2e-8506-0858e75fbe34",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-74e0980c-ec15-4e07-a5d1-06d51c6e7f5a",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-c9cc20aa-d11c-4d35-b16e-26401b7a5fd3",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-049896cc-c550-4e1f-8eac-34cb1fd15ca3",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.screenshot"
+      },
+      {
+        "id": "exec-0fcd30f9-8fd3-4bf8-bde3-39e7eaa22e71",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.navigate"
+      },
+      {
+        "id": "exec-6fd2ba0e-4749-486a-aafa-9d2e48733532",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.back"
+      },
+      {
+        "id": "exec-ff71e5a0-2689-4c2a-a6d0-be267db4ec36",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-66e1e780-e2ef-4d5d-a14e-822f971b3360",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-7b62890a-0dce-4108-b8bf-01fc3e1f63b7",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.inspect"
+      },
+      {
+        "id": "exec-fecdce71-b103-4fdb-9eb6-65e6d80b15be",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/browser.interact"
+      },
+      {
+        "id": "exec-c0b50bfb-bf8a-4e81-9b9f-2167ce4c5a8b",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/evidence.list"
+      },
+      {
+        "id": "exec-fb17ff3f-9060-45c8-befb-1dc71b4ce6b4",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02",
+        "status": "completed",
+        "title": "rove/session.observations"
+      }
+    ],
+    "driveUrls": [
+      "https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q\",\"breadcrumb\":\"My",
+      "https://drive.google.com/drive/folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q\",\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[\"obs_fbbbc53c08184b978aae2e95d78635eb\",\"obs_c57e013b46934ab9839b5e767cda800f\",\"obs_54bcd00ffcae47f99a341d02563eb5ae\",\"obs_8fcb5bb52b634f3f85fc22a82841acef\",\"obs_31e88f4bb4c14225a1835a32b7b0ec4e\"],\"screenshotEvidenceIds\":[\"ev_84a8131eea444fc4aa3ad17adc5552b5\"],\"receiptIds\":[\"rcpt_7b1797d7512a40f7a913237d9de6347f\",\"rcpt_678b8e86a58147c388584f1a8cec346d\"],\"downloadObservationIds\":[\"obs_a00dd07d1a424c9dbee6b97758cb848e\",\"obs_31e88f4bb4c14225a1835a32b7b0ec4e\"],\"downloadEvidenceIds\":[\"ev_9cef9b5d0e154db9bceb9161a868c487\"],\"actualFilename\":\"rove-live-regression-gate-20260907-b.txt\",\"size\":199,\"mime\":\"text/plain\",\"externalMutations\":[\"download\"]}"
+    ],
+    "receiptIds": [
+      "rcpt_7b1797d7512a40f7a913237d9de6347f",
+      "rcpt_678b8e86a58147c388584f1a8cec346d"
+    ],
+    "observationIds": [
+      "obs_fbbbc53c08184b978aae2e95d78635eb",
+      "obs_c57e013b46934ab9839b5e767cda800f",
+      "obs_54bcd00ffcae47f99a341d02563eb5ae",
+      "obs_8fcb5bb52b634f3f85fc22a82841acef",
+      "obs_31e88f4bb4c14225a1835a32b7b0ec4e",
+      "obs_a00dd07d1a424c9dbee6b97758cb848e",
+      "bobs_130f9127ece943e48c3ddbeaaf4410d4",
+      "bobs_151e9ffacd104d4fb789f59a33f2590e"
+    ],
+    "evidenceIds": [
+      "ev_84a8131eea444fc4aa3ad17adc5552b5",
+      "ev_9cef9b5d0e154db9bceb9161a868c487"
+    ],
+    "pageIds": [
+      "page_01"
+    ],
+    "downloadFilenameMentions": 3,
+    "downloadSizes": [
+      "199 bytes"
+    ],
+    "mimeTypes": [
+      "com/drive",
+      "folders/12jhgOPxB6GuMWsCVaBY8z6rKaF68ns6q",
+      "text/plain"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/drive-retry2-20260909-0430-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_464b616f-2a24-4d1e-bf2f-3b374fae2245",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Lifecycle is closed."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_ac7910b0-7fe9-4264-b49a-1e4b5be1f1b0",
+        "stage": "turn_started",
+        "turnId": "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+      },
+      "roveSessionId": "ses_469653760ee5429e9f8767d1f63887ac",
+      "codexThreadId": "01a0853e-de52-7b41-94b7-a97b99f332fa",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a0853e-ed04-7a02-99c1-d9a2333c3d02"
+        ],
+        "itemCount": 20
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

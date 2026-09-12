@@ -14,6 +14,7 @@ import type {
   ControlWaitResult,
   Evidence,
   EvidenceReadResult,
+  GeneratedFileArtifactRequest,
   HubCommandResult,
   HubOperation,
   InspectOptions,
@@ -21,6 +22,7 @@ import type {
   ObservationPage,
   ObservationQuery,
   PageInspection,
+  PageSummary,
   PressRequest,
   ScreenshotOptions,
   SessionSnapshot,
@@ -31,6 +33,14 @@ import type {
   TargetResolution,
   TargetResolutionRequest,
   VerifiedInteractionRequest,
+  AdvanceSemanticTransactionRequest,
+  BeginSemanticTransactionRequest,
+  SemanticTransactionAdvanceResult,
+  SemanticTransactionSnapshot,
+  SemanticTransactionVerificationResult,
+  VerifySemanticTransactionRequest,
+  LocalFileGrantRequest,
+  LocalFileGrantResult,
 } from "@rove/protocol";
 
 import { RuntimeClientError } from "./runtime-client.error.js";
@@ -56,7 +66,13 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
 
   async healthCheck(timeoutMs = 10_000): Promise<unknown> {
     const route = await this.routeStatus(Math.min(timeoutMs, 2_000));
-    const runtime = await this.call("runtime.health", {}, timeoutMs, undefined, true);
+    const runtime = await this.call(
+      "runtime.health",
+      {},
+      timeoutMs,
+      undefined,
+      true,
+    );
     return {
       controlPlane: route.controlPlane,
       selectedRuntime: route.selectedRuntime,
@@ -88,6 +104,22 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     return this.call("browser.navigate", { sessionId, input });
   }
 
+  openPage(sessionId: string, input: NavigateRequest): Promise<PageSummary> {
+    return this.call("browser.open_page", { sessionId, input });
+  }
+
+  pages(sessionId: string): Promise<PageSummary[]> {
+    return this.call("browser.pages", { sessionId });
+  }
+
+  switchPage(sessionId: string, pageId: string): Promise<PageSummary> {
+    return this.call("browser.switch_page", { sessionId, pageId });
+  }
+
+  closePage(sessionId: string, pageId: string): Promise<void> {
+    return this.call("browser.close_page", { sessionId, pageId });
+  }
+
   inspect(sessionId: string, input: InspectOptions): Promise<PageInspection> {
     return this.call("browser.inspect", { sessionId, input });
   }
@@ -104,6 +136,47 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt> {
     return this.call("browser.interact", { sessionId, input });
+  }
+
+  beginSemanticTransaction(
+    sessionId: string,
+    input: BeginSemanticTransactionRequest,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.call("browser.transaction_begin", { sessionId, input });
+  }
+
+  advanceSemanticTransaction(
+    sessionId: string,
+    input: AdvanceSemanticTransactionRequest,
+  ): Promise<SemanticTransactionAdvanceResult> {
+    return this.call("browser.transaction_advance", { sessionId, input });
+  }
+
+  verifySemanticTransaction(
+    sessionId: string,
+    input: VerifySemanticTransactionRequest,
+  ): Promise<SemanticTransactionVerificationResult> {
+    return this.call("browser.transaction_verify", { sessionId, input });
+  }
+
+  getSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.call("browser.transaction_status", {
+      sessionId,
+      transactionId,
+    });
+  }
+
+  cancelSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.call("browser.transaction_cancel", {
+      sessionId,
+      transactionId,
+    });
   }
 
   click(
@@ -135,6 +208,26 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
 
   screenshot(sessionId: string, input: ScreenshotOptions): Promise<Evidence> {
     return this.call("browser.screenshot", { sessionId, input });
+  }
+
+  createFileArtifact(
+    sessionId: string,
+    input: GeneratedFileArtifactRequest,
+  ): Promise<Evidence> {
+    return this.call("evidence.create_file", { sessionId, input });
+  }
+
+  requestLocalFileGrant(
+    sessionId: string,
+    input: LocalFileGrantRequest,
+    signal?: AbortSignal,
+  ): Promise<LocalFileGrantResult> {
+    return this.call(
+      "evidence.request_file_grant",
+      { sessionId, input },
+      300_000,
+      signal,
+    );
   }
 
   saveRecord(sessionId: string, input: SaveRecordInput): Promise<Evidence> {

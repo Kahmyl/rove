@@ -111,6 +111,13 @@ export const DOM_ACTIVITY_INIT_SCRIPT = String.raw`
 (() => {
   const activityWindow = window;
 
+  // tsx/esbuild can preserve callback names by wrapping nested functions with
+  // a module-local __name helper. Playwright serializes the callback without
+  // that module scope, so provide the inert helper in every Rove page before
+  // any evaluated callback runs. The init script is a raw string and is not
+  // itself transformed.
+  globalThis.__name ??= (value) => value;
+
   if (
     activityWindow.__roveDomActivityInstalled ===
     true

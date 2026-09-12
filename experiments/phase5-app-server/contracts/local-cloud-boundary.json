@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "status": "proposed",
+  "deviceAuthoritative": [
+    "codex_process",
+    "codex_credentials",
+    "browser_cookies",
+    "browser_process",
+    "local_files",
+    "rove_task_capability",
+    "approvals",
+    "action_receipts",
+    "consequential_outcome"
+  ],
+  "cloudPermitted": [
+    "rove_account_id",
+    "device_registration",
+    "encrypted_task_metadata",
+    "workflow_definition",
+    "schedule",
+    "notification_route",
+    "signed_user_intent",
+    "redacted_ordered_event"
+  ],
+  "cloudForbiddenFields": [
+    "codexToken",
+    "browserCookie",
+    "rawMcpCapability",
+    "approvalDecision",
+    "receiptAuthority",
+    "consequentialOutcomeAuthority",
+    "localPath"
+  ],
+  "transportEnvelopeSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion", "deviceId", "sequence", "type", "payload"],
+    "properties": {
+      "schemaVersion": { "const": 1 },
+      "deviceId": { "type": "string", "pattern": "^dev_" },
+      "sequence": { "type": "integer", "minimum": 1 },
+      "type": {
+        "enum": ["task_intent", "redacted_task_event", "workflow_metadata"]
+      },
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "taskId": { "type": "string" },
+          "workflowId": { "type": "string" },
+          "status": { "type": "string" },
+          "summary": { "type": "string", "maxLength": 1000 },
+          "occurredAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  },
+  "rule": "The cloud may request work from an online trusted device but cannot execute, approve, impersonate a Rove capability, or declare a consequential local outcome."
+}

@@ -34,7 +34,15 @@ interface OwnershipFenceState {
 export class BrowserOwnershipFence {
   private readonly states = new Map<string, OwnershipFenceState>();
 
-  initialize(sessionId: string, owner: BrowserActor | null): number {
+  has(sessionId: string): boolean {
+    return this.states.has(sessionId);
+  }
+
+  initialize(
+    sessionId: string,
+    owner: BrowserActor | null,
+    persistedGeneration = 1,
+  ): number {
     const existing = this.states.get(sessionId);
 
     if (existing !== undefined) {
@@ -47,7 +55,9 @@ export class BrowserOwnershipFence {
       );
     }
 
-    const generation = 1;
+    if (!Number.isInteger(persistedGeneration) || persistedGeneration <= 0)
+      throw new Error("Invalid persisted ownership generation.");
+    const generation = persistedGeneration;
 
     this.states.set(sessionId, {
       generation,
@@ -87,6 +97,10 @@ export class BrowserOwnershipFence {
         this.releaseLease(sessionId);
       },
     };
+  }
+
+  generation(sessionId: string): number {
+    return this.requireState(sessionId).generation;
   }
 
   async runAgentBrowserOperation<T>(

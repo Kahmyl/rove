@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../../..",
+    "paths": {
+      "@rove/protocol": ["packages/protocol/src/index.ts"],
+      "@rove/config": ["packages/config/src/index.ts"],
+      "@rove/storage": ["packages/storage/src/index.ts"],
+      "@rove/browser": ["packages/browser/src/index.ts"]
+    }
+  }
+}

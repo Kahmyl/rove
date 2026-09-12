@@ -1,0 +1,222 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 30419,
+    "ownedProcessPids": [
+      30419,
+      30435,
+      30436,
+      30444,
+      30493,
+      30499
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+    "operationId": "intent_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+    "sessionId": "ses_28b5216ebed14a2cb99645be4a0102a3",
+    "threadId": "01a08974-0bef-72d0-9930-6addf1dea0b4",
+    "turnId": "01a08974-2399-7841-96d4-ab890a057817"
+  },
+  "terminalRevision": 667,
+  "terminalTask": {
+    "taskId": "task_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+    "lifecycle": {
+      "phase": "waiting_for_human",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+      "inputDigest": "30e5298f485fb5d194c680f618e0f7c7950f2a25d2b5941c9357eb83a7d19e05",
+      "stage": "turn_started",
+      "turnId": "01a08974-2399-7841-96d4-ab890a057817"
+    },
+    "roveSessionId": "ses_28b5216ebed14a2cb99645be4a0102a3",
+    "codexThreadId": "01a08974-0bef-72d0-9930-6addf1dea0b4",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish"
+    ],
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08974-2399-7841-96d4-ab890a057817"
+      ],
+      "itemCount": 8
+    }
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "journey_not_passed",
+      "observation_ids_count",
+      "screenshot_ids_count",
+      "missing_inspect_tool",
+      "repository_url",
+      "issue_url",
+      "repository_not_private",
+      "issue_number",
+      "issue_title",
+      "checklist",
+      "assignee",
+      "label",
+      "history",
+      "github_distinct_tabs",
+      "receipt_ids_count",
+      "final_observation",
+      "final_observation_not_in_ledger",
+      "issue_close_evidence",
+      "github_history_tool",
+      "github_second_tab_tool"
+    ],
+    "marker": {
+      "journey": "github",
+      "status": "blocked",
+      "reason": "GitHub requires human authentication; Rove is awaiting human control return. No mutations were performed.",
+      "repositoryUrl": null,
+      "issueUrl": null,
+      "repositoryPrivate": null,
+      "issueNumber": null,
+      "issueTitle": null,
+      "checklist": null,
+      "assignee": null,
+      "label": null,
+      "historyReturned": false,
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [],
+      "screenshotEvidenceIds": [],
+      "receiptIds": [],
+      "finalObservationId": null,
+      "issueState": null
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_28b5216ebed14a2cb99645be4a0102a3",
+    "pageIds": [
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_7a00b0b58c2d4b4ea682a9e1c6a16453",
+      "obs_b32e4af5f196459eb3cf343c656f951d",
+      "obs_fb6883c6ae8a47909e3fdfdf1e427a13"
+    ],
+    "evidenceIds": [
+      "ev_9d7548cdb6b94194b39915bf47253f0b",
+      "ev_a894924155374b0eaf12bc807997d1a6"
+    ],
+    "screenshotEvidenceIds": [],
+    "receipts": [],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_005540d3cae25fd5016aa22a0c69ec87d09df82d25ecb5778f",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "text": "I’ll create the private repository and issue, verify the saved changes, then check history, tabs, and the final viewport evidence through Rove."
+      },
+      {
+        "id": "msg_005540d3cae25fd5016aa22a20b9b087d0ae66d178417c3741",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "text": "Rove has paused at GitHub authentication and handed control to you. Sign-in must be completed in the Rove browser before I can create the repository; no repository or issue changes have been made."
+      },
+      {
+        "id": "msg_005540d3cae25fd5016aa22a328ddc87d0a2a33b3f6923ac86",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"github\",\"status\":\"blocked\",\"reason\":\"GitHub requires human authentication; Rove is awaiting human control return. No mutations were performed.\",\"repositoryUrl\":null,\"issueUrl\":null,\"repositoryPrivate\":null,\"issueNumber\":null,\"issueTitle\":null,\"checklist\":null,\"assignee\":null,\"label\":null,\"historyReturned\":false,\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[],\"screenshotEvidenceIds\":[],\"receiptIds\":[],\"finalObservationId\":null,\"issueState\":null}\n\nGitHub redirected to its login page. Please complete sign-in in the Rove browser and return control.\n\nThe repository and issue were not created. Metadata, checklist, history, and second-tab verification remain unperformed. No consequential-action receipts or viewport screenshot exist, so an exact visual description is unavailable."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-d45f9ee3-968b-4523-901d-7e4f3f5f2e60",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-30f73fbc-0978-47d0-beeb-617ae7c47b8c",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "status": "completed",
+        "title": "control.wait"
+      },
+      {
+        "id": "exec-73b1cc78-a6b4-4304-a43f-a347175df58c",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817",
+        "status": "completed",
+        "title": "session.observations"
+      }
+    ],
+    "repositoryUrls": [],
+    "receiptIds": [],
+    "observationIds": [],
+    "evidenceIds": [],
+    "navigationIds": []
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/github-20260909-181822-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Observation reduced from authoritative facts."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_769f090e-cf2d-4714-bed6-4c187fda0ec3",
+        "inputDigest": "30e5298f485fb5d194c680f618e0f7c7950f2a25d2b5941c9357eb83a7d19e05",
+        "stage": "turn_started",
+        "turnId": "01a08974-2399-7841-96d4-ab890a057817"
+      },
+      "roveSessionId": "ses_28b5216ebed14a2cb99645be4a0102a3",
+      "codexThreadId": "01a08974-0bef-72d0-9930-6addf1dea0b4",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08974-2399-7841-96d4-ab890a057817"
+        ],
+        "itemCount": 8
+      }
+    },
+    "companion": null,
+    "runOwnedAttention": [],
+    "runOwnedFileAttention": 0,
+    "runOwnedRecoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": [
+      30444
+    ]
+  }
+}

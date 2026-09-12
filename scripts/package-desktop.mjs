@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
+  chmod,
   mkdir,
   readFile,
   realpath,
@@ -20,7 +22,13 @@ const servicesRoot = join(stagingRoot, "services");
 const runtimeRoot = join(servicesRoot, "runtime");
 const mcpRoot = join(servicesRoot, "mcp");
 const browsersRoot = join(stagingRoot, "browsers");
+const codexRoot = join(servicesRoot, "codex");
 const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+export const PINNED_CODEX_SHA256 =
+  "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a";
+export const PINNED_CODE_MODE_HOST_SHA256 =
+  "038b9c6b60baacbfacba1fe81cf603c22b73697810e013d4efda040f1a7294e7";
+export const PINNED_CODE_MODE_HOST_BYTES = 62_768_576;
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -74,7 +82,95 @@ async function pruneService(serviceRoot) {
   );
 }
 
-async function prepare() {
+export async function verifyCodexCodeModeHost(source) {
+  const bytes = await readFile(source).catch(() => {
+    throw new Error(`Supported Codex code-mode host is unavailable: ${source}`);
+  });
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (digest !== PINNED_CODE_MODE_HOST_SHA256) {
+    throw new Error(
+      "Codex code-mode host digest does not match packaged baseline 0.153.4.",
+    );
+  }
+  if (bytes.byteLength !== PINNED_CODE_MODE_HOST_BYTES) {
+    throw new Error(
+      "Codex code-mode host size does not match packaged baseline 0.153.4.",
+    );
+  }
+  return { source, bytes, digest, size: bytes.byteLength };
+}
+
+async function verifyCodexComponentSet() {
+  if (process.platform !== "darwin" || process.arch !== "arm64") {
+    throw new Error(
+      `No reviewed packaged Codex baseline exists for ${process.platform}/${process.arch}.`,
+    );
+  }
+  const executableSource =
+    process.env.ROVE_CODEX_EXECUTABLE ??
+    "/Applications/ChatGPT.app/Contents/Resources/codex";
+  const codeModeHostSource =
+    process.env.ROVE_CODEX_CODE_MODE_HOST ??
+    join(dirname(executableSource), "codex-code-mode-host");
+  const executableBytes = await readFile(executableSource).catch(() => {
+    throw new Error(
+      `Supported Codex executable is unavailable: ${executableSource}`,
+    );
+  });
+  const executableDigest = createHash("sha256")
+    .update(executableBytes)
+    .digest("hex");
+  if (executableDigest !== PINNED_CODEX_SHA256) {
+    throw new Error(
+      "Codex executable digest does not match packaged baseline 0.153.4.",
+    );
+  }
+  const codeModeHost = await verifyCodexCodeModeHost(codeModeHostSource);
+  return {
+    executable: {
+      source: executableSource,
+      bytes: executableBytes,
+      digest: executableDigest,
+    },
+    codeModeHost,
+  };
+}
+
+async function prepareCodexComponentSet({ executable, codeModeHost }) {
+  await mkdir(codexRoot, { recursive: true });
+  const executableDestination = join(codexRoot, "codex");
+  const codeModeHostDestination = join(codexRoot, "codex-code-mode-host");
+  await Promise.all([
+    writeFile(executableDestination, executable.bytes),
+    writeFile(codeModeHostDestination, codeModeHost.bytes),
+  ]);
+  await Promise.all([
+    chmod(executableDestination, 0o755),
+    chmod(codeModeHostDestination, 0o755),
+  ]);
+  await writeFile(
+    join(codexRoot, "compatibility.json"),
+    `${JSON.stringify(
+      {
+        version: "0.153.4",
+        platform: "macos",
+        architecture: "arm64",
+        sha256: executable.digest,
+        codeModeHost: {
+          filename: "codex-code-mode-host",
+          sha256: codeModeHost.digest,
+          bytes: codeModeHost.size,
+          platform: "macos",
+          architecture: "arm64",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function prepare(verifiedCodex) {
   await rm(stagingRoot, { recursive: true, force: true });
   await mkdir(servicesRoot, { recursive: true });
 
@@ -87,6 +183,19 @@ async function prepare() {
     "--prod",
     "--legacy",
     desktopRoot,
+  ]);
+
+  // The deterministic picker is a source-build qualification composition and
+  // must never be present in desktop staging or a packaged artifact.
+  await Promise.all([
+    rm(join(desktopRoot, "src", "main", "qualification"), {
+      recursive: true,
+      force: true,
+    }),
+    rm(join(desktopRoot, "dist", "main", "main", "qualification"), {
+      recursive: true,
+      force: true,
+    }),
   ]);
 
   await run(pnpmExecutable, [
@@ -108,6 +217,8 @@ async function prepare() {
   ]);
 
   await Promise.all([pruneService(runtimeRoot), pruneService(mcpRoot)]);
+
+  await prepareCodexComponentSet(verifiedCodex);
 
   await run(
     pnpmExecutable,
@@ -157,6 +268,9 @@ async function prepare() {
       "playwright/package.json",
     ),
     assertFile(join(mcpRoot, "dist", "main.js")),
+    assertFile(join(codexRoot, "codex")),
+    assertFile(join(codexRoot, "codex-code-mode-host")),
+    assertFile(join(codexRoot, "compatibility.json")),
     assertFile(
       join(
         mcpRoot,
@@ -170,7 +284,11 @@ async function prepare() {
 }
 
 async function packageDesktop() {
-  await prepare();
+  // Compatibility is established before clearing or otherwise mutating staging.
+  const verifiedCodex = await verifyCodexComponentSet();
+  if (process.argv.includes("--verify-codex-only")) return;
+
+  await prepare(verifiedCodex);
 
   if (process.argv.includes("--prepare-only")) {
     return;
@@ -197,4 +315,8 @@ async function packageDesktop() {
   });
 }
 
-await packageDesktop();
+if (
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  await packageDesktop();

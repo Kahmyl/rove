@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createServer, type Server as HttpServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +10,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  canonicalRoveToolDefinitionsJsonWire,
+  ROVE_TOOL_DEFINITIONS_SHA256,
+} from "@rove/protocol";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -28,6 +33,14 @@ type Inspection = {
     kind: string;
     name?: string;
   }>;
+};
+
+type PageSummary = {
+  id: string;
+  url: string;
+  title?: string;
+  active: boolean;
+  revision: number;
 };
 
 let runtime: ChildProcess;
@@ -56,6 +69,22 @@ beforeAll(async () => {
   });
 
   await waitForHealth(`http://127.0.0.1:${runtimePort}/health`);
+  const workspaceResponse = await fetch(
+    `http://127.0.0.1:${runtimePort}/browser-workspaces`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${RUNTIME_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ displayName: "E2E" }),
+    },
+  );
+  if (!workspaceResponse.ok) {
+    throw new Error(
+      `Unable to create E2E browser workspace (${workspaceResponse.status}).`,
+    );
+  }
 }, 60_000);
 
 afterAll(async () => {
@@ -91,6 +120,12 @@ describe("M10 V1 process E2E", () => {
     await client.connect(transport);
 
     try {
+      const listed = await client.listTools();
+      expect(
+        createHash("sha256")
+          .update(canonicalRoveToolDefinitionsJsonWire(listed.tools))
+          .digest("hex"),
+      ).toBe(ROVE_TOOL_DEFINITIONS_SHA256);
       await runAgentScenario(client);
     } finally {
       await client.close();
@@ -161,19 +196,30 @@ async function runAgentScenario(client: Client): Promise<void> {
 
     expect(inspection.text).toContain("Rove Search");
 
-    await callJson(client, "browser.type", {
+    await callJson(client, "browser.interact", {
       sessionId,
-      target: target(inspection, "Search query"),
-      value: "rove",
+      observationId: inspection.observationId,
+      action: {
+        kind: "fill",
+        target: target(inspection, "Search query"),
+        value: "rove",
+      },
+      effect: "edit_content",
     });
 
     inspection = await callJson<Inspection>(client, "browser.inspect", {
       sessionId,
     });
 
-    await callJson(client, "browser.click", {
+    await callJson(client, "browser.interact", {
       sessionId,
-      target: target(inspection, "Search"),
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Search"),
+      },
+      effect: "navigate",
+      expectedEffects: [{ kind: "text_present", text: "Search results" }],
     });
 
     inspection = await callJson<Inspection>(client, "browser.inspect", {
@@ -182,9 +228,20 @@ async function runAgentScenario(client: Client): Promise<void> {
 
     expect(inspection.text).toContain("Search results");
 
-    await callJson(client, "browser.click", {
+    await callJson(client, "browser.interact", {
       sessionId,
-      target: target(inspection, "Rove result"),
+      observationId: inspection.observationId,
+      action: {
+        kind: "click",
+        target: target(inspection, "Rove result"),
+      },
+      effect: "navigate",
+      expectedEffects: [
+        {
+          kind: "text_present",
+          text: "Structured browser automation fixture record.",
+        },
+      ],
     });
 
     inspection = await callJson<Inspection>(client, "browser.inspect", {
@@ -194,6 +251,47 @@ async function runAgentScenario(client: Client): Promise<void> {
     expect(inspection.text).toContain(
       "Structured browser automation fixture record.",
     );
+
+    const resultPageId = inspection.pageId;
+    const openedPage = await callJson<PageSummary>(
+      client,
+      "browser.open_page",
+      {
+        sessionId,
+        url: fixtureUrl,
+      },
+    );
+
+    expect(openedPage).toMatchObject({
+      active: true,
+      url: `${fixtureUrl}/`,
+    });
+    expect(openedPage.id).not.toBe(resultPageId);
+
+    const openPages = await callJson<PageSummary[]>(client, "browser.pages", {
+      sessionId,
+    });
+
+    expect(openPages).toHaveLength(2);
+    expect(openPages.find((page) => page.id === resultPageId)?.active).toBe(
+      false,
+    );
+
+    await expect(
+      callJson<PageSummary>(client, "browser.switch_page", {
+        sessionId,
+        pageId: resultPageId,
+      }),
+    ).resolves.toMatchObject({ id: resultPageId, active: true });
+
+    await callJson(client, "browser.close_page", {
+      sessionId,
+      pageId: openedPage.id,
+    });
+
+    expect(
+      await callJson<PageSummary[]>(client, "browser.pages", { sessionId }),
+    ).toHaveLength(1);
 
     const savedRecord = await callJson<{
       id: string;
@@ -205,6 +303,96 @@ async function runAgentScenario(client: Client): Promise<void> {
         title: inspection.title,
         url: inspection.url,
       },
+    });
+
+    const generatedFile = await callJson<{
+      id: string;
+      type: string;
+      metadata: Record<string, unknown>;
+    }>(client, "evidence.create_file", {
+      sessionId,
+      filename: "acceptance.txt",
+      content: "Rove acceptance",
+    });
+    expect(generatedFile).toMatchObject({
+      type: "file",
+      metadata: {
+        filename: "acceptance.txt",
+        source: "agent_generated",
+        sizeBytes: 15,
+      },
+    });
+
+    await expect(
+      callJson(client, "evidence.read", {
+        sessionId,
+        evidenceId: generatedFile.id,
+      }),
+    ).resolves.toMatchObject({
+      id: generatedFile.id,
+      binary: { available: true, encoding: "external" },
+    });
+
+    const uploadPage = await callJson<PageSummary>(
+      client,
+      "browser.open_page",
+      {
+        sessionId,
+        url: `${fixtureUrl}/actions`,
+      },
+    );
+    const uploadInspection = await callJson<Inspection>(
+      client,
+      "browser.inspect",
+      { sessionId },
+    );
+    const uploadTrigger = await callJson<{
+      status: string;
+      target?: { pageId: string; revision: number; ref: string };
+    }>(client, "browser.resolve_target", {
+      sessionId,
+      observationId: uploadInspection.observationId,
+      intent: { capability: "activate", text: "File upload trigger" },
+    });
+    expect(uploadTrigger.status).toBe("selected");
+    expect(uploadTrigger.target).toBeDefined();
+    const uploadReceipt = await callJson<Record<string, unknown>>(
+      client,
+      "browser.interact",
+      {
+        sessionId,
+        observationId: uploadInspection.observationId,
+        action: {
+          kind: "upload",
+          target: uploadTrigger.target,
+          evidenceId: generatedFile.id,
+        },
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: `fixture-upload:${generatedFile.id}`,
+        expectedEffects: [
+          { kind: "text_present", text: "uploaded:acceptance.txt" },
+        ],
+      },
+    );
+    expect(uploadReceipt, JSON.stringify(uploadReceipt, null, 2)).toMatchObject(
+      { outcome: "applied" },
+    );
+    await expect(
+      callJson<Inspection>(client, "browser.inspect", { sessionId }),
+    ).resolves.toMatchObject({
+      text: expect.stringContaining("uploaded:acceptance.txt"),
+    });
+    await callJson(client, "browser.switch_page", {
+      sessionId,
+      pageId: resultPageId,
+    });
+    await callJson(client, "browser.close_page", {
+      sessionId,
+      pageId: uploadPage.id,
+    });
+    inspection = await callJson<Inspection>(client, "browser.inspect", {
+      sessionId,
     });
 
     await callScreenshot(client, {
@@ -227,6 +415,8 @@ async function runAgentScenario(client: Client): Promise<void> {
     );
 
     expect(evidence.some((item) => item.type === "record")).toBe(true);
+
+    expect(evidence.some((item) => item.type === "file")).toBe(true);
 
     expect(evidence.some((item) => item.type === "screenshot")).toBe(true);
 
@@ -270,6 +460,8 @@ async function runAgentScenario(client: Client): Promise<void> {
     }>(client, "control.request_human", {
       sessionId,
       reason: "F3 exclusive ownership boundary",
+      instruction: "Inspect the page and continue the E2E workflow.",
+      continuationPolicy: "resume_after_control_return",
     });
 
     expect(requested).toMatchObject({
@@ -326,9 +518,6 @@ async function runAgentScenario(client: Client): Promise<void> {
 
     // Every live browser tool actually exposed through MCP must
     // fail at the ownership boundary.
-    //
-    // browser.pages is intentionally not invented here because it
-    // is a Runtime API, not an MCP tool in the current catalog.
     const staleTarget = {
       pageId: inspection.pageId,
       revision: inspection.revision,
@@ -353,25 +542,37 @@ async function runAgentScenario(client: Client): Promise<void> {
         },
       ],
       [
-        "browser.click",
+        "browser.open_page",
         {
           sessionId,
-          target: staleTarget,
+          url: fixtureUrl,
+        },
+      ],
+      ["browser.pages", { sessionId }],
+      [
+        "browser.switch_page",
+        {
+          sessionId,
+          pageId: resultPageId,
         },
       ],
       [
-        "browser.type",
+        "browser.close_page",
         {
           sessionId,
-          target: staleTarget,
-          value: "must-not-type",
+          pageId: resultPageId,
         },
       ],
       [
-        "browser.press",
+        "browser.interact",
         {
           sessionId,
-          key: "Tab",
+          observationId: inspection.observationId,
+          action: {
+            kind: "click",
+            target: staleTarget,
+          },
+          effect: "reversible_ui",
         },
       ],
       [
@@ -477,63 +678,33 @@ async function callScreenshot(
   client: Client,
   args: Record<string, unknown>,
 ): Promise<void> {
-  const result =
-    await client.callTool({
-      name:
-        "browser.screenshot",
-      arguments:
-        args,
-    });
+  const result = await client.callTool({
+    name: "browser.screenshot",
+    arguments: args,
+  });
 
-  if (
-    result.isError === true
-  ) {
+  if (result.isError === true) {
+    const detail = result.content.find((item) => item.type === "text");
     throw new Error(
-      "browser.screenshot returned an MCP error.",
+      detail?.type === "text"
+        ? `browser.screenshot returned an MCP error: ${detail.text}`
+        : "browser.screenshot returned an MCP error.",
     );
   }
 
-  const image =
-    result.content.find(
-      (item) =>
-        item.type === "image",
-    );
+  const image = result.content.find((item) => item.type === "image");
 
-  if (
-    image === undefined ||
-    image.type !== "image"
-  ) {
-    throw new Error(
-      "Expected screenshot image content.",
-    );
+  if (image === undefined || image.type !== "image") {
+    throw new Error("Expected screenshot image content.");
   }
 
-  expect(
-    image.mimeType,
-  ).toBe(
-    "image/png",
-  );
+  expect(image.mimeType).toBe("image/png");
 
-  const bytes =
-    Buffer.from(
-      image.data,
-      "base64",
-    );
+  const bytes = Buffer.from(image.data, "base64");
 
-  expect(
-    bytes.length,
-  ).toBeGreaterThan(24);
+  expect(bytes.length).toBeGreaterThan(24);
 
-  expect(
-    Array.from(
-      bytes.subarray(0, 4),
-    ),
-  ).toEqual([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-  ]);
+  expect(Array.from(bytes.subarray(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
 }
 
 async function callJson<T = unknown>(
@@ -722,6 +893,27 @@ async function startFixture(): Promise<{
             <title>Rove Result</title>
             <h1>Rove Result</h1>
             <p>Structured browser automation fixture record.</p>
+          `);
+      return;
+    }
+
+    if (url.pathname === "/actions") {
+      response.end(`
+            <!doctype html>
+            <title>Rove Actions</title>
+            <h1>Browser actions</h1>
+            <button id="file-upload-trigger" type="button">File upload trigger</button>
+            <input id="chooser-file" type="file" hidden>
+            <p id="upload-state">idle</p>
+            <script>
+              document.querySelector('#file-upload-trigger').addEventListener('click', () => {
+                document.querySelector('#chooser-file').click();
+              });
+              document.querySelector('#chooser-file').addEventListener('change', event => {
+                const name = event.currentTarget.files?.item(0)?.name ?? 'none';
+                document.querySelector('#upload-state').textContent = 'uploaded:' + name;
+              });
+            </script>
           `);
       return;
     }

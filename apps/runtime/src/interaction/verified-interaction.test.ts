@@ -4,6 +4,7 @@ import type { BrowserObservation } from "@rove/protocol";
 
 import {
   classifyActionOutcome,
+  interactionActionProposal,
   verifyExpectedEffects,
 } from "./verified-interaction.js";
 
@@ -57,6 +58,79 @@ describe("Phase 2 verified interaction semantics", () => {
     );
 
     expect(classifyActionOutcome(effects)).toBe("applied");
+  });
+
+  it("does not accept pre-existing text or exact URL as causal proof", () => {
+    const predecessor = observation(
+      "before",
+      "https://example.test/inbox",
+      "Review request",
+    );
+    const successor = observation(
+      "after",
+      "https://example.test/inbox",
+      "Review request",
+    );
+    const effects = verifyExpectedEffects(
+      [
+        { kind: "url_equals", url: "https://example.test/inbox" },
+        { kind: "text_present", text: "Review request" },
+      ],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+    );
+
+    expect(effects.every((effect) => effect.state === "unresolved")).toBe(true);
+    expect(classifyActionOutcome(effects)).toBe("unknown");
+  });
+
+  it("requires target state and presence transitions", () => {
+    const predecessor = observation("before", "https://example.test", "");
+    predecessor.targets = [
+      {
+        ref: "before",
+        kind: "checkbox",
+        name: "Ready",
+        visible: true,
+        enabled: true,
+        state: { checked: true },
+      },
+    ];
+    const successor = observation("after", "https://example.test", "");
+    successor.targets = [
+      {
+        ...predecessor.targets[0]!,
+        ref: "after",
+      },
+    ];
+    const preexisting = verifyExpectedEffects(
+      [
+        { kind: "target_checked", target: { name: "Ready", kind: "checkbox" } },
+        { kind: "target_present", target: { name: "Ready", kind: "checkbox" } },
+      ],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+    );
+    expect(preexisting.every((effect) => effect.state === "unresolved")).toBe(
+      true,
+    );
+
+    predecessor.targets[0]!.state = { checked: false };
+    const transitioned = verifyExpectedEffects(
+      [{ kind: "target_checked", target: { name: "Ready", kind: "checkbox" } }],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+    );
+    expect(classifyActionOutcome(transitioned)).toBe("applied");
   });
 
   it("keeps outcome unknown when successor evidence is unavailable", () => {
@@ -196,5 +270,240 @@ describe("Phase 2 verified interaction semantics", () => {
     expect(classifyActionOutcome(opened)).toBe("unknown");
 
     expect(classifyActionOutcome(closed)).toBe("unknown");
+  });
+
+  it("derives a credential floor from the grounded target", () => {
+    const before = observation(
+      "before",
+      "https://example.test/sign-in",
+      "Sign in",
+    );
+    before.targets = [
+      {
+        ref: "t1",
+        kind: "input",
+        name: "Password",
+        visible: true,
+        enabled: true,
+        sensitive: true,
+      },
+    ];
+
+    expect(
+      interactionActionProposal(
+        {
+          observationId: "before",
+          action: {
+            kind: "fill",
+            target: { pageId: "page_01", revision: 1, ref: "t1" },
+            value: "not-persisted",
+          },
+          expectedEffects: [],
+          consequential: false,
+        },
+        before,
+      ),
+    ).toMatchObject({
+      action: "fill",
+      effect: "credential_entry",
+    });
+  });
+
+  it("requires verifiable evidence for a consequential proposal", () => {
+    const before = observation(
+      "before",
+      "https://example.test/issue/new",
+      "Create issue",
+    );
+
+    expect(
+      interactionActionProposal(
+        {
+          observationId: "before",
+          action: {
+            kind: "click",
+            target: { pageId: "page_01", revision: 1, ref: "t1" },
+          },
+          expectedEffects: [],
+          consequential: true,
+          consequenceKey: "issue:create:1",
+        },
+        before,
+      ),
+    ).toMatchObject({
+      effect: "external_commit",
+      explicitlyAuthorized: true,
+      outcomeCanBeVerified: false,
+    });
+  });
+
+  it("verifies rich widget state and exact non-sensitive values", () => {
+    const before = observation(
+      "before",
+      "https://example.test/widgets",
+      "Widgets",
+    );
+    const after = observation(
+      "after",
+      "https://example.test/widgets",
+      "Widgets",
+    );
+    before.targets = [
+      {
+        ref: "t1-before",
+        kind: "disclosure",
+        name: "Advanced",
+        visible: true,
+        enabled: true,
+        state: { expanded: false, open: false, focused: false },
+      },
+      {
+        ref: "t2-before",
+        kind: "slider",
+        name: "Priority",
+        visible: true,
+        enabled: true,
+        state: { valueNow: 3 },
+      },
+      {
+        ref: "t3-before",
+        kind: "input",
+        name: "Summary",
+        visible: true,
+        enabled: true,
+        state: { value: "Draft" },
+      },
+    ];
+    after.targets = [
+      {
+        ref: "t1",
+        kind: "disclosure",
+        name: "Advanced",
+        visible: true,
+        enabled: true,
+        state: { expanded: true, open: true, focused: true },
+      },
+      {
+        ref: "t2",
+        kind: "slider",
+        name: "Priority",
+        visible: true,
+        enabled: true,
+        state: { valueNow: 7 },
+      },
+      {
+        ref: "t3",
+        kind: "input",
+        name: "Summary",
+        visible: true,
+        enabled: true,
+        state: { value: "Ready" },
+      },
+    ];
+
+    const effects = verifyExpectedEffects(
+      [
+        { kind: "target_expanded", target: { name: "Advanced" } },
+        { kind: "target_open", target: { name: "Advanced" } },
+        { kind: "target_focused", target: { name: "Advanced" } },
+        {
+          kind: "target_numeric_value",
+          target: { name: "Priority" },
+          value: 7,
+        },
+        {
+          kind: "target_value",
+          target: { name: "Summary" },
+          value: "Ready",
+        },
+      ],
+      before,
+      after,
+      undefined,
+      [],
+      [],
+    );
+
+    expect(effects.every((effect) => effect.state === "observed")).toBe(true);
+    expect(classifyActionOutcome(effects)).toBe("applied");
+  });
+
+  it("verifies a named target relative to a structural destination scope", () => {
+    const before = observation(
+      "before",
+      "https://example.test/files",
+      "Quarterly report Inbox Archive",
+    );
+    const after = observation(
+      "after",
+      "https://example.test/files",
+      "Quarterly report Inbox Archive",
+    );
+    before.targets = [
+      {
+        ref: "source-before",
+        kind: "button",
+        name: "Quarterly report",
+        visible: true,
+        enabled: true,
+        perceived: {
+          capabilities: ["activate"],
+          scopes: [
+            { kind: "list", label: "Inbox" },
+            { kind: "menu", label: "Move actions" },
+          ],
+        },
+      },
+    ];
+    after.targets = [
+      {
+        ref: "source-copy",
+        kind: "button",
+        name: "Quarterly report",
+        visible: true,
+        enabled: true,
+        perceived: {
+          capabilities: ["activate"],
+          scopes: [{ kind: "list", label: "Inbox" }],
+        },
+      },
+      {
+        ref: "destination-copy",
+        kind: "button",
+        name: "Quarterly report",
+        visible: true,
+        enabled: true,
+        perceived: {
+          capabilities: ["activate"],
+          scopes: [{ kind: "list", label: "Archive" }],
+        },
+      },
+    ];
+
+    const effects = verifyExpectedEffects(
+      [
+        {
+          kind: "target_within_scope",
+          target: { name: "Quarterly report", kind: "button" },
+          scope: { kind: "list", label: "Archive" },
+        },
+        {
+          kind: "target_outside_scope",
+          target: { name: "Quarterly report", kind: "button" },
+          scope: { kind: "menu", label: "Move actions" },
+        },
+      ],
+      before,
+      after,
+      undefined,
+      [],
+      [],
+    );
+
+    expect(effects.map((effect) => effect.state)).toEqual([
+      "observed",
+      "observed",
+    ]);
+    expect(classifyActionOutcome(effects)).toBe("applied");
   });
 });

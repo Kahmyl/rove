@@ -24,6 +24,7 @@ import {
   type FixtureServer,
 } from "../../../packages/browser/src/fixtures/fixture-server.js";
 import { BrowserController } from "./api/browser.controller.js";
+import { BrowserWorkspaceController } from "./api/browser-workspace.controller.js";
 import { EvidenceController } from "./api/evidence.controller.js";
 import { HealthController } from "./api/health.controller.js";
 import { ObservationController } from "./api/observation.controller.js";
@@ -54,9 +55,7 @@ function requiredTarget(inspection: PageInspection, name: string) {
   return item;
 }
 
-async function startHttp(
-  token?: string,
-): Promise<{
+async function startHttp(token?: string): Promise<{
   baseUrl: string;
   authorization: string;
   home: string;
@@ -85,12 +84,14 @@ async function startHttp(
     new EvidenceService(new FileEvidenceStore(home)),
     config,
   );
+  await runtime.createBrowserWorkspace("Default");
 
   @Module({
     controllers: [
       HealthController,
       SessionController,
       BrowserController,
+      BrowserWorkspaceController,
       ObservationController,
       EvidenceController,
       ControlController,
@@ -141,6 +142,95 @@ afterEach(async () => {
 });
 
 describe("Milestone 4 runtime HTTP API", () => {
+  it("administers browser workspaces separately from task session start", async () => {
+    const token = "runtime-workspace-token-123456";
+    const { baseUrl, authorization } = await startHttp(token);
+
+    const initial = await json(
+      baseUrl,
+      "/browser-workspaces",
+      {},
+      authorization,
+    );
+    expect(initial.response.status).toBe(200);
+    const initialStatus = initial.body as unknown as {
+      selectedWorkspaceId: string;
+      workspaces: Array<{ id: string; displayName: string }>;
+    };
+    expect(initialStatus.workspaces).toHaveLength(1);
+
+    const created = await json(
+      baseUrl,
+      "/browser-workspaces",
+      { method: "POST", body: JSON.stringify({ displayName: "Work" }) },
+      authorization,
+    );
+    expect(created.response.status).toBe(201);
+    const workId = String(created.body.id);
+    expect(workId).toMatch(/^wrk_/);
+
+    const selected = await json(
+      baseUrl,
+      `/browser-workspaces/${workId}/select`,
+      { method: "POST" },
+      authorization,
+    );
+    expect(selected.body).toMatchObject({ selectedWorkspaceId: workId });
+
+    const renamed = await json(
+      baseUrl,
+      `/browser-workspaces/${workId}`,
+      { method: "PATCH", body: JSON.stringify({ displayName: "Client" }) },
+      authorization,
+    );
+    expect(renamed.body).toMatchObject({
+      selectedWorkspaceId: workId,
+      workspaces: expect.arrayContaining([
+        expect.objectContaining({ id: workId, displayName: "Client" }),
+      ]),
+    });
+
+    const started = await json(
+      baseUrl,
+      "/sessions",
+      { method: "POST", body: JSON.stringify({ mode: "agent" }) },
+      authorization,
+    );
+    expect(started.response.status).toBe(201);
+    expect(started.body).toMatchObject({
+      workspace: { id: workId, displayName: "Client" },
+    });
+    const activeDelete = await json(
+      baseUrl,
+      `/browser-workspaces/${workId}`,
+      { method: "DELETE" },
+      authorization,
+    );
+    expect(activeDelete.response.ok).toBe(false);
+    expect(activeDelete.body).toMatchObject({
+      ok: false,
+      error: { code: "PROFILE_LOCKED" },
+    });
+    await json(
+      baseUrl,
+      `/sessions/${String(started.body.id)}/end`,
+      { method: "POST" },
+      authorization,
+    );
+    const deleted = await json(
+      baseUrl,
+      `/browser-workspaces/${workId}`,
+      { method: "DELETE" },
+      authorization,
+    );
+    expect(deleted.response.ok).toBe(true);
+    expect(
+      (deleted.body.workspaces as Array<{ id: string }>).some(
+        (workspace) => workspace.id === workId,
+      ),
+    ).toBe(false);
+  });
+
   it("serves the complete authenticated browser, observation, evidence, and session path", async () => {
     const token = "runtime-test-token-123456789";
     const { baseUrl, authorization } = await startHttp(token);
@@ -332,6 +422,157 @@ describe("Milestone 4 runtime HTTP API", () => {
     expect(ended.body).toMatchObject({ status: "completed", controller: null });
   }, 15_000);
 
+  it("serves the semantic transaction lifecycle over authenticated HTTP", async () => {
+    const token = "runtime-transaction-token-123456";
+    const { baseUrl, authorization } = await startHttp(token);
+    const fixture = await startFixtureServer();
+    servers.push(fixture);
+
+    const started = await json(
+      baseUrl,
+      "/sessions",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "agent",
+          startUrl: `${fixture.url}/semantic-transfer`,
+        }),
+      },
+      authorization,
+    );
+    const sessionId = String(started.body.id);
+    const inspect = async () => {
+      const result = await json(
+        baseUrl,
+        `/sessions/${sessionId}/browser/inspect`,
+        { method: "POST", body: "{}" },
+        authorization,
+      );
+      return result.body as unknown as PageInspection;
+    };
+    const reference = (inspection: PageInspection, name: string) => ({
+      pageId: inspection.pageId,
+      revision: inspection.revision,
+      ref: requiredTarget(inspection, name).ref,
+    });
+
+    const initial = await inspect();
+    const begun = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/transactions`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          observationId: initial.observationId,
+          kind: "transfer",
+          sourceTarget: reference(initial, "Quarterly report"),
+          destination: {
+            verification: "within_scope",
+            scope: { kind: "list", label: "Archive" },
+          },
+          mechanism: "menu",
+          consequenceKey: "http:move:quarterly-report:archive",
+        }),
+      },
+      authorization,
+    );
+    expect(begun.response.status).toBe(201);
+    expect(begun.body).toMatchObject({ status: "prepared" });
+    const transactionId = String(begun.body.transactionId);
+
+    const prepared = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/transactions/${transactionId}/advance`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          observationId: initial.observationId,
+          phase: "prepare",
+          action: {
+            kind: "click",
+            target: reference(initial, "Quarterly report"),
+          },
+          expectedEffects: [
+            {
+              kind: "target_present",
+              target: { name: "Move to Archive", kind: "menuitem" },
+            },
+          ],
+          effect: "reversible_ui",
+        }),
+      },
+      authorization,
+    );
+    expect(prepared.body).toMatchObject({
+      transaction: { status: "in_progress" },
+      receipt: { outcome: "applied" },
+    });
+
+    const commitObservation = await inspect();
+    const committed = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/transactions/${transactionId}/advance`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          observationId: commitObservation.observationId,
+          phase: "commit",
+          action: {
+            kind: "click",
+            target: reference(commitObservation, "Move to Archive"),
+          },
+          expectedEffects: [
+            {
+              kind: "target_within_scope",
+              target: { name: "Quarterly report", kind: "button" },
+              scope: { kind: "list", label: "Archive" },
+            },
+          ],
+        }),
+      },
+      authorization,
+    );
+    expect(committed.body).toMatchObject({
+      transaction: { status: "committed" },
+      receipt: { consequential: true, outcome: "applied" },
+    });
+
+    const finalObservation = await inspect();
+    const verified = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/transactions/${transactionId}/verify`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          observationId: finalObservation.observationId,
+        }),
+      },
+      authorization,
+    );
+    expect(verified.body).toMatchObject({
+      outcome: "applied",
+      transaction: { status: "verified" },
+    });
+
+    const status = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/transactions/${transactionId}`,
+      {},
+      authorization,
+    );
+    expect(status.body).toMatchObject({
+      status: "verified",
+      steps: [{ phase: "prepare" }, { phase: "commit" }],
+    });
+
+    await json(
+      baseUrl,
+      `/sessions/${sessionId}/end`,
+      { method: "POST" },
+      authorization,
+    );
+  }, 15_000);
+
   it("rejects non-loopback configuration without a token", () => {
     const config = loadConfig({ env: { ROVE_RUNTIME_HOST: "0.0.0.0" } });
     expect(() => assertRuntimeBindingSafe(config)).toThrowError(
@@ -448,6 +689,7 @@ describe("Milestone 8 Companion session discovery", () => {
         method: "POST",
         body: JSON.stringify({
           mode: "agent",
+          browser: { mode: "temporary" },
         }),
       },
       authorization,
@@ -462,6 +704,7 @@ describe("Milestone 8 Companion session discovery", () => {
         method: "POST",
         body: JSON.stringify({
           mode: "companion",
+          browser: { mode: "temporary" },
         }),
       },
       authorization,
@@ -488,6 +731,34 @@ describe("Milestone 8 Companion session discovery", () => {
         controller: "agent",
       }),
     ]);
+
+    const inventory = await json(
+      baseUrl,
+      "/sessions/inventory?mode=companion",
+      {},
+      authorization,
+    );
+    expect(inventory.response.status).toBe(200);
+    expect(inventory.body as unknown as unknown[]).toEqual([
+      expect.objectContaining({
+        schemaVersion: 1,
+        session: expect.objectContaining({ id: companionId }),
+        attachment: "attached",
+        recovery: "not_needed",
+      }),
+    ]);
+    const recovered = await json(
+      baseUrl,
+      `/sessions/${companionId}/recover`,
+      { method: "POST" },
+      authorization,
+    );
+    expect(recovered.response.status).toBe(201);
+    expect(recovered.body).toMatchObject({
+      session: { id: companionId },
+      attachment: "attached",
+      recovery: "not_needed",
+    });
 
     await json(
       baseUrl,

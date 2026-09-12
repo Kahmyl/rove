@@ -52,14 +52,14 @@ The following Rove capabilities are existing authority and must be preserved
 unless an accepted experiment proves that a bounded replacement is required:
 
 - Rove-owned browser sessions;
-- managed persistent and temporary profiles;
+- durable selected browser workspaces and intentional temporary identities;
 - system Chrome launched externally and attached through CDP;
 - stable page identities;
 - page revisions;
 - revision-scoped target references;
 - stale-target protection;
 - serialized browser mutations;
-- page-state perception and mutation policy;
+- page-state perception plus consequence-aware per-action authorization;
 - browser ownership fencing;
 - human takeover and return of control;
 - target invalidation after handback;
@@ -145,6 +145,13 @@ The following decisions govern all phases.
 
 ## Experiment policy
 
+Browser capability discovery and production admission are governed by the
+[Web Capability Atlas](capabilities/web-capability-atlas.md). The atlas is the
+standards-derived inventory for perception, grounding, action, verification,
+evidence, recovery, and safety. Application-specific live journeys validate
+composition and regression; they must not be the first place a missing browser
+primitive is discovered.
+
 An isolated experiment is required when:
 
 - technical feasibility is uncertain;
@@ -210,6 +217,15 @@ controls. Inspection emits bounded coverage counts and bounded exclusion
 reasons so a visible supported semantic control cannot silently disappear.
 Presentation limits only truncate the returned inventory; grounding against the
 same exact observation continues to use its complete canonical index.
+
+Accessible-name ranking is ordinal: normalized exact match, then normalized
+direct substring, then a bounded whole-token-sequence fallback. The fallback
+case-folds and segments Unicode letters and numbers, and requires one name's
+tokens to occur as an ordered contiguous sequence in the other. This admits
+harmless wrapping punctuation and supplemental leading or trailing tokens
+without edit distance or fuzzy guessing. Empty or symbol-only text contributes
+no evidence, token boundaries remain distinct, and a stronger non-actionable
+candidate still blocks fallback to a weaker actionable candidate.
 
 ### Isolated experiment
 
@@ -311,11 +327,37 @@ Phase 2 includes:
 - applied, not-applied, and unknown outcomes;
 - prohibition of blind consequential-action replay.
 
-Ordinary `browser.type` and verified `fill` mean deterministic replacement of
-the complete contents of an input, textarea, or contenteditable. Rove uses
+The `fill` action in `browser.interact` means deterministic replacement of the
+complete contents of an input, textarea, or contenteditable. Rove uses
 Playwright `fill`, verifies the exact resulting editable value without
 serializing it, and reports failure rather than falling back to sequential key
-events. Explicit keyboard behavior is a separate `browser.press` operation.
+events. Explicit keyboard behavior uses the `press` interaction action. The MCP
+catalog exposes this single target-mutation surface so consequence and
+authorization semantics cannot diverge across browser verbs.
+
+Target capabilities describe operations supported directly by the target; they
+do not predict every effect that activation may cause. A native
+`input[type=file]` advertises `upload`. A button or menu item that opens a
+dynamic file chooser advertises `activate` instead. The caller grounds that
+indirect trigger from an exact accessible name and structural scope, then uses
+the grounded target in an `upload` interaction. Runtime stages the chooser and
+file assignment as the upload mechanism and applies the consequential-action
+fence. Rove must not label every activatable control as upload-capable merely
+because activation could theoretically open a chooser.
+
+The uploaded bytes must already be a Rove file artifact. Granting access to an
+existing local file is a separate local-file authority decision, not browser
+perception. `evidence.create_file` stages bounded agent-supplied content without
+reading user files. `evidence.request_file_grant` opens Rove Companion's native
+file picker for explicit user selection. Neither tool accepts a host path, and
+selected paths are not returned to the agent. The resulting opaque `ev_...` ID
+is the only file authority accepted by the upload interaction.
+
+Expected visible-text effects are page-wide. They are suitable for unique
+success copy, but `text_absent` must not be used to prove an entity rename or
+removal when activity, history, toast, or audit surfaces may retain the old
+text. Entity outcomes use exact `target_present` / `target_absent` checks or a
+scoped target effect, followed by fresh semantic verification when needed.
 
 ### Isolated experiment
 
@@ -414,8 +456,14 @@ Supported capture modes already are:
 - target;
 - region.
 
-An `observationId` may bind a capture to one exact current
-`BrowserObservation`.
+An `observationId` binds a capture to the same page, document revision, URL,
+viewport, scroll position, device scale, and current ownership. Global material
+mutation drift is a revalidation trigger rather than a universal veto: a
+viewport capture may proceed across unrelated dynamic DOM churn, and its
+metadata records both the source observation mutation version and the mutation
+version actually captured. Navigation, page replacement, viewport/scroll
+change, ownership change, or target-style restoration failure still rejects
+the capture before it can become durable evidence.
 
 Viewport and bounded region captures can already be returned through MCP as
 actual image content while the same capture remains durable Rove evidence.
@@ -652,6 +700,36 @@ the `ActionReceipt` retains `dispatchStatus: completed` and records bounded
 receipt persistence, or page policy. Those observability failures do not turn a
 known external mutation into `INVALID_CONFIGURATION`.
 
+Positive successor evidence also resolves a lower-level dispatch ambiguity for
+the requested effect. In that case the receipt returns `outcome: applied` and
+`dispatchStatus: completed`, retains the original failure as a degradation, and
+permits the workflow to continue without replay. Only `outcome: unknown` is the
+consequential stop-and-reconcile boundary.
+
+Semantic transfer commits cannot use an unrelated or already-visible text
+postcondition. The commit must bind its expected effect to the exact source:
+the source enters the declared visible scope, leaves the current source view
+before remote-destination verification, or appears after an explicit paste in
+the opened destination. Remote transfers still require a fresh destination
+observation proving the exact source target plus independent destination
+identity.
+
+Keyboard clipboard transfer preparation has a narrower evidence rule because a
+web application may expose no readable clipboard or cut-pending state. An
+effect-free page-level copy/cut prepare is accepted only when the exact
+transaction source is already selected in the supplied fresh observation and
+trusted keyboard dispatch completes. The step records
+`evidenceBasis: trusted_dispatch` and the receipt remains `outcome: unknown`;
+only the later, source-bound commit is consequential. Selected composite state
+is inherited from semantic row, option, and tree-item owners onto their
+actionable descendants so this precondition does not depend on application DOM
+boundaries. A failed or uncertain dispatch never advances preparation.
+
+Agent-facing observations remain bounded by the requested target limit, but
+Runtime verification and target grounding use the canonical target authority
+stored for that observation. `targetsTruncated` limits presentation size; it
+does not remove eligible targets from verification authority.
+
 ### Security and privacy boundary
 
 Visual content is untrusted page evidence.
@@ -787,51 +865,78 @@ recorded as passes.
 
 ### Outcome
 
-At completion, the Rove desktop application contains an integrated Codex
-conversation and reasoning surface.
+At completion, the Rove desktop application is the native Codex-powered Rove
+task product. A user signs in, chooses an available model and reasoning effort,
+enters only the desired outcome, and follows conversation, browser work,
+evidence, approvals, and human attention in one surface. Its process, protocol,
+task association, continuation, recovery, and presentation boundaries preserve
+the authority model established in Phases 1–4.
+
+The complete replanned design is
+[`implementation/phase5-codex-app-server-integration.md`](./implementation/phase5-codex-app-server-integration.md).
 
 ### Production scope
 
 Phase 5 includes:
 
-- direct `codex app-server` supervision;
-- JSON-RPC client;
-- initialization;
-- official ChatGPT login;
-- account state;
-- thread start, list, resume, and archive where required;
-- turn start;
-- streamed events;
-- interruption;
-- approval handling;
-- model and rate-limit state where available;
-- Rove tool registration;
-- Rove task, browser-session, and Codex-thread association;
-- App Server crash recovery;
+- version-pinned `codex app-server --stdio` supervision and protocol drift
+  gates;
+- initialized JSON-RPC request/response, notification, and server-request
+  handling;
+- official App Server-owned ChatGPT login, account, model, and rate-limit
+  state;
+- dynamic model/effort and usage presentation rather than hard-coded account
+  assumptions;
+- thread start/list/read/resume/archive, turn start/steer/interrupt, and
+  streamed item projection;
+- standard required MCP configuration for Rove tools rather than experimental
+  dynamic tools;
+- zero-instruction Rove capability bootstrap and catalog readiness before the
+  first task turn;
+- visible user-owned selection of Agent, Companion, or Capture execution and a
+  named browser workspace or Temporary identity before browser launch;
+- opaque Rove task capability binding across Codex thread and Rove browser
+  sessions;
+- distinct but coherently presented Codex approvals and Rove browser handoff;
+- exactly-once task continuation when authoritative human Return Control occurs
+  after an eligible handoff, including after wait timeout or restart;
+- one combined product projection across chip, expanded, and full
+  presentations;
+- a local-first application boundary that preserves trusted-device execution
+  while allowing a later cloud Hub to add account, device, and workflow control
+  without gaining browser or credential authority;
+- App Server, renderer, and Desktop crash recovery without replaying uncertain
+  turns or consequential browser actions;
 - continued support for external MCP clients.
 
 The Codex SDK is outside scope.
 
 ### Isolated experiment
 
-A minimal App Server client must prove:
-
-- initialization;
-- account read;
-- official login initiation;
-- thread creation;
-- thread resumption after client restart;
-- streamed turn events;
-- interruption;
-- one real Rove tool call;
-- approval request and response;
-- App Server restart behavior.
+Eight isolated experiments must prove protocol lifecycle/drift, standard Rove
+MCP integration, approval/handoff concurrency, crash/outcome reconciliation,
+unified-surface continuity, durable human-return continuation, and the
+account/catalog/local-cloud seam, plus task launch mode/browser-identity
+selection before their results are shaped into production slices. Experiment
+code is evidence, not production scaffolding.
 
 ### Authority boundary
 
 Codex reasons and chooses tools. Rove owns browser lifetime, observation,
 interaction, evidence, human control, and browser-session truth. Codex must not
-open a competing browser for the same Rove task.
+open a competing browser for the same Rove task. The desktop host owns App
+Server lifetime, protocol compatibility, task association, and the combined
+product projection. The renderer owns none of these truths.
+
+### Entry gate
+
+Phase 5 implementation starts only after GitHub, Gmail/Calendar, Drive, Maps,
+and PDF live journeys pass on the final Phase 1–4 stack. Automated
+non-regression alone is insufficient.
+
+This entry gate passed on 2026-09-07. Evidence and the bounded diagnostics that
+preceded the final pass are recorded in
+[`experiments/2026-09-07-production-live-acceptance.md`](./experiments/2026-09-07-production-live-acceptance.md).
 
 ## Phase 6 — Basic generic workflows
 
@@ -968,7 +1073,14 @@ does not enter the Phase 1 production path.
 
 Phase 1 reuses existing page revision authority and binds each browser
 observation to URL, material mutation version, viewport, scroll position, and
-device scale.
+device scale. Material mutation drift does not erase an otherwise current
+observation. Before a semantic target action, Rove re-resolves the exact marked
+target and verifies its stored element and semantic-root identity, exact frame
+instance, semantic identity and state, visibility, enabled/actionable state,
+geometry, occlusion, and ambiguity. Coordinate and visual-anchor actions retain
+strict whole-observation freshness. This lets stable targets on dynamic pages
+remain usable without accepting target replacement or geometrically stale
+authority.
 
 Production bounds:
 

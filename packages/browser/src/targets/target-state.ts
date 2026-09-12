@@ -8,6 +8,7 @@ export interface TargetState {
   enabled: boolean;
   interactive: boolean;
   editable: boolean;
+  focusable: boolean;
 }
 
 function normalize(value: string | undefined): string | undefined {
@@ -128,6 +129,11 @@ export async function readTargetState(locator: Locator): Promise<TargetState> {
       tag === "select" ||
       role !== undefined ||
       html.tabIndex >= 0;
+    const focusable =
+      enabled &&
+      (html.tabIndex >= 0 ||
+        element.hasAttribute("tabindex") ||
+        html.isContentEditable);
     const attributes: Record<string, string> = {};
     for (const attribute of [
       "name",
@@ -158,6 +164,7 @@ export async function readTargetState(locator: Locator): Promise<TargetState> {
       enabled,
       interactive,
       editable,
+      focusable,
     };
   });
 }

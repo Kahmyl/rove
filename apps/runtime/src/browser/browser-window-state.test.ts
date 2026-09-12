@@ -71,4 +71,24 @@ describe("BrowserService live window state", () => {
 
     await service.close("ses_no_window_state");
   });
+
+  it("shows the exact attached browser session and reports absence without launching a substitute", async () => {
+    const show = vi.fn(async () => undefined);
+    const browser = {
+      id: "browser_show",
+      capabilities: {},
+      hostIdentity: () => null,
+      browserWindowState: async () => liveState,
+      show,
+      close: vi.fn(async () => undefined),
+    } as unknown as BrowserSession;
+    const service = new BrowserService({
+      start: vi.fn(async () => browser),
+    } as unknown as BrowserEngine);
+
+    await expect(service.show("ses_missing")).resolves.toBe(false);
+    await service.start("ses_show", {} as BrowserLaunchConfig);
+    await expect(service.show("ses_show")).resolves.toBe(true);
+    expect(show).toHaveBeenCalledTimes(1);
+  });
 });

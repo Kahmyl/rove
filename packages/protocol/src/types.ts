@@ -2,6 +2,10 @@ import type { z } from "zod";
 import type {
   actorSchema,
   browserHostIdentitySchema,
+  browserSessionIdentitySchema,
+  browserWorkspaceIdSchema,
+  browserWorkspaceSchema,
+  browserWorkspaceStatusSchema,
   browserWindowStateSchema,
   browserProfileSchema,
   browserRuntimeCapabilitiesSchema,
@@ -20,6 +24,7 @@ import type {
   screenshotOptionsSchema,
   sessionModeSchema,
   sessionSchema,
+  runtimeSessionInventorySchema,
   sessionStatusSchema,
   scrollOptionsSchema,
   startSessionRequestSchema,
@@ -31,7 +36,11 @@ import type {
   typeRequestSchema,
 } from "./schemas.js";
 import type { RoveErrorCode } from "./errors.js";
-import type { PerceivedControl } from "./phase2-interaction.js";
+import type {
+  ActionPhaseRecord,
+  BrowserInteractionRequest,
+  PerceivedControl,
+} from "./phase2-interaction.js";
 
 export type SessionMode = z.infer<typeof sessionModeSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
@@ -41,10 +50,21 @@ export type Actor = z.infer<typeof actorSchema>;
 export type BrowserHostIdentity = z.infer<typeof browserHostIdentitySchema>;
 export type BrowserWindowState = z.infer<typeof browserWindowStateSchema>;
 export type BrowserProfileConfig = z.infer<typeof browserProfileSchema>;
+export type BrowserWorkspaceId = z.infer<typeof browserWorkspaceIdSchema>;
+export type BrowserSessionIdentity = z.infer<
+  typeof browserSessionIdentitySchema
+>;
+export type BrowserWorkspace = z.infer<typeof browserWorkspaceSchema>;
+export type BrowserWorkspaceStatus = z.infer<
+  typeof browserWorkspaceStatusSchema
+>;
 export type BrowserRuntimeCapabilities = z.infer<
   typeof browserRuntimeCapabilitiesSchema
 >;
 export type Session = z.infer<typeof sessionSchema>;
+export type RuntimeSessionInventory = z.infer<
+  typeof runtimeSessionInventorySchema
+>;
 export type SessionSnapshot = Session;
 export type StartSessionRequest = z.input<typeof startSessionRequestSchema>;
 export type TargetKind = z.infer<typeof targetKindSchema>;
@@ -66,9 +86,13 @@ export type SwitchPageRequest = z.input<typeof switchPageRequestSchema>;
 
 export interface ControlStatus {
   sessionId: string;
+  generation: number;
   status: SessionStatus;
   controller: Controller;
   handoff?: HumanHandoff;
+  activeHandoffId?: string;
+  activeHandoffGeneration?: number;
+  lastReturnedHandoffId?: string;
   updatedAt: string;
   observationSeq?: number;
 }
@@ -143,11 +167,41 @@ export interface BrowserObservationCapabilities {
   frameProvenance: boolean;
   openShadowDom: boolean;
   screenshotModes: Array<"viewport" | "full-page" | "target" | "region">;
+  capabilityAtlasVersion: string;
+  interactionKinds: BrowserInteractionRequest["kind"][];
+  semanticStates: Array<keyof PageTargetState>;
+  humanBoundaries: Array<
+    | "browser_permission"
+    | "webauthn"
+    | "payment"
+    | "human_verification"
+    | "closed_shadow_dom"
+    | "browser_owned_ui"
+  >;
 }
 
 export interface PageTargetState {
   checked?: boolean;
   selectedValues?: string[];
+  value?: string;
+  focused?: boolean;
+  expanded?: boolean;
+  pressed?: boolean | "mixed";
+  selected?: boolean;
+  current?: boolean | string;
+  busy?: boolean;
+  invalid?: boolean | string;
+  required?: boolean;
+  readOnly?: boolean;
+  open?: boolean;
+  valueNow?: number;
+  valueMin?: number;
+  valueMax?: number;
+  valueText?: string;
+  orientation?: "horizontal" | "vertical";
+  hasPopup?: boolean | string;
+  controls?: string[];
+  activeDescendant?: string;
 }
 
 export interface PageTarget {
@@ -334,7 +388,11 @@ export interface PageSummary {
 
 export type BrowserActionType =
   | "navigate"
+  | "open_page"
   | "click"
+  | "double_click"
+  | "secondary_click"
+  | "modified_click"
   | "type"
   | "press"
   | "scroll"
@@ -344,13 +402,18 @@ export type BrowserActionType =
   | "switch_page"
   | "close_page"
   | "hover"
+  | "focus"
+  | "blur"
   | "clear"
   | "fill"
+  | "type_sequential"
+  | "select_text"
   | "select"
   | "check"
   | "uncheck"
   | "drag"
   | "upload"
+  | "clipboard"
   | "precise_scroll"
   | "coordinate_click";
 
@@ -365,6 +428,7 @@ export interface ActionResult {
   url?: string;
   openedPages?: PageSummary[];
   observationSeq?: number;
+  phases?: ActionPhaseRecord[];
 }
 
 export interface ObservationPage {

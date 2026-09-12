@@ -20,8 +20,6 @@ export function toAgentConnectionDetails(
   };
 }
 
-export function formatAgentConnection(
-  details: AgentConnectionDetails,
-): string {
+export function formatAgentConnection(details: AgentConnectionDetails): string {
   return `${JSON.stringify(details, null, 2)}\n`;
 }

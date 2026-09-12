@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "node --watch --env-file-if-exists=../../.env --import tsx src/main.ts",
     "start": "node dist/main.js",
-    "test": "vitest run",
+    "test": "vitest run --root ../.. apps/mcp/src",
     "test:manual:stdio": "tsx test/manual/stdio.ts",
     "test:manual:http": "tsx test/manual/http.ts",
     "test:manual:http:no-auth": "tsx test/manual/http-no-auth.ts",

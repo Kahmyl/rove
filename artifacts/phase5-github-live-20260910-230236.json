@@ -1,0 +1,813 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 10905,
+    "ownedProcessPids": [
+      10905,
+      10925,
+      10926,
+      10927,
+      10982,
+      11006,
+      11007,
+      11027,
+      11045,
+      11063,
+      11081,
+      11099,
+      11117,
+      11135,
+      11153,
+      11171,
+      11189,
+      11207,
+      11225,
+      11243,
+      11261,
+      11279,
+      11297,
+      11315,
+      11333,
+      11351,
+      11369,
+      11387,
+      11405,
+      11423,
+      11441,
+      11459,
+      11477,
+      11508,
+      11531
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_a44efc59-e996-4e67-9396-59e0e62272d8",
+    "operationId": "intent_a44efc59-e996-4e67-9396-59e0e62272d8",
+    "sessionId": "ses_246aec5e8c834f6299a097bf69657e73",
+    "threadId": "01a08d58-3d1b-7411-9492-4e339dfb5724",
+    "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214"
+  },
+  "terminalRevision": 2112,
+  "terminalTask": {
+    "taskId": "task_a44efc59-e996-4e67-9396-59e0e62272d8",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_a44efc59-e996-4e67-9396-59e0e62272d8",
+      "inputDigest": "3d524df0b073db06a3477bb3b0f195c8c8a9d79d3a81fd3cacfe411fc8ddf39c",
+      "stage": "turn_started",
+      "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214"
+    },
+    "roveSessionId": "ses_246aec5e8c834f6299a097bf69657e73",
+    "codexThreadId": "01a08d58-3d1b-7411-9492-4e339dfb5724",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08d58-4b26-7031-be0e-3cbe82f3c214"
+      ],
+      "itemCount": 62
+    }
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "receipt_ids_count"
+    ],
+    "marker": {
+      "journey": "github",
+      "status": "passed",
+      "repositoryUrl": "https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236",
+      "issueUrl": "https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236/issues/1",
+      "repositoryPrivate": true,
+      "issueNumber": 1,
+      "issueTitle": "[ROVE LIVE] Browser acceptance task",
+      "checklist": [
+        true,
+        false,
+        false
+      ],
+      "assignee": "Kamil-Flint",
+      "label": "enhancement",
+      "historyReturned": true,
+      "distinctPageIds": [
+        "page_01",
+        "page_02"
+      ],
+      "durableObservationIds": [
+        "bobs_fabdb3ece4ac4530a82852a211186004",
+        "bobs_d869e5fc5b1341debdf9f2009e32b2b6",
+        "bobs_6f7a70f6ff4542208b2e1e75db6ae341",
+        "bobs_b3817b72d3e94db48ad625222b5addcc"
+      ],
+      "screenshotEvidenceIds": [
+        "ev_f046e152ffc146acba0d73ce1223e82e"
+      ],
+      "receiptIds": [
+        "rcpt_a94dfc5e0b5a4b0eb089ae43e4baa57c",
+        "rcpt_803bd475f8ab41e39fd12b475242c8d4",
+        "rcpt_4afdbc9ce2d94fb997595513379f9fa1"
+      ],
+      "finalObservationId": "bobs_b3817b72d3e94db48ad625222b5addcc",
+      "issueState": "open"
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_246aec5e8c834f6299a097bf69657e73",
+    "pageIds": [
+      "page_01",
+      "page_02"
+    ],
+    "observationIds": [
+      "obs_06b2ebd250fc48c09007d9317259c68d",
+      "obs_e05c26dc8e41493a82704eb5edf6138d",
+      "obs_ffcd6424b1f14080ae6794689b45bd89",
+      "obs_4e3d01441a5e4e7097da83d79b0ea00d",
+      "obs_94c633c54ec34beeb26030c7cce9c4a6",
+      "obs_f2a3436cb2fa46b5bf382c6ef568b926",
+      "obs_46403e9b808745e88a05e8086e2e632b",
+      "obs_6f9321e7870743a585a0cb13aa83c17c",
+      "obs_0cc6da66ec0146bbbe999988aede31bd",
+      "obs_1a7d166287b8480ba17dbb9e9d6a4062",
+      "obs_458267e2e7a64e16a2ce56bf748b17c9",
+      "obs_76734a9bebd946049c161a5fb47d0e16",
+      "obs_b9ac6525d5614617a7d507904653c6da",
+      "obs_a7c0a8f6062c4904a3417f44ee604844",
+      "obs_c5fd61032aca478fa36bb9dc5b749299",
+      "obs_95fcd346114045c5a6190dc8fb610e72",
+      "obs_7d057d894a6c4eacbcdf326a112b7363",
+      "obs_f80cf30996f84cb19c998a6bbbcbd6b2",
+      "obs_df6c1aa6833f465a8866732daf5d348a",
+      "obs_464fe602c5514d69a6bd7b643e227742",
+      "obs_545313abde2a488da0255b694b899494",
+      "obs_c322d465138344f5bc2cd7f382f2132f",
+      "obs_a847db6f225f42d59a57dfadee4bad2d",
+      "obs_cd02e9a9df374235b00c78477bfac654",
+      "obs_c537dee8454347b4a81d5cd7068d6ffb",
+      "obs_998c31d935034e028a386aa3cc840b7d",
+      "bobs_3e649c0958a84f0f9834693802150356",
+      "bobs_8a9acbb4cc474a8ba8c8e569550f3ad2",
+      "bobs_97486fcc33944a8993793c776f386d39",
+      "bobs_fabdb3ece4ac4530a82852a211186004",
+      "bobs_d86c4c412c2047c5ab71f32e80a23413",
+      "bobs_55c3461acd3045048bc10fa1df3feed4",
+      "bobs_ae63afd6bdd14f6b8b0a99f6fe8ee291",
+      "bobs_fc3089394c0b432f96a2b9e27651ab6b",
+      "bobs_f983967f1c5b44ce830c0bf0fb618b7f",
+      "bobs_fd280902697d48b5b00cb9d42b310bfd",
+      "bobs_d869e5fc5b1341debdf9f2009e32b2b6",
+      "bobs_9f620dbb66004fc58b96735c6fadb7aa",
+      "bobs_7dfb056f04c54752a0ed4cd31433f8e3",
+      "bobs_b913e2f2572c4c368ee0852bd824d663",
+      "bobs_6f7a70f6ff4542208b2e1e75db6ae341",
+      "bobs_b3817b72d3e94db48ad625222b5addcc"
+    ],
+    "evidenceIds": [
+      "ev_f046e152ffc146acba0d73ce1223e82e",
+      "ev_1598eacb61454ab1bb0756ca67df8e08",
+      "ev_17b27791c1264e678d6771fff09fe06d",
+      "ev_1b7ad4c7e54c42aaab1c03b956d80ae9",
+      "ev_29902ec0c39c42b8a90cbbb67e0b9b35",
+      "ev_2cf1828a0cb84b1ca5343bfe873cefaf",
+      "ev_3f29277bf0af4a758ce3c936a953b2a9",
+      "ev_44b9c637428047c3ac14f6f9d5b09ab6",
+      "ev_4be0fe6107c849c2a967bffb149f4022",
+      "ev_4d0d41aacbb344faa93a39dda012ad50",
+      "ev_4eef8174deaa44fb8c959e3a1a6171aa",
+      "ev_52dc0573a9cc4d99aefadc14a4849522",
+      "ev_54fb77eea8f94b1eb262153300302415",
+      "ev_5b78dc1b2c694b0a87cdfcec9ac9ed8b",
+      "ev_611b6f3a4fb34921a7022b4a3db746d9",
+      "ev_6427b68ebc74490fa45e1c153aece664",
+      "ev_6aa72f64dae14d72b23b471053171dd6",
+      "ev_6c8cead9584744e5890c2c971ccfe76e",
+      "ev_7abad9733d174c0b920b0bcbdaea3bd0",
+      "ev_8a41bc5994104923a563b2d584f883a4",
+      "ev_8a68cbb5431a4022a5f258352c2f4feb",
+      "ev_b6a7a512b7fd4aa2bc2bc24912238140",
+      "ev_b90e698c8ecd44e882f90db3c76029a8",
+      "ev_c271dfb4b8ef4aea8d6b7502a34dbbf1",
+      "ev_c2d91081bf4d4407a073b0dfd7dbe083",
+      "ev_e0758af79a9745f5b5afffc01b844d8d",
+      "ev_e300dec22b9f4e07b98c7fa6ac267e30",
+      "ev_f270a8d30e4e4c5eb851d57090ad539d",
+      "ev_f583a0d2f49d468aa8d4f5d6937b127d",
+      "ev_fc4cdca4026c4f179764816a99d8bb33"
+    ],
+    "screenshotEvidenceIds": [
+      "ev_f046e152ffc146acba0d73ce1223e82e"
+    ],
+    "receipts": [
+      {
+        "id": "rcpt_13e6ae93c419498db19406849839afef",
+        "observationId": "obs_ffcd6424b1f14080ae6794689b45bd89",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_92de2d563f5743ce842b7ced47cca0ef",
+        "observationId": "obs_4e3d01441a5e4e7097da83d79b0ea00d",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_6184db677078438bb79416fd74a819ae",
+        "observationId": "obs_94c633c54ec34beeb26030c7cce9c4a6",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_absent",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_a94dfc5e0b5a4b0eb089ae43e4baa57c",
+        "observationId": "obs_46403e9b808745e88a05e8086e2e632b",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": true,
+        "effects": [
+          {
+            "kind": "url_equals",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_ab2e0723d40f4f03b83936068ea56535",
+        "observationId": "obs_0cc6da66ec0146bbbe999988aede31bd",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_86a79c84ca5b4b05b8a0484b2111c37f",
+        "observationId": "obs_1a7d166287b8480ba17dbb9e9d6a4062",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_a23e25cd59904674a5b0c08a6b609cff",
+        "observationId": "obs_458267e2e7a64e16a2ce56bf748b17c9",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_absent",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_93bd603e0d284900abcf70c8f9b2040e",
+        "observationId": "obs_76734a9bebd946049c161a5fb47d0e16",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_bf2c94e7698e42a685c04e49941c99b6",
+        "observationId": "obs_b9ac6525d5614617a7d507904653c6da",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_e94fc654e34d4bdda092e832b463274c",
+        "observationId": "obs_a7c0a8f6062c4904a3417f44ee604844",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_absent",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_803bd475f8ab41e39fd12b475242c8d4",
+        "observationId": "obs_95fcd346114045c5a6190dc8fb610e72",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": true,
+        "effects": [
+          {
+            "kind": "url_equals",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_9f8da93a832946cba18d2da46d701df4",
+        "observationId": "obs_7d057d894a6c4eacbcdf326a112b7363",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "unresolved"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_759b29be6a2a4873989ab0695418c414",
+        "observationId": "obs_f80cf30996f84cb19c998a6bbbcbd6b2",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_c509d3d26b21494dbc8bc75fbf8a837b",
+        "observationId": "obs_df6c1aa6833f465a8866732daf5d348a",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_4afdbc9ce2d94fb997595513379f9fa1",
+        "observationId": "obs_464fe602c5514d69a6bd7b643e227742",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": true,
+        "effects": [
+          {
+            "kind": "text_absent",
+            "state": "observed"
+          },
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa3290cbae087d299cb9171cfd52734",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "I’ll create the private repository and issue, verify the saved changes, then check browser history, tabs, and capture the final viewport evidence through Rove."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa3294dc69887d297c11136b072ecbb",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "GitHub shows the repository name is available, with Kamil-Flint as owner. Private visibility is selected; I’m saving the repository next."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa329a3619887d28f1f2ab925393273",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "The private repository is created. I’m preparing the issue with the exact two paragraphs and three unchecked items, then adding the assignee and enhancement label before saving."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa329f659f087d2840ab78a3f8ba80b",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "The draft matches the requested title and body, with Kamil-Flint assigned and enhancement selected. I’m creating issue #1, then verifying its saved state before editing the checklist."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa32a3f8e0887d2aa5b0330015e243c",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "The saved issue has the exact original body, all three items unchecked, Kamil-Flint assigned, and enhancement applied. I’ve changed only the first Markdown checkbox and am saving that edit."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa32a6f5b3487d2b33ad4ceb2f727f3",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "The edit is saved and verified: only the first item is checked, and the title, paragraphs, assignee, label, and open state remain correct. Browser Back returned from the repository main page to issue #1. I’m checking the second tab and capturing the final viewport."
+      },
+      {
+        "id": "msg_0f43e5de23f2a5d9016aa32abcb02487d2b88b75498dbda5bf",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"github\",\"status\":\"passed\",\"repositoryUrl\":\"https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236\",\"issueUrl\":\"https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236/issues/1\",\"repositoryPrivate\":true,\"issueNumber\":1,\"issueTitle\":\"[ROVE LIVE] Browser acceptance task\",\"checklist\":[true,false,false],\"assignee\":\"Kamil-Flint\",\"label\":\"enhancement\",\"historyReturned\":true,\"distinctPageIds\":[\"page_01\",\"page_02\"],\"durableObservationIds\":[\"bobs_fabdb3ece4ac4530a82852a211186004\",\"bobs_d869e5fc5b1341debdf9f2009e32b2b6\",\"bobs_6f7a70f6ff4542208b2e1e75db6ae341\",\"bobs_b3817b72d3e94db48ad625222b5addcc\"],\"screenshotEvidenceIds\":[\"ev_f046e152ffc146acba0d73ce1223e82e\"],\"receiptIds\":[\"rcpt_a94dfc5e0b5a4b0eb089ae43e4baa57c\",\"rcpt_803bd475f8ab41e39fd12b475242c8d4\",\"rcpt_4afdbc9ce2d94fb997595513379f9fa1\"],\"finalObservationId\":\"bobs_b3817b72d3e94db48ad625222b5addcc\",\"issueState\":\"open\"}\n\nCreated the [private repository](https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236) and [issue #1](https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236/issues/1). Verified the exact title and both paragraphs before and after editing.\n\n- Checked: Create the private repository.\n- Unchecked: Verify the saved issue metadata.\n- Unchecked: Confirm browser-history navigation.\n- Assignee: **Kamil-Flint**. Label: **enhancement**. State: **Open**.\n\nBrowser Back returned from the repository main page to the issue in `page_01`. The repository Issues page opened in `page_02`, then focus returned to `page_01`.\n\nAll three consequential receipts above report **dispatched, completed, applied**, respectively for repository creation, issue creation with metadata, and saving the checklist edit.\n\nThe final viewport screenshot shows the repository breadcrumb with a lock icon, selected Issues tab, full issue title and #1, green Open badge, both complete paragraphs, first checkbox checked and the other two empty. The right sidebar visibly shows Kamil-Flint an"
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-db9a8ea4-94da-48a2-89c6-ab2df501ba62",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-eb6364c0-8148-43b8-8c8c-88d174cfbb6c",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-b72dd93d-1731-46f5-9426-4d88fd181115",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-f621c6e5-75ee-402f-82b7-48004bce936c",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-3ba7d621-7a0c-4805-a4b4-79bff17ac892",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-25bde99b-0d2f-4a12-8033-453f73c59117",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c0c44ebd-f5fa-488a-b068-2b6f35966880",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-81f4e144-473d-457b-9294-613b7adee958",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.scroll"
+      },
+      {
+        "id": "exec-5dd907fc-ac6e-4215-bbb4-51fa8ee7c48d",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-e4c8291c-e0c1-4cab-a4ec-8b76b726e459",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-aec0d61b-5e5b-4a77-afad-c2ac3ad18a50",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-8dbee00d-7f73-4d44-819b-0b07c61f9ce5",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.navigate"
+      },
+      {
+        "id": "exec-f70610d6-e70d-4cbe-ae37-c386e65d3392",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-ee11ae77-2874-4143-b893-f84e7b7bbd52",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-4e80cf50-45cf-4f48-9aab-c0e8410bea3b",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-bfd1b87a-e172-40ad-ab6e-d3d2423799eb",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-e326c637-c731-4324-87f3-809c8c950c5d",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-bf822213-3dba-4477-990e-16ffc7ad64bf",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-f12a0433-e984-484b-a72a-0d67c17d3249",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-d678c870-e28e-46d6-8559-9673759ffbaa",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-ed1e2eca-90bd-40ac-944f-53767bf4fb3e",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-5d550460-c54f-4a41-9902-4b5ad1be3e89",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-44c81026-b6bf-46a6-a6ff-57f2b58ac090",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-ef7f3131-ca15-4e25-b51b-43a599f7f4c9",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-2ed4ba9c-dce3-424b-ac38-2aa8739739a0",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-924da212-6d4e-49aa-813f-2108a946a2f0",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-ac52d9e7-6fa5-4e18-8974-3469daf94b48",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.scroll"
+      },
+      {
+        "id": "exec-8eec3cb9-4bdb-41f2-ae96-ffc637d43acb",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-846aa1fc-e0af-4486-b4f6-9af535b0f2c3",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-bdd7e078-96fd-4f18-a80d-c7018b3d84a4",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-edb963ba-c1d9-4bee-aecf-97d4f9e367bc",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-7ae0f3df-7d37-4d39-98ad-8a1a05583331",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-ab872aeb-a8f1-4237-a511-b584039be1ba",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-b4d16d69-2128-4c45-888e-5b2f439b9906",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-f5fd6ff4-6bb4-40f1-af5c-0c2a7071695f",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-d68fa6b5-f81e-4ea2-b3af-702cf8f58167",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-20056d3e-8724-4ff2-b970-761e40f0e51b",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-ff269351-6fd6-421a-b9e1-eaf3654e7955",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-9bcccfaa-8dbb-4e47-add8-2f2c86cb03c7",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.navigate"
+      },
+      {
+        "id": "exec-104fe8c3-4770-46ed-8cec-e3a6f0eb41a7",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.back"
+      },
+      {
+        "id": "exec-30945d31-a09a-4129-8fc3-b57ca3e83b17",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-89ae6222-5a84-4256-9500-6a4fb29b97c6",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.open_page"
+      },
+      {
+        "id": "exec-c1d77e92-1c7f-42f8-bc7f-7f44bb90c09b",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.pages"
+      },
+      {
+        "id": "exec-b76dbb50-3483-4015-91b0-cc4fd2f27447",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.switch_page"
+      },
+      {
+        "id": "exec-428f31b5-99d5-469b-a8f1-77212fd56fcc",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-fe315eaf-8180-4cfe-a628-1aba8b585f8f",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.switch_page"
+      },
+      {
+        "id": "exec-c6bd2714-f99f-4a97-bced-59c755516b5f",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-ea8eb03d-a9de-453a-b348-3637c21f31a5",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-9d9adb1b-08ad-413c-b390-12f5d15787da",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-37bd4755-6ee2-47de-80cd-746ca380cd34",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-d6b76829-132f-4024-8478-9fd918dca16f",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214",
+        "status": "completed",
+        "title": "session.observations"
+      }
+    ],
+    "repositoryUrls": [
+      "https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236",
+      "https://github.com/Kamil-Flint/rove-phase5-live-20260910-230236/issues/1"
+    ],
+    "receiptIds": [
+      "rcpt_a94dfc5e0b5a4b0eb089ae43e4baa57c",
+      "rcpt_803bd475f8ab41e39fd12b475242c8d4",
+      "rcpt_4afdbc9ce2d94fb997595513379f9fa1"
+    ],
+    "observationIds": [
+      "bobs_fabdb3ece4ac4530a82852a211186004",
+      "bobs_d869e5fc5b1341debdf9f2009e32b2b6",
+      "bobs_6f7a70f6ff4542208b2e1e75db6ae341",
+      "bobs_b3817b72d3e94db48ad625222b5addcc"
+    ],
+    "evidenceIds": [
+      "ev_f046e152ffc146acba0d73ce1223e82e"
+    ],
+    "navigationIds": []
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/github-20260910-230236-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_a44efc59-e996-4e67-9396-59e0e62272d8",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Observation reduced from authoritative facts."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_a44efc59-e996-4e67-9396-59e0e62272d8",
+        "inputDigest": "3d524df0b073db06a3477bb3b0f195c8c8a9d79d3a81fd3cacfe411fc8ddf39c",
+        "stage": "turn_started",
+        "turnId": "01a08d58-4b26-7031-be0e-3cbe82f3c214"
+      },
+      "roveSessionId": "ses_246aec5e8c834f6299a097bf69657e73",
+      "codexThreadId": "01a08d58-3d1b-7411-9492-4e339dfb5724",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08d58-4b26-7031-be0e-3cbe82f3c214"
+        ],
+        "itemCount": 62
+      }
+    },
+    "companion": null,
+    "runOwnedAttention": [],
+    "runOwnedFileAttention": 0,
+    "runOwnedRecoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 35,
+    "residualProcessIds": []
+  }
+}

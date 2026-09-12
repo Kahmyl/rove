@@ -1,0 +1,259 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_48e9b2bf-db41-4e1b-a6ac-4c4e13fd8916",
+    "displayName": "Rove Drive Acceptance 20260911-012519",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 13809,
+    "ownedProcessPids": [
+      13809,
+      13830,
+      13831,
+      13832,
+      13890,
+      13896
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+    "operationId": "intent_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+    "sessionId": "ses_829ee38f2cee40f585d6412d2f29df77",
+    "threadId": "01a08f2e-8b2f-7451-86f5-e464eb5e2d8e",
+    "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d"
+  },
+  "terminalRevision": 931,
+  "terminalTask": {
+    "taskId": "task_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+    "lifecycle": {
+      "phase": "waiting_for_human",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+      "stage": "turn_started",
+      "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d"
+    },
+    "roveSessionId": "ses_829ee38f2cee40f585d6412d2f29df77",
+    "codexThreadId": "01a08f2e-8b2f-7451-86f5-e464eb5e2d8e",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_48e9b2bf-db41-4e1b-a6ac-4c4e13fd8916"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish"
+    ],
+    "runtime": {
+      "status": "awaiting_human",
+      "controller": null,
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08f2e-9cae-7541-a04e-f7f3ee08988d"
+      ],
+      "itemCount": 7
+    },
+    "attachmentCount": 1
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "final_reports_stop",
+      "journey_not_passed",
+      "observation_ids_count",
+      "screenshot_ids_count",
+      "missing_inspect_tool",
+      "drive_folder_url",
+      "drive_breadcrumb",
+      "drive_file_count",
+      "drive_not_organized",
+      "drive_history",
+      "drive_mutations",
+      "drive_receipt_ids_count",
+      "drive_mutation_receipts",
+      "drive_final_observation",
+      "receipt_ids_count",
+      "download_observation_ids_count",
+      "download_evidence_ids_count",
+      "download_observation_not_exactly_one",
+      "download_evidence_not_exactly_one",
+      "actual_filename_missing",
+      "download_size",
+      "download_mime",
+      "run_download_count",
+      "run_download_file_count",
+      "download_receipt_correlation",
+      "download_filename_mismatch",
+      "file_filename_mismatch",
+      "download_size_mismatch",
+      "download_mime_mismatch",
+      "missing_download_interact",
+      "missing_evidence_tool",
+      "drive_history_tool"
+    ],
+    "marker": {
+      "journey": "drive",
+      "status": "blocked",
+      "reason": "Google Drive redirected to Google sign-in; human authentication is required. No external mutations were performed.",
+      "folderName": "Rove Live Acceptance P5.9 20260911-0732",
+      "folderUrl": null,
+      "breadcrumb": null,
+      "sourceFileName": "rove-live-acceptance.txt",
+      "fileName": "rove-live-acceptance-renamed.txt",
+      "fileCount": null,
+      "organized": false,
+      "historyReturned": false,
+      "historyReturnUrl": null,
+      "distinctPageIds": [
+        "page_01"
+      ],
+      "durableObservationIds": [],
+      "screenshotEvidenceIds": [],
+      "receiptIds": [],
+      "finalObservationId": null,
+      "downloadObservationIds": [],
+      "downloadEvidenceIds": [],
+      "actualFilename": null,
+      "size": null,
+      "mime": null,
+      "externalMutations": []
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_829ee38f2cee40f585d6412d2f29df77",
+    "pageIds": [
+      "page_01"
+    ],
+    "observationIds": [
+      "obs_092b9fda7f8f41bab46d6b85eb868538",
+      "obs_6752c6e9785d4b3e82d4b08a6e461e50",
+      "obs_f40b5de85c7b443d93e1bb8faae391c8",
+      "obs_4fd79031ca4a4b7ca9fa7c549322e7a6"
+    ],
+    "evidenceIds": [
+      "ev_3862157c386645d8bf4d90015f79c75d",
+      "ev_85a5964fdb9348bbb1fc78678e029076",
+      "ev_ac63d9b0f550411eb82ea7e0902b09b9",
+      "ev_bc064115abf84db49f8f195bb76a3a2c"
+    ],
+    "screenshotEvidenceIds": [],
+    "receipts": [],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_0a9fcc3863be213b016aa3a174e1d487d29224ce6997896555",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "text": "I’ll carry out the Drive journey through Rove, verify each change, and collect the screenshot, history, and download evidence."
+      },
+      {
+        "id": "msg_0a9fcc3863be213b016aa3a196a89887d28af306c19993b866",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"drive\",\"status\":\"blocked\",\"reason\":\"Google Drive redirected to Google sign-in; human authentication is required. No external mutations were performed.\",\"folderName\":\"Rove Live Acceptance P5.9 20260911-0732\",\"folderUrl\":null,\"breadcrumb\":null,\"sourceFileName\":\"rove-live-acceptance.txt\",\"fileName\":\"rove-live-acceptance-renamed.txt\",\"fileCount\":null,\"organized\":false,\"historyReturned\":false,\"historyReturnUrl\":null,\"distinctPageIds\":[\"page_01\"],\"durableObservationIds\":[],\"screenshotEvidenceIds\":[],\"receiptIds\":[],\"finalObservationId\":null,\"downloadObservationIds\":[],\"downloadEvidenceIds\":[],\"actualFilename\":null,\"size\":null,\"mime\":null,\"externalMutations\":[]}\n\nGoogle Drive requires sign-in. Human control was requested; execution stopped.\n\nAll six mutations—create folder, upload, rename, create Archive, move, and download—remain unperformed, with no receipts. No screenshot or final folder verification exists.\n\nPage `page_01` redirected to Google Accounts sign-in, recorded by `obs_f40b5de85c7b443d93e1bb8faae391c8`. Authentication was confirmed by `obs_4fd79031ca4a4b7ca9fa7c549322e7a6`. No viewport was captured, so there is no verified visual description.\n\nPlease sign in through Rove and tell me when you’re ready to continue."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-6be05e49-54a1-4149-95cd-4b213f4d0f3b",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-b0ba1e4f-566f-42ca-ad0c-52d8ac24e9e9",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "status": "started",
+        "title": "control.request_human"
+      },
+      {
+        "id": "exec-26a68a59-32a0-4872-bbcc-851a7a6e66a0",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "status": "completed",
+        "title": "control.wait"
+      },
+      {
+        "id": "exec-c4551207-b305-48a3-8ea3-25aaea7d3ff7",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d",
+        "status": "completed",
+        "title": "session.observations"
+      }
+    ],
+    "driveUrls": [],
+    "receiptIds": [],
+    "observationIds": [
+      "obs_f40b5de85c7b443d93e1bb8faae391c8",
+      "obs_4fd79031ca4a4b7ca9fa7c549322e7a6"
+    ],
+    "evidenceIds": [],
+    "pageIds": [
+      "page_01"
+    ],
+    "downloadFilenameMentions": 1,
+    "downloadSizes": [],
+    "mimeTypes": []
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/drive-20260911-073252-native.png",
+  "cleanup": {
+    "operation": "normal Finish and Archive",
+    "task": {
+      "taskId": "task_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+      "lifecycle": {
+        "phase": "closed",
+        "reason": "Thread is already archived; repeated archive is reconciled."
+      },
+      "bootstrapStage": "complete",
+      "initialLaunch": {
+        "operationId": "intent_72e5dd64-c95e-4922-9b1c-25603afcd4b3",
+        "stage": "turn_started",
+        "turnId": "01a08f2e-9cae-7541-a04e-f7f3ee08988d"
+      },
+      "roveSessionId": "ses_829ee38f2cee40f585d6412d2f29df77",
+      "codexThreadId": "01a08f2e-8b2f-7451-86f5-e464eb5e2d8e",
+      "executionMode": "agent",
+      "browserIdentity": {
+        "mode": "workspace",
+        "workspaceId": "wrk_48e9b2bf-db41-4e1b-a6ac-4c4e13fd8916"
+      },
+      "approvalsReviewer": "auto_review",
+      "availableActions": [
+        "resume"
+      ],
+      "runtime": {
+        "status": "completed",
+        "controller": null,
+        "recovery": "cleanup_required"
+      },
+      "conversation": {
+        "turnStatus": "completed",
+        "archived": true,
+        "turnOrder": [
+          "01a08f2e-9cae-7541-a04e-f7f3ee08988d"
+        ],
+        "itemCount": 7
+      },
+      "attachmentCount": 0
+    },
+    "companion": null,
+    "attention": [],
+    "fileAttention": [],
+    "recoveryWarnings": [],
+    "baselinePreserved": true,
+    "violations": []
+  },
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

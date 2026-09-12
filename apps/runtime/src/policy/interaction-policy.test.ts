@@ -120,6 +120,100 @@ describe("InteractionPolicy", () => {
     );
   });
 
+  it("authorizes a grounded recovery independently of the legacy page-wide gate", () => {
+    const policy = new InteractionPolicy();
+    policy.recordInspection(
+      "ses_test",
+      inspection(
+        {
+          kind: "unknown_interstitial",
+          confidence: "medium",
+          signals: ["interstitial:unknown"],
+        },
+        {
+          propositions: {
+            ...propositions,
+            interstitialPresented: true,
+          },
+        },
+      ),
+    );
+
+    expect(() =>
+      policy.authorizeMutation("ses_test", "back", 0, identity),
+    ).toThrowError(expect.objectContaining({ code: "UNKNOWN_INTERSTITIAL" }));
+
+    expect(
+      policy.authorizeAction(
+        "ses_test",
+        "back",
+        {
+          action: "back",
+          effect: "recover",
+          explicitlyAuthorized: true,
+          freshlyGrounded: true,
+          outcomeCanBeVerified: true,
+        },
+        0,
+        identity,
+      ),
+    ).toMatchObject({ decision: "allow" });
+  });
+
+  it("keeps freshness and repetition invariants on the action-level path", () => {
+    const stale = new InteractionPolicy();
+    stale.recordInspection("ses_test", inspection(ready));
+
+    expect(() =>
+      stale.authorizeAction(
+        "ses_test",
+        "back",
+        {
+          action: "back",
+          effect: "recover",
+          explicitlyAuthorized: true,
+          freshlyGrounded: true,
+          outcomeCanBeVerified: true,
+        },
+        0,
+        { ...identity, fingerprint: "b".repeat(64) },
+      ),
+    ).toThrowError(expect.objectContaining({ code: "INSPECTION_REQUIRED" }));
+
+    const repeated = new InteractionPolicy();
+    repeated.recordInspection("ses_repeat", inspection(ready));
+    for (let index = 0; index < 4; index += 1) {
+      repeated.authorizeAction(
+        "ses_repeat",
+        "back",
+        {
+          action: "back",
+          effect: "recover",
+          explicitlyAuthorized: true,
+          freshlyGrounded: true,
+          outcomeCanBeVerified: true,
+        },
+        index,
+        identity,
+      );
+    }
+    expect(() =>
+      repeated.authorizeAction(
+        "ses_repeat",
+        "back",
+        {
+          action: "back",
+          effect: "recover",
+          explicitlyAuthorized: true,
+          freshlyGrounded: true,
+          outcomeCanBeVerified: true,
+        },
+        5,
+        identity,
+      ),
+    ).toThrowError(expect.objectContaining({ code: "REPEATED_ACTION_BLOCKED" }));
+  });
+
   it("makes loading-state rejection explicitly retryable", () => {
     const policy = new InteractionPolicy();
 

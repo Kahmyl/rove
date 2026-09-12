@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "status": "proposed",
+  "transport": "stdio-jsonl",
+  "allowedBaselines": [
+    {
+      "cliVersion": "0.153.4",
+      "platformOs": "macos",
+      "architecture": "arm64",
+      "executableSha256": "c147aa90d34139599711fb568102ceefc6319ca1ac5cb6f4056ca46a1834edd9",
+      "generatedSchemaSha256": "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5"
+    }
+  ],
+  "requiredHandshake": ["initialize", "initialized"],
+  "requiredCapabilities": {
+    "experimentalApi": false,
+    "requestAttestation": false
+  },
+  "schemaEvidence": "../fixtures/schema-manifest.json",
+  "failBeforeMutationOn": [
+    "unresolved_executable",
+    "unsupported_version",
+    "executable_digest_mismatch",
+    "schema_digest_mismatch",
+    "initialize_failure",
+    "required_rove_mcp_failure"
+  ],
+  "productionResolution": "Packaged builds must use a Rove-approved binary identity. Development may use an explicitly configured binary only when version and schema digests match this manifest. PATH lookup alone is insufficient."
+}

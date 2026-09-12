@@ -1,0 +1,500 @@
+import { describe, expect, it } from "vitest";
+
+import type {
+  LocalProductSnapshot,
+  ProductTaskProjection,
+} from "../main/codex/local-product-api.js";
+import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import {
+  activeProductTask,
+  composerGate,
+  newestDesktopSnapshot,
+  reconcileSelectedTaskId,
+  recoveryLabel,
+  selectableProductTasks,
+  taskControlProjection,
+  taskHistoryTitle,
+} from "./product-surface-state.js";
+
+const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
+
+function product(
+  account: "unavailable" | "logged_out" | "logged_in" = "logged_in",
+): LocalProductSnapshot {
+  return {
+    version: 7,
+    host: { state: "ready", ready: true, restartAttempt: 0 },
+    catalog: {
+      account: { status: account },
+      models: [
+        {
+          id: "model_a",
+          model: "model_a",
+          displayName: "Model A",
+          description: "Fixture",
+          efforts: ["low", "high"],
+          defaultEffort: "low",
+          isDefault: true,
+          inputModalities: ["text"],
+          supportsPersonality: false,
+          defaultServiceTier: null,
+        },
+      ],
+      rateLimits: null,
+      usage: null,
+      refreshedAt: "2026-09-07T00:00:00Z",
+    },
+    attention: [],
+    tasks: [],
+    recoveryWarnings: [],
+    draftAttachments: [],
+    fileAttention: [],
+  };
+}
+
+function desktop(
+  account: "unavailable" | "logged_out" | "logged_in" = "logged_in",
+): DesktopSurfaceSnapshot {
+  return {
+    revision: 1,
+    surface: {
+      presentation: "full",
+      browserContext: "windowed",
+      activeHost: "control_center",
+      returnPresentation: "chip",
+      revision: 1,
+    },
+    companion: null,
+    notice: null,
+    workspaces: {
+      selectedWorkspaceId: workspaceId,
+      workspaces: [
+        {
+          id: workspaceId,
+          displayName: "Personal",
+          browser: "chrome",
+          storageLayout: "workspace",
+          createdAt: "2026-09-07T00:00:00Z",
+          lastUsedAt: "2026-09-07T00:00:00Z",
+        },
+      ],
+    },
+    product: product(account),
+    productError: null,
+  };
+}
+
+describe("native product composer state", () => {
+  it("ignores a Desktop snapshot older than the newest applied revision", () => {
+    const newer = desktop();
+    const older = { ...newer, revision: 0 };
+    expect(newestDesktopSnapshot(newer, older)).toBe(newer);
+    expect(newestDesktopSnapshot(older, newer)).toBe(newer);
+  });
+
+  it.each(["agent", "companion", "capture"] as const)(
+    "accepts %s with named and explicitly temporary identity",
+    (mode) => {
+      for (const browserChoice of [`workspace:${workspaceId}`, "temporary"]) {
+        const result = composerGate(desktop(), {
+          outcome: "Complete the task",
+          mode,
+          browserChoice,
+          model: "model_a",
+          effort: "high",
+        });
+        expect(result.ready).toBe(true);
+        expect(result.browserIdentity?.mode).toBe(
+          browserChoice === "temporary" ? "temporary" : "workspace",
+        );
+      }
+    },
+  );
+
+  it("blocks logged-out, unavailable, empty, and implicit no-workspace launch", () => {
+    for (const account of ["logged_out", "unavailable"] as const)
+      expect(
+        composerGate(desktop(account), {
+          outcome: "Do it",
+          mode: "agent",
+          browserChoice: `workspace:${workspaceId}`,
+        }).ready,
+      ).toBe(false);
+    expect(
+      composerGate(desktop(), {
+        outcome: "",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+      }).reason,
+    ).toMatch(/Describe/);
+    const noWorkspace = desktop();
+    noWorkspace.workspaces = { workspaces: [] };
+    expect(
+      composerGate(noWorkspace, {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: "",
+      }).reason,
+    ).toMatch(/Create.*Temporary/);
+  });
+
+  it("keeps an unmatched Runtime session visible without globally blocking new tasks", () => {
+    const state = desktop("logged_out");
+    state.companion = {
+      session: {
+        id: "ses_unmatched",
+        mode: "agent",
+        status: "active",
+        controller: "agent",
+      },
+      observationCount: 2,
+      evidenceCount: 7,
+    };
+    expect(
+      composerGate(state, {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+      }).reason,
+    ).toBe("Sign in to Rove with ChatGPT before starting.");
+
+    state.product!.catalog.account = { status: "logged_in" };
+    expect(
+      composerGate(state, {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: "temporary",
+      }),
+    ).toMatchObject({ ready: true, browserIdentity: { mode: "temporary" } });
+  });
+
+  it("rejects stale workspace, model, and reasoning-effort selections", () => {
+    expect(
+      composerGate(desktop(), {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: "workspace:wrk_00000000-0000-4000-8000-000000000099",
+      }).reason,
+    ).toMatch(/available browser/);
+    expect(
+      composerGate(desktop(), {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+        model: "removed",
+      }).reason,
+    ).toMatch(/model is stale/);
+    expect(
+      composerGate(desktop(), {
+        outcome: "Do it",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+        model: "model_a",
+        effort: "ultra",
+      }).reason,
+    ).toMatch(/effort is unavailable/);
+  });
+
+  it("keeps an oldest cleanup task selectable without blocking an independent launch", () => {
+    const state = desktop();
+    const blocker: ProductTaskProjection = {
+      taskId: "task_oldest_blocker",
+      executionMode: "agent" as const,
+      browserIdentity: { mode: "temporary" as const },
+      selectionSource: "user_selected" as const,
+      selectedAt: "2026-09-01T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete" as const,
+      lifecycle: {
+        phase: "cleanup_required" as const,
+        reason: "Runtime cleanup is unconfirmed.",
+      },
+      availableActions: ["retry_cleanup", "finish"],
+    };
+    const histories: ProductTaskProjection[] = Array.from(
+      { length: 12 },
+      (_, index) => ({
+        ...blocker,
+        taskId: `task_closed_${index}`,
+        selectedAt: `2026-09-0${String((index % 7) + 1)}T01:00:00.000Z`,
+        lifecycle: { phase: "closed", reason: "Closed." },
+        availableActions: [],
+      }),
+    );
+    state.product!.tasks = [blocker, ...histories];
+
+    const selectable = selectableProductTasks(state.product);
+    expect(selectable).toHaveLength(9);
+    expect(selectable[0]).toMatchObject({
+      taskId: blocker.taskId,
+      availableActions: ["retry_cleanup", "finish"],
+    });
+    expect(
+      composerGate(state, {
+        outcome: "Start another task",
+        mode: "agent",
+        browserChoice: "temporary",
+      }),
+    ).toMatchObject({
+      ready: true,
+      browserIdentity: { mode: "temporary" },
+    });
+  });
+
+  it("derives concise task names from the first meaningful user request", () => {
+    const task: ProductTaskProjection = {
+      taskId: "task_named",
+      executionMode: "agent",
+      browserIdentity: { mode: "temporary" },
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-12T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      lifecycle: { phase: "closed", reason: "Closed." },
+      availableActions: [],
+      conversation: {
+        turnStatus: "completed",
+        archived: false,
+        items: {
+          first: {
+            id: "first",
+            turnId: "turn_1",
+            kind: "user_message",
+            status: "completed",
+            authoredBy: "user",
+            text: "Using only the Rove connector, create and verify a private GitHub repository for browser acceptance.",
+          },
+        },
+        turnOrder: ["turn_1"],
+      },
+    };
+    expect(taskHistoryTitle(task)).toBe(
+      "Create and verify a private GitHub repository for…",
+    );
+    const legacyFirst = { ...task.conversation!.items.first! };
+    delete legacyFirst.authoredBy;
+    expect(
+      taskHistoryTitle({
+        ...task,
+        conversation: {
+          ...task.conversation!,
+          items: {
+            first: legacyFirst,
+          },
+        },
+      }),
+    ).toBe("Create and verify a private GitHub repository for…");
+    const withoutConversation = { ...task };
+    delete withoutConversation.conversation;
+    expect(
+      taskHistoryTitle({ ...withoutConversation, executionMode: "capture" }),
+    ).toBe("Browser capture");
+  });
+
+  it("does not count closed archived history as blockers before or after active-task cleanup", () => {
+    const state = desktop();
+    const closed: ProductTaskProjection = {
+      taskId: "task_closed",
+      executionMode: "agent",
+      browserIdentity: { mode: "workspace", workspaceId },
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-07T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      lifecycle: { phase: "closed", reason: "Closed." },
+      availableActions: [],
+      conversation: {
+        turnStatus: "completed",
+        archived: true,
+        items: {},
+        turnOrder: [],
+      },
+    };
+    const active: ProductTaskProjection = {
+      ...closed,
+      taskId: "task_active",
+      lifecycle: { phase: "working", reason: "Working." },
+      availableActions: ["finish"],
+      conversation: {
+        turnStatus: "in_progress",
+        archived: false,
+        items: {},
+        turnOrder: [],
+      },
+    };
+    state.product!.tasks = [closed, closed, closed, closed, active].map(
+      (task, index) => ({ ...task, taskId: `${task.taskId}_${index}` }),
+    );
+    state.product!.currentTaskId = "task_active_4";
+    expect(
+      composerGate(state, {
+        outcome: "Next",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+      }).reason,
+    ).toMatch(/still attached/);
+    expect(
+      composerGate(state, {
+        outcome: "Next",
+        mode: "agent",
+        browserChoice: "temporary",
+      }),
+    ).toMatchObject({ ready: true, browserIdentity: { mode: "temporary" } });
+    state.product!.tasks = state.product!.tasks.map((task, index) =>
+      index === 4
+        ? {
+            ...task,
+            lifecycle: { phase: "ready", reason: "Ready." },
+            conversation: {
+              turnStatus: "completed",
+              archived: false,
+              items: {},
+              turnOrder: [],
+            },
+          }
+        : task,
+    );
+    expect(
+      composerGate(state, {
+        outcome: "Keep the dormant profile selection",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+      }).reason,
+    ).toMatch(/still attached/);
+
+    state.product!.tasks = state.product!.tasks.map((task, index) =>
+      index === 4
+        ? {
+            ...task,
+            lifecycle: { phase: "closed", reason: "Closed." },
+            availableActions: [],
+            conversation: {
+              turnStatus: "completed",
+              archived: true,
+              items: {},
+              turnOrder: [],
+            },
+          }
+        : task,
+    );
+    delete state.product!.currentTaskId;
+    expect(
+      composerGate(state, {
+        outcome: "Next",
+        mode: "agent",
+        browserChoice: `workspace:${workspaceId}`,
+      }),
+    ).toMatchObject({ ready: true });
+  });
+
+  it("derives controller and takeover truth only from the current product task", () => {
+    const state = product();
+    const task: ProductTaskProjection = {
+      taskId: "task_waiting",
+      executionMode: "agent",
+      browserIdentity: { mode: "temporary" },
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-08T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      lifecycle: { phase: "waiting_for_human", reason: "Handoff." },
+      availableActions: ["finish"],
+      runtime: {
+        status: "awaiting_human",
+        controller: null,
+        attachment: "attached",
+        recovery: "not_needed",
+        profileOwnership: "released",
+      },
+    };
+    state.tasks = [task];
+    state.currentTaskId = task.taskId;
+    state.attention = [
+      {
+        authority: "rove_control",
+        kind: "control_handoff",
+        requestId: "control:ses_waiting:handoff_waiting",
+        taskId: task.taskId,
+        generation: 2,
+        status: "pending",
+        sequence: 1,
+        title: "Browser control handoff",
+      },
+    ];
+    expect(taskControlProjection(task, state)).toEqual({
+      controllerLabel: "Awaiting handoff",
+      canTakeControl: true,
+      canPause: false,
+    });
+    delete state.currentTaskId;
+    expect(taskControlProjection(task, state)).toMatchObject({
+      controllerLabel: "Awaiting handoff",
+      canTakeControl: false,
+    });
+  });
+
+  it("reconciles historical selection across archive, replacement, and removal", () => {
+    const state = product();
+    const terminal: ProductTaskProjection = {
+      taskId: "task_terminal",
+      executionMode: "agent",
+      browserIdentity: { mode: "temporary" },
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-08T00:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      lifecycle: { phase: "closed", reason: "Closed." },
+      availableActions: [],
+    };
+    state.tasks = [terminal];
+
+    expect(activeProductTask(state)).toBeUndefined();
+    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBe(
+      "task_terminal",
+    );
+    expect(reconcileSelectedTaskId("task_missing", null, state)).toBeNull();
+
+    const blocker = {
+      ...terminal,
+      taskId: "task_blocker",
+      lifecycle: { phase: "cleanup_required", reason: "Cleanup required." },
+      availableActions: ["retry_cleanup"],
+    } satisfies ProductTaskProjection;
+    state.tasks = [terminal, blocker];
+    state.currentTaskId = blocker.taskId;
+    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBeNull();
+    expect(activeProductTask(state)?.taskId).toBe(blocker.taskId);
+
+    delete state.currentTaskId;
+    state.tasks = [terminal];
+    expect(
+      reconcileSelectedTaskId("task_terminal", blocker.taskId, state),
+    ).toBeNull();
+  });
+
+  it("distinguishes startup, restart, sign-in, MCP/product failure, and ready state", () => {
+    expect(recoveryLabel(null)).toBe("Connecting");
+    const starting = desktop();
+    starting.product!.host = {
+      state: "initializing",
+      ready: false,
+      restartAttempt: 0,
+    };
+    expect(recoveryLabel(starting)).toBe("Starting Codex");
+    starting.product!.host = {
+      state: "degraded",
+      ready: false,
+      restartAttempt: 1,
+    };
+    expect(recoveryLabel(starting)).toBe("Restarting Codex");
+    starting.productError = "Rove MCP unavailable";
+    expect(recoveryLabel(starting)).toBe("Codex unavailable");
+    expect(recoveryLabel(desktop())).toBe("Ready");
+  });
+
+  it("contains no browser profile filesystem path in the renderer workspace projection", () => {
+    expect(JSON.stringify(desktop())).not.toMatch(
+      /userDataDir|profileDirectory/,
+    );
+  });
+});

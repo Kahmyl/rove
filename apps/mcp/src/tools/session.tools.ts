@@ -12,7 +12,7 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "session.start",
       description:
-        "Start a Rove browser session. Sessions use the managed persistent 'default' profile unless a profile is explicitly supplied, preserving user-authorized cookies and preferences between runs. Use agent for autonomous work where human control requires an explicit handoff, companion when the human may voluntarily take over at any time, and capture for human-driven browsing that Rove observes.",
+        "Start a Rove browser session. By default this reuses the browser workspace currently selected in the Rove app, preserving that workspace's signed-in state across tasks and restarts. A caller may select only an existing opaque workspaceId, or request a temporary identity for intentional isolation; starting a task never creates a browser identity. Use agent for autonomous work where human control requires an explicit handoff, companion when the human may voluntarily take over, and capture for human-driven browsing that Rove observes.",
       inputSchema: {
         type: "object",
         properties: {
@@ -23,33 +23,37 @@ export function sessionTools(runtime: RuntimeClient): ToolDefinition[] {
               "agent = autonomous with explicit human handoff; companion = collaborative with voluntary human takeover; capture = human-controlled observation",
           },
           startUrl: { type: "string" },
-          profile: {
-            type: "object",
-            properties: {
-              mode: {
-                type: "string",
-                enum: ["temporary", "persistent", "existing"],
+          browser: {
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  mode: { const: "workspace" },
+                  workspaceId: {
+                    type: "string",
+                    pattern: "^wrk_[a-f0-9-]{36}$",
+                    description:
+                      "Existing workspace id. Omit it to use the workspace selected in Rove.",
+                  },
+                },
+                required: ["mode"],
+                additionalProperties: false,
               },
-              name: { type: "string" },
-              userDataDir: { type: "string" },
-              profileDirectory: { type: "string" },
-            },
-            required: ["mode"],
-            additionalProperties: false,
+              {
+                type: "object",
+                properties: {
+                  mode: { const: "temporary" },
+                },
+                required: ["mode"],
+                additionalProperties: false,
+              },
+            ],
           },
         },
         required: ["mode"],
         additionalProperties: false,
       },
-      handler: (input) => {
-        const record = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
-        return runtime.startSession(
-          startSessionRequestSchema.parse({
-            ...record,
-            profile: record.profile ?? { mode: "persistent", name: "default" },
-          }),
-        );
-      },
+      handler: (input) => runtime.startSession(startSessionRequestSchema.parse(input)),
     },
     {
       name: "session.status",

@@ -1,0 +1,45 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "error": "GitHub authentication requires human control: control:ses_9816ffef7706430b875bca72fa33b327:handoff_c14af529d32c4aa99cfba686558bf2bb.",
+  "taskId": "task_261066d0-c0fc-45c3-b69a-3f68642c83a2",
+  "task": {
+    "taskId": "task_261066d0-c0fc-45c3-b69a-3f68642c83a2",
+    "lifecycle": {
+      "phase": "waiting_for_human",
+      "reason": "Lifecycle is waiting_for_human."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_eceacb33-72af-4935-bb52-56011e6dcd26",
+      "inputDigest": "f0dc7f207f9ceda3089459cb2c6cbd55eb4f726845d258f50975af8dc858e9c6",
+      "stage": "turn_started",
+      "turnId": "01a0854d-b6ef-73a1-b25c-384dc46ba651"
+    },
+    "roveSessionId": "ses_9816ffef7706430b875bca72fa33b327",
+    "codexThreadId": "01a0854d-a7e4-7583-b250-75eae9d3e98e",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish"
+    ],
+    "conversation": {
+      "turnStatus": "in_progress",
+      "archived": false,
+      "turnOrder": [
+        "01a0854d-b6ef-73a1-b25c-384dc46ba651"
+      ],
+      "itemCount": 6
+    }
+  },
+  "productError": null,
+  "cleanupError": "Snapshot poll timed out at cleanup:finish; last validated snapshot: {\"task\":{\"taskId\":\"task_261066d0-c0fc-45c3-b69a-3f68642c83a2\",\"executionMode\":\"agent\",\"browserIdentity\":{\"mode\":\"workspace\",\"workspaceId\":\"wrk_0d22b405-5c2a-431e-929e-29b8822e2e35\"},\"selectionSource\":\"user_selected\",\"selectedAt\":\"2026-09-09T08:34:12.417Z\",\"bootstrapStage\":\"complete\",\"initialLaunch\":{\"operationId\":\"intent_eceacb33-72af-4935-bb52-56011e6dcd26\",\"inputDigest\":\"f0dc7f207f9ceda3089459cb2c6cbd55eb4f726845d258f50975af8dc858e9c6\",\"stage\":\"turn_started\",\"turnId\":\"01a0854d-b6ef-73a1-b25c-384dc46ba651\"},\"roveSessionId\":\"ses_9816ffef7706430b875bca72fa33b327\",\"codexThreadId\":\"01a0854d-a7e4-7583-b250-75eae9d3e98e\",\"model\":\"gpt-6-astra\",\"reasoningEffort\":\"medium\",\"approvalsReviewer\":\"auto_review\",\"conversation\":{\"turnStatus\":\"interrupted\",\"archived\":false,\"items\":{\"01a0854d-ba39-7420-acb4-8bc08c3ff971\":{\"id\":\"01a0854d-ba39-7420-acb4-8bc08c3ff971\",\"turnId\":\"01a0854d-b6ef-73a1-b25c-384dc46ba651\",\"kind\":\"user_message\",\"status\":\"completed\",\"authoredBy\":\"user\",\"text\":\"Create a new private GitHub repository named rove-phase5-live-20260909-0415.\\n\\nCreate issue #1 titled:\\n[ROVE LIVE] Browser acceptance task\\n\\nUse this multi-paragraph body, with exactly three initially unchecked checklist items:\\n\\nThis issue verifies the complete Rove Phase 5 browser journey against GitHub’s live product surface.\\n\\nThe result must preserve issue content, ownership, labeling, editing, navigation history, and visual evidence.\\n\\n- [ ] Create the private repository\\n- [ ] Verify the saved issue metadata\\n- [ ] Confirm browser-history navigation\\n\\nAssign the issue to the current GitHub user and apply the enhancement label. Verify the saved issue. Then edit it so that only the first checklist item is checked, save, and verify the final title, body, checklist, assignee, and label.\\n\\nNavigate to the repository main page, use browser history to return to the issue, open another repository page in a second tab, return to the issue tab, capture a final Rove viewport screenshot, and describe wh",
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

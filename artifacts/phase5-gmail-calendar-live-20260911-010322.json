@@ -1,0 +1,623 @@
+{
+  "status": "failed",
+  "stage": "task-terminal",
+  "workspace": {
+    "id": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35",
+    "displayName": "Rove Live Acceptance 20260908-1619",
+    "browser": "chrome"
+  },
+  "processIdentity": {
+    "desktopPid": 30549,
+    "ownedProcessPids": [
+      30549,
+      30568,
+      30569,
+      30570,
+      30628,
+      30634
+    ],
+    "managedRuntimePids": []
+  },
+  "launchIdentity": {
+    "taskId": "task_1fa589af-0cab-4e71-bd90-3e91d617b1eb",
+    "operationId": "intent_1fa589af-0cab-4e71-bd90-3e91d617b1eb",
+    "sessionId": "ses_036871fc8398446590be5d8adda70590",
+    "threadId": "01a08dc6-e6c5-7762-8400-0d7a5ec4fda4",
+    "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c"
+  },
+  "terminalRevision": 1714,
+  "terminalTask": {
+    "taskId": "task_1fa589af-0cab-4e71-bd90-3e91d617b1eb",
+    "lifecycle": {
+      "phase": "ready",
+      "reason": "Observation reduced from authoritative facts."
+    },
+    "bootstrapStage": "complete",
+    "initialLaunch": {
+      "operationId": "intent_1fa589af-0cab-4e71-bd90-3e91d617b1eb",
+      "stage": "turn_started",
+      "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c"
+    },
+    "roveSessionId": "ses_036871fc8398446590be5d8adda70590",
+    "codexThreadId": "01a08dc6-e6c5-7762-8400-0d7a5ec4fda4",
+    "executionMode": "agent",
+    "browserIdentity": {
+      "mode": "workspace",
+      "workspaceId": "wrk_0d22b405-5c2a-431e-929e-29b8822e2e35"
+    },
+    "approvalsReviewer": "auto_review",
+    "availableActions": [
+      "finish",
+      "message"
+    ],
+    "runtime": {
+      "status": "active",
+      "controller": "agent",
+      "recovery": "not_needed"
+    },
+    "conversation": {
+      "turnStatus": "completed",
+      "archived": false,
+      "turnOrder": [
+        "01a08dc6-f379-7223-a0d6-b84a4170a35c"
+      ],
+      "itemCount": 53
+    },
+    "attachmentCount": 0
+  },
+  "journeyVerification": {
+    "ok": false,
+    "violations": [
+      "calendar_receipt_not_in_ledger",
+      "calendar_mutation_receipts",
+      "gmail_return_tool"
+    ],
+    "marker": {
+      "journey": "gmail_calendar",
+      "status": "passed",
+      "gmailUrl": "https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD",
+      "calendarUrl": "https://calendar.google.com/calendar/u/0/r/search?q=Rove%20live%20acceptance%20review",
+      "requestedDuration": "30 minutes",
+      "schedulingPeriod": "tomorrow afternoon",
+      "emailEventTitle": "Rove acceptance review",
+      "note": "Created during Rove live acceptance.",
+      "created": true,
+      "createdEventTitle": "Rove acceptance review",
+      "titleEdited": true,
+      "eventTitle": "Rove live acceptance review",
+      "eventTime": "Friday, September 11, 2026, 2:00 PM–2:30 PM GMT+01",
+      "eventDescription": "Created during Rove live acceptance.",
+      "eventCount": 1,
+      "noGuests": true,
+      "gmailReturnedOpen": true,
+      "externalMutations": [
+        "calendar_event_create",
+        "calendar_event_title_edit"
+      ],
+      "distinctPageIds": [
+        "page_01",
+        "page_02"
+      ],
+      "durableObservationIds": [
+        "bobs_4924a0b589814485858ed2b06a61d23b",
+        "bobs_0fa4f9fe1d25475080f0da27f66afaf9"
+      ],
+      "screenshotEvidenceIds": [
+        "ev_7511767cfa8c4aae83a62bf7225380c1",
+        "ev_15456c83ace549efb704f2503b3ce206"
+      ],
+      "receiptIds": [
+        "rcpt_54d9e7c87ed443558b636fe5c9fc02e3",
+        "rcpt_ca3ba082291b41618b56062449cf8543"
+      ],
+      "finalObservationId": "bobs_0fa4f9fe1d25475080f0da27f66afaf9"
+    },
+    "independentEvidence": {}
+  },
+  "liveLedger": {
+    "sessionId": "ses_036871fc8398446590be5d8adda70590",
+    "pageIds": [
+      "page_01",
+      "page_02"
+    ],
+    "observationIds": [
+      "obs_27b0330950184e23b2af9984aac74175",
+      "obs_4dfb22321402431082b2e27ce8b55f5e",
+      "obs_68b4e2ac44be43289f4b7d0ba801a8d4",
+      "obs_309420d823e849f2a02cc1f01dbe31c7",
+      "obs_679666e704c54cddbac1c04c365f9b74",
+      "obs_0aacc501e1b24ddc936299ad086a7362",
+      "obs_5bb306b25d77403a9130de681b2bb15c",
+      "obs_ca61449951654235b90f398c2ee4f503",
+      "obs_a19761c01ba047c5aad387b6ffabd205",
+      "obs_08022e2865d24c888a45c63416dd8ae4",
+      "obs_04c9b931fe3c40ba8ce842545bc1c4ec",
+      "obs_e4f8c4e2f0584ee2a8190d4e49c5c0d6",
+      "obs_b0a64ecebeb747c0b1b0979dc0228c9f",
+      "obs_cea30acb27ca451abd035a12aa68c2e8",
+      "obs_93d6f9b786814fcdbe8c027c57658553",
+      "obs_4b94033f533d423c91cb693099061453",
+      "bobs_fecaf271b3664040915c8271b825494d",
+      "bobs_cd330f56596d4a34b1cdd1b0006fd24a",
+      "bobs_2c0188b4d71048ea95d0fb532345878a",
+      "bobs_62015734229b42abba5fcfbd80b3099b",
+      "bobs_7a60bf6e011b4933ae4a28ef61d33a29",
+      "bobs_4f23493ac66d44faaa6b81a9648062a1",
+      "bobs_7c6a91248d8a4c168ee1b51f5c965e70",
+      "bobs_ee38acf1e7c5400c9880109479d1fbe7",
+      "bobs_46af247c178e46b98003ee1c2ab60695",
+      "bobs_e9a653e72f6d40bc992bffff2e3cbad8",
+      "bobs_4924a0b589814485858ed2b06a61d23b",
+      "bobs_73b735491c6444dd97872bbb0ab7122f",
+      "bobs_0fa4f9fe1d25475080f0da27f66afaf9"
+    ],
+    "evidenceIds": [
+      "ev_15456c83ace549efb704f2503b3ce206",
+      "ev_7511767cfa8c4aae83a62bf7225380c1",
+      "ev_0e718e010f7a48498073025b0c89e1dc",
+      "ev_1b4424c22dc44b79b738e75485a791dd",
+      "ev_2c0a7a50f4cb42938bcbe096bb8e6e0e",
+      "ev_2d91fea7de444e27a0bc69dbf3a657d9",
+      "ev_2eb51dacb3904275a73bae9422dda980",
+      "ev_2f779317de2e47d0bd7c70d8617a990a",
+      "ev_315324aa05e84f7583004df2a4962c9b",
+      "ev_3206a3438f37416ab0360be062b0d413",
+      "ev_531fb941211748509688469e7f7dab71",
+      "ev_5547c0d91efd400bad1ff735fa8f1b4c",
+      "ev_6039fc749ff841d0a49897f054a1e17d",
+      "ev_609dd2cfbda74ddc879a588657f3fab0",
+      "ev_61b8e7a64fe04cb3b5050a0b3f35f417",
+      "ev_63f3a531af8b49bcb7aaadca4236f30c",
+      "ev_663c74ab8d8c441c9ab9e4f76908dd8e",
+      "ev_74c98fe20a7b45eb906d2fc695bd0d62",
+      "ev_7b38d9e731f44c7f87bbc2bba5308fba",
+      "ev_80b785fb84854766a79f582bdb280fbc",
+      "ev_95935ab155df4cad98e30b4b85a610ad",
+      "ev_97267490531c4b91b3f0aee9fb175174",
+      "ev_ad2a3ad5cf454b2bbf697b7f985bee6c",
+      "ev_af2bb06591734a879c54a61139d079af",
+      "ev_b8b326422f6148279cb3bbe622093d74",
+      "ev_c0b23bd316444cd0b5a8f6ea87ad911c",
+      "ev_e6ba5326ecaa4807b7686ad3895529e8",
+      "ev_f1fb242bf1904a998835ac70b0624c1f",
+      "ev_f37e9ac6e08844f184764964dc0bc1b9"
+    ],
+    "screenshotEvidenceIds": [
+      "ev_15456c83ace549efb704f2503b3ce206",
+      "ev_7511767cfa8c4aae83a62bf7225380c1"
+    ],
+    "receipts": [
+      {
+        "id": "rcpt_f252fc7289544ca081b5fe66f7cfa1a3",
+        "observationId": "obs_68b4e2ac44be43289f4b7d0ba801a8d4",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_e3add41f1966492586e6a5a00bf61845",
+        "observationId": "obs_309420d823e849f2a02cc1f01dbe31c7",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_b81bfa3410ce4b3fb5cba8da9dd4d0d7",
+        "observationId": "obs_679666e704c54cddbac1c04c365f9b74",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_6a0a73e9c3374be4ab0163bbd536e355",
+        "observationId": "obs_0aacc501e1b24ddc936299ad086a7362",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_9ec1305666154071ab8981f9ccd6612e",
+        "observationId": "obs_5bb306b25d77403a9130de681b2bb15c",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_05f41b91fb0745448a90114bea804b8c",
+        "observationId": "obs_ca61449951654235b90f398c2ee4f503",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_ca3ba082291b41618b56062449cf8543",
+        "observationId": "obs_a19761c01ba047c5aad387b6ffabd205",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": true,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_6dc0787aa774406f833e14d63b9a1e3b",
+        "observationId": "obs_08022e2865d24c888a45c63416dd8ae4",
+        "outcome": "unknown",
+        "dispatched": true,
+        "consequential": false,
+        "effects": []
+      },
+      {
+        "id": "rcpt_ed17036c45724376adc033f82211dc28",
+        "observationId": "obs_04c9b931fe3c40ba8ce842545bc1c4ec",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_d8b44bb2dcbc473b9eae73e26d2e2af7",
+        "observationId": "obs_e4f8c4e2f0584ee2a8190d4e49c5c0d6",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "text_present",
+            "state": "observed"
+          }
+        ]
+      },
+      {
+        "id": "rcpt_54b7f2b834e3443ab98f44cb17f895f2",
+        "observationId": "obs_93d6f9b786814fcdbe8c027c57658553",
+        "outcome": "applied",
+        "dispatched": true,
+        "consequential": false,
+        "effects": [
+          {
+            "kind": "url_changed",
+            "state": "observed"
+          }
+        ]
+      }
+    ],
+    "downloads": [],
+    "downloadFileEvidence": []
+  },
+  "evidence": {
+    "assistantMessages": [
+      {
+        "id": "msg_0d1af25e07b9c126016aa3455f9f2c87d2814acde7a09ebbe2",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "I’ll verify the existing event through Calendar Search, save the title change once if every required fact matches, then verify the event and return to the planning email."
+      },
+      {
+        "id": "msg_0d1af25e07b9c126016aa345bbe7dc87d282d4ded394d15e35",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "Calendar Search found exactly one matching event on September 11, 2026, from 2:00–2:30 PM. I’m checking its description and guest details before editing."
+      },
+      {
+        "id": "msg_0d1af25e07b9c126016aa345ee839487d2b4c32a13183b39dd",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "The event’s title, description, date, times, GMT+01 timezone, and empty guest list match. Only the title field has changed; I’m submitting the single authorized Save now."
+      },
+      {
+        "id": "msg_0d1af25e07b9c126016aa34637d3f487d29d7bfbca204e67d0",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "The Save applied, and fresh Calendar Search shows exactly one event titled “Rove live acceptance review” at the original date and time. I’m verifying its final details and capturing the screenshot."
+      },
+      {
+        "id": "msg_0d1af25e07b9c126016aa3469d67a887d2a7ebb52960586ac4",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "The final Calendar screenshot is captured. Gmail is open in a distinct page, and I’m opening the exact planning-email link to verify its contents."
+      },
+      {
+        "id": "msg_0d1af25e07b9c126016aa346d5842087d29b198c7bbc667908",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "text": "ROVE_LIVE_RESULT {\"journey\":\"gmail_calendar\",\"status\":\"passed\",\"gmailUrl\":\"https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD\",\"calendarUrl\":\"https://calendar.google.com/calendar/u/0/r/search?q=Rove%20live%20acceptance%20review\",\"requestedDuration\":\"30 minutes\",\"schedulingPeriod\":\"tomorrow afternoon\",\"emailEventTitle\":\"Rove acceptance review\",\"note\":\"Created during Rove live acceptance.\",\"created\":true,\"createdEventTitle\":\"Rove acceptance review\",\"titleEdited\":true,\"eventTitle\":\"Rove live acceptance review\",\"eventTime\":\"Friday, September 11, 2026, 2:00 PM–2:30 PM GMT+01\",\"eventDescription\":\"Created during Rove live acceptance.\",\"eventCount\":1,\"noGuests\":true,\"gmailReturnedOpen\":true,\"externalMutations\":[\"calendar_event_create\",\"calendar_event_title_edit\"],\"distinctPageIds\":[\"page_01\",\"page_02\"],\"durableObservationIds\":[\"bobs_4924a0b589814485858ed2b06a61d23b\",\"bobs_0fa4f9fe1d25475080f0da27f66afaf9\"],\"screenshotEvidenceIds\":[\"ev_7511767cfa8c4aae83a62bf7225380c1\",\"ev_15456c83ace549efb704f2503b3ce206\"],\"receiptIds\":[\"rcpt_54d9e7c87ed443558b636fe5c9fc02e3\",\"rcpt_ca3ba082291b41618b56062449cf8543\"],\"finalObservationId\":\"bobs_0fa4f9fe1d25475080f0da27f66afaf9\"}\n\nSaved the title edit exactly once. Final event details verified, screenshots captured, and the planning email remains open in a distinct Gmail page. Creation and its receipt are historical."
+      }
+    ],
+    "toolCalls": [
+      {
+        "id": "exec-41b5ea5a-e0ac-49df-a81c-6a74bdc7ac97",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "session.start"
+      },
+      {
+        "id": "exec-2b68cfad-698e-4d3a-8aeb-816aa3173c19",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-dd8c29e4-e10b-4071-b424-8ecbde7461ad",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-4ac33a0d-bda6-41ce-b050-5c4d92f50dc8",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-8d01b748-2c11-436f-86cc-c97309c0a088",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-de43b7ee-a435-4073-8650-afcf4884bd32",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-ab343228-1f4c-4c10-86ed-540fc043d923",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-21a25d5a-028d-450f-bc80-d1d0dfdd454a",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-62bbdbba-e4f4-4e75-8640-3e8752f7ad44",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-9432c485-ba21-4556-835a-15731d242032",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-3e0e8ff8-2d48-4099-af73-e0aa1254a76d",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-30423727-2dd4-440e-80e6-54f0892adf0e",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-c226b6ac-cada-4130-ab62-e4fb5bef7a73",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-fccbca42-f797-455e-afea-aec0725ebcfc",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-d63ea8a7-f3c0-4c55-bc88-24ae36057ba4",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-f19b03bb-82cc-43e7-9342-00011d946069",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-d157907d-7c54-45c4-948f-1561d5105458",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-cd7bbe78-dfbc-4562-a753-6b1ed626c321",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-3053f82b-8d90-4540-8371-8cc354328734",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-98939e5b-5732-4b1c-8967-22b083554815",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-f13b015b-76c5-40af-8ff1-2fef2591fe41",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-f6ce6dcb-a391-444c-9bc6-9cb9cdc93474",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-9329797f-bddb-4e41-b3d5-bf6d7c2a6932",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-09e175d5-0352-4134-801d-9f3f92fb6393",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-754a47db-2d7a-4d75-b55e-fd34ef819ed4",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-c95a55e7-560d-4f3a-9e09-c5caacaaa3fc",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-a0fcf14e-c65e-4a55-89dd-cfc0b7a21c67",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-b99a1ed9-5aa0-4876-b46f-ca8465ee0bda",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-82ba1500-ee4d-4c6d-908d-1bc90f23c2f0",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.pages"
+      },
+      {
+        "id": "exec-9300a0cf-0fad-431c-8d32-2bc108fe2ea8",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.open_page"
+      },
+      {
+        "id": "exec-93db8f8d-3aac-4e13-8a6f-1a454ac0c310",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-45c136a5-dbcb-4b67-9309-528e3e111bea",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.resolve_target"
+      },
+      {
+        "id": "exec-604bd395-84ef-4c46-96e5-61e05682b898",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-de31a6c4-53ce-410d-b8c7-1f23c6cc793c",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-60bd0566-9386-43ab-9e1d-fd08f039f0d4",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.interact"
+      },
+      {
+        "id": "exec-e70e248d-2701-4178-af94-18095859dfbb",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-420b1f0f-ac87-4a2d-94f4-e3ceed2e3b67",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "session.observations"
+      },
+      {
+        "id": "exec-9b8f6e9b-3fec-42f8-aad0-eabee04361ca",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.pages"
+      },
+      {
+        "id": "exec-e2fffa35-bb7c-44e8-a9c2-fc623b8c8716",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.screenshot"
+      },
+      {
+        "id": "exec-8b53e34c-9258-4302-b180-7a8c95d5e684",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.inspect"
+      },
+      {
+        "id": "exec-649b863b-605d-487e-9eb3-2c440aa34063",
+        "turnId": "01a08dc6-f379-7223-a0d6-b84a4170a35c",
+        "status": "completed",
+        "title": "browser.screenshot"
+      }
+    ],
+    "gmailUrls": [
+      "https://mail.google.com/mail/u/0/#inbox/FMfcgzQhWLNrGhQjNDnghCrgQvjQnHxD\",\"calendarUrl\":\"https://calendar.google.com/calendar/u/0/r/search?q=Rove%20live%20acceptance%20review\",\"requestedDuration\":\"30"
+    ],
+    "calendarUrls": [
+      "https://calendar.google.com/calendar/u/0/r/search?q=Rove%20live%20acceptance%20review\",\"requestedDuration\":\"30"
+    ],
+    "observationIds": [
+      "bobs_4924a0b589814485858ed2b06a61d23b",
+      "bobs_0fa4f9fe1d25475080f0da27f66afaf9"
+    ],
+    "evidenceIds": [
+      "ev_7511767cfa8c4aae83a62bf7225380c1",
+      "ev_15456c83ace549efb704f2503b3ce206"
+    ],
+    "pageIds": [
+      "page_01",
+      "page_02"
+    ]
+  },
+  "nativeScreenshotPath": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.9-live-acceptance/gmail-calendar-20260911-010322-native.png",
+  "cleanupError": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Archive', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button>Archive</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m  - element was detached from the DOM, retrying\u001b[22m\n",
+  "residualProcessAudit": {
+    "ownedProcessCount": 6,
+    "residualProcessIds": []
+  }
+}

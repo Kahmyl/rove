@@ -17,6 +17,7 @@ export * from "./downloads/download-runtime.js";
 export * from "./profiles/profile-lock.js";
 export * from "./profiles/profile-manager.js";
 export * from "./profiles/persistent-browser-host.js";
+export * from "./profiles/browser-workspace-registry.js";
 export * from "./runtime/browser-launch-plan.js";
 export * from "./runtime/browser-sandbox.js";
 

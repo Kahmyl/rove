@@ -71,9 +71,12 @@ async function referenceFor(
 
 describe("F1 Gate 4 stabilization research", () => {
   const quietPolicy: StabilizationPolicy = {
-    id: "floor-300-quiet-75",
+    id: "floor-400-quiet-75",
     kind: "quiet-window",
-    minimumObservationMs: 300,
+    // Reference truth is captured after the final 350 ms checkpoint plus a
+    // 50 ms margin. Using the same floor prevents a loaded browser process
+    // from accepting apparent quiet before its nominal 250 ms timer runs.
+    minimumObservationMs: 400,
     quietWindowMs: 75,
     maxObservationMs: 1000,
     pollMs: 10,

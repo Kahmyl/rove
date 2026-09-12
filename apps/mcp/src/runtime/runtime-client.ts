@@ -9,11 +9,13 @@ import {
   type ControlWaitResult,
   type Evidence,
   type EvidenceReadResult,
+  type GeneratedFileArtifactRequest,
   type InspectOptions,
   type NavigateRequest,
   type ObservationPage,
   type ObservationQuery,
   type PageInspection,
+  type PageSummary,
   type PressRequest,
   type ScreenshotOptions,
   type SessionSnapshot,
@@ -24,6 +26,14 @@ import {
   type TargetResolution,
   type TargetResolutionRequest,
   type VerifiedInteractionRequest,
+  type AdvanceSemanticTransactionRequest,
+  type BeginSemanticTransactionRequest,
+  type SemanticTransactionAdvanceResult,
+  type SemanticTransactionSnapshot,
+  type SemanticTransactionVerificationResult,
+  type VerifySemanticTransactionRequest,
+  type LocalFileGrantRequest,
+  type LocalFileGrantResult,
 } from "@rove/protocol";
 import { RuntimeClientError } from "./runtime-client.error.js";
 import type {
@@ -121,6 +131,38 @@ export class RuntimeHttpClient implements RuntimeClient {
     );
   }
 
+  openPage(sessionId: string, input: NavigateRequest): Promise<PageSummary> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/pages`,
+      input,
+    );
+  }
+
+  pages(sessionId: string): Promise<PageSummary[]> {
+    return this.request(
+      "GET",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/pages`,
+    );
+  }
+
+  switchPage(sessionId: string, pageId: string): Promise<PageSummary> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/pages/${encodeURIComponent(pageId)}/switch`,
+    );
+  }
+
+  closePage(sessionId: string, pageId: string): Promise<void> {
+    return this.request(
+      "DELETE",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/pages/${encodeURIComponent(pageId)}`,
+      undefined,
+      DEFAULT_TIMEOUT_MS,
+      true,
+    );
+  }
+
   inspect(sessionId: string, input: InspectOptions): Promise<PageInspection> {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(input)) {
@@ -152,6 +194,61 @@ export class RuntimeHttpClient implements RuntimeClient {
       "POST",
       `/sessions/${encodeURIComponent(sessionId)}/browser/interact`,
       input,
+    );
+  }
+
+  beginSemanticTransaction(
+    sessionId: string,
+    input: BeginSemanticTransactionRequest,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/transactions`,
+      input,
+    );
+  }
+
+  advanceSemanticTransaction(
+    sessionId: string,
+    input: AdvanceSemanticTransactionRequest,
+  ): Promise<SemanticTransactionAdvanceResult> {
+    const { transactionId, ...body } = input;
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/transactions/${encodeURIComponent(transactionId)}/advance`,
+      body,
+    );
+  }
+
+  verifySemanticTransaction(
+    sessionId: string,
+    input: VerifySemanticTransactionRequest,
+  ): Promise<SemanticTransactionVerificationResult> {
+    const { transactionId, ...body } = input;
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/transactions/${encodeURIComponent(transactionId)}/verify`,
+      body,
+    );
+  }
+
+  getSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.request(
+      "GET",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/transactions/${encodeURIComponent(transactionId)}`,
+    );
+  }
+
+  cancelSemanticTransaction(
+    sessionId: string,
+    transactionId: string,
+  ): Promise<SemanticTransactionSnapshot> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/transactions/${encodeURIComponent(transactionId)}/cancel`,
     );
   }
 
@@ -209,6 +306,35 @@ export class RuntimeHttpClient implements RuntimeClient {
       "POST",
       `/sessions/${encodeURIComponent(sessionId)}/browser/screenshot`,
       input,
+    );
+  }
+
+  createFileArtifact(
+    sessionId: string,
+    input: GeneratedFileArtifactRequest,
+  ): Promise<Evidence> {
+    const bytes =
+      input.encoding === "base64"
+        ? Buffer.from(input.content, "base64")
+        : Buffer.from(input.content, "utf8");
+    return this.requestFileArtifact(
+      sessionId,
+      input.filename,
+      input.mimeType,
+      "agent_generated",
+      bytes,
+    );
+  }
+
+  requestLocalFileGrant(
+    _sessionId: string,
+    _input: LocalFileGrantRequest,
+    _signal?: AbortSignal,
+  ): Promise<LocalFileGrantResult> {
+    throw new RuntimeClientError(
+      "FILE_GRANT_UNAVAILABLE",
+      "A user file grant requires the Rove Companion control-plane route.",
+      false,
     );
   }
 
@@ -279,7 +405,7 @@ export class RuntimeHttpClient implements RuntimeClient {
   }
 
   private async request<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "DELETE",
     path: string,
     body?: unknown,
     timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -328,6 +454,63 @@ export class RuntimeHttpClient implements RuntimeClient {
       throw new RuntimeClientError(
         "RUNTIME_PROTOCOL_ERROR",
         "Runtime API returned malformed JSON.",
+        false,
+      );
+    }
+  }
+
+  private async requestFileArtifact(
+    sessionId: string,
+    filename: string,
+    mimeType: string,
+    source: "agent_generated",
+    bytes: Uint8Array,
+  ): Promise<Evidence> {
+    let response: Response;
+    try {
+      response = await fetch(
+        new URL(
+          `/sessions/${encodeURIComponent(sessionId)}/evidence/files`,
+          this.runtimeUrl,
+        ),
+        {
+          method: "POST",
+          headers: {
+            ...(this.runtimeToken === undefined
+              ? {}
+              : { authorization: `Bearer ${this.runtimeToken}` }),
+            "content-type": mimeType,
+            "x-rove-file-name": Buffer.from(filename, "utf8").toString(
+              "base64url",
+            ),
+            "x-rove-file-source": source,
+          },
+          body: Buffer.from(bytes),
+          signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+        },
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        throw new RuntimeClientError(
+          "RUNTIME_TIMEOUT",
+          "Runtime file-artifact request timed out.",
+          true,
+        );
+      }
+      throw new RuntimeClientError(
+        "RUNTIME_UNAVAILABLE",
+        "Runtime API is unavailable.",
+        true,
+      );
+    }
+    const text = await response.text();
+    if (!response.ok) throw parseRuntimeError(text, response.status);
+    try {
+      return JSON.parse(text) as Evidence;
+    } catch {
+      throw new RuntimeClientError(
+        "RUNTIME_PROTOCOL_ERROR",
+        "Runtime API returned malformed file-artifact metadata.",
         false,
       );
     }

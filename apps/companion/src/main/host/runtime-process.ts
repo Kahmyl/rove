@@ -43,7 +43,10 @@ export function buildRuntimeProcessEnvironment(
     ROVE_BROWSER: options.browser,
     ...(options.runtimeInstanceId === undefined
       ? {}
-      : { ROVE_RUNTIME_INSTANCE_ID: options.runtimeInstanceId }),
+      : {
+          ROVE_RUNTIME_INSTANCE_ID: options.runtimeInstanceId,
+          ROVE_RUNTIME_OWNER_PROCESS_ID: String(process.pid),
+        }),
     ...(options.runtimeStartedAt === undefined
       ? {}
       : { ROVE_RUNTIME_STARTED_AT: options.runtimeStartedAt }),
@@ -123,7 +126,9 @@ export class RuntimeProcess {
         runtimeProcessId: child.pid,
         startedAt: this.options.runtimeStartedAt,
       }).catch((error: unknown) => {
-        process.stderr.write(`[runtime] Failed to record managed Runtime ownership: ${error instanceof Error ? error.message : String(error)}\n`);
+        process.stderr.write(
+          `[runtime] Failed to record managed Runtime ownership: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
       });
     }
 
@@ -163,10 +168,12 @@ export class RuntimeProcess {
       }
       if (this.options.runtimeInstanceId !== undefined) {
         void this.registryWrite
-          .then(() => removeManagedRuntimeRecord(
-            this.options.home,
-            this.options.runtimeInstanceId!,
-          ))
+          .then(() =>
+            removeManagedRuntimeRecord(
+              this.options.home,
+              this.options.runtimeInstanceId!,
+            ),
+          )
           .catch(() => undefined);
       }
 

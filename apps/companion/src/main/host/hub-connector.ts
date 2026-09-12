@@ -11,6 +11,7 @@ import {
   runtimeRequest,
   toHubCommandError,
   type LocalRuntimeConnection,
+  type HubCommandAuthority,
 } from "./hub-command-executor.js";
 
 export interface HubConnectorOptions {
@@ -21,6 +22,7 @@ export interface HubConnectorOptions {
   runtimeInstanceId: string;
   runtimeStartedAt: string;
   companionIdentity: ComponentInstanceIdentity;
+  authority?: HubCommandAuthority;
   retryDelayMs?: number;
 }
 
@@ -34,7 +36,8 @@ export class HubConnector {
   constructor(private readonly options: HubConnectorOptions) {}
 
   start(): void {
-    if (this.loop !== undefined) throw new Error("Hub connector is already running.");
+    if (this.loop !== undefined)
+      throw new Error("Hub connector is already running.");
     const controller = new AbortController();
     this.controller = controller;
     this.loop = this.run(controller.signal).finally(() => {
@@ -55,7 +58,11 @@ export class HubConnector {
         if (command === undefined) continue;
         let result: HubCommandResult;
         try {
-          const value = await executeHubCommand(command, this.options.runtime);
+          const value = await executeHubCommand(
+            command,
+            this.options.runtime,
+            this.options.authority,
+          );
           result = {
             protocolVersion: ROVE_HUB_PROTOCOL_VERSION,
             commandId: command.commandId,
@@ -84,7 +91,10 @@ export class HubConnector {
 
   private async poll(signal: AbortSignal) {
     const response = await fetch(
-      new URL(`/v1/devices/${encodeURIComponent(this.options.deviceId)}/poll`, this.options.controlPlaneUrl),
+      new URL(
+        `/v1/devices/${encodeURIComponent(this.options.deviceId)}/poll`,
+        this.options.controlPlaneUrl,
+      ),
       {
         method: "POST",
         headers: await this.localHubHeaders(),
@@ -97,15 +107,25 @@ export class HubConnector {
         "This Hub is fenced as an older Runtime instance.",
       );
     }
-    if (!response.ok) throw new Error(`Control-plane poll failed with HTTP ${response.status}.`);
+    if (!response.ok)
+      throw new Error(
+        `Control-plane poll failed with HTTP ${response.status}.`,
+      );
     const command = hubCommandSchema.parse(await response.json());
-    if (command.deviceId !== this.options.deviceId) throw new Error("Control plane returned a command for another device.");
+    if (command.deviceId !== this.options.deviceId)
+      throw new Error("Control plane returned a command for another device.");
     return command;
   }
 
-  private async sendResult(result: HubCommandResult, signal: AbortSignal): Promise<void> {
+  private async sendResult(
+    result: HubCommandResult,
+    signal: AbortSignal,
+  ): Promise<void> {
     const response = await fetch(
-      new URL(`/v1/commands/${encodeURIComponent(result.commandId)}/result`, this.options.controlPlaneUrl),
+      new URL(
+        `/v1/commands/${encodeURIComponent(result.commandId)}/result`,
+        this.options.controlPlaneUrl,
+      ),
       {
         method: "POST",
         headers: {
@@ -116,7 +136,10 @@ export class HubConnector {
         signal,
       },
     );
-    if (!response.ok) throw new Error(`Control-plane result delivery failed with HTTP ${response.status}.`);
+    if (!response.ok)
+      throw new Error(
+        `Control-plane result delivery failed with HTTP ${response.status}.`,
+      );
   }
 
   private async sendResultWithRetry(

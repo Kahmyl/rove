@@ -106,6 +106,24 @@ describe("CompanionSurface", () => {
     expect(window.destroyed).toBe(false);
   });
 
+  it("returns the logical surface after an intercepted full-window close", () => {
+    const window = new FakeWindow();
+    let returned = 0;
+    const surface = new CompanionSurface(
+      () => window,
+      () => false,
+      () => {
+        returned += 1;
+      },
+    );
+
+    surface.show();
+    expect(window.emitClose()).toBe(true);
+
+    expect(returned).toBe(1);
+    expect(window.visible).toBe(false);
+  });
+
   it("allows the window to close during application shutdown", () => {
     const window = new FakeWindow();
 

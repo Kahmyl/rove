@@ -448,6 +448,8 @@ export function classifyObservedPageState(
     surfaces.some(
       (surface) =>
         surface.kind === "blocking_dialog" &&
+        !surface.routineDismissControl &&
+        !surface.workflowFormSurface &&
         !(
           surface.verificationDirective ||
           surface.verificationControl ||

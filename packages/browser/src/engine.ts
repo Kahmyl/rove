@@ -25,7 +25,11 @@ export interface BrowserInteractionUpload {
 
 export interface BrowserInteractionContext {
   observationId: string;
+  /** Correlates post-dispatch browser activity with one Runtime action. */
+  activityBoundaryId?: string;
+  /** Backward-compatible single artifact context. */
   upload?: BrowserInteractionUpload;
+  uploads?: BrowserInteractionUpload[];
 }
 
 export interface BrowserSession {
@@ -33,6 +37,7 @@ export interface BrowserSession {
   readonly capabilities: BrowserRuntimeCapabilities;
   hostIdentity(): BrowserHostIdentity | null;
   browserWindowState(): Promise<BrowserWindowState | null>;
+  show(): Promise<void>;
   onActivity(listener: BrowserActivityListener): () => void;
   inspect(
     options?: InspectOptions,
@@ -46,6 +51,7 @@ export interface BrowserSession {
   ): Promise<ActionResult>;
   pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
   navigate(url: string): Promise<ActionResult>;
+  openPage(url: string): Promise<PageSummary>;
   click(target: TargetReference): Promise<ActionResult>;
   type(target: TargetReference, value: string): Promise<ActionResult>;
   press(target: TargetReference | null, key: string): Promise<ActionResult>;

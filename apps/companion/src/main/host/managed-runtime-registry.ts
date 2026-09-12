@@ -29,12 +29,19 @@ function alive(pid: number): boolean {
   }
 }
 
-async function processValue(pid: number, field: "lstart" | "command"): Promise<string | undefined> {
+async function processValue(
+  pid: number,
+  field: "lstart" | "command",
+): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", `${field}=`], {
-      encoding: "utf8",
-      timeout: 2_000,
-    });
+    const { stdout } = await execFileAsync(
+      "ps",
+      ["-p", String(pid), "-o", `${field}=`],
+      {
+        encoding: "utf8",
+        timeout: 2_000,
+      },
+    );
     const value = stdout.trim();
     return value.length === 0 ? undefined : value;
   } catch {
@@ -56,15 +63,22 @@ function parseRecord(value: unknown): ManagedRuntimeRecord | undefined {
     typeof item.runtimeDirectory !== "string" ||
     typeof item.baseUrl !== "string" ||
     typeof item.startedAt !== "string"
-  ) return undefined;
+  )
+    return undefined;
   return item as ManagedRuntimeRecord;
 }
 
-async function readRecord(home: string): Promise<ManagedRuntimeRecord | undefined> {
+async function readRecord(
+  home: string,
+): Promise<ManagedRuntimeRecord | undefined> {
   try {
-    const record = parseRecord(JSON.parse(await readFile(resolve(home, REGISTRY_FILE), "utf8")));
+    const record = parseRecord(
+      JSON.parse(await readFile(resolve(home, REGISTRY_FILE), "utf8")),
+    );
     if (record === undefined) {
-      throw new Error("Rove's managed Runtime record is invalid; refusing unsafe reconciliation.");
+      throw new Error(
+        "Rove's managed Runtime record is invalid; refusing unsafe reconciliation.",
+      );
     }
     return record;
   } catch (error) {
@@ -80,6 +94,46 @@ async function waitUntilDead(pid: number, timeoutMs: number): Promise<boolean> {
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 50));
   }
   return !alive(pid);
+}
+
+async function runtimeHealth(
+  baseUrl: string,
+): Promise<Record<string, unknown> | undefined> {
+  const health = await fetch(`${baseUrl}/health`, {
+    signal: AbortSignal.timeout(500),
+  })
+    .then(async (response) =>
+      response.ok ? (response.json() as Promise<unknown>) : undefined,
+    )
+    .catch(() => undefined);
+  if (
+    typeof health !== "object" ||
+    health === null ||
+    !("runtime" in health) ||
+    typeof health.runtime !== "object" ||
+    health.runtime === null
+  )
+    return undefined;
+  return health.runtime as Record<string, unknown>;
+}
+
+async function waitForRuntimeProofOrExit(
+  record: ManagedRuntimeRecord,
+  timeoutMs: number,
+): Promise<"verified" | "exited" | "unproved"> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!alive(record.runtimeProcessId)) return "exited";
+    const health = await runtimeHealth(record.baseUrl);
+    if (
+      health?.runtimeInstanceId === record.runtimeInstanceId &&
+      health.processId === record.runtimeProcessId
+    )
+      return "verified";
+    if (health !== undefined) return "unproved";
+    await new Promise<void>((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  return alive(record.runtimeProcessId) ? "unproved" : "exited";
 }
 
 export async function reconcileManagedRuntime(options: {
@@ -104,33 +158,58 @@ export async function reconcileManagedRuntime(options: {
     return;
   }
 
-  const [runtimeIdentity, command, health] = await Promise.all([
+  const [runtimeIdentity, command] = await Promise.all([
     processValue(record.runtimeProcessId, "lstart"),
     processValue(record.runtimeProcessId, "command"),
-    fetch(`${record.baseUrl}/health`, { signal: AbortSignal.timeout(2_000) })
-      .then(async (response) => response.ok ? response.json() as Promise<unknown> : undefined)
-      .catch(() => undefined),
   ]);
-  const healthRuntime =
-    typeof health === "object" && health !== null &&
-    "runtime" in health && typeof health.runtime === "object" && health.runtime !== null
-      ? health.runtime as Record<string, unknown>
-      : undefined;
-  const verified =
+  const staticallyCorrelated =
     record.runtimeDirectory === options.runtimeDirectory &&
     runtimeIdentity === record.runtimeProcessIdentity &&
-    command?.includes(`--rove-runtime-instance=${record.runtimeInstanceId}`) === true &&
-    healthRuntime?.runtimeInstanceId === record.runtimeInstanceId &&
-    healthRuntime.processId === record.runtimeProcessId;
-  if (!verified) {
+    command?.includes(`--rove-runtime-instance=${record.runtimeInstanceId}`) ===
+      true;
+  if (!staticallyCorrelated) {
+    const mayStillBeExiting =
+      runtimeIdentity === undefined ||
+      runtimeIdentity === record.runtimeProcessIdentity;
+    if (
+      mayStillBeExiting &&
+      (await waitUntilDead(record.runtimeProcessId, 1_000))
+    ) {
+      await unlink(path).catch(() => undefined);
+      return;
+    }
     throw new Error(
       "A live process is referenced by Rove's managed Runtime record, but ownership could not be proved. Refusing to terminate it.",
     );
   }
 
-  await terminateProcessTree(record.runtimeProcessId, "SIGTERM");
+  const proof = await waitForRuntimeProofOrExit(record, 2_000);
+  if (proof === "exited") {
+    await unlink(path).catch(() => undefined);
+    return;
+  }
+  if (proof !== "verified") {
+    throw new Error(
+      "A live process is referenced by Rove's managed Runtime record, but ownership could not be proved. Refusing to terminate it.",
+    );
+  }
+
+  const terminateVerifiedRuntime = async (signal: NodeJS.Signals) => {
+    try {
+      await terminateProcessTree(record.runtimeProcessId, signal);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EPERM") throw error;
+      try {
+        process.kill(record.runtimeProcessId, signal);
+      } catch (directError) {
+        if ((directError as NodeJS.ErrnoException).code !== "ESRCH")
+          throw directError;
+      }
+    }
+  };
+  await terminateVerifiedRuntime("SIGTERM");
   if (!(await waitUntilDead(record.runtimeProcessId, 5_000))) {
-    await terminateProcessTree(record.runtimeProcessId, "SIGKILL");
+    await terminateVerifiedRuntime("SIGKILL");
     if (!(await waitUntilDead(record.runtimeProcessId, 1_000))) {
       throw new Error("The verified orphaned Rove Runtime did not exit.");
     }
@@ -150,7 +229,10 @@ export async function writeManagedRuntimeRecord(options: {
     processValue(options.runtimeProcessId, "lstart"),
     processValue(process.pid, "lstart"),
   ]);
-  if (runtimeProcessIdentity === undefined || ownerProcessIdentity === undefined) {
+  if (
+    runtimeProcessIdentity === undefined ||
+    ownerProcessIdentity === undefined
+  ) {
     throw new Error("Could not establish managed Runtime process identity.");
   }
   await mkdir(options.home, { recursive: true, mode: 0o700 });
@@ -167,11 +249,16 @@ export async function writeManagedRuntimeRecord(options: {
     baseUrl: options.baseUrl,
     startedAt: options.startedAt,
   };
-  await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, {
+    mode: 0o600,
+  });
   await rename(temporary, path);
 }
 
-export async function removeManagedRuntimeRecord(home: string, runtimeInstanceId: string): Promise<void> {
+export async function removeManagedRuntimeRecord(
+  home: string,
+  runtimeInstanceId: string,
+): Promise<void> {
   const record = await readRecord(home);
   if (record?.runtimeInstanceId === runtimeInstanceId) {
     await unlink(resolve(home, REGISTRY_FILE)).catch(() => undefined);

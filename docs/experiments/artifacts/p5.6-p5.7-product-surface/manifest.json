@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-09-12T09:18:31.381Z",
+  "artifacts": [
+    {
+      "id": "full-active-handoff",
+      "path": "/Users/habibkamil/Documents/monorepo/rove/docs/experiments/artifacts/p5.6-p5.7-product-surface/full-active-handoff.png",
+      "interactionAssertions": {
+        "chronologicalInputWorkOutputSegments": true,
+        "iconOnlyCopyControls": true,
+        "inputMetadataOutsideCard": true,
+        "timestampsVisible": true,
+        "internalRecoveryDiagnosticsHidden": true,
+        "scrollRegionFocusFrameHidden": true,
+        "formattedFinalOutput": true,
+        "pendingRequestReplacesRichComposer": true,
+        "newTaskSwitchesToLaunchComposer": true,
+        "directArchiveControlRetained": true,
+        "rightClickRenameAndArchive": true,
+        "outsideClickDismissedTaskMenu": true,
+        "directArchiveCommandCount": 1,
+        "historicalTaskReadOnly": true,
+        "activeAttentionScopedAndRestored": true,
+        "singleInlineAttention": true,
+        "attentionReplacesComposer": true,
+        "sidebarAttentionRemoved": true,
+        "browserStatusInRightInspector": true,
+        "taskIdentityInTopNavigation": true,
+        "duplicateTaskStatusRemoved": true
+      }
+    }
+  ]
+}

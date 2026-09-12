@@ -7,6 +7,7 @@ export type BrowserActivityType =
   | "dialog_opened"
   | "download_completed"
   | "download_failed"
+  | "download_correlation_unavailable"
   | "browser_evidence"
   | "interaction_click"
   | "form_submitted"
