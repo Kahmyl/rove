@@ -20,6 +20,7 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Workflow Context and Portability](Engineering/workflow-context-and-portability.md)                 | Guided setup, context assembly, curated knowledge, and limited synchronization.               |
 | [Browser Control and Recording](Engineering/browser-control-and-recording.md)                       | Task-owned pages, shared resources, perception, handoff, capture, and requested video.        |
 | [Testing and Operations](Engineering/testing-and-operations.md)                                     | Executable checks, acceptance scenarios, packaging, recovery, backup, and evidence.           |
+| [Engineering Agent Environment](Engineering/engineering-agent-environment.md)                       | Repository-owned Codex guidance, safety defaults, verification, and continuation workflow.    |
 
 There is no partner-facing platform API commitment. The usual API/Partner Integration document is therefore replaced by application and capability contracts. A separate distributed realtime platform, technical workflow engine, and product release-version documents are unnecessary. Small design rationales belong with the responsible document rather than in a second, competing architecture collection.
 

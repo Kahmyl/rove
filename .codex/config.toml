@@ -1,0 +1,6 @@
+# Safe repository defaults. Codex loads this file only for trusted projects.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[features]
+multi_agent = true

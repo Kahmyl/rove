@@ -74,6 +74,8 @@
     "browser:perception:validation:document-frame": "pnpm --filter @rove/browser perception:validation:document-frame",
     "browser:perception:validation:frame-ownership-boundaries": "pnpm --filter @rove/browser perception:validation:frame-ownership-boundaries",
     "check:repository": "node scripts/check-repository.mjs",
+    "codex:context": "node .agents/skills/rove-engineering/scripts/context-snapshot.mjs",
+    "codex:environment:check": "node scripts/check-codex-environment.mjs --installed-client",
     "test:experiments": "node --test experiments/agent-execution/*.test.mjs"
   },
   "devDependencies": {

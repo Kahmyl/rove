@@ -147,7 +147,11 @@ for (const file of files) {
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
-} else
+} else {
+  execFileSync(process.execPath, ["scripts/check-codex-environment.mjs"], {
+    stdio: "inherit",
+  });
   console.log(
     `Repository checks passed: ${files.length} files, ${imports} relative imports, ${links} local document links.`,
   );
+}

@@ -1,0 +1,46 @@
+# Consequential repository and live-environment commands always require a human
+# approval when Codex requests to run them outside the sandbox.
+
+prefix_rule(
+    pattern = ["git", ["push", "merge", "rebase", "reset", "clean", "stash"]],
+    decision = "prompt",
+    justification = "Confirm repository integration or potentially destructive Git operations.",
+    match = [
+        "git push origin codex/example",
+        "git merge feature/example",
+        "git rebase main",
+        "git reset --hard HEAD~1",
+        "git clean -fd",
+        "git stash push",
+    ],
+    not_match = [
+        "git status --short",
+        "git diff --check",
+        "git commit -m example",
+    ],
+)
+
+prefix_rule(
+    pattern = ["pnpm", ["agent:live", "test:attachments:source-product-live", "test:browser:live-stability", "auth:profile"]],
+    decision = "prompt",
+    justification = "This command can use a real model, profile, browser, or external service.",
+    match = [
+        "pnpm agent:live",
+        "pnpm test:attachments:source-product-live",
+        "pnpm test:browser:live-stability",
+        "pnpm auth:profile",
+    ],
+    not_match = [
+        "pnpm agent:fixtures",
+        "pnpm test:attachments",
+        "pnpm test",
+    ],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "docker:reset"],
+    decision = "prompt",
+    justification = "Resetting the development stack removes its local containers and volumes.",
+    match = ["pnpm docker:reset"],
+    not_match = ["pnpm docker:down", "pnpm docker:logs"],
+)
