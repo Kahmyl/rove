@@ -1,0 +1,55 @@
+name: Finish repository labels
+on:
+  push:
+    branches: [docs/product-foundation]
+    paths: [.github/workflows/repository-label-cleanup.yml]
+permissions:
+  contents: write
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Normalize the remaining two suite labels
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          changes = [
+            ('apps/mcp/src/control-transports.integration.test.ts', 'M7 MCP control tools', 'MCP control tools'),
+            ('apps/mcp/test/e2e/session-lifecycle.e2e.test.ts', 'M10 V1 process E2E', 'MCP session lifecycle across processes'),
+          ]
+          for name, old, new in changes:
+              path = Path(name)
+              text = path.read_text()
+              assert text.count(old) == 1, name
+              path.write_text(text.replace(old, new))
+          path = Path('scripts/check-repository.mjs')
+          text = path.read_text()
+          anchor = '      let literal;'
+          assert text.count(anchor) == 1
+          guard = '''      if (
+                  ts.isCallExpression(node) &&
+                  ts.isIdentifier(node.expression) &&
+                  node.expression.text === "describe" &&
+                  node.arguments.length > 0 &&
+                  ts.isStringLiteralLike(node.arguments[0]) &&
+                  /\\b(?:Phase\\s*\\d+|Gate\\s*\\d+|M\\d+|P\\d+\\.\\d+)\\b/i.test(node.arguments[0].text)
+                ) errors.push(`Milestone test label: ${file}: ${node.arguments[0].text}`);
+          '''
+          path.write_text(text.replace(anchor, guard + anchor))
+          PY
+          node --check scripts/check-repository.mjs
+          git diff --check
+          git add apps/mcp/src/control-transports.integration.test.ts apps/mcp/test/e2e/session-lifecycle.e2e.test.ts scripts/check-repository.mjs
+          git -c user.name='Rove repository maintenance' -c user.email='repository-maintenance@users.noreply.github.com' commit -m 'test: use behavioral suite labels and enforce naming policy'
+          git push origin HEAD:refs/heads/docs/product-foundation
+          git rev-parse HEAD > /tmp/rove-final-source-commit.txt
+          git archive --format=tar.gz HEAD > /tmp/rove-final-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reconciled-repository-source
+          path: /tmp/rove-final-source*
+          retention-days: 1
