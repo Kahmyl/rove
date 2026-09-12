@@ -1,0 +1,42 @@
+name: Documentation review
+on:
+  push:
+    branches: [docs/product-foundation]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare native database and browser
+        run: |
+          pnpm --filter @rove/companion exec npm rebuild better-sqlite3
+          pnpm --filter @rove/browser exec playwright install --with-deps chromium
+      - name: Typecheck and build
+        run: pnpm typecheck && pnpm build
+      - name: Tests with native browser sandbox enabled
+        run: |
+          set +e
+          xvfb-run -a pnpm exec vitest run --maxWorkers=2 --reporter=json --outputFile="$RUNNER_TEMP/tests.json" > "$RUNNER_TEMP/tests.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$RUNNER_TEMP/test-exit-code.txt"
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documentation-sandbox-baseline
+          path: |
+            ${{ runner.temp }}/tests.json
+            ${{ runner.temp }}/tests.log
+            ${{ runner.temp }}/test-exit-code.txt
+          retention-days: 3
