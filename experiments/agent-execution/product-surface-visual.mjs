@@ -3,10 +3,15 @@
 
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, URL } from "node:url";
 import process from "node:process";
+
+import {
+  UI_TRUTH_SCENARIO_BY_ID,
+  UI_TRUTH_VIEWPORTS,
+} from "./ui-truth-scenarios.mjs";
 
 const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -19,10 +24,7 @@ const { chromium } = requireBrowserDependency("playwright");
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
 const outputRoot = process.env.ROVE_PRODUCT_SURFACE_VISUAL_OUTPUT
   ? resolve(process.env.ROVE_PRODUCT_SURFACE_VISUAL_OUTPUT)
-  : join(
-      repositoryRoot,
-      "artifacts/verification/product-surface",
-    );
+  : join(repositoryRoot, "artifacts/verification/product-surface");
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
 
 const mime = {
@@ -80,7 +82,7 @@ function baseSnapshot(presentation, accountStatus) {
       ],
     },
     product: {
-      version: 5,
+      version: 9,
       host: {
         state: "ready",
         ready: true,
@@ -128,6 +130,7 @@ function baseSnapshot(presentation, accountStatus) {
       fileAttention: [],
       draftAttachments: [],
       tasks: [],
+      workflows: [],
       recoveryWarnings: [],
     },
     productError: null,
@@ -498,7 +501,1172 @@ function constrainedLongSnapshot() {
   return value;
 }
 
+function uiTruthTask({
+  taskId,
+  request,
+  phase = "ready",
+  reason = "Ready.",
+  turnStatus = "completed",
+  availableActions = ["message", "finish"],
+  runtime,
+  executionMode = "agent",
+}) {
+  const turnId = `turn_${taskId}`;
+
+  return {
+    taskId,
+    executionMode,
+    browserIdentity: { mode: "temporary" },
+    selectionSource: "user_selected",
+    selectedAt: "2026-09-13T12:00:00.000Z",
+    approvalsReviewer: "auto_review",
+    bootstrapStage: "complete",
+    results: [],
+    conversation: {
+      ...(turnStatus === "in_progress" ? { activeTurnId: turnId } : {}),
+      turnStatus,
+      archived: false,
+      turnOrder: [turnId],
+      items: {
+        [`user_${taskId}`]: {
+          id: `user_${taskId}`,
+          turnId,
+          kind: "user_message",
+          status: "completed",
+          authoredBy: "user",
+          completedAt: "2026-09-13T12:00:00.000Z",
+          text: request,
+        },
+      },
+    },
+    lifecycle: { phase, reason },
+    availableActions,
+    ...(runtime === undefined ? {} : { runtime }),
+  };
+}
+
+function uiTruthWorkingSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId: "task_truth_working",
+    request: "Run the active analysis",
+    phase: "working",
+    reason: "Working.",
+    turnStatus: "in_progress",
+    availableActions: ["message", "interrupt", "finish"],
+    runtime: {
+      status: "active",
+      controller: "agent",
+      attachment: "attached",
+      recovery: "not_needed",
+      profileOwnership: "owned",
+    },
+  });
+
+  value.product.tasks = [task];
+  value.product.currentTaskId = task.taskId;
+  return value;
+}
+
+function uiTruthCompletedSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId: "task_truth_completed",
+    request: "Summarize the completed research",
+    phase: "ready",
+    reason: "Ready for follow-up.",
+    turnStatus: "completed",
+    availableActions: ["message", "finish"],
+  });
+
+  value.product.tasks = [task];
+  value.product.currentTaskId = task.taskId;
+  return value;
+}
+
+function uiTruthInterruptedSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId: "task_truth_interrupted",
+    request: "Continue the interrupted investigation",
+    phase: "ready",
+    reason: "Stopped by the user.",
+    turnStatus: "completed",
+    availableActions: ["message", "resume", "finish"],
+  });
+
+  value.product.tasks = [task];
+  value.product.currentTaskId = task.taskId;
+  return value;
+}
+
+function uiTruthFailedSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId: "task_truth_failed",
+    request: "Investigate the failed workflow",
+    phase: "failed",
+    reason: "The task failed.",
+    turnStatus: "completed",
+    availableActions: [],
+  });
+
+  value.product.tasks = [task];
+
+  // Preserve stale application currentTaskId deliberately. The renderer projection
+  // must still treat failed work as terminal rather than resurrecting authority.
+  value.product.currentTaskId = task.taskId;
+  return value;
+}
+
+function uiTruthAttentionSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId: "task_truth_attention",
+    request: "Complete the browser sign in",
+    phase: "waiting_for_human",
+    reason: "Complete sign in.",
+    turnStatus: "in_progress",
+    availableActions: ["finish"],
+    executionMode: "companion",
+    runtime: {
+      status: "awaiting_human",
+      controller: null,
+      attachment: "attached",
+      recovery: "not_needed",
+      profileOwnership: "owned",
+    },
+  });
+
+  value.product.tasks = [task];
+  value.product.currentTaskId = task.taskId;
+  value.product.attention = [
+    {
+      authority: "rove_control",
+      kind: "control_handoff",
+      requestId: "control:ses_truth_attention:1",
+      taskId: task.taskId,
+      threadId: "thread_truth_attention",
+      turnId: `turn_${task.taskId}`,
+      generation: 1,
+      status: "pending",
+      sequence: 1,
+      title: "Browser control handoff",
+      instruction: "Complete sign in.",
+      continuationPolicy: "resume_after_control_return",
+    },
+  ];
+  return value;
+}
+
+function uiTruthWorkflow(revision = 1) {
+  const workflowId = "workflow_ui_truth";
+  return {
+    workflowId,
+    name: "Research review",
+    archived: false,
+    currentRevision: revision,
+    revision: {
+      workflowId,
+      revision,
+      configuration: {
+        purpose: "Review research consistently.",
+        preferences: [],
+        criteria: [],
+        guidance: [
+          {
+            id: "guidance_sources",
+            text: "Prefer primary sources.",
+            appliesTo: ["research"],
+          },
+        ],
+        procedures: [],
+        resourceRequirements: [],
+        resultConventions: [],
+        approvedKnowledge: [],
+      },
+      digest: "a".repeat(64),
+      approvedAt: "2026-09-13T12:00:00.000Z",
+    },
+    createdAt: "2026-09-13T11:00:00.000Z",
+    updatedAt: "2026-09-13T12:00:00.000Z",
+  };
+}
+
+function uiTruthResult({
+  resultId = "result_ui_truth",
+  taskId = "task_truth_result",
+  kind = "report",
+  lifecycle = "prepared",
+  selected = false,
+  revision = 1,
+  title = "Research brief",
+  body = "Current reviewed research brief.",
+}) {
+  return {
+    resultId,
+    taskId,
+    turnId: `turn_${taskId}`,
+    kind,
+    lifecycle,
+    selected,
+    currentRevision: revision,
+    revision: {
+      resultId,
+      revision,
+      title,
+      body,
+      artifactIds: [],
+      digest: "b".repeat(64),
+      createdAt: "2026-09-13T12:00:00.000Z",
+    },
+    source: {
+      conversationItemId: `assistant_${taskId}`,
+      conversationTextDigest: "c".repeat(64),
+      evidenceIds: [],
+    },
+    ...(kind === "action"
+      ? {
+          actionMaterial: {
+            recipient: "reviewer@example.test",
+            recipientControl: "Exact recipient reviewed by the user",
+            content: "Send the approved research summary.",
+            contentControl: "Exact content reviewed by the user",
+            target: "mailbox:reviewer",
+            commitControl: "Dispatch requires explicit authorization",
+            attachmentIds: [],
+            scope: "One message",
+          },
+          materialDigest: "d".repeat(64),
+        }
+      : {}),
+    createdAt: "2026-09-13T12:00:00.000Z",
+    updatedAt: "2026-09-13T12:00:00.000Z",
+  };
+}
+
+function uiTruthTaskSnapshot({
+  taskId,
+  request,
+  executionMode = "agent",
+  runtime,
+  availableActions = ["message", "finish"],
+  results = [],
+  recordings,
+  workflows = [],
+  workflowAssociation,
+  workflowContext,
+  phase = "ready",
+  reason = "Ready for follow-up.",
+  turnStatus = "completed",
+}) {
+  const value = baseSnapshot("full", "logged_in");
+  const task = uiTruthTask({
+    taskId,
+    request,
+    executionMode,
+    runtime,
+    availableActions,
+    phase,
+    reason,
+    turnStatus,
+  });
+  task.results = results;
+  if (recordings !== undefined) task.recordings = recordings;
+  if (workflowAssociation !== undefined)
+    task.workflowAssociation = workflowAssociation;
+  if (workflowContext !== undefined) task.workflowContext = workflowContext;
+  value.product.tasks = [task];
+  value.product.currentTaskId = taskId;
+  value.product.workflows = workflows;
+  return value;
+}
+
+function uiTruthWorkflowSnapshot({ revision = 1, promote = false } = {}) {
+  const workflow = uiTruthWorkflow(revision);
+  const taskId = "task_truth_workflow";
+  const result = uiTruthResult({
+    resultId: "result_workflow_source",
+    taskId,
+    kind: "report",
+    title: "Reusable source assessment",
+    body: "Use the verified source assessment for future reviews.",
+  });
+  return uiTruthTaskSnapshot({
+    taskId,
+    request: "Review the research with my Workflow",
+    workflows: [workflow],
+    results: promote ? [result] : [],
+    workflowAssociation: {
+      workflowId: workflow.workflowId,
+      workflowName: workflow.name,
+    },
+    workflowContext: {
+      workflowId: workflow.workflowId,
+      workflowName: workflow.name,
+      revision: Math.max(1, revision - 1),
+      digest: "e".repeat(64),
+      developerInstructions: "Earlier approved task context.",
+    },
+  });
+}
+
+function uiTruthResultSnapshot(options = {}) {
+  const taskId = "task_truth_result";
+  return uiTruthTaskSnapshot({
+    taskId,
+    request: "Prepare a structured research result",
+    results: [uiTruthResult({ taskId, ...options })],
+    workflows: options.workflows ?? [],
+  });
+}
+
+function uiTruthActionSnapshot(lifecycle) {
+  return uiTruthResultSnapshot({
+    resultId: `result_action_${lifecycle}`,
+    kind: "action",
+    lifecycle,
+    title: "Send approved research summary",
+    body: `Authoritative action state: ${lifecycle}.`,
+  });
+}
+
+function uiTruthRecording(state) {
+  const id = `rec_${state.slice(0, 1).padEnd(32, state.slice(0, 1))}`;
+  return {
+    schemaVersion: 1,
+    id,
+    taskId: "task_truth_recording",
+    sessionId: `ses_${"a".repeat(32)}`,
+    mode: "agent",
+    state,
+    scope: {
+      kind: "page",
+      pageId: `page_${"b".repeat(32)}`,
+      url: "https://example.test/research",
+    },
+    sensitiveDataPolicy: "user_confirmed_visible_content",
+    includesAudio: false,
+    coverage: "Selected task-owned page only.",
+    exclusions: ["Browser chrome", "Other tabs", "Native dialogs"],
+    requestedAt: "2026-09-13T12:00:00.000Z",
+    updatedAt: "2026-09-13T12:02:00.000Z",
+    ...(["recording", "finalizing", "available"].includes(state)
+      ? { startedAt: "2026-09-13T12:00:01.000Z" }
+      : {}),
+    ...(["finalizing", "available"].includes(state)
+      ? { stoppedAt: "2026-09-13T12:01:59.000Z" }
+      : {}),
+    ...(state === "available"
+      ? {
+          artifact: {
+            artifactId: id,
+            filename: "task-page-recording.webm",
+            mimeType: "video/webm",
+            sizeBytes: 4096,
+            sha256: "f".repeat(64),
+            playable: true,
+            partial: false,
+          },
+        }
+      : {}),
+    ...(state === "failed"
+      ? {
+          failure: {
+            code: "CAPTURE_INTERRUPTED",
+            message: "The page recording was interrupted before completion.",
+          },
+        }
+      : {}),
+  };
+}
+
+function uiTruthRecordingSnapshot(state) {
+  return uiTruthTaskSnapshot({
+    taskId: "task_truth_recording",
+    request: "Record the selected task page",
+    runtime: {
+      status: "active",
+      controller: "agent",
+      attachment: "attached",
+      recovery: "not_needed",
+      profileOwnership: "owned",
+    },
+    recordings: [uiTruthRecording(state)],
+  });
+}
+
+function uiTruthViewedOtherSnapshot() {
+  const value = baseSnapshot("full", "logged_in");
+
+  const active = uiTruthTask({
+    taskId: "task_truth_active_a",
+    request: "Run the active analysis",
+    phase: "working",
+    reason: "Task A is working.",
+    turnStatus: "in_progress",
+    availableActions: ["message", "interrupt", "finish"],
+    runtime: {
+      status: "active",
+      controller: "agent",
+      attachment: "attached",
+      recovery: "not_needed",
+      profileOwnership: "owned",
+    },
+  });
+
+  const viewed = uiTruthTask({
+    taskId: "task_truth_viewed_b",
+    request: "Review the comparison notes",
+    phase: "ready",
+    reason: "Task B is ready.",
+    turnStatus: "completed",
+    availableActions: ["message", "finish"],
+  });
+
+  value.product.tasks = [active, viewed];
+  value.product.currentTaskId = active.taskId;
+  return value;
+}
+
+async function requireVisible(locator, label) {
+  const count = await locator.count();
+  if (count === 0)
+    throw new Error(`[UI Truth] Expected visible semantic target: ${label}`);
+
+  for (let index = 0; index < count; index += 1) {
+    if (await locator.nth(index).isVisible()) return;
+  }
+  throw new Error(`[UI Truth] Semantic target is not visible: ${label}`);
+}
+
+async function requireAbsent(locator, label) {
+  const count = await locator.count();
+  for (let index = 0; index < count; index += 1) {
+    if (await locator.nth(index).isVisible())
+      throw new Error(
+        `[UI Truth] Forbidden semantic target is visible: ${label}`,
+      );
+  }
+}
+
+async function requireInputValue(page, value, label) {
+  const matched = await page
+    .locator("input, textarea, select")
+    .evaluateAll(
+      (elements, expected) =>
+        elements.some((element) => element.value === expected),
+      value,
+    );
+  if (!matched) throw new Error(`[UI Truth] Expected form value: ${label}`);
+}
+
+async function assertUiTruthCase(page, item) {
+  if (!item.truthScenarioId) return;
+
+  const scenario = UI_TRUTH_SCENARIO_BY_ID.get(item.truthScenarioId);
+  if (!scenario)
+    throw new Error(
+      `[UI Truth] Unknown repository scenario ${item.truthScenarioId}.`,
+    );
+
+  switch (scenario.id) {
+    case "T01": {
+      await requireVisible(
+        page.getByLabel("Desired outcome"),
+        "T01 new-task desired-outcome composer",
+      );
+      await requireVisible(
+        page.getByLabel("Start task"),
+        "T01 Start task action",
+      );
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "T01 must not imply active execution",
+      );
+      break;
+    }
+
+    case "T02": {
+      await requireVisible(
+        page.getByText("Run the active analysis", { exact: true }),
+        "T02 active task request",
+      );
+      await requireVisible(
+        page.getByLabel("Stop task"),
+        "T02 active Stop action",
+      );
+      await requireAbsent(
+        page.getByLabel("Resume task"),
+        "T02 working task must not imply interruption",
+      );
+      break;
+    }
+
+    case "T03": {
+      await requireVisible(
+        page.getByText("Summarize the completed research", { exact: true }),
+        "T03 completed task request",
+      );
+      await requireVisible(
+        page.getByRole("textbox"),
+        "T03 follow-up input remains usable",
+      );
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "T03 completed turn must not imply active execution",
+      );
+      break;
+    }
+
+    case "T04": {
+      await requireVisible(
+        page.getByText("Continue the interrupted investigation", {
+          exact: true,
+        }),
+        "T04 interrupted task request",
+      );
+      await requireVisible(
+        page.getByLabel("Resume task"),
+        "T04 explicit continuation action",
+      );
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "T04 interrupted state must not still look actively running",
+      );
+      break;
+    }
+
+    case "T05": {
+      await requireVisible(
+        page.getByLabel("Desired outcome"),
+        "T05 failed task returns product to independent new-task readiness",
+      );
+      await requireVisible(
+        page.getByLabel("Task history: task_truth_failed"),
+        "T05 failed task remains reviewable in history",
+      );
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "T05 failed task must not retain live execution authority",
+      );
+      break;
+    }
+
+    case "T06": {
+      await requireVisible(
+        page.getByText("Complete sign in.", { exact: true }),
+        "T06 authoritative handoff instruction",
+      );
+      await requireVisible(
+        page.getByText("Browser control handoff", { exact: true }),
+        "T06 authoritative attention title",
+      );
+      await requireVisible(
+        page.getByRole("button", { name: "Take Over", exact: true }),
+        "T06 task-scoped takeover action",
+      );
+      await requireAbsent(
+        page.getByText("The task failed.", { exact: true }),
+        "T06 attention must not be presented as task failure",
+      );
+      break;
+    }
+
+    case "T07": {
+      const activeRow = page.getByLabel("Task history: task_truth_active_a");
+      const viewedRow = page.getByLabel("Task history: task_truth_viewed_b");
+
+      await requireVisible(activeRow, "T07 active Task A navigation entry");
+      await requireVisible(viewedRow, "T07 Task B navigation entry");
+
+      await viewedRow.click();
+
+      await requireVisible(
+        page.getByText("Review the comparison notes", { exact: true }),
+        "T07 Task B is the viewed main content",
+      );
+
+      await requireVisible(
+        activeRow,
+        "T07 Task A remains represented while B is viewed",
+      );
+
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "T07 Task B must not inherit Task A Stop authority",
+      );
+
+      await requireAbsent(
+        page.getByLabel("Resume task"),
+        "T07 Task B must not inherit unrelated execution controls",
+      );
+      break;
+    }
+
+    case "T08": {
+      await requireVisible(
+        page.getByText("Work without a Workflow", { exact: true }),
+        "T08 standalone task content",
+      );
+      await requireVisible(
+        page.getByText(/Standalone · ready · Agent/),
+        "T08 standalone task status",
+      );
+      await requireVisible(
+        page.getByLabel("Follow-up outcome"),
+        "T08 standalone follow-up composer",
+      );
+      await requireAbsent(
+        page.getByText(/Workflow is required/i),
+        "T08 must not require a Workflow",
+      );
+      break;
+    }
+
+    case "W01": {
+      await requireVisible(
+        page.getByRole("button", {
+          name: "Create a reusable environment for recurring work",
+        }),
+        "W01 useful empty-state creation path",
+      );
+      await requireAbsent(
+        page.getByText(/failed to load Workflows/i),
+        "W01 empty collection must not look failed",
+      );
+      break;
+    }
+
+    case "W02": {
+      await requireVisible(
+        page.getByText(/Research review · ready · Agent/),
+        "W02 concrete task-to-Workflow association",
+      );
+      await requireAbsent(
+        page.getByText(/task history is Workflow/i),
+        "W02 history must not be represented as portable configuration",
+      );
+      break;
+    }
+
+    case "W03": {
+      await requireVisible(
+        page.getByText(/Revision 2 · 1 tasks/),
+        "W03 current immutable revision",
+      );
+      await page
+        .getByRole("button", { name: /Research review/ })
+        .first()
+        .click();
+      await requireVisible(
+        page.getByRole("dialog", { name: "Edit Workflow" }),
+        "W03 current Workflow editor",
+      );
+      await requireInputValue(
+        page,
+        "Prefer primary sources.",
+        "W03 current approved guidance",
+      );
+      await requireAbsent(
+        page.getByText(/historical task.*revision 2/i),
+        "W03 must not rewrite historical task context",
+      );
+      break;
+    }
+
+    case "W04": {
+      await page.getByRole("button", { name: "Save to Workflow" }).click();
+      await requireVisible(
+        page.getByRole("dialog", { name: "Save to Workflow" }),
+        "W04 explicit promotion review",
+      );
+      await requireInputValue(
+        page,
+        "Use the verified source assessment for future reviews.",
+        "W04 exact reusable material",
+      );
+      await requireVisible(
+        page.getByLabel("Promotion category"),
+        "W04 reusable information category",
+      );
+      await requireVisible(
+        page.getByText(
+          /conversation, files, approvals, and browser state are not included/i,
+        ),
+        "W04 excluded non-portable material",
+      );
+      break;
+    }
+
+    case "R01": {
+      await requireVisible(
+        page.getByRole("region", { name: "Task results" }),
+        "R01 structured result region",
+      );
+      await requireVisible(
+        page.getByText("report · Revision 1", { exact: true }),
+        "R01 result kind and revision identity",
+      );
+      await requireAbsent(
+        page.getByText(/assistant prose only/i),
+        "R01 structured result must not collapse to prose",
+      );
+      break;
+    }
+
+    case "R02": {
+      await requireVisible(
+        page.getByText("Revised research brief", { exact: true }),
+        "R02 current revised result",
+      );
+      await requireVisible(
+        page.getByText("draft · Revision 2", { exact: true }),
+        "R02 current result revision",
+      );
+      const selected = page.getByLabel("Select for follow-up");
+      await requireVisible(selected, "R02 selected follow-up state");
+      if (!(await selected.isChecked()))
+        throw new Error("[UI Truth] R02 current result is not selected.");
+      await requireAbsent(
+        page.getByText("Obsolete first revision", { exact: true }),
+        "R02 obsolete revision must not be current",
+      );
+      break;
+    }
+
+    case "A01":
+    case "A02":
+    case "A03":
+    case "A04":
+    case "A05": {
+      const lifecycle = {
+        A01: "prepared",
+        A02: "authorized",
+        A03: "dispatched",
+        A04: "confirmed",
+        A05: "unresolved",
+      }[scenario.id];
+      await requireVisible(
+        page.getByText(lifecycle, { exact: true }),
+        `${scenario.id} authoritative action lifecycle`,
+      );
+      await requireVisible(
+        page.getByText("Dispatch requires explicit authorization", {
+          exact: true,
+        }),
+        `${scenario.id} exact commit control`,
+      );
+      if (scenario.id === "A01")
+        await requireVisible(
+          page.getByRole("button", { name: "Authorize exact action" }),
+          "A01 explicit authorization boundary",
+        );
+      else
+        await requireAbsent(
+          page.getByRole("button", { name: "Authorize exact action" }),
+          `${scenario.id} must not repeat prepared authorization UI`,
+        );
+      if (scenario.id === "A05") {
+        await requireAbsent(
+          page.getByText("failed", { exact: true }),
+          "A05 unresolved must not be called failed",
+        );
+        await requireAbsent(
+          page.getByRole("button", { name: /retry/i }),
+          "A05 unresolved must not invite blind retry",
+        );
+      }
+      break;
+    }
+
+    case "B01": {
+      await requireVisible(
+        page.getByLabel("Follow-up outcome"),
+        "B01 task remains usable without browser",
+      );
+      await requireVisible(
+        page.getByText("None", { exact: true }),
+        "B01 no browser controller",
+      );
+      await requireAbsent(
+        page.getByText("The task failed.", { exact: true }),
+        "B01 browser absence must not be task failure",
+      );
+      break;
+    }
+
+    case "B02":
+    case "C01":
+    case "C03": {
+      await requireVisible(
+        page.getByText("Agent", { exact: true }),
+        `${scenario.id} authoritative agent control`,
+      );
+      await requireVisible(
+        page.getByRole("button", { name: /^(?:Open|View) Browser$/ }),
+        `${scenario.id} task-owned browser surface`,
+      );
+      await requireAbsent(
+        page.getByRole("button", { name: "Return control" }),
+        `${scenario.id} must not imply human control`,
+      );
+      break;
+    }
+
+    case "C02": {
+      await requireVisible(
+        page.getByText("You", { exact: true }),
+        "C02 authoritative human control",
+      );
+      await requireVisible(
+        page.getByRole("button", { name: "Return control" }),
+        "C02 return-control action",
+      );
+      await requireAbsent(
+        page.getByRole("button", { name: "Take Over" }),
+        "C02 must not offer takeover after transfer",
+      );
+      break;
+    }
+
+    case "C04": {
+      await requireVisible(
+        page.getByText(/Standalone · ready · Capture/),
+        "C04 human-led Capture participation",
+      );
+      await requireVisible(
+        page.getByText("Capture · Human-driven", { exact: true }),
+        "C04 explicit human-led Capture semantics",
+      );
+      await requireAbsent(
+        page.getByText("Automate · Agent mode", { exact: true }),
+        "C04 Capture setup must not be mislabeled as Agent mode",
+      );
+      await requireAbsent(
+        page.getByLabel("Stop task"),
+        "C04 Capture must not imply an active Codex turn",
+      );
+      break;
+    }
+
+    case "V01": {
+      await requireVisible(
+        page.getByText("Page recording active", { exact: true }),
+        "V01 active page recording",
+      );
+      await requireVisible(
+        page.getByRole("button", { name: "Stop page recording" }),
+        "V01 stop recording action",
+      );
+      await requireAbsent(
+        page.getByText("browser-window recording", { exact: false }),
+        "V01 active page recording must not claim window scope",
+      );
+      break;
+    }
+
+    case "V02": {
+      const finalizing = page.getByRole("button", {
+        name: "Finalizing recording…",
+      });
+      await requireVisible(finalizing, "V02 finalizing state");
+      if (await finalizing.isEnabled())
+        throw new Error("[UI Truth] V02 finalizing control must be disabled.");
+      await requireAbsent(
+        page.getByRole("button", { name: "Open recording" }),
+        "V02 must not expose playable success",
+      );
+      break;
+    }
+
+    case "V03": {
+      await requireVisible(
+        page.getByText("available", { exact: true }),
+        "V03 available lifecycle",
+      );
+      await requireVisible(
+        page.getByRole("button", { name: "Open recording" }),
+        "V03 playable recording action",
+      );
+      await requireAbsent(
+        page.getByText("Recording unavailable", { exact: false }),
+        "V03 must not look failed",
+      );
+      break;
+    }
+
+    case "V04": {
+      await requireVisible(
+        page.getByText("failed", { exact: true }),
+        "V04 failed lifecycle",
+      );
+      await requireVisible(
+        page.getByText(/Recording unavailable:.*interrupted before completion/),
+        "V04 truthful interrupted recording",
+      );
+      await requireAbsent(
+        page.getByRole("button", { name: "Open recording" }),
+        "V04 failed recording must not be playable",
+      );
+      break;
+    }
+
+    case "D01":
+    case "D02":
+    case "D03": {
+      const opened = await page.evaluate(() => {
+        const details = document.querySelector("details.account-menu");
+        const button = [
+          ...document.querySelectorAll(".account-menu button"),
+        ].find((candidate) => candidate.textContent?.trim() === "Settings");
+        if (
+          !(details instanceof HTMLDetailsElement) ||
+          !(button instanceof HTMLButtonElement)
+        )
+          return false;
+        details.open = true;
+        button.click();
+        return true;
+      });
+      if (!opened)
+        throw new Error(`[UI Truth] ${scenario.id} settings entry missing.`);
+      await requireVisible(
+        page.getByRole("dialog", { name: "Settings" }),
+        `${scenario.id} data-management settings`,
+      );
+      if (scenario.id === "D01") {
+        await page
+          .getByRole("button", { name: "Export local backup…" })
+          .click();
+        await requireVisible(
+          page.getByText("rove-local-backup created with 4 files.", {
+            exact: true,
+          }),
+          "D01 truthful export completion",
+        );
+      } else if (scenario.id === "D02") {
+        await page
+          .getByRole("button", { name: "Export local backup…" })
+          .click();
+        await requireVisible(
+          page.getByText("The backup export was cancelled.", { exact: true }),
+          "D02 truthful export cancellation",
+        );
+        await requireAbsent(
+          page.getByText(/created with .* files/i),
+          "D02 must not claim export success",
+        );
+      }
+      await requireVisible(
+        page.getByText(/Restore is not available yet/),
+        `${scenario.id} restore unsupported disclosure`,
+      );
+      await requireAbsent(
+        page.getByRole("button", { name: /^Restore/i }),
+        `${scenario.id} must not expose a functioning Restore action`,
+      );
+      break;
+    }
+
+    default:
+      throw new Error(
+        `[UI Truth] No semantic qualification implemented for ${scenario.id}.`,
+      );
+  }
+}
+
 const cases = [
+  {
+    id: "ui-truth-t01",
+    truthScenarioId: "T01",
+    snapshot: baseSnapshot("full", "logged_in"),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t02",
+    truthScenarioId: "T02",
+    snapshot: uiTruthWorkingSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t03",
+    truthScenarioId: "T03",
+    snapshot: uiTruthCompletedSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t04",
+    truthScenarioId: "T04",
+    snapshot: uiTruthInterruptedSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t05",
+    truthScenarioId: "T05",
+    snapshot: uiTruthFailedSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t06",
+    truthScenarioId: "T06",
+    snapshot: uiTruthAttentionSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t07",
+    truthScenarioId: "T07",
+    snapshot: uiTruthViewedOtherSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-t08",
+    truthScenarioId: "T08",
+    snapshot: uiTruthTaskSnapshot({
+      taskId: "task_truth_standalone",
+      request: "Work without a Workflow",
+    }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-w01",
+    truthScenarioId: "W01",
+    snapshot: baseSnapshot("full", "logged_in"),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-w02",
+    truthScenarioId: "W02",
+    snapshot: uiTruthWorkflowSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-w03",
+    truthScenarioId: "W03",
+    snapshot: uiTruthWorkflowSnapshot({ revision: 2 }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-w04",
+    truthScenarioId: "W04",
+    snapshot: uiTruthWorkflowSnapshot({ promote: true }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-r01",
+    truthScenarioId: "R01",
+    snapshot: uiTruthResultSnapshot(),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  {
+    id: "ui-truth-r02",
+    truthScenarioId: "R02",
+    snapshot: uiTruthResultSnapshot({
+      kind: "draft",
+      selected: true,
+      revision: 2,
+      title: "Revised research brief",
+      body: "Current selected revision.",
+    }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  ...[
+    ["a01", "A01", "prepared"],
+    ["a02", "A02", "authorized"],
+    ["a03", "A03", "dispatched"],
+    ["a04", "A04", "confirmed"],
+    ["a05", "A05", "unresolved"],
+  ].map(([suffix, truthScenarioId, lifecycle]) => ({
+    id: `ui-truth-${suffix}`,
+    truthScenarioId,
+    snapshot: uiTruthActionSnapshot(lifecycle),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  })),
+  {
+    id: "ui-truth-b01",
+    truthScenarioId: "B01",
+    snapshot: uiTruthTaskSnapshot({
+      taskId: "task_truth_browser_absent",
+      request: "Continue without browser access",
+    }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  ...[
+    ["b02", "B02", "agent", "agent", ["message", "finish"]],
+    ["c01", "C01", "agent", "agent", ["message", "finish"]],
+    ["c02", "C02", "companion", "human", ["return_control", "finish"]],
+    ["c03", "C03", "companion", "agent", ["message", "finish"]],
+  ].map(([suffix, truthScenarioId, executionMode, controller, actions]) => ({
+    id: `ui-truth-${suffix}`,
+    truthScenarioId,
+    snapshot: uiTruthTaskSnapshot({
+      taskId: `task_truth_${suffix}`,
+      request: `Exercise ${truthScenarioId} collaboration truth`,
+      executionMode,
+      availableActions: actions,
+      runtime: {
+        status: "active",
+        controller,
+        attachment: "attached",
+        recovery: "not_needed",
+        profileOwnership: "owned",
+      },
+    }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  })),
+  {
+    id: "ui-truth-c04",
+    truthScenarioId: "C04",
+    snapshot: uiTruthTaskSnapshot({
+      taskId: "task_truth_capture",
+      request: "Capture my human-led browser journey",
+      executionMode: "capture",
+      turnStatus: "completed",
+    }),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  },
+  ...[
+    ["v01", "V01", "recording"],
+    ["v02", "V02", "finalizing"],
+    ["v03", "V03", "available"],
+    ["v04", "V04", "failed"],
+  ].map(([suffix, truthScenarioId, state]) => ({
+    id: `ui-truth-${suffix}`,
+    truthScenarioId,
+    snapshot: uiTruthRecordingSnapshot(state),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  })),
+  ...[
+    ["d01", "D01", "success"],
+    ["d02", "D02", "cancel"],
+    ["d03", "D03", "unsupported"],
+  ].map(([suffix, truthScenarioId, backupOutcome]) => ({
+    id: `ui-truth-${suffix}`,
+    truthScenarioId,
+    backupOutcome,
+    snapshot: baseSnapshot("full", "logged_in"),
+    follower: false,
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  })),
   {
     id: "full-onboarding",
     snapshot: baseSnapshot("full", "logged_out"),
@@ -600,11 +1768,21 @@ try {
       viewport: item.viewport,
       colorScheme: item.colorScheme ?? "light",
     });
+    const truthScenario = item.truthScenarioId
+      ? UI_TRUTH_SCENARIO_BY_ID.get(item.truthScenarioId)
+      : undefined;
+    const tracePath = truthScenario?.trace
+      ? join(outputRoot, `${item.id}.trace.zip`)
+      : undefined;
+    if (tracePath)
+      await page
+        .context()
+        .tracing.start({ screenshots: true, snapshots: true });
     page.on("pageerror", (error) => {
       process.stderr.write(`[product-surface:${item.id}] ${error.message}\n`);
     });
     await page.addInitScript(
-      ({ snapshot, failFirstLoginOpen, themePreference }) => {
+      ({ snapshot, failFirstLoginOpen, themePreference, backupOutcome }) => {
         if (themePreference)
           localStorage.setItem("rove.theme-preference.v1", themePreference);
         const listeners = new Set();
@@ -668,16 +1846,30 @@ try {
           getBrowserWorkspaces: async () => snapshot.workspaces,
           createBrowserWorkspace: async () => snapshot.workspaces,
           selectBrowserWorkspace: async () => snapshot.workspaces,
+          exportLocalBackup: async () => {
+            window.__roveCalls.push({ type: "exportLocalBackup" });
+            if (backupOutcome === "cancel")
+              throw new Error("The backup export was cancelled.");
+            return {
+              status: "created",
+              name: "rove-local-backup",
+              fileCount: 4,
+              missingCount: 0,
+            };
+          },
         };
       },
       {
         snapshot: item.snapshot,
         failFirstLoginOpen: item.failFirstLoginOpen ?? false,
         themePreference: item.themePreference,
+        backupOutcome: item.backupOutcome,
       },
     );
     const suffix = item.follower ? "?surface=follower" : "";
     await page.goto(`http://127.0.0.1:${address.port}/${suffix}`);
+
+    await assertUiTruthCase(page, item);
     await page.waitForSelector(
       item.follower ? ".product-chip, .product-expanded" : ".product-app",
     );
@@ -1291,9 +2483,26 @@ try {
     }
     const path = join(outputRoot, `${item.id}.png`);
     await page.screenshot({ path, fullPage: true });
+    if (tracePath) await page.context().tracing.stop({ path: tracePath });
     artifacts.push({
       id: item.id,
-      path,
+      path: relative(repositoryRoot, path),
+      ...(truthScenario
+        ? {
+            scenarioId: truthScenario.id,
+            name: truthScenario.name,
+            category: truthScenario.category,
+            applicationStateSummary: truthScenario.applicationTruth,
+            rendererProjectionSummary: truthScenario.rendererTruth,
+            semanticAssertions: truthScenario.semanticAssertions,
+            negativeAssertions: truthScenario.negativeAssertions,
+            viewport: item.viewport,
+            status: "PASS",
+            defectClassification: null,
+            notes: [],
+          }
+        : {}),
+      ...(tracePath ? { tracePath: relative(repositoryRoot, tracePath) } : {}),
       ...(keyboardOrder ? { keyboardOrder } : {}),
       ...(interactionAssertions ? { interactionAssertions } : {}),
     });
