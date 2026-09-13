@@ -2086,12 +2086,18 @@ export class RuntimeService implements RoveRuntime {
   ): Promise<EffectJournalRecord> {
     await this.effectJournalReady;
     const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
     const browserWorkspaceScope = session.workspace?.id ?? session.id;
     const record = await this.effectJournal.findById(effectId);
-    if (!record || record.browserWorkspaceScope !== browserWorkspaceScope)
+    if (
+      !record ||
+      record.taskScope !== taskScope ||
+      record.browserWorkspaceScope !== browserWorkspaceScope
+    )
       throw new RoveError({
         code: "ACTION_NOT_AUTHORIZED",
-        message: "The effect does not belong to this browser workspace.",
+        message:
+          "The effect does not belong to this task and browser workspace.",
       });
     return this.effectJournal.authorizeRepeat(
       effectId,

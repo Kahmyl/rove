@@ -224,7 +224,9 @@ describe("RecordingService", () => {
       confirmUnmaskedSensitiveContent: true,
     });
     browser.stopPageRecording.mockImplementationOnce(async () => {
-      await writeFile(stagingPath(), Buffer.from("incomplete video"));
+      const bytes = Buffer.alloc(256, 0);
+      bytes.set(Buffer.from("1a45dfa3", "hex"), 0);
+      await writeFile(stagingPath(), bytes);
       throw new Error("encoder failed");
     });
     await expect(service.stop(sessionId, started.id)).resolves.toMatchObject({

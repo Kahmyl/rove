@@ -166,10 +166,7 @@ export class RecordingService implements OnModuleDestroy {
           () => undefined,
         );
       try {
-        await this.browsers
-          .get(sessionId)
-          .stopPageRecording(recordingId)
-          .catch(() => undefined);
+        await this.browsers.get(sessionId).stopPageRecording(recordingId);
         const artifact = await this.recordings.finalizeArtifact(
           sessionId,
           recordingId,

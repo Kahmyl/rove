@@ -2763,7 +2763,13 @@ describe("runtime integration", () => {
     expect(unrelatedServer.mutationCount()).toBe(0);
 
     const productAuthorizationBoundary = new SessionController(replacement);
-    await productAuthorizationBoundary.authorizeEffectRepeat(sessionB.id, {
+    await expect(
+      productAuthorizationBoundary.authorizeEffectRepeat(sessionB.id, {
+        effectId: unresolved!.effectId,
+        authorizationId: "effect_repeat_00000000-0000-4000-8000-000000000000",
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    await productAuthorizationBoundary.authorizeEffectRepeat(sessionA.id, {
       effectId: unresolved!.effectId,
       authorizationId: "effect_repeat_12345678-1234-4123-8123-123456789abc",
     });
