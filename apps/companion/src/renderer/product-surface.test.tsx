@@ -95,6 +95,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           approvalsReviewer: "auto_review",
           bootstrapStage: "complete",
           results: [],
+          conversation: {
+            turnStatus: "completed",
+            archived: false,
+            items: {},
+            turnOrder: [],
+          },
           recordings: [
             {
               schemaVersion: 1,
@@ -155,7 +161,13 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         />,
       );
       expect(html).toContain("Page recording active");
-      expect(html).toContain(`${mode} mode`);
+      expect(html).toContain(
+        {
+          agent: "Automate · Agent mode",
+          companion: "Work together · Companion mode",
+          capture: "Capture · Human-driven",
+        }[mode],
+      );
       expect(html).toContain("Stop page recording");
       expect(html).toContain("Continuous video is not masked");
       expect(html).toContain("Recording unavailable");

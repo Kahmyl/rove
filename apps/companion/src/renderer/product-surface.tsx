@@ -3792,7 +3792,7 @@ export function ProductSurface({
                     <div className="eyebrow">Page recording</div>
                     <strong>Task-owned browser evidence</strong>
                   </div>
-                  <small>{viewedTask.executionMode} mode</small>
+                  <small>{modeLabel(viewedTask.executionMode)}</small>
                 </header>
                 <p>
                   Records the selected page only, without audio. Browser chrome,
@@ -4365,9 +4365,7 @@ export function ProductSurface({
                                 <strong>How Rove helps</strong>
                                 <div className="task-frozen-option">
                                   <span>
-                                    {viewedTask.executionMode === "companion"
-                                      ? "Companion"
-                                      : "Agent"}
+                                    {modeLabel(viewedTask.executionMode)}
                                   </span>
                                   <small>Fixed for this task</small>
                                 </div>
