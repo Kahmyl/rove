@@ -25,7 +25,10 @@ import {
   type TaskProcessState,
   type Session,
   type RuntimeSessionInventory,
+  type Recording,
   type StartSessionRequest,
+  type StartRecordingRequest,
+  type TaskWorkflowContextSnapshot,
   type TaskResultActionPlan,
 } from "@rove/protocol";
 
@@ -248,7 +251,7 @@ export interface ResolvedTaskContext {
     workflowId: string;
     workflowName: string;
   };
-  workflowContext?: import("@rove/protocol").TaskWorkflowContextSnapshot;
+  workflowContext?: TaskWorkflowContextSnapshot;
   initialLaunch?: InitialLaunchJournal;
   /** Optional only on the accepted v2 migration input; validation materializes it. */
   lifecycle?: TaskLifecycleState;
@@ -930,15 +933,10 @@ export interface TaskRuntimePort {
   ): Promise<object>;
   startRecording?(
     sessionId: string,
-    request: import("@rove/protocol").StartRecordingRequest,
-  ): Promise<import("@rove/protocol").Recording>;
-  stopRecording?(
-    sessionId: string,
-    recordingId: string,
-  ): Promise<import("@rove/protocol").Recording>;
-  listRecordings?(
-    sessionId: string,
-  ): Promise<import("@rove/protocol").Recording[]>;
+    request: StartRecordingRequest,
+  ): Promise<Recording>;
+  stopRecording?(sessionId: string, recordingId: string): Promise<Recording>;
+  listRecordings?(sessionId: string): Promise<Recording[]>;
 }
 export interface RoveMcpInspection {
   serverName: string;

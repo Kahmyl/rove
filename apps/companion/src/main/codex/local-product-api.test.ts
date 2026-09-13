@@ -995,7 +995,8 @@ describe("LocalProductApi native product seam", () => {
     const results = resultStore(action);
     const current = fixture("agent", undefined, account(), undefined, results);
     const task = await current.tasks.readTask("task_existing");
-    const { roveSessionId: _sessionId, ...browserlessContext } = task!.context;
+    const { roveSessionId, ...browserlessContext } = task!.context;
+    expect(roveSessionId).toBeTruthy();
     current.tasks.readTask.mockResolvedValue({
       ...task!,
       context: browserlessContext,

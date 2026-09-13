@@ -9,7 +9,7 @@ export interface WorkflowGuidanceEntry {
   appliesTo: readonly string[];
 }
 
-export interface WorkflowKnowledgeEntry extends WorkflowGuidanceEntry {}
+export type WorkflowKnowledgeEntry = WorkflowGuidanceEntry;
 
 export interface WorkflowResourceRequirement {
   id: string;
@@ -97,11 +97,11 @@ const SECRET_PATTERNS = [
   /\b(?:password|passwd|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|authorization|cookie)\s*[:=]\s*\S+/i,
 ] as const;
 const LOCAL_PATH_PATTERNS = [
-  /(?:^|[\s"'`()\[\]{}<>=,:;])file:\/\/\/?[^\s"'`]+/i,
-  /(?:^|[\s"'`()\[\]{}<>=,:;])\\\\[^\\\s"'`]+\\[^\\\s"'`]+/,
-  /(?:^|[\s"'`()\[\]{}<>=,:;])[A-Za-z]:[\\/][^\s"'`]+/,
-  /(?:^|[\s"'`()\[\]{}<>=,:;])~\/[^\s"'`]+/,
-  /(?:^|[\s"'`()\[\]{}<>=,:;])(?:\.{1,2}[\\/]|\/(?!\/))[^\s"'`]+/,
+  /(?:^|[\s"'`()[\]{}<>=,:;])file:\/\/\/?[^\s"'`]+/i,
+  /(?:^|[\s"'`()[\]{}<>=,:;])\\\\[^\\\s"'`]+\\[^\\\s"'`]+/,
+  /(?:^|[\s"'`()[\]{}<>=,:;])[A-Za-z]:[\\/][^\s"'`]+/,
+  /(?:^|[\s"'`()[\]{}<>=,:;])~\/[^\s"'`]+/,
+  /(?:^|[\s"'`()[\]{}<>=,:;])(?:\.{1,2}[\\/]|\/(?!\/))[^\s"'`]+/,
 ] as const;
 
 function boundedText(value: unknown, label: string, maximum: number): string {
