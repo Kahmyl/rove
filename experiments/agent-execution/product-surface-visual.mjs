@@ -1272,13 +1272,14 @@ async function assertUiTruthCase(page, item) {
       );
       await page.getByRole("button", { name: "Context", exact: true }).click();
       await requireVisible(
-        page.getByRole("dialog", { name: "Edit Workflow" }),
-        "W03 current Workflow editor",
+        page.getByRole("heading", {
+          name: "Help Rove understand how to work here",
+        }),
+        "W03 readable Workflow Context",
       );
-      await requireInputValue(
-        page,
-        "Prefer primary sources.",
-        "W03 current approved guidance",
+      await requireVisible(
+        page.getByText("Prefer primary sources.", { exact: true }),
+        "W03 current approved guidance read view",
       );
       await requireAbsent(
         page.getByText(/historical task.*revision 2/i),
@@ -1657,6 +1658,7 @@ async function captureDesignStateEvidence(page, item) {
     assertions.workflowCreateFocusInspected = true;
   }
   if (item.truthScenarioId === "T01") {
+    await page.getByLabel("Commands and settings", { exact: true }).click();
     await page.getByLabel("Workflow environment").focus();
     const path = statePath("focus");
     await page.screenshot({ path, fullPage: true });
@@ -2278,7 +2280,7 @@ try {
     if (item.id.startsWith("full-composer")) {
       await page.getByLabel("Desired outcome").focus();
       keyboardOrder = [];
-      for (let index = 0; index < 7; index += 1) {
+      for (let index = 0; index < 4; index += 1) {
         keyboardOrder.push(
           await page.evaluate(() => {
             const active = document.activeElement;
@@ -2294,16 +2296,14 @@ try {
       const expectedOrder = [
         "Desired outcome",
         "Attach files",
-        "Workflow environment",
-        "Task setup",
-        "Permission review",
-        "Model and reasoning effort",
+        "Commands and settings",
         "Task controls and status",
       ];
       if (JSON.stringify(keyboardOrder) !== JSON.stringify(expectedOrder))
         throw new Error(
           `Keyboard order drifted: ${JSON.stringify({ expectedOrder, keyboardOrder })}`,
         );
+      await page.getByLabel("Commands and settings", { exact: true }).click();
       await page.getByLabel("Task setup").click();
       await page.getByText("How Rove helps", { exact: true }).waitFor();
       const setupPopoverBox = await page
@@ -2331,6 +2331,7 @@ try {
         .evaluate((menu) => menu.open));
       if (!setupOutsideClickDismissed)
         throw new Error("Task setup remained open after an outside click.");
+      await page.getByLabel("Commands and settings", { exact: true }).click();
       await page.getByLabel("Permission review").click();
       await page.keyboard.press("Escape");
       const permissionEscapeDismissed = !(await page
@@ -2338,6 +2339,7 @@ try {
         .evaluate((menu) => menu.open));
       if (!permissionEscapeDismissed)
         throw new Error("Permission menu remained open after Escape.");
+      await page.getByLabel("Commands and settings", { exact: true }).click();
       await page.getByLabel("Model and reasoning effort").click();
       await page.getByText("Reasoning effort", { exact: true }).waitFor();
       const modelPopoverBox = await page
@@ -2529,6 +2531,7 @@ try {
         throw new Error(
           `Forced-light surfaces leaked dark styling: ${JSON.stringify(themeSurfaces)}`,
         );
+      await page.getByLabel("Commands and settings", { exact: true }).click();
       await page.getByLabel("Task setup").hover();
       const setupHoverBackground = await page
         .getByLabel("Task setup")

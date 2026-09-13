@@ -253,6 +253,25 @@ function executeProductIntent(intent) {
     notify();
     return { aggregate: { taskId } };
   }
+  if (intent.type === "attention.decide") {
+    const current = snapshot.product.attention.find(
+      (entry) =>
+        entry.taskId === intent.taskId &&
+        entry.requestId === intent.requestId &&
+        entry.generation === intent.generation,
+    );
+    if (!current) throw new Error("Attention request not found.");
+    current.status = "resolved";
+    const task = snapshot.product.tasks.find(
+      (entry) => entry.taskId === intent.taskId,
+    );
+    if (task) {
+      task.lifecycle = { phase: "ready", reason: "Ready for another message." };
+      task.availableActions = ["message", "finish"];
+    }
+    notify();
+    return {};
+  }
   return {};
 }
 
@@ -298,7 +317,9 @@ function seedWorkflowResult() {
   return structuredClone(task.results[0]);
 }
 
+let attentionGeneration = 0;
 function seedWorkflowAttention() {
+  attentionGeneration += 1;
   snapshot.product.attention = [
     {
       authority: "codex",
@@ -308,7 +329,7 @@ function seedWorkflowAttention() {
       threadId: "thread_workflow_weekly_update",
       turnId: "turn_workflow_weekly_update",
       itemId: "item_weekly_audience",
-      generation: 1,
+      generation: attentionGeneration,
       status: "pending",
       sequence: 1,
       title: "Choose the final audience",
@@ -317,7 +338,7 @@ function seedWorkflowAttention() {
           id: "audience",
           header: "Audience",
           question: "Who should receive this update?",
-          isOther: false,
+          isOther: true,
           isSecret: false,
           options: [
             { label: "Leadership", description: "Concise executive update" },

@@ -70,6 +70,10 @@ async function visibleState(page) {
       ".workflow-output-list",
       ".workflow-create-dialog",
       ".workflow-editor",
+      ".workflow-context-surface",
+      ".workflow-context-focused-editor",
+      ".composer-command-palette",
+      ".task-response-surface",
       ".composer-input-shell",
     ]
       .map((selector) => {
@@ -249,9 +253,24 @@ try {
     page,
     "workflow-task-composer",
     "Start ordinary work inside the Workflow.",
-    "The normal task composer opens with Weekly product update already selected.",
+    "The simplified composer opens with the Workflow association already established and secondary settings hidden.",
     note(
-      "Task creation reuses the normal composer and exact Workflow association instead of a special lifecycle.",
+      "The request, attachment action, command entry, and start action form the permanent chrome.",
+    ),
+  );
+  assert(
+    !(await page.getByLabel("Workflow environment").isVisible()),
+    "Workflow configuration leaked into the closed composer.",
+  );
+  await page.getByLabel("Desired outcome").press("/");
+  await page.getByLabel("Search commands").waitFor();
+  await capture(
+    page,
+    "composer-command-palette",
+    "Find a less-frequent task setting without losing the request.",
+    "Typing slash opens a searchable, keyboard-accessible palette grouped around implemented actions and settings.",
+    note(
+      "Workflow, participation, approval, browser, model, and file controls remain available without permanent chrome.",
     ),
   );
   await page
@@ -305,76 +324,155 @@ try {
     ),
   );
   await page.getByRole("button", { name: /Choose the final audience/ }).click();
-  await page
-    .getByText("Who should receive this update?", { exact: true })
-    .waitFor();
+  const responseSurface = page.locator(".task-response-surface");
+  await responseSurface.waitFor();
   await capture(
     page,
-    "workflow-attention-routed-to-task",
+    "task-input-replaces-composer",
     "Answer the decision in the work that owns it.",
-    "Opening the Workflow attention item routes to the exact task and its existing response UI.",
+    "Opening the Workflow attention item routes to the exact task and replaces its ordinary composer with one response surface.",
     note(
-      "No second Workflow attention state machine or response path is introduced.",
+      "The response uses the existing exact attention identity; the normal composer is absent.",
     ),
   );
+  assert(
+    (await page.locator(".task-composer-shell").count()) === 0,
+    "The ordinary composer competed with blocking task input.",
+  );
+  await responseSurface.getByText(/Leadership/).click();
+  await capture(
+    page,
+    "bounded-choice-selected",
+    "Choose the audience Rove needs to continue.",
+    "One explicit option is selected; no choice was made automatically.",
+    note("Bounded choices remain clear and reversible before submission."),
+  );
+  await responseSurface.getByRole("button", { name: "Send" }).click();
+  await page.locator(".task-composer-shell").waitFor();
+  await capture(
+    page,
+    "normal-composer-restored",
+    "Continue the same task after answering.",
+    "The authoritative response resolves and the ordinary composer returns on the same task.",
+    note("Task identity and normal continuation are preserved."),
+  );
+  await page.evaluate(() => window.rove.seedWorkflowAttention());
+  await page.locator(".task-response-surface").waitFor();
+  await page.getByLabel("Audience answer").fill("Customer advisory group");
+  await capture(
+    page,
+    "freeform-alternative",
+    "Provide a valid answer outside the suggested choices.",
+    "Something else accepts a freeform audience without trapping the customer in generated choices.",
+    note(
+      "The alternative is submitted through the same attention-response contract.",
+    ),
+  );
+  await page
+    .locator(".task-response-surface")
+    .getByRole("button", { name: "Send" })
+    .click();
+  await page.locator(".task-composer-shell").waitFor();
   await workflowRow.click();
   await page.locator(".workflow-workspace").waitFor();
-  await page.evaluate(() => window.rove.seedWorkflowResult());
-  await page
-    .getByRole("button", {
-      name: "Open Workflow output: result_weekly_product_update",
-    })
-    .waitFor();
   await capture(
     page,
-    "workflow-home-with-output",
-    "Rediscover useful material produced by Workflow work.",
-    "Recent outputs projects a stable report from the associated task.",
+    "workflow-home-after-input",
+    "Return to the recurring workspace after resolving task input.",
+    "Home remains the approved work-oriented workspace; the resolved request no longer appears as attention.",
     note(
-      "The output appears from existing task Result truth; no conversation scraping or duplicate record is used.",
+      "Task response does not create a second Workflow-level state machine.",
     ),
   );
-  await page.getByRole("button", { name: "View all" }).click();
-  await page
-    .getByRole("heading", { name: "Useful work to return to" })
-    .waitFor();
-  await capture(
-    page,
-    "workflow-outputs",
-    "See the useful things accumulated through this Workflow.",
-    "Outputs lists title, kind, lifecycle, and originating task.",
-    note(
-      "Outputs is first-class but restrained; no folders or document-manager behavior is introduced.",
-    ),
-  );
-  await page
-    .getByRole("button", {
-      name: "Open Workflow output: result_weekly_product_update",
-    })
-    .click();
-  await page.locator('.result-card[data-opened="true"]').waitFor();
-  await capture(
-    page,
-    "exact-output-opened",
-    "Open the exact saved output and continue from it.",
-    "The owning task opens with the stable result card focused and existing result actions intact.",
-    note("Output selection routes through exact task and Result identity."),
-  );
-  await workflowRow.click();
   await page.getByRole("button", { name: "Context", exact: true }).click();
-  await page.getByRole("dialog", { name: "Edit Workflow" }).waitFor();
+  await page.locator(".workflow-context-surface").waitFor();
   await capture(
     page,
-    "optional-workflow-context",
-    "Optionally add deeper instructions after useful work already exists.",
-    "The advanced editor is reachable from secondary Context navigation and every section may remain empty.",
-    [
-      {
-        classification: "COGNITIVE_LOAD",
-        detail:
-          "Advanced configuration remains dense once deliberately opened, but it no longer blocks creation or work.",
-      },
-    ],
+    "context-read-first",
+    "Understand the approved context before changing it.",
+    "Context is a full secondary workspace page showing Goal, help, success expectations, and knowledge/resources in readable language.",
+    note(
+      "No configuration inputs or modal appear until a section is explicitly edited.",
+    ),
+  );
+  assert(
+    (await page.getByRole("dialog", { name: "Edit Workflow" }).count()) === 0,
+    "Context still opened as a modal.",
+  );
+  await page
+    .locator(".workflow-context-section")
+    .filter({ hasText: "Goal" })
+    .getByRole("button", { name: "Edit" })
+    .click();
+  await page
+    .getByLabel("Workflow goal")
+    .fill("Prepare a clear weekly update for the people who need it.");
+  await capture(
+    page,
+    "context-focused-edit",
+    "Improve one part of the Workflow context.",
+    "Only Goal is editable while the rest of the page remains readable.",
+    note(
+      "Focused editing reuses the existing immutable configuration revision machinery.",
+    ),
+  );
+  await page
+    .locator(".workflow-context-focused-editor")
+    .getByRole("button", { name: "Save" })
+    .click();
+  await page
+    .getByText("Prepare a clear weekly update for the people who need it.", {
+      exact: true,
+    })
+    .waitFor();
+  await capture(
+    page,
+    "context-edit-saved",
+    "Confirm the approved context change.",
+    "The readable Goal reflects the saved revision and edit controls are closed.",
+    note("Save returns to read-first state."),
+  );
+  await page
+    .locator(".workflow-context-section")
+    .filter({ hasText: "How Rove should help" })
+    .getByRole("button", { name: "Edit" })
+    .click();
+  await page
+    .locator(".workflow-context-focused-editor")
+    .getByRole("button", { name: "Cancel" })
+    .click();
+  assert(
+    (await page.locator(".workflow-context-focused-editor").count()) === 0,
+    "Cancelling Context editing did not restore the read view.",
+  );
+  await capture(
+    page,
+    "context-edit-cancelled",
+    "Leave another Context section unchanged.",
+    "Cancel returns to the readable Context surface without creating another revision.",
+    note("Focused editing has an explicit non-persistent exit."),
+  );
+  await page
+    .locator(".workflow-context-advanced")
+    .getByText("Advanced", { exact: true })
+    .click();
+  await capture(
+    page,
+    "advanced-context-disclosed",
+    "Reach less-common configuration deliberately.",
+    "Advanced reveals procedures and output preferences without activating every field.",
+    note(
+      "Existing capabilities remain reachable through progressive disclosure.",
+    ),
+  );
+  await page.getByRole("button", { name: "Home", exact: true }).click();
+  await page.locator(".workflow-start-card").waitFor();
+  await capture(
+    page,
+    "return-workflow-home",
+    "Return to everyday Workflow work.",
+    "Home returns with task entry and recent work intact.",
+    note("Context remains secondary to work."),
   );
 
   const journeyState = await page.evaluate(() => window.rove.getJourneyState());
@@ -403,9 +501,8 @@ try {
     "Task did not use the current Workflow revision.",
   );
   assert(
-    journeyState.snapshot.product.tasks[1].results[0].resultId ===
-      "result_weekly_product_update",
-    "Stable Workflow result is missing.",
+    journeyState.snapshot.product.workflows[0].currentRevision === 2,
+    "Focused Context save did not persist a revision.",
   );
   assert(
     steps.every((entry) => !entry.visible.horizontalOverflow),
@@ -420,7 +517,7 @@ try {
   const manifest = {
     title: "Customer Journey 02 — Workflow workspace",
     journey:
-      "Create a Workflow, enter it immediately, start working, and optionally configure it.",
+      "Create a Workflow, start work through progressive commands, answer exact task input, and refine readable Context.",
     baseline: {
       commit,
       gitStatus,
@@ -437,8 +534,8 @@ try {
       requiredWorkflowCreationInputs: 1,
       advancedConfigurationInputsBeforeEntry: 0,
       associatedTasks: 1,
-      projectedOutputs: 1,
-      projectedAttentionRequests: 1,
+      conversationalAttentionResponses: 2,
+      workflowContextRevisions: 2,
     },
     assertions: {
       nameOnlyCreation: true,
@@ -448,8 +545,14 @@ try {
       taskUsesCurrentRevisionContext: true,
       recentTaskProjected: true,
       exactAttentionRouted: true,
-      stableResultProjected: true,
-      exactResultOpened: true,
+      slashPaletteAccessible: true,
+      taskInputReplacesComposer: true,
+      freeformAlternative: true,
+      composerRestored: true,
+      contextReadFirst: true,
+      focusedContextEdit: true,
+      focusedContextCancel: true,
+      advancedContextReachable: true,
       contextSecondary: true,
       standaloneHistoryPreserved: true,
     },
@@ -465,7 +568,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "summary.md"),
-    `# Customer Journey 02 — Workflow workspace\n\nThe deterministic local Electron journey passed with ${steps.length} screenshots and no live Codex, real account, Supabase, or external action.\n\n- **Could a user enter the workspace within seconds?** Yes. Creation requires one name and immediately selects Workflow Home.\n- **Could they start working without configuring it?** Yes. A sparse Workflow exposes New task immediately; zero advanced inputs precede entry.\n- **Is it obvious which tasks belong here?** Yes. Home lists exact associated tasks with current status, normal task history names the Workflow, and Workflow attention routes back to its owning task.\n- **Do useful outputs make the workspace feel persistent?** Yes. Stable task Results appear on Home and Outputs and open their exact owning task/result.\n- **Is configuration secondary rather than mandatory?** Yes. Context is secondary navigation opened after work; existing advanced fields remain compatible and optional.\n- **Does the workspace feel more useful than a standalone task?** Yes in this bounded slice: related work and useful output are rediscoverable together without changing task identity or lifecycle.\n- **Is anything cognitively heavy before advanced settings?** No. Before choosing Context, the only additional decision during task start is the existing explicit guidance-disclosure choice. The advanced editor itself remains dense and is a bounded future refinement.\n\nEvidence: ordered PNGs, \`contact-sheet.png\`, \`manifest.json\`, \`trace.json\`, and \`journey-02.trace.zip\`.\n`,
+    `# Customer Journey 02 — Workflow interaction\n\nThe deterministic local Electron journey passed with ${steps.length} screenshots and no live Codex, real account, Supabase, or external action.\n\n- **Composer:** The permanent surface is reduced to request, attachment, command, and send controls. Typing slash opens searchable access to the implemented task, Workflow, browser, approval, model, and file choices.\n- **Task-required input:** An exact conversational request replaces only its owning selected task's composer. Suggested choices and a freeform alternative both submit through the existing attention contract; successful response restores the normal composer.\n- **Background attention:** Workflow Home shows an exact lightweight indicator and routes to the owning task before presenting input.\n- **Workflow Context:** Context is a full read-first workspace surface. One section enters focused edit mode, save creates the next existing immutable revision, cancel remains available, and Advanced stays collapsed until requested.\n- **Preserved boundaries:** Workflow Home architecture, task lifecycle, browser handoff, approval authority, Results behavior, standalone work, and local-only test state remain unchanged.\n\nEvidence: ordered PNGs, \`contact-sheet.png\`, \`manifest.json\`, \`trace.json\`, and \`journey-02.trace.zip\`.\n`,
   );
   process.stdout.write(
     `${JSON.stringify({ status: "pass", output: relative(repositoryRoot, outputRoot), screenshots: steps.length }, null, 2)}\n`,
