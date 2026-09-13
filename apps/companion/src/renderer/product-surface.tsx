@@ -16,7 +16,10 @@ import type {
   ProductElicitationField,
 } from "../main/codex/local-product-api.js";
 import type { ProjectedConversationItem } from "../main/codex/conversations.js";
-import type { LoginProjection } from "../main/codex/account-catalog.js";
+import type {
+  CodexModelProjection,
+  LoginProjection,
+} from "../main/codex/account-catalog.js";
 import type { TaskAttachmentDescriptor } from "../main/codex/task-attachments.js";
 import type {
   WorkflowConfiguration,
@@ -688,6 +691,232 @@ function closeParentMenu(event: MouseEvent<HTMLButtonElement>): void {
   event.currentTarget.closest("details")?.removeAttribute("open");
 }
 
+export function compatibleReasoningEffort(
+  model: Pick<CodexModelProjection, "efforts" | "defaultEffort">,
+  currentEffort: string,
+): string {
+  return model.efforts.includes(currentEffort)
+    ? currentEffort
+    : model.defaultEffort;
+}
+
+function displayReasoningEffort(value: string): string {
+  return value ? `${value[0]?.toUpperCase()}${value.slice(1)}` : "Default";
+}
+
+function ComposerModeMenu({
+  mode,
+  onChange,
+}: {
+  mode: ExecutionMode;
+  onChange?: (mode: ExecutionMode) => void;
+}) {
+  const label =
+    mode === "agent" ? "Agent" : mode === "companion" ? "Companion" : "Capture";
+  return (
+    <details className="composer-menu composer-mode-menu">
+      <summary aria-label={`Participation mode: ${label}`}>
+        <span>{label}</span>
+        <svg
+          className="composer-chevron"
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+        >
+          <path d="m4 6 4 4 4-4" />
+        </svg>
+      </summary>
+      <div className="composer-popover compact-popover">
+        {onChange ? (
+          <section>
+            <strong>Participation mode</strong>
+            {(
+              [
+                ["agent", "Agent", "Rove completes the task"],
+                ["companion", "Companion", "Work together with handoffs"],
+                ["capture", "Capture", "You drive the browser"],
+              ] as const
+            ).map(([value, optionLabel, description]) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={`Execution mode: ${optionLabel}`}
+                aria-pressed={mode === value}
+                onClick={(event) => {
+                  onChange(value);
+                  closeParentMenu(event);
+                }}
+              >
+                <span>{optionLabel}</span>
+                <small>{description}</small>
+              </button>
+            ))}
+          </section>
+        ) : (
+          <div className="task-frozen-option">
+            <span>{label}</span>
+            <small>Fixed for this task</small>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function ComposerPermissionMenu({
+  approvalsReviewer,
+  mode,
+  onChange,
+}: {
+  approvalsReviewer: ApprovalsReviewer;
+  mode: ExecutionMode;
+  onChange?: (approvalsReviewer: ApprovalsReviewer) => void;
+}) {
+  const label =
+    approvalsReviewer === "auto_review" ? "Approve for me" : "Always ask";
+  return (
+    <details className="composer-menu composer-permission-menu">
+      <summary aria-label={`Approval policy: ${label}`}>
+        <svg
+          className="composer-control-icon"
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+        >
+          <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
+          <path d="m7.4 10 1.65 1.65 3.55-3.55" />
+        </svg>
+        <span>{label}</span>
+        <svg
+          className="composer-chevron"
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+        >
+          <path d="m4 6 4 4 4-4" />
+        </svg>
+      </summary>
+      <div className="composer-popover compact-popover">
+        {onChange ? (
+          <section>
+            <strong>Approval policy</strong>
+            <button
+              type="button"
+              aria-pressed={approvalsReviewer === "auto_review"}
+              disabled={mode === "capture"}
+              onClick={(event) => {
+                onChange("auto_review");
+                closeParentMenu(event);
+              }}
+            >
+              <span>Approve for me</span>
+              <small>Rove reviews routine requests</small>
+            </button>
+            <button
+              type="button"
+              aria-pressed={approvalsReviewer === "user"}
+              disabled={mode === "capture"}
+              onClick={(event) => {
+                onChange("user");
+                closeParentMenu(event);
+              }}
+            >
+              <span>Always ask</span>
+              <small>You review every request</small>
+            </button>
+          </section>
+        ) : (
+          <div className="task-frozen-option">
+            <span>{label}</span>
+            <small>Fixed for this task</small>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function ComposerModelMenu({
+  models,
+  modelId,
+  effort,
+  onModelChange,
+  onEffortChange,
+}: {
+  models: readonly CodexModelProjection[];
+  modelId: string;
+  effort: string;
+  onModelChange?: (model: CodexModelProjection) => void;
+  onEffortChange?: (effort: string) => void;
+}) {
+  const selected = models.find((entry) => entry.id === modelId);
+  const modelLabel = selected?.displayName ?? (modelId || "Default model");
+  const effortLabel = displayReasoningEffort(effort);
+  return (
+    <details className="composer-menu composer-model-menu">
+      <summary
+        aria-label={`Model and reasoning effort: ${modelLabel}, ${effortLabel}`}
+      >
+        <span className="composer-control-icon" aria-hidden="true">
+          ✦
+        </span>
+        <span className="composer-model-label">{modelLabel}</span>
+        <small className="composer-current-effort">{effortLabel}</small>
+        <svg
+          className="composer-chevron"
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+        >
+          <path d="m4 6 4 4 4-4" />
+        </svg>
+      </summary>
+      <div className="composer-popover model-popover">
+        {onModelChange && onEffortChange ? (
+          <>
+            <section>
+              <strong>Model</strong>
+              {models.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  aria-label={`Model: ${entry.displayName}`}
+                  aria-pressed={modelId === entry.id}
+                  onClick={() => onModelChange(entry)}
+                >
+                  <span>{entry.displayName}</span>
+                </button>
+              ))}
+            </section>
+            <section>
+              <strong>Reasoning</strong>
+              {selected?.efforts.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`Reasoning effort: ${displayReasoningEffort(value)}`}
+                  aria-pressed={effort === value}
+                  onClick={(event) => {
+                    onEffortChange(value);
+                    closeParentMenu(event);
+                  }}
+                >
+                  <span>{displayReasoningEffort(value)}</span>
+                </button>
+              ))}
+            </section>
+          </>
+        ) : (
+          <div className="task-frozen-option">
+            <span>{modelLabel}</span>
+            <small>
+              {effort
+                ? `${effortLabel} reasoning · fixed for this task`
+                : "Fixed for this task"}
+            </small>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function attentionCopy(entry: ProductAttentionProjection): string {
   if (entry.instruction) return entry.instruction;
   if (entry.elicitation) return entry.elicitation.message;
@@ -1170,6 +1399,10 @@ export function ProductSurface({
   const selectedModel = product?.catalog.models.find(
     (entry) => entry.id === model,
   );
+  const selectComposerModel = (entry: CodexModelProjection) => {
+    setModel(entry.id);
+    setEffort(compatibleReasoningEffort(entry, effort));
+  };
   const viewedTask = showNewTask
     ? undefined
     : (product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
@@ -1916,238 +2149,360 @@ export function ProductSurface({
       [requestId]: { ...current[requestId], [fieldId]: value },
     }));
 
-  const renderCodexAttention = (entry: ProductAttentionProjection) => (
-    <section
-      className={`attention-card attention-inline attention-codex${
-        entry.kind === "user_input" ? " task-response-surface" : ""
-      }`}
-      aria-label="Current task request"
-    >
-      <div className="eyebrow">
-        {entry.kind === "user_input" ? "Rove needs your input" : "Input needed"}
-      </div>
-      <h2>{entry.title}</h2>
-      <p>{attentionCopy(entry)}</p>
-      {entry.context?.map((item) => (
-        <p key={item.label}>
-          <strong>{item.label}:</strong> {item.value}
-        </p>
-      ))}
-      {entry.status === "pending" && (
-        <>
-          {entry.questions?.map((question) => (
-            <fieldset key={question.id}>
-              <legend>{question.header}</legend>
-              <p>{question.question}</p>
-              {question.options?.map((option) => (
-                <label className="task-response-choice" key={option.label}>
-                  <input
-                    type="radio"
-                    name={`${attentionStateKey(entry)}:${question.id}`}
-                    checked={
-                      attentionAnswers[attentionStateKey(entry)]?.[
-                        question.id
-                      ]?.[0] === option.label
-                    }
-                    onChange={() =>
-                      setQuestionAnswer(attentionStateKey(entry), question.id, [
-                        option.label,
-                      ])
-                    }
-                  />
-                  {option.label} — {option.description}
+  const renderCodexAttention = (entry: ProductAttentionProjection) => {
+    const choiceQuestion =
+      entry.kind === "user_input" && entry.questions?.length === 1
+        ? entry.questions[0]
+        : undefined;
+    const choiceOptions = choiceQuestion?.options;
+    const responseKey = attentionStateKey(entry);
+    const selectedChoice = choiceQuestion
+      ? attentionAnswers[responseKey]?.[choiceQuestion.id]?.[0]
+      : undefined;
+    const boundedChoiceResponse = Boolean(
+      choiceQuestion && choiceOptions?.length,
+    );
+
+    if (boundedChoiceResponse && choiceQuestion && choiceOptions) {
+      const freeformValue = choiceOptions.some(
+        (option) => option.label === selectedChoice,
+      )
+        ? ""
+        : (selectedChoice ?? "");
+
+      return (
+        <section
+          className="attention-card attention-inline attention-codex task-response-surface task-choice-response"
+          aria-label="Current task request"
+        >
+          <header className="task-response-heading">
+            <h2>{choiceQuestion.question}</h2>
+          </header>
+          {entry.context?.length ? (
+            <div className="task-response-context">
+              {entry.context.map((item) => (
+                <p key={item.label}>
+                  <strong>{item.label}:</strong> {item.value}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {entry.status === "pending" ? (
+            <>
+              <fieldset className="task-response-options">
+                <legend>{choiceQuestion.header}</legend>
+                {choiceOptions.map((option, index) => (
+                  <label className="task-response-choice" key={option.label}>
+                    <input
+                      className="task-response-radio"
+                      type="radio"
+                      name={`${responseKey}:${choiceQuestion.id}`}
+                      checked={selectedChoice === option.label}
+                      onChange={() =>
+                        setQuestionAnswer(responseKey, choiceQuestion.id, [
+                          option.label,
+                        ])
+                      }
+                    />
+                    <span className="task-response-index" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <span className="task-response-option-copy">
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                    <svg
+                      className="task-response-arrow"
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                    >
+                      <path d="m7.5 4.5 5.5 5.5-5.5 5.5" />
+                    </svg>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="task-response-footer">
+                {choiceQuestion.isOther ? (
+                  <label className="task-response-other">
+                    <span className="task-response-pencil" aria-hidden="true">
+                      <svg viewBox="0 0 20 20">
+                        <path d="m12.9 4.1 3 3L7.2 15.8l-3.7.7.7-3.7 8.7-8.7Z" />
+                        <path d="m11.5 5.5 3 3" />
+                      </svg>
+                    </span>
+                    <span className="task-response-other-label">
+                      Something else
+                    </span>
+                    <input
+                      aria-label={`${choiceQuestion.header} answer`}
+                      type={choiceQuestion.isSecret ? "password" : "text"}
+                      placeholder="Something else…"
+                      value={freeformValue}
+                      onChange={(event) =>
+                        setQuestionAnswer(responseKey, choiceQuestion.id, [
+                          event.target.value,
+                        ])
+                      }
+                    />
+                  </label>
+                ) : (
+                  <span />
+                )}
+                <button
+                  className="primary task-response-submit"
+                  disabled={busy}
+                  onClick={() => void answerAttention(entry, "accept")}
+                >
+                  Send
+                </button>
+              </div>
+            </>
+          ) : (
+            <small>Status: {entry.status.replaceAll("_", " ")}</small>
+          )}
+        </section>
+      );
+    }
+
+    return (
+      <section
+        className={`attention-card attention-inline attention-codex${
+          entry.kind === "user_input" ? " task-response-surface" : ""
+        }`}
+        aria-label="Current task request"
+      >
+        <div className="eyebrow">
+          {entry.kind === "user_input"
+            ? "Rove needs your input"
+            : "Input needed"}
+        </div>
+        <h2>{entry.title}</h2>
+        <p>{attentionCopy(entry)}</p>
+        {entry.context?.map((item) => (
+          <p key={item.label}>
+            <strong>{item.label}:</strong> {item.value}
+          </p>
+        ))}
+        {entry.status === "pending" && (
+          <>
+            {entry.questions?.map((question) => (
+              <fieldset key={question.id}>
+                <legend>{question.header}</legend>
+                <p>{question.question}</p>
+                {question.options?.map((option) => (
+                  <label className="task-response-choice" key={option.label}>
+                    <input
+                      type="radio"
+                      name={`${attentionStateKey(entry)}:${question.id}`}
+                      checked={
+                        attentionAnswers[attentionStateKey(entry)]?.[
+                          question.id
+                        ]?.[0] === option.label
+                      }
+                      onChange={() =>
+                        setQuestionAnswer(
+                          attentionStateKey(entry),
+                          question.id,
+                          [option.label],
+                        )
+                      }
+                    />
+                    {option.label} — {option.description}
+                  </label>
+                ))}
+                {(!question.options || question.isOther) && (
+                  <label className="task-response-other">
+                    <span>
+                      {question.options ? "Something else" : "Your answer"}
+                    </span>
+                    <input
+                      aria-label={`${question.header} answer`}
+                      type={question.isSecret ? "password" : "text"}
+                      value={
+                        question.options &&
+                        question.options.some(
+                          (option) =>
+                            option.label ===
+                            attentionAnswers[attentionStateKey(entry)]?.[
+                              question.id
+                            ]?.[0],
+                        )
+                          ? ""
+                          : (attentionAnswers[attentionStateKey(entry)]?.[
+                              question.id
+                            ]?.[0] ?? "")
+                      }
+                      onChange={(event) =>
+                        setQuestionAnswer(
+                          attentionStateKey(entry),
+                          question.id,
+                          [event.target.value],
+                        )
+                      }
+                    />
+                  </label>
+                )}
+              </fieldset>
+            ))}
+            {entry.elicitation?.mode === "form" &&
+              entry.elicitation.fields?.map((field) => (
+                <label key={field.id}>
+                  {field.title}
+                  {field.description && <small>{field.description}</small>}
+                  {field.type === "boolean" ? (
+                    <input
+                      type="checkbox"
+                      checked={
+                        (attentionForms[attentionStateKey(entry)]?.[field.id] ??
+                          field.default) === true
+                      }
+                      onChange={(event) =>
+                        setFormValue(
+                          attentionStateKey(entry),
+                          field.id,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                  ) : field.options ? (
+                    <select
+                      aria-label={field.title}
+                      multiple={field.type === "multi_select"}
+                      value={
+                        field.type === "multi_select"
+                          ? ((attentionForms[attentionStateKey(entry)]?.[
+                              field.id
+                            ] as string[] | undefined) ??
+                            (field.default as readonly string[] | undefined) ??
+                            [])
+                          : String(
+                              attentionForms[attentionStateKey(entry)]?.[
+                                field.id
+                              ] ??
+                                field.default ??
+                                unsetSelectValue(field),
+                            )
+                      }
+                      onChange={(event) =>
+                        setFormValue(
+                          attentionStateKey(entry),
+                          field.id,
+                          field.type === "multi_select"
+                            ? Array.from(event.target.selectedOptions).map(
+                                (option) => option.value,
+                              )
+                            : event.target.value,
+                        )
+                      }
+                    >
+                      {field.type !== "multi_select" && (
+                        <option value={unsetSelectValue(field)} disabled>
+                          Choose…
+                        </option>
+                      )}
+                      {field.options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      aria-label={field.title}
+                      type={
+                        field.type === "number" || field.type === "integer"
+                          ? "number"
+                          : field.format === "email"
+                            ? "email"
+                            : field.format === "uri"
+                              ? "url"
+                              : field.format === "date"
+                                ? "date"
+                                : "text"
+                      }
+                      required={field.required}
+                      min={field.minimum}
+                      max={field.maximum}
+                      minLength={field.minLength}
+                      maxLength={field.maxLength}
+                      step={field.type === "integer" ? 1 : undefined}
+                      placeholder={
+                        field.format === "date-time"
+                          ? "YYYY-MM-DDTHH:mm:ssZ"
+                          : undefined
+                      }
+                      value={String(
+                        attentionForms[attentionStateKey(entry)]?.[field.id] ??
+                          field.default ??
+                          "",
+                      )}
+                      onChange={(event) =>
+                        setFormValue(
+                          attentionStateKey(entry),
+                          field.id,
+                          field.type === "number" || field.type === "integer"
+                            ? event.target.valueAsNumber
+                            : event.target.value,
+                        )
+                      }
+                    />
+                  )}
                 </label>
               ))}
-              {(!question.options || question.isOther) && (
-                <label className="task-response-other">
-                  <span>
-                    {question.options ? "Something else" : "Your answer"}
-                  </span>
-                  <input
-                    aria-label={`${question.header} answer`}
-                    type={question.isSecret ? "password" : "text"}
-                    value={
-                      question.options &&
-                      question.options.some(
-                        (option) =>
-                          option.label ===
-                          attentionAnswers[attentionStateKey(entry)]?.[
-                            question.id
-                          ]?.[0],
-                      )
-                        ? ""
-                        : (attentionAnswers[attentionStateKey(entry)]?.[
-                            question.id
-                          ]?.[0] ?? "")
-                    }
-                    onChange={(event) =>
-                      setQuestionAnswer(attentionStateKey(entry), question.id, [
-                        event.target.value,
-                      ])
-                    }
-                  />
-                </label>
+            {entry.elicitation?.mode === "form" &&
+              entry.elicitation.unsupportedReason && (
+                <p role="alert">
+                  This request cannot be submitted:{" "}
+                  {entry.elicitation.unsupportedReason}
+                </p>
               )}
-            </fieldset>
-          ))}
-          {entry.elicitation?.mode === "form" &&
-            entry.elicitation.fields?.map((field) => (
-              <label key={field.id}>
-                {field.title}
-                {field.description && <small>{field.description}</small>}
-                {field.type === "boolean" ? (
-                  <input
-                    type="checkbox"
-                    checked={
-                      (attentionForms[attentionStateKey(entry)]?.[field.id] ??
-                        field.default) === true
-                    }
-                    onChange={(event) =>
-                      setFormValue(
-                        attentionStateKey(entry),
-                        field.id,
-                        event.target.checked,
-                      )
-                    }
-                  />
-                ) : field.options ? (
-                  <select
-                    aria-label={field.title}
-                    multiple={field.type === "multi_select"}
-                    value={
-                      field.type === "multi_select"
-                        ? ((attentionForms[attentionStateKey(entry)]?.[
-                            field.id
-                          ] as string[] | undefined) ??
-                          (field.default as readonly string[] | undefined) ??
-                          [])
-                        : String(
-                            attentionForms[attentionStateKey(entry)]?.[
-                              field.id
-                            ] ??
-                              field.default ??
-                              unsetSelectValue(field),
-                          )
-                    }
-                    onChange={(event) =>
-                      setFormValue(
-                        attentionStateKey(entry),
-                        field.id,
-                        field.type === "multi_select"
-                          ? Array.from(event.target.selectedOptions).map(
-                              (option) => option.value,
-                            )
-                          : event.target.value,
-                      )
-                    }
-                  >
-                    {field.type !== "multi_select" && (
-                      <option value={unsetSelectValue(field)} disabled>
-                        Choose…
-                      </option>
-                    )}
-                    {field.options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    aria-label={field.title}
-                    type={
-                      field.type === "number" || field.type === "integer"
-                        ? "number"
-                        : field.format === "email"
-                          ? "email"
-                          : field.format === "uri"
-                            ? "url"
-                            : field.format === "date"
-                              ? "date"
-                              : "text"
-                    }
-                    required={field.required}
-                    min={field.minimum}
-                    max={field.maximum}
-                    minLength={field.minLength}
-                    maxLength={field.maxLength}
-                    step={field.type === "integer" ? 1 : undefined}
-                    placeholder={
-                      field.format === "date-time"
-                        ? "YYYY-MM-DDTHH:mm:ssZ"
-                        : undefined
-                    }
-                    value={String(
-                      attentionForms[attentionStateKey(entry)]?.[field.id] ??
-                        field.default ??
-                        "",
-                    )}
-                    onChange={(event) =>
-                      setFormValue(
-                        attentionStateKey(entry),
-                        field.id,
-                        field.type === "number" || field.type === "integer"
-                          ? event.target.valueAsNumber
-                          : event.target.value,
-                      )
-                    }
-                  />
-                )}
-              </label>
-            ))}
-          {entry.elicitation?.mode === "form" &&
-            entry.elicitation.unsupportedReason && (
-              <p role="alert">
-                This request cannot be submitted:{" "}
-                {entry.elicitation.unsupportedReason}
-              </p>
-            )}
-          {entry.elicitation?.mode === "url" && (
-            <button
-              onClick={() =>
-                void window.rove.openTrustedExternal({
-                  purpose: "mcp_elicitation",
-                  taskId: entry.taskId,
-                  requestId: entry.requestId,
-                  generation: entry.generation,
-                })
-              }
-            >
-              Open secure page
-            </button>
-          )}
-          <div className="attention-actions">
-            {entry.kind !== "user_input" && (
+            {entry.elicitation?.mode === "url" && (
               <button
-                disabled={busy}
-                onClick={() => void answerAttention(entry, "decline")}
+                onClick={() =>
+                  void window.rove.openTrustedExternal({
+                    purpose: "mcp_elicitation",
+                    taskId: entry.taskId,
+                    requestId: entry.requestId,
+                    generation: entry.generation,
+                  })
+                }
               >
-                Decline
+                Open secure page
               </button>
             )}
-            {entry.kind === "mcp_elicitation" && (
+            <div className="attention-actions">
+              {entry.kind !== "user_input" && (
+                <button
+                  disabled={busy}
+                  onClick={() => void answerAttention(entry, "decline")}
+                >
+                  Decline
+                </button>
+              )}
+              {entry.kind === "mcp_elicitation" && (
+                <button
+                  disabled={busy}
+                  onClick={() => void answerAttention(entry, "cancel")}
+                >
+                  Cancel
+                </button>
+              )}
               <button
-                disabled={busy}
-                onClick={() => void answerAttention(entry, "cancel")}
+                className="primary"
+                disabled={busy || Boolean(entry.elicitation?.unsupportedReason)}
+                onClick={() => void answerAttention(entry, "accept")}
               >
-                Cancel
+                {entry.kind === "user_input" ? "Send" : "Approve / Send"}
               </button>
-            )}
-            <button
-              className="primary"
-              disabled={busy || Boolean(entry.elicitation?.unsupportedReason)}
-              onClick={() => void answerAttention(entry, "accept")}
-            >
-              {entry.kind === "user_input" ? "Send" : "Approve / Send"}
-            </button>
-          </div>
-        </>
-      )}
-      {entry.status !== "pending" && (
-        <small>Status: {entry.status.replaceAll("_", " ")}</small>
-      )}
-    </section>
-  );
+            </div>
+          </>
+        )}
+        {entry.status !== "pending" && (
+          <small>Status: {entry.status.replaceAll("_", " ")}</small>
+        )}
+      </section>
+    );
+  };
 
   const beginDrag = (event: PointerEvent<HTMLDivElement>) => {
     if (!follower || (event.target as Element).closest("button")) return;
@@ -3499,8 +3854,8 @@ export function ProductSurface({
             {renderModalError()}
             <footer>
               <p>
-                Guest browsing is available from Task setup. Guest data is
-                deleted locally when its task ends.
+                Guest browsing is available from Commands under Browser profile.
+                Guest data is deleted locally when its task ends.
               </p>
             </footer>
           </section>
@@ -4355,10 +4710,7 @@ export function ProductSurface({
                     className="composer-menu composer-command-menu"
                     id="task-command-palette"
                   >
-                    <summary
-                      aria-label="Commands and settings"
-                      title="Commands and settings"
-                    >
+                    <summary aria-label="Commands" title="Commands">
                       <span aria-hidden="true">/</span>
                     </summary>
                     <div
@@ -4431,47 +4783,17 @@ export function ProductSurface({
                                   ))}
                               </select>
                             </label>
+                            <ComposerModeMenu mode={mode} onChange={setMode} />
+                            <ComposerPermissionMenu
+                              approvalsReviewer={approvalsReviewer}
+                              mode={mode}
+                              onChange={setApprovalsReviewer}
+                            />
                             <details className="composer-menu composer-setup-menu">
-                              <summary aria-label="Task setup">
-                                Task setup
+                              <summary aria-label="Browser profile">
+                                Browser profile
                               </summary>
-                              <div className="composer-popover">
-                                <section>
-                                  <strong>How Rove helps</strong>
-                                  {(
-                                    [
-                                      [
-                                        "agent",
-                                        "Agent",
-                                        "Rove completes the task",
-                                      ],
-                                      [
-                                        "companion",
-                                        "Companion",
-                                        "Work together with handoffs",
-                                      ],
-                                      [
-                                        "capture",
-                                        "Capture",
-                                        "You drive the browser",
-                                      ],
-                                    ] as const
-                                  ).map(([value, label, description]) => (
-                                    <button
-                                      key={value}
-                                      type="button"
-                                      aria-label={`Execution mode: ${label}`}
-                                      aria-pressed={mode === value}
-                                      onClick={(event) => {
-                                        setMode(value);
-                                        closeParentMenu(event);
-                                      }}
-                                    >
-                                      <span>{label}</span>
-                                      <small>{description}</small>
-                                    </button>
-                                  ))}
-                                </section>
+                              <div className="composer-popover compact-popover">
                                 <section>
                                   <strong>Browser profile</strong>
                                   {desktop?.workspaces.workspaces.map(
@@ -4528,49 +4850,6 @@ export function ProductSurface({
                                 </section>
                               </div>
                             </details>
-                            <details className="composer-menu composer-permission-menu">
-                              <summary aria-label="Permission review">
-                                <svg
-                                  className="composer-control-icon"
-                                  aria-hidden="true"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
-                                  <path d="m7.4 10 1.65 1.65 3.55-3.55" />
-                                </svg>
-                                {approvalsReviewer === "auto_review"
-                                  ? "Approve for me"
-                                  : "Always ask"}
-                              </summary>
-                              <div className="composer-popover compact-popover">
-                                <button
-                                  type="button"
-                                  aria-pressed={
-                                    approvalsReviewer === "auto_review"
-                                  }
-                                  disabled={mode === "capture"}
-                                  onClick={(event) => {
-                                    setApprovalsReviewer("auto_review");
-                                    closeParentMenu(event);
-                                  }}
-                                >
-                                  <span>Approve for me</span>
-                                  <small>Rove reviews routine requests</small>
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-pressed={approvalsReviewer === "user"}
-                                  disabled={mode === "capture"}
-                                  onClick={(event) => {
-                                    setApprovalsReviewer("user");
-                                    closeParentMenu(event);
-                                  }}
-                                >
-                                  <span>Always ask</span>
-                                  <small>You review every request</small>
-                                </button>
-                              </div>
-                            </details>
                           </div>
                           {selectedWorkflowId && (
                             <label className="workflow-share-choice">
@@ -4613,63 +4892,36 @@ export function ProductSurface({
                       ) && (
                         <section>
                           <strong>Model</strong>
-                          <details className="composer-menu composer-model-menu">
-                            <summary aria-label="Model and reasoning effort">
-                              <span
-                                className="composer-control-icon"
-                                aria-hidden="true"
-                              >
-                                ✦
-                              </span>
-                              {selectedModel?.displayName ?? "Default model"}
-                              {effort ? ` · ${effort}` : ""}
-                              <svg
-                                className="composer-chevron"
-                                aria-hidden="true"
-                                viewBox="0 0 16 16"
-                              >
-                                <path d="m4 6 4 4 4-4" />
-                              </svg>
-                            </summary>
-                            <div className="composer-popover model-popover">
-                              <section>
-                                <strong>Model</strong>
-                                {product?.catalog.models.map((entry) => (
-                                  <button
-                                    key={entry.id}
-                                    type="button"
-                                    aria-pressed={model === entry.id}
-                                    onClick={() => setModel(entry.id)}
-                                  >
-                                    <span>{entry.displayName}</span>
-                                  </button>
-                                ))}
-                              </section>
-                              <section>
-                                <strong>Reasoning effort</strong>
-                                {selectedModel?.efforts.map((value) => (
-                                  <button
-                                    key={value}
-                                    type="button"
-                                    aria-pressed={effort === value}
-                                    onClick={(event) => {
-                                      setEffort(value);
-                                      closeParentMenu(event);
-                                    }}
-                                  >
-                                    <span>
-                                      {value[0]?.toUpperCase() + value.slice(1)}
-                                    </span>
-                                  </button>
-                                ))}
-                              </section>
-                            </div>
-                          </details>
+                          <ComposerModelMenu
+                            models={product?.catalog.models ?? []}
+                            modelId={model}
+                            effort={effort}
+                            onModelChange={selectComposerModel}
+                            onEffortChange={setEffort}
+                          />
                         </section>
                       )}
                     </div>
                   </details>
+                  <div
+                    className="composer-ambient-controls"
+                    aria-label="Task configuration"
+                  >
+                    <ComposerModeMenu mode={mode} onChange={setMode} />
+                    <ComposerPermissionMenu
+                      approvalsReviewer={approvalsReviewer}
+                      mode={mode}
+                      onChange={setApprovalsReviewer}
+                    />
+                  </div>
                   <div className="composer-footer">
+                    <ComposerModelMenu
+                      models={product?.catalog.models ?? []}
+                      modelId={model}
+                      effort={effort}
+                      onModelChange={selectComposerModel}
+                      onEffortChange={setEffort}
+                    />
                     <button
                       className="primary composer-submit"
                       aria-label={
@@ -5209,10 +5461,7 @@ export function ProductSurface({
                             className="composer-menu composer-command-menu"
                             id="task-followup-command-palette"
                           >
-                            <summary
-                              aria-label="Commands and settings"
-                              title="Commands and settings"
-                            >
+                            <summary aria-label="Commands" title="Commands">
                               <span aria-hidden="true">/</span>
                             </summary>
                             <div
@@ -5241,54 +5490,22 @@ export function ProductSurface({
                                 <section>
                                   <strong>Task</strong>
                                   <div className="composer-control-rail">
+                                    <ComposerModeMenu
+                                      mode={viewedTask.executionMode}
+                                    />
+                                    <ComposerPermissionMenu
+                                      approvalsReviewer={
+                                        viewedTask.approvalsReviewer
+                                      }
+                                      mode={viewedTask.executionMode}
+                                    />
                                     <details className="composer-menu composer-setup-menu">
-                                      <summary aria-label="Task setup">
-                                        Task setup
-                                      </summary>
-                                      <div className="composer-popover task-settings-popover">
-                                        <section>
-                                          <strong>How Rove helps</strong>
-                                          <div className="task-frozen-option">
-                                            <span>
-                                              {modeLabel(
-                                                viewedTask.executionMode,
-                                              )}
-                                            </span>
-                                            <small>Fixed for this task</small>
-                                          </div>
-                                        </section>
-                                        <section>
-                                          <strong>Browser profile</strong>
-                                          <div className="task-frozen-option">
-                                            <span>{identityLabel}</span>
-                                            <small>Fixed for this task</small>
-                                          </div>
-                                        </section>
-                                      </div>
-                                    </details>
-                                    <details className="composer-menu composer-permission-menu">
-                                      <summary aria-label="Permission review">
-                                        <svg
-                                          className="composer-control-icon"
-                                          aria-hidden="true"
-                                          viewBox="0 0 20 20"
-                                        >
-                                          <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
-                                          <path d="m7.4 10 1.65 1.65 3.55-3.55" />
-                                        </svg>
-                                        {viewedTask.approvalsReviewer ===
-                                        "auto_review"
-                                          ? "Approve for me"
-                                          : "Always ask"}
+                                      <summary aria-label="Browser profile">
+                                        Browser profile
                                       </summary>
                                       <div className="composer-popover compact-popover task-settings-popover">
                                         <div className="task-frozen-option">
-                                          <span>
-                                            {viewedTask.approvalsReviewer ===
-                                            "auto_review"
-                                              ? "Approve for me"
-                                              : "Always ask"}
-                                          </span>
+                                          <span>{identityLabel}</span>
                                           <small>Fixed for this task</small>
                                         </div>
                                       </div>
@@ -5304,53 +5521,25 @@ export function ProductSurface({
                               ) && (
                                 <section>
                                   <strong>Model</strong>
-                                  <details className="composer-menu composer-model-menu">
-                                    <summary aria-label="Model and reasoning effort">
-                                      <span
-                                        className="composer-control-icon"
-                                        aria-hidden="true"
-                                      >
-                                        ✦
-                                      </span>
-                                      {product?.catalog.models.find(
-                                        (entry) =>
-                                          entry.id === viewedTask.model,
-                                      )?.displayName ??
-                                        viewedTask.model ??
-                                        "Default model"}
-                                      {viewedTask.reasoningEffort
-                                        ? ` · ${viewedTask.reasoningEffort}`
-                                        : ""}
-                                      <svg
-                                        className="composer-chevron"
-                                        aria-hidden="true"
-                                        viewBox="0 0 16 16"
-                                      >
-                                        <path d="m4 6 4 4 4-4" />
-                                      </svg>
-                                    </summary>
-                                    <div className="composer-popover compact-popover task-settings-popover">
-                                      <div className="task-frozen-option">
-                                        <span>
-                                          {product?.catalog.models.find(
-                                            (entry) =>
-                                              entry.id === viewedTask.model,
-                                          )?.displayName ??
-                                            viewedTask.model ??
-                                            "Default model"}
-                                        </span>
-                                        <small>
-                                          {viewedTask.reasoningEffort
-                                            ? `${viewedTask.reasoningEffort} reasoning · fixed for this task`
-                                            : "Fixed for this task"}
-                                        </small>
-                                      </div>
-                                    </div>
-                                  </details>
+                                  <ComposerModelMenu
+                                    models={product?.catalog.models ?? []}
+                                    modelId={viewedTask.model ?? ""}
+                                    effort={viewedTask.reasoningEffort ?? ""}
+                                  />
                                 </section>
                               )}
                             </div>
                           </details>
+                          <ComposerModeMenu mode={viewedTask.executionMode} />
+                          <ComposerPermissionMenu
+                            approvalsReviewer={viewedTask.approvalsReviewer}
+                            mode={viewedTask.executionMode}
+                          />
+                          <ComposerModelMenu
+                            models={product?.catalog.models ?? []}
+                            modelId={viewedTask.model ?? ""}
+                            effort={viewedTask.reasoningEffort ?? ""}
+                          />
                           {viewedTask.availableActions.includes(
                             "return_control",
                           ) ? (

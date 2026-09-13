@@ -253,14 +253,35 @@ try {
     page,
     "workflow-task-composer",
     "Start ordinary work inside the Workflow.",
-    "The simplified composer opens with the Workflow association already established and secondary settings hidden.",
+    "The composer keeps participation, approval, and model state glanceable while the Workflow association is already established by the workspace.",
     note(
-      "The request, attachment action, command entry, and start action form the permanent chrome.",
+      "Request, attachment, commands, participation, approval, model with effort, and start form one quiet toolbar without repeating the Workflow selector.",
     ),
   );
   assert(
     !(await page.getByLabel("Workflow environment").isVisible()),
     "Workflow configuration leaked into the closed composer.",
+  );
+  assert(
+    await page.getByLabel("Commands", { exact: true }).isVisible(),
+    "Commands was not visible in the composer toolbar.",
+  );
+  const ambientControls = page.getByLabel("Task configuration");
+  for (const label of [
+    "Participation mode: Agent",
+    "Approval policy: Approve for me",
+  ]) {
+    assert(
+      await ambientControls.getByLabel(label, { exact: true }).isVisible(),
+      `${label} was not visible in the composer toolbar.`,
+    );
+  }
+  assert(
+    await page
+      .locator(".composer-card .composer-footer")
+      .getByLabel(/Model and reasoning effort/)
+      .isVisible(),
+    "Combined model and reasoning effort was not visible.",
   );
   await page.getByLabel("Desired outcome").press("/");
   await page.getByLabel("Search commands").waitFor();
@@ -270,7 +291,7 @@ try {
     "Find a less-frequent task setting without losing the request.",
     "Typing slash opens a searchable, keyboard-accessible palette grouped around implemented actions and settings.",
     note(
-      "Workflow, participation, approval, browser, model, and file controls remain available without permanent chrome.",
+      "Workflow association, browser profile, and file actions remain progressively disclosed; the visible participation, approval, and model controls drive the same state from here.",
     ),
   );
   await page
@@ -349,6 +370,13 @@ try {
   );
   await responseSurface.getByRole("button", { name: "Send" }).click();
   await page.locator(".task-composer-shell").waitFor();
+  assert(
+    await page
+      .locator(".task-composer-shell")
+      .getByLabel("Commands", { exact: true })
+      .isVisible(),
+    "Normal composer controls did not return after task input.",
+  );
   await capture(
     page,
     "normal-composer-restored",
@@ -568,7 +596,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "summary.md"),
-    `# Customer Journey 02 — Workflow interaction\n\nThe deterministic local Electron journey passed with ${steps.length} screenshots and no live Codex, real account, Supabase, or external action.\n\n- **Composer:** The permanent surface is reduced to request, attachment, command, and send controls. Typing slash opens searchable access to the implemented task, Workflow, browser, approval, model, and file choices.\n- **Task-required input:** An exact conversational request replaces only its owning selected task's composer. Suggested choices and a freeform alternative both submit through the existing attention contract; successful response restores the normal composer.\n- **Background attention:** Workflow Home shows an exact lightweight indicator and routes to the owning task before presenting input.\n- **Workflow Context:** Context is a full read-first workspace surface. One section enters focused edit mode, save creates the next existing immutable revision, cancel remains available, and Advanced stays collapsed until requested.\n- **Preserved boundaries:** Workflow Home architecture, task lifecycle, browser handoff, approval authority, Results behavior, standalone work, and local-only test state remain unchanged.\n\nEvidence: ordered PNGs, \`contact-sheet.png\`, \`manifest.json\`, \`trace.json\`, and \`journey-02.trace.zip\`.\n`,
+    `# Customer Journey 02 — Workflow interaction\n\nThe deterministic local Electron journey passed with ${steps.length} screenshots and no live Codex, real account, Supabase, or external action.\n\n- **Composer:** Attachment, Commands, participation mode, approval policy, combined model and effort, and Send remain quietly visible. Typing or clicking slash opens the same searchable palette for implemented long-tail choices including Workflow association, browser profile, and files.\n- **Task-required input:** An exact conversational request replaces only its owning selected task's composer. Suggested choices and a freeform alternative both submit through the existing attention contract; successful response restores the normal composer.\n- **Background attention:** Workflow Home shows an exact lightweight indicator and routes to the owning task before presenting input.\n- **Workflow Context:** Context is a full read-first workspace surface. One section enters focused edit mode, save creates the next existing immutable revision, cancel remains available, and Advanced stays collapsed until requested.\n- **Preserved boundaries:** Workflow Home architecture, task lifecycle, browser handoff, approval authority, Results behavior, standalone work, and local-only test state remain unchanged.\n\nEvidence: ordered PNGs, \`contact-sheet.png\`, \`manifest.json\`, \`trace.json\`, and \`journey-02.trace.zip\`.\n`,
   );
   process.stdout.write(
     `${JSON.stringify({ status: "pass", output: relative(repositoryRoot, outputRoot), screenshots: steps.length }, null, 2)}\n`,

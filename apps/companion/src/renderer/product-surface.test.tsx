@@ -5,6 +5,7 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   LocalBackupSettings,
   ProductSurface,
+  compatibleReasoningEffort,
   commandPaletteMatches,
   followupDraftForTask,
   permissionReviewDescription,
@@ -68,7 +69,7 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
-  it("keeps secondary task controls searchable behind the command palette", () => {
+  it("keeps ambient task controls visible and long-tail controls searchable", () => {
     expect(commandPaletteMatches("work", "Workflow", "Task mode")).toBe(true);
     expect(commandPaletteMatches("reason", "Model", "Reasoning effort")).toBe(
       true,
@@ -84,10 +85,19 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain('aria-label="Commands and settings"');
+    expect(html).toContain('aria-label="Commands"');
     expect(html).toContain('aria-label="Search commands"');
     expect(html).toContain('aria-label="Workflow environment"');
-    expect(html).toContain('aria-label="Model and reasoning effort"');
+    expect(html).toContain('class="composer-ambient-controls"');
+    expect(html).toContain('aria-label="Participation mode: Agent"');
+    expect(html).toContain('aria-label="Approval policy: Approve for me"');
+    expect(html).toContain('aria-label="Model and reasoning effort:');
+  });
+
+  it("reconciles reasoning effort from the selected catalog model", () => {
+    const model = { efforts: ["low", "medium"], defaultEffort: "medium" };
+    expect(compatibleReasoningEffort(model, "low")).toBe("low");
+    expect(compatibleReasoningEffort(model, "high")).toBe("medium");
   });
 
   it("offers an explicit managed-credential-store exclusion boundary", () => {
@@ -187,8 +197,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       expect(html).toContain("Page recording active");
       expect(html).toContain(
         {
-          agent: "Automate · Agent mode",
-          companion: "Work together · Companion mode",
+          agent: "Participation mode: Agent",
+          companion: "Participation mode: Companion",
           capture: "Capture · Human-driven",
         }[mode],
       );
@@ -645,15 +655,15 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
     expect(html).toContain('aria-label="Desired outcome"');
-    expect(html).toContain('aria-label="Task setup"');
+    expect(html).toContain('aria-label="Participation mode: Agent"');
     expect(html).toContain('aria-label="Execution mode: Agent"');
     expect(html).toContain('aria-label="Browser profile: Personal"');
     expect(html).toContain('aria-label="Browser profile: Guest"');
     expect(html).toContain('aria-label="Rove settings"');
     expect(html).toContain("Browser profiles");
     expect(html).not.toContain("Browser workspace</span>");
-    expect(html).toContain('aria-label="Permission review"');
-    expect(html).toContain('aria-label="Model and reasoning effort"');
+    expect(html).toContain('aria-label="Approval policy: Approve for me"');
+    expect(html).toContain('aria-label="Model and reasoning effort:');
     expect(html).toContain('aria-pressed="true"><span>Approve for me</span>');
     expect(html).toContain("Always ask");
     expect(html).not.toContain("Routine eligible requests are reviewed");
@@ -978,6 +988,94 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(humanOwnedCompact).not.toContain("Retry cleanup");
   });
 
+  it("presents one bounded user question as a focused choice response", () => {
+    const value = snapshot();
+    value.product!.catalog.account = {
+      status: "logged_in",
+      authMode: "chatgpt",
+    };
+    value.product!.tasks = [
+      {
+        taskId: "task_choice",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-13T12:00:00Z",
+        approvalsReviewer: "user",
+        bootstrapStage: "complete",
+        results: [],
+        codexThreadId: "thread_choice",
+        lifecycle: {
+          phase: "waiting_for_human",
+          reason: "Choose the audience.",
+        },
+        availableActions: ["finish"],
+        conversation: {
+          turnStatus: "in_progress",
+          archived: false,
+          items: {},
+          turnOrder: ["turn_choice"],
+          activeTurnId: "turn_choice",
+        },
+      },
+    ];
+    value.product!.currentTaskId = "task_choice";
+    value.product!.attention = [
+      {
+        authority: "codex",
+        kind: "user_input",
+        requestId: "question_choice",
+        taskId: "task_choice",
+        threadId: "thread_choice",
+        turnId: "turn_choice",
+        itemId: "item_choice",
+        generation: 1,
+        status: "pending",
+        sequence: 1,
+        title: "Choose the final audience",
+        questions: [
+          {
+            id: "audience",
+            header: "Audience",
+            question: "Who should receive this update?",
+            isOther: true,
+            isSecret: false,
+            options: [
+              {
+                label: "Leadership",
+                description: "Concise executive update",
+              },
+              {
+                label: "Product team",
+                description: "More delivery detail",
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+
+    expect(html).toContain("task-choice-response");
+    expect(html).toContain("Who should receive this update?");
+    expect(html).toContain("task-response-index");
+    expect(html).toContain("task-response-option-copy");
+    expect(html).toContain("Concise executive update");
+    expect(html).toContain('placeholder="Something else…"');
+    expect(html).toContain(">Send</button>");
+    expect(html).not.toContain("Leadership — Concise executive update");
+    expect(html).not.toContain("task-composer-shell");
+    expect(html).not.toContain("composer-ambient-controls");
+    expect(html).not.toContain('aria-label="Commands"');
+  });
+
   it("renders bounded keyboard-scroll regions for long task content", () => {
     const value = snapshot();
     value.product!.catalog.account = {
@@ -1292,9 +1390,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       'class="composer-input-shell followup task-composer-shell"',
     );
     expect(html).toContain('aria-label="Attach files"');
-    expect(html).toContain('aria-label="Task setup"');
-    expect(html).toContain('aria-label="Permission review"');
-    expect(html).toContain('aria-label="Model and reasoning effort"');
+    expect(html).toContain('aria-label="Participation mode: Agent"');
+    expect(html).toContain('aria-label="Approval policy: Approve for me"');
+    expect(html).toContain('aria-label="Model and reasoning effort:');
     expect(html).toContain('aria-label="Stop task"');
     expect(html).not.toContain(">Pause</button>");
     expect(html).not.toContain("Finish task");

@@ -112,6 +112,18 @@ function baseSnapshot(presentation, accountStatus) {
             supportsPersonality: false,
             defaultServiceTier: null,
           },
+          {
+            id: "gpt-5.6-sol",
+            model: "gpt-5.6-sol",
+            displayName: "GPT-5.6 Sol",
+            description: "Fixture model with a narrower effort catalog",
+            efforts: ["low", "high"],
+            defaultEffort: "high",
+            isDefault: false,
+            inputModalities: ["text", "image"],
+            supportsPersonality: false,
+            defaultServiceTier: null,
+          },
         ],
         rateLimits: [
           {
@@ -1658,7 +1670,7 @@ async function captureDesignStateEvidence(page, item) {
     assertions.workflowCreateFocusInspected = true;
   }
   if (item.truthScenarioId === "T01") {
-    await page.getByLabel("Commands and settings", { exact: true }).click();
+    await page.getByLabel("Commands", { exact: true }).click();
     await page.getByLabel("Workflow environment").focus();
     const path = statePath("focus");
     await page.screenshot({ path, fullPage: true });
@@ -2278,9 +2290,12 @@ try {
       };
     }
     if (item.id.startsWith("full-composer")) {
+      await page
+        .getByLabel("Desired outcome")
+        .fill("Review the current work and summarize the result.");
       await page.getByLabel("Desired outcome").focus();
       keyboardOrder = [];
-      for (let index = 0; index < 4; index += 1) {
+      for (let index = 0; index < 7; index += 1) {
         keyboardOrder.push(
           await page.evaluate(() => {
             const active = document.activeElement;
@@ -2296,16 +2311,19 @@ try {
       const expectedOrder = [
         "Desired outcome",
         "Attach files",
-        "Commands and settings",
-        "Task controls and status",
+        "Commands",
+        "Participation mode: Agent",
+        "Approval policy: Approve for me",
+        "Model and reasoning effort: GPT-6 Astra, Low",
+        "Start task",
       ];
       if (JSON.stringify(keyboardOrder) !== JSON.stringify(expectedOrder))
         throw new Error(
           `Keyboard order drifted: ${JSON.stringify({ expectedOrder, keyboardOrder })}`,
         );
-      await page.getByLabel("Commands and settings", { exact: true }).click();
-      await page.getByLabel("Task setup").click();
-      await page.getByText("How Rove helps", { exact: true }).waitFor();
+      await page.getByLabel("Commands", { exact: true }).click();
+      await page.getByLabel("Browser profile", { exact: true }).click();
+      await page.getByText("Browser profile", { exact: true }).last().waitFor();
       const setupPopoverBox = await page
         .locator(".composer-setup-menu .composer-popover")
         .boundingBox();
@@ -2331,19 +2349,28 @@ try {
         .evaluate((menu) => menu.open));
       if (!setupOutsideClickDismissed)
         throw new Error("Task setup remained open after an outside click.");
-      await page.getByLabel("Commands and settings", { exact: true }).click();
-      await page.getByLabel("Permission review").click();
+      await page.getByLabel("Commands", { exact: true }).click();
+      await page
+        .locator("#task-command-palette")
+        .getByLabel("Approval policy: Approve for me", { exact: true })
+        .click();
       await page.keyboard.press("Escape");
       const permissionEscapeDismissed = !(await page
-        .locator(".composer-permission-menu")
+        .locator("#task-command-palette .composer-permission-menu")
         .evaluate((menu) => menu.open));
       if (!permissionEscapeDismissed)
         throw new Error("Permission menu remained open after Escape.");
-      await page.getByLabel("Commands and settings", { exact: true }).click();
-      await page.getByLabel("Model and reasoning effort").click();
-      await page.getByText("Reasoning effort", { exact: true }).waitFor();
+      await page.getByLabel("Commands", { exact: true }).click();
+      await page
+        .locator("#task-command-palette")
+        .getByLabel(/Model and reasoning effort/)
+        .click();
+      await page
+        .locator("#task-command-palette")
+        .getByText("Reasoning", { exact: true })
+        .waitFor();
       const modelPopoverBox = await page
-        .locator(".composer-model-menu .composer-popover")
+        .locator("#task-command-palette .composer-model-menu .composer-popover")
         .boundingBox();
       const modelPopoverGeometryValid =
         modelPopoverBox !== null &&
@@ -2363,10 +2390,92 @@ try {
         });
       await page.locator(".product-topbar").click();
       const modelOutsideClickDismissed = !(await page
-        .locator(".composer-model-menu")
+        .locator("#task-command-palette .composer-model-menu")
         .evaluate((menu) => menu.open));
       if (!modelOutsideClickDismissed)
         throw new Error("Model menu remained open after an outside click.");
+      const commandPalette = page.locator("#task-command-palette");
+      const visibleConfiguration = page.getByLabel("Task configuration");
+      await page.getByLabel("Desired outcome").fill("");
+      await page.getByLabel("Desired outcome").press("/");
+      const typedSlashOpenedSamePalette =
+        (await commandPalette.evaluate((menu) => menu.open)) &&
+        (await commandPalette
+          .getByLabel("Search commands")
+          .evaluate((input) => document.activeElement === input));
+      if (!typedSlashOpenedSamePalette)
+        throw new Error(
+          "Typed slash did not open and focus the command palette.",
+        );
+      await commandPalette.getByLabel("Search commands").fill("workflow");
+      const commandSearchFiltered =
+        (await commandPalette.getByLabel("Workflow environment").count()) ===
+          1 &&
+        (await commandPalette
+          .getByText("Attach file", { exact: true })
+          .count()) === 0;
+      if (!commandSearchFiltered)
+        throw new Error("Command search did not filter to Workflow controls.");
+      await commandPalette.getByLabel("Search commands").fill("");
+      await commandPalette
+        .getByLabel("Participation mode: Agent", { exact: true })
+        .click();
+      await commandPalette
+        .getByLabel("Execution mode: Companion", { exact: true })
+        .click();
+      const paletteModeUpdatedVisibleState =
+        (await visibleConfiguration
+          .getByLabel("Participation mode: Companion", { exact: true })
+          .count()) === 1;
+      if (!paletteModeUpdatedVisibleState)
+        throw new Error(
+          "Palette mode selection did not update composer state.",
+        );
+      await commandPalette
+        .getByLabel("Approval policy: Approve for me", { exact: true })
+        .click();
+      await commandPalette.getByText("Always ask", { exact: true }).click();
+      const paletteApprovalUpdatedVisibleState =
+        (await visibleConfiguration
+          .getByLabel("Approval policy: Always ask", { exact: true })
+          .count()) === 1;
+      if (!paletteApprovalUpdatedVisibleState)
+        throw new Error(
+          "Palette approval selection did not update composer state.",
+        );
+      await commandPalette.getByLabel(/Model and reasoning effort/).click();
+      await commandPalette
+        .getByLabel("Model: GPT-5.6 Sol", { exact: true })
+        .click();
+      const unsupportedEffortOmitted =
+        (await commandPalette
+          .getByLabel("Reasoning effort: Medium", { exact: true })
+          .count()) === 0;
+      if (!unsupportedEffortOmitted)
+        throw new Error("Selected model exposed an unsupported effort.");
+      await commandPalette
+        .getByLabel("Reasoning effort: Low", { exact: true })
+        .click();
+      const paletteModelUpdatedVisibleState =
+        (await page
+          .locator(".composer-card .composer-footer")
+          .getByLabel("Model and reasoning effort: GPT-5.6 Sol, Low", {
+            exact: true,
+          })
+          .count()) === 1;
+      if (!paletteModelUpdatedVisibleState)
+        throw new Error(
+          "Palette model selection did not update composer state.",
+        );
+      await page.keyboard.press("Escape");
+      const commandPaletteEscapeDismissed = !(await commandPalette.evaluate(
+        (menu) => menu.open,
+      ));
+      if (!commandPaletteEscapeDismissed)
+        throw new Error("Command palette remained open after Escape.");
+      await page
+        .getByLabel("Desired outcome")
+        .fill("Review the current work and summarize the result.");
       await page.locator(".app-menu > summary").click();
       await page.getByRole("button", { name: "Sign out of Codex" }).waitFor();
       if ((await page.getByText("Token activity").count()) !== 0)
@@ -2470,6 +2579,13 @@ try {
         setupOutsideClickDismissed,
         permissionEscapeDismissed,
         modelOutsideClickDismissed,
+        typedSlashOpenedSamePalette,
+        commandSearchFiltered,
+        paletteModeUpdatedVisibleState,
+        paletteApprovalUpdatedVisibleState,
+        unsupportedEffortOmitted,
+        paletteModelUpdatedVisibleState,
+        commandPaletteEscapeDismissed,
         outsideClickDismissed,
         escapeDismissed,
         themeSettingWorks:
@@ -2531,10 +2647,10 @@ try {
         throw new Error(
           `Forced-light surfaces leaked dark styling: ${JSON.stringify(themeSurfaces)}`,
         );
-      await page.getByLabel("Commands and settings", { exact: true }).click();
-      await page.getByLabel("Task setup").hover();
+      await page.getByLabel("Commands", { exact: true }).click();
+      await page.getByLabel("Browser profile", { exact: true }).hover();
       const setupHoverBackground = await page
-        .getByLabel("Task setup")
+        .getByLabel("Browser profile", { exact: true })
         .evaluate((element) => getComputedStyle(element).backgroundColor);
       const hoverAlpha = Number(
         setupHoverBackground.match(/rgba\(0, 0, 0, ([\d.]+)\)/)?.[1],
