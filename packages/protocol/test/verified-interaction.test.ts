@@ -31,6 +31,28 @@ describe("interaction contracts", () => {
     ).toBe(false);
   });
 
+  it("requires an exact authorization digest and concrete plan for task-result actions", () => {
+    const request = {
+      observationId: "bobs_current",
+      consequential: true,
+      consequenceKey: `task-result:result_1:${"a".repeat(64)}`,
+      action: {
+        kind: "click" as const,
+        target: { pageId: "page_01", revision: 1, ref: "t1" },
+      },
+    };
+    expect(verifiedInteractionRequestSchema.safeParse(request).success).toBe(
+      false,
+    );
+    expect(
+      verifiedInteractionRequestSchema.safeParse({
+        ...request,
+        authorizationDigest: "a".repeat(64),
+        authorizedPlanId: `plan_${"b".repeat(32)}`,
+      }).success,
+    ).toBe(true);
+  });
+
   it("accepts neutral grounding intent without numeric scoring fields", () => {
     expect(
       targetResolutionRequestSchema.parse({
@@ -141,6 +163,27 @@ describe("interaction contracts", () => {
           { kind: "download_completed" },
           { kind: "download_completed", filename: "second.pdf" },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("binds observed file effects to exact names and SHA-256 digests", () => {
+    expect(
+      expectedEffectSchema.parse({
+        kind: "target_files",
+        target: { name: "Attachments" },
+        files: [{ name: "reviewed.pdf", sha256: "a".repeat(64) }],
+      }),
+    ).toEqual({
+      kind: "target_files",
+      target: { name: "Attachments" },
+      files: [{ name: "reviewed.pdf", sha256: "a".repeat(64) }],
+    });
+    expect(
+      expectedEffectSchema.safeParse({
+        kind: "target_files",
+        target: { name: "Attachments" },
+        files: [{ name: "reviewed.pdf", sha256: "not-a-digest" }],
       }).success,
     ).toBe(false);
   });

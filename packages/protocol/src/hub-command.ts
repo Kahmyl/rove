@@ -16,6 +16,8 @@ export const hubOperationSchema = z.enum([
   "browser.inspect",
   "browser.resolve_target",
   "browser.interact",
+  "browser.prepare_task_result_action",
+  "browser.task_result_action_plan",
   "browser.transaction_begin",
   "browser.transaction_advance",
   "browser.transaction_verify",

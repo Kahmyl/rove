@@ -1,6 +1,6 @@
 # Logical Domain Model
 
-**Status:** Target design derived from the product documents; not a claim that these concepts already exist as separate tables or services.
+**Status:** Target design derived from the product documents. Local Workflow environments and stable task results now implement the corresponding portions without requiring every concept to become a separate table or service.
 
 ## Core relationships
 
@@ -73,4 +73,4 @@ Deleting a workflow removes portable setup after explicit confirmation, not its 
 
 ## Existing implementation boundary
 
-The current source has task-ledger/engine stores and a task-addressed product port in `apps/companion/src/main/codex`. Runtime owns existing browser/session state. Those are implementation foundations, not a requirement to encode the entire new domain inside one session record or create a parallel authoritative task state machine. See [architecture](system-architecture-and-transactions.md) and [data model](relational-data-model.md).
+The current source has task-ledger/engine stores, local Workflow/result relations, and a task-addressed product port in `apps/companion/src/main/codex`. Result selection is a local product fact; the exact selected snapshot applied to a new turn remains in the durable task event/outbox. Runtime owns browser/session state and the external-effect journal. The companion's action result is reconciled from exact Runtime effect truth rather than becoming a parallel dispatch authority. See [architecture](system-architecture-and-transactions.md), [structured results](structured-results-and-actions.md), and [data model](relational-data-model.md).

@@ -1,5 +1,12 @@
+import type { TaskResultActionPlan } from "@rove/protocol";
+
 export type EffectJournalState =
-  "prepared" | "applied" | "not_applied" | "unresolved";
+  | "planned"
+  | "authorized"
+  | "prepared"
+  | "applied"
+  | "not_applied"
+  | "unresolved";
 
 export interface EffectJournalRecord {
   schemaVersion: 1;
@@ -9,6 +16,7 @@ export interface EffectJournalRecord {
   browserWorkspaceScope: string;
   consequenceKey: string;
   actionFingerprint: string;
+  taskResultPlan?: TaskResultActionPlan;
   /** Retained as diagnostic metadata for records created by the removed
    * origin-scoped fence. It is never dispatch authority. */
   uncertaintyDomain?: string;
@@ -56,7 +64,12 @@ export interface EffectJournalStore {
       EffectJournalRecord,
       "state" | "updatedAt" | "observationId" | "evidenceId"
     > &
-      Partial<Pick<EffectJournalRecord, "ownershipGeneration">>,
+      Partial<
+        Pick<
+          EffectJournalRecord,
+          "ownershipGeneration" | "actionFingerprint" | "taskResultPlan"
+        >
+      >,
   ): Promise<EffectJournalRecord>;
   find(
     taskScope: string,

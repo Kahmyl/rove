@@ -12,6 +12,8 @@ export const ROVE_TOOL_CATALOG = [
   "browser.inspect",
   "browser.resolve_target",
   "browser.interact",
+  "browser.prepare_task_result_action",
+  "browser.task_result_action_plan",
   "browser.transaction_begin",
   "browser.transaction_advance",
   "browser.transaction_verify",
@@ -66,4 +68,4 @@ export function canonicalRoveToolDefinitionsJsonWire(
 
 /** SHA-256 of canonicalRoveToolDefinitionsJsonWire for the 0.1.0 tools/list payload. */
 export const ROVE_TOOL_DEFINITIONS_SHA256 =
-  "e2611dd31ccfca2e94936121184e7a075b2d85a15ed12683cbdbb14b8fb2d521";
+  "f4107aa1c5b31fbce338975ad7fd94a09ec2f0f8bbbdda84dbb34a3ae601f1fb";

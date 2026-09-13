@@ -28,18 +28,19 @@ Opaque identifiers are examples, not required regexes. The same accepted operati
 
 ## Product command families
 
-| Commands                                                                  | Required behavior                                                                                          |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `task.start`, `task.message`                                              | Validate model readiness for inference; resolve guidance and exact task; acquire no browser unless needed. |
-| `task.stop`                                                               | Stop further dispatch for current work; preserve conversation and results; reconcile in-flight effects.    |
-| `task.archive`, `task.restore`, `task.delete`                             | Distinguish organization, restoration, and explicit destructive cleanup.                                   |
-| `workflow.create`, `workflow.edit`, `workflow.archive`, `workflow.delete` | Validate approved portable content and expected revision; never cascade deletion into local task history.  |
-| `workflow.promote`                                                        | Show and approve the exact selected reusable information; do not upload a task implicitly.                 |
-| `browser.open`, `control.take`, `control.return`                          | Resolve task-owned resources and current control generation; do not use selected UI tab as authority.      |
-| `recording.start`, `recording.stop`                                       | Confirm scope and privacy/OS permissions; persist artifact availability separately from recording intent.  |
-| `attention.respond`                                                       | Match task, request, operation, generation, and scope; accept a live decision once.                        |
-| `resource.grant`, `resource.revoke`                                       | Select/resolve authorized resources; reject stale, out-of-scope, or revoked use.                           |
-| Model connect/disconnect                                                  | Change the model connection, not the Rove owner or local data.                                             |
+| Commands                                                                  | Required behavior                                                                                           |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `task.start`, `task.message`                                              | Validate model readiness for inference; resolve guidance and exact task; acquire no browser unless needed.  |
+| `task.stop`                                                               | Stop further dispatch for current work; preserve conversation and results; reconcile in-flight effects.     |
+| `task.archive`, `task.restore`, `task.delete`                             | Distinguish organization, restoration, and explicit destructive cleanup.                                    |
+| `workflow.create`, `workflow.edit`, `workflow.archive`, `workflow.delete` | Validate approved portable content and expected revision; never cascade deletion into local task history.   |
+| `workflow.promote`                                                        | Show and approve the exact selected reusable information; do not upload a task implicitly.                  |
+| `result.create`, `result.revise`, `result.select`, `result.authorize`     | Resolve exact task/source/revision; bind action authorization to reviewed material before Runtime dispatch. |
+| `browser.open`, `control.take`, `control.return`                          | Resolve task-owned resources and current control generation; do not use selected UI tab as authority.       |
+| `recording.start`, `recording.stop`                                       | Confirm scope and privacy/OS permissions; persist artifact availability separately from recording intent.   |
+| `attention.respond`                                                       | Match task, request, operation, generation, and scope; accept a live decision once.                         |
+| `resource.grant`, `resource.revoke`                                       | Select/resolve authorized resources; reject stale, out-of-scope, or revoked use.                            |
+| Model connect/disconnect                                                  | Change the model connection, not the Rove owner or local data.                                              |
 
 Reading tasks, results, and artifacts does not require model access. Query responses include enough revision and status information for coherent UI updates. List operations use bounded pagination and a stable cursor rather than assuming one complete in-memory list forever.
 
@@ -85,4 +86,4 @@ For HTTP MCP integrations, follow the selected supported [MCP authorization spec
 
 ## Implementation mapping
 
-Current entry points include `apps/companion/src/main/codex/local-product-api.ts`, `product-task-port.ts`, the thread/session supervisor, `apps/mcp`, and the private Runtime API. Existing command names and protocol identifiers are compatibility facts. Adapt these seams deliberately rather than declaring the target command catalog already available or adding a competing second product API.
+Current entry points include `apps/companion/src/main/codex/local-product-api.ts`, `product-task-port.ts`, `results.ts`, the thread/session supervisor, `apps/mcp`, and the private Runtime API. Local result commands, selected-result turn snapshots, exact result-revision Workflow promotion, and Runtime-owned prepare/validate/authorize/commit plans for task-result actions are implemented through these seams. A semantic result authorization is not direct dispatch authority: the concrete grounded plan must match the saved recipient, content, files, target, and scope. Other command names in this target catalog are not thereby declared implemented. Existing command names and protocol identifiers are compatibility facts; adapt them deliberately rather than adding a competing second product API.

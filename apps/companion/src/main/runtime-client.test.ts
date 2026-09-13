@@ -26,6 +26,64 @@ function jsonResponse(value: unknown, status = 200): Response {
 }
 
 describe("CompanionRuntimeClient", () => {
+  it("reads exact consequential effect truth without authorizing or dispatching", async () => {
+    const effect = {
+      effectId: "a".repeat(64),
+      state: "applied" as const,
+      consequenceKey: "task-result:result_1:digest",
+      evidenceId: "ev_applied",
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(effect)) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
+
+    await expect(
+      client.consequentialEffect("ses_companion", effect.consequenceKey),
+    ).resolves.toEqual(effect);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://127.0.0.1:47820/sessions/ses_companion/effects/consequential?consequenceKey=task-result%3Aresult_1%3Adigest",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+  });
+
+  it("registers a task-result material digest on the exact Runtime session", async () => {
+    const requests: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchImpl = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        requests.push({
+          url: String(input),
+          method: init?.method ?? "GET",
+          body:
+            typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        });
+        return jsonResponse({ state: "prepared" });
+      },
+    ) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
+    const digest = "d".repeat(64);
+    const consequenceKey = `task-result:result_1:${digest}`;
+    const planId = `plan_${"a".repeat(32)}`;
+
+    await client.authorizeTaskResultAction(
+      "ses_companion",
+      consequenceKey,
+      digest,
+      planId,
+    );
+    expect(requests).toEqual([
+      {
+        url: "http://127.0.0.1:47820/sessions/ses_companion/effects/authorize-task-result",
+        method: "POST",
+        body: { consequenceKey, materialDigest: digest, planId },
+      },
+    ]);
+  });
+
   it("uses a distinct trusted Runtime route for an explicit effect repetition", async () => {
     const requests: Array<{ url: string; method: string; body: unknown }> = [];
     const fetchImpl = vi.fn(

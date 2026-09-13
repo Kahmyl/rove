@@ -101,9 +101,14 @@ function parseRecord(raw: string): EffectJournalRecord {
     (value.attemptId !== undefined &&
       (typeof value.attemptId !== "string" ||
         !/^effect_attempt_[a-f0-9-]{36}$/.test(value.attemptId))) ||
-    !["prepared", "applied", "not_applied", "unresolved"].includes(
-      value.state ?? "",
-    ) ||
+    ![
+      "planned",
+      "authorized",
+      "prepared",
+      "applied",
+      "not_applied",
+      "unresolved",
+    ].includes(value.state ?? "") ||
     !Number.isSafeInteger(value.ownershipGeneration) ||
     value.ownershipGeneration! < 1 ||
     typeof value.cutoverEpoch !== "string" ||
@@ -117,6 +122,30 @@ function parseRecord(raw: string): EffectJournalRecord {
       (typeof value.evidenceId !== "string" || value.evidenceId.length === 0))
   )
     throw new Error("Effect journal record is invalid.");
+  if (
+    value.taskResultPlan !== undefined &&
+    (typeof value.taskResultPlan !== "object" ||
+      value.taskResultPlan === null ||
+      value.taskResultPlan.schemaVersion !== 1 ||
+      typeof value.taskResultPlan.planId !== "string" ||
+      !/^plan_[a-f0-9]{32}$/.test(value.taskResultPlan.planId) ||
+      value.taskResultPlan.consequenceKey !== value.consequenceKey ||
+      value.taskResultPlan.taskScope !== value.taskScope ||
+      value.taskResultPlan.browserWorkspaceScope !==
+        value.browserWorkspaceScope ||
+      value.taskResultPlan.actionFingerprint !== value.actionFingerprint ||
+      !/^[a-f0-9]{64}$/.test(value.taskResultPlan.materialDigest) ||
+      !/^[a-f0-9]{64}$/.test(value.taskResultPlan.planDigest))
+  )
+    throw new Error("Effect journal task-result plan is invalid.");
+  if (value.taskResultPlan) {
+    const { planDigest, ...planBase } = value.taskResultPlan;
+    if (
+      createHash("sha256").update(JSON.stringify(planBase)).digest("hex") !==
+      planDigest
+    )
+      throw new Error("Effect journal task-result plan digest is invalid.");
+  }
   const authorization = value.repeatAuthorization;
   if (
     authorization !== undefined &&
@@ -150,6 +179,45 @@ function validTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function validActionFingerprintTransition(
+  previous: EffectJournalRecord,
+  next: EffectJournalRecord,
+): boolean {
+  if (next.actionFingerprint === previous.actionFingerprint) return true;
+  return validTaskResultPlanReplacement(previous, next);
+}
+
+function validTaskResultPlanReplacement(
+  previous: EffectJournalRecord,
+  next: EffectJournalRecord,
+): boolean {
+  const previousPlan = previous.taskResultPlan;
+  const nextPlan = next.taskResultPlan;
+  return (
+    (previous.state === "planned" || previous.state === "authorized") &&
+    next.state === "planned" &&
+    nextPlan !== undefined &&
+    (previousPlan === undefined || previousPlan.planId !== nextPlan.planId)
+  );
+}
+
+function validTaskResultPlanTransition(
+  previous: EffectJournalRecord,
+  next: EffectJournalRecord,
+): boolean {
+  const previousPlan = previous.taskResultPlan;
+  const nextPlan = next.taskResultPlan;
+  if (previousPlan === undefined && nextPlan === undefined) return true;
+  if (
+    previousPlan !== undefined &&
+    nextPlan !== undefined &&
+    previousPlan.planId === nextPlan.planId &&
+    previousPlan.planDigest === nextPlan.planDigest
+  )
+    return true;
+  return validTaskResultPlanReplacement(previous, next);
 }
 
 function parseCutover(raw: string): EffectJournalCutover {
@@ -246,7 +314,8 @@ export class FileEffectJournalStore implements EffectJournalStore {
           (record.taskScope !== previous.taskScope ||
             record.browserWorkspaceScope !== previous.browserWorkspaceScope ||
             record.consequenceKey !== previous.consequenceKey ||
-            record.actionFingerprint !== previous.actionFingerprint ||
+            !validActionFingerprintTransition(previous, record) ||
+            !validTaskResultPlanTransition(previous, record) ||
             record.uncertaintyDomain !== previous.uncertaintyDomain ||
             record.affectedOperationFingerprint !==
               previous.affectedOperationFingerprint ||
@@ -279,8 +348,14 @@ export class FileEffectJournalStore implements EffectJournalStore {
   async prepare(
     input: Omit<EffectJournalRecord, "schemaVersion" | "version" | "effectId">,
   ): Promise<EffectJournalRecord> {
-    if (input.state !== "prepared")
-      throw new Error("Effect journal must begin in prepared state.");
+    if (
+      input.state !== "planned" &&
+      input.state !== "prepared" &&
+      input.state !== "authorized"
+    )
+      throw new Error(
+        "Effect journal must begin planned, authorized, or prepared.",
+      );
     const effectId = key(
       input.taskScope,
       input.browserWorkspaceScope,
@@ -332,12 +407,20 @@ export class FileEffectJournalStore implements EffectJournalStore {
       EffectJournalRecord,
       "state" | "updatedAt" | "observationId" | "evidenceId"
     > &
-      Partial<Pick<EffectJournalRecord, "ownershipGeneration">>,
+      Partial<
+        Pick<EffectJournalRecord, "ownershipGeneration" | "actionFingerprint">
+      > & {
+        taskResultPlan?: EffectJournalRecord["taskResultPlan"] | undefined;
+      },
   ): Promise<EffectJournalRecord> {
     const current = await this.readRecord(effectId);
     if (!current || current.version !== expectedVersion)
       throw new Error("Effect journal version conflict.");
     const allowed =
+      (current.state === "planned" &&
+        (update.state === "planned" || update.state === "authorized")) ||
+      (current.state === "authorized" && update.state === "planned") ||
+      (current.state === "authorized" && update.state === "prepared") ||
       (current.state === "prepared" &&
         ["applied", "not_applied", "unresolved"].includes(update.state)) ||
       (current.state === "not_applied" && update.state === "prepared");
@@ -348,11 +431,25 @@ export class FileEffectJournalStore implements EffectJournalStore {
         update.ownershipGeneration < 1)
     )
       throw new Error("Effect journal ownership generation is invalid.");
+    const { taskResultPlan: currentPlan, ...currentWithoutPlan } = current;
+    const { taskResultPlan: updatedPlan, ...updateWithoutPlan } = update;
+    const nextPlan = Object.prototype.hasOwnProperty.call(
+      update,
+      "taskResultPlan",
+    )
+      ? updatedPlan
+      : currentPlan;
     const next: EffectJournalRecord = {
-      ...current,
-      ...update,
+      ...currentWithoutPlan,
+      ...updateWithoutPlan,
+      ...(nextPlan === undefined ? {} : { taskResultPlan: nextPlan }),
       version: current.version + 1,
     };
+    if (
+      !validActionFingerprintTransition(current, next) ||
+      !validTaskResultPlanTransition(current, next)
+    )
+      throw new Error("Effect journal identity transition is invalid.");
     const created = await publishExclusive(
       this.recordVersionPath(effectId, next.version),
       next,

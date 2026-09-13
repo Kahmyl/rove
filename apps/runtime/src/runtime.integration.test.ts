@@ -46,6 +46,8 @@ interface Harness {
   browser: BrowserService;
   sessions: SessionService;
   ownershipFence: BrowserOwnershipFence;
+  effectJournal: FileEffectJournalStore;
+  evidence: EvidenceService;
 }
 
 const homes: string[] = [];
@@ -81,10 +83,36 @@ async function harness(
 ): Promise<Harness> {
   const home = await mkdtemp(join(tmpdir(), "rove-runtime-"));
   homes.push(home);
+  const loadedConfig = loadConfig({
+    cwd: home,
+    env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
+  });
+  const config = {
+    ...loadedConfig,
+    timeouts: {
+      ...loadedConfig.timeouts,
+      ...(browserPolicy.actionMs === undefined
+        ? {}
+        : { actionMs: browserPolicy.actionMs }),
+    },
+    browser: {
+      ...loadedConfig.browser,
+      ...(browserPolicy.headless === undefined
+        ? {}
+        : { headless: browserPolicy.headless }),
+      ...(browserPolicy.minimumActionIntervalMs === undefined
+        ? {}
+        : {
+            minimumActionIntervalMs: browserPolicy.minimumActionIntervalMs,
+          }),
+    },
+  };
   const sessions = new SessionService(new FileSessionStore(home));
   const browser = new BrowserService(engine);
   const observations = new ObservationService(new FileObservationStore(home));
   const ownershipFence = new BrowserOwnershipFence();
+  const effectJournal = new FileEffectJournalStore(config.home);
+  const evidence = new EvidenceService(new FileEvidenceStore(home));
 
   const runtime = new RuntimeService(
     sessions,
@@ -93,35 +121,10 @@ async function harness(
     new BrowserCommandCoordinator(),
     browser,
     observations,
-    new EvidenceService(new FileEvidenceStore(home)),
-    (() => {
-      const config = loadConfig({
-        cwd: home,
-        env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
-      });
-
-      return {
-        ...config,
-        timeouts: {
-          ...config.timeouts,
-          ...(browserPolicy.actionMs === undefined
-            ? {}
-            : { actionMs: browserPolicy.actionMs }),
-        },
-        browser: {
-          ...config.browser,
-          ...(browserPolicy.headless === undefined
-            ? {}
-            : { headless: browserPolicy.headless }),
-          ...(browserPolicy.minimumActionIntervalMs === undefined
-            ? {}
-            : {
-                minimumActionIntervalMs: browserPolicy.minimumActionIntervalMs,
-              }),
-        },
-      };
-    })(),
+    evidence,
+    config,
     ownershipFence,
+    effectJournal,
   );
 
   await runtime.createBrowserWorkspace("Default");
@@ -132,6 +135,8 @@ async function harness(
     browser,
     sessions,
     ownershipFence,
+    effectJournal,
+    evidence,
   };
 }
 
@@ -1632,6 +1637,41 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const inspection = await runtime.inspectBrowser(session.id);
+    const authorizationDigest = "d".repeat(64);
+    const consequenceKey = `task-result:result_runtime_test:${authorizationDigest}`;
+    const authorizedInteraction = {
+      observationId: inspection.observationId,
+      action: {
+        kind: "click" as const,
+        target: target(inspection, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "url_changed" as const }],
+      consequential: true,
+      consequenceKey,
+      authorizationDigest,
+      authorizedPlanId: `plan_${"0".repeat(32)}`,
+    };
+    await expect(
+      runtime.interact(session.id, authorizedInteraction),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(server.mutationCount()).toBe(0);
+    const plan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: inspection.observationId,
+      consequenceKey,
+      materialDigest: authorizationDigest,
+      fieldBindings: [],
+      attachmentBindings: [],
+      commitAction: authorizedInteraction.action,
+      expectedEffects: authorizedInteraction.expectedEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      consequenceKey,
+      authorizationDigest,
+      plan.planId,
+    );
+    authorizedInteraction.authorizedPlanId = plan.planId;
     const liveBrowser = physicalBrowser(browser, session.id);
     const internal = liveBrowser as unknown as {
       synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
@@ -1647,16 +1687,7 @@ describe("runtime integration", () => {
       return synchronize(...args);
     };
 
-    const receipt = await runtime.interact(session.id, {
-      observationId: inspection.observationId,
-      action: {
-        kind: "click",
-        target: target(inspection, "Apply consequential mutation"),
-      },
-      expectedEffects: [{ kind: "url_changed" }],
-      consequential: true,
-      consequenceKey: "fixture:mutation:applied",
-    });
+    const receipt = await runtime.interact(session.id, authorizedInteraction);
 
     expect(server.mutationCount()).toBe(1);
     expect(receipt).toMatchObject({
@@ -1675,6 +1706,679 @@ describe("runtime integration", () => {
         },
       ],
     });
+    await expect(
+      runtime.consequentialEffect(session.id, consequenceKey),
+    ).resolves.toMatchObject({
+      state: "applied",
+      consequenceKey,
+      effectId: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+  });
+
+  it("dispatches only the unchanged concrete plan for authorized result material", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-form`,
+    });
+    active.push({ runtime, id: session.id });
+
+    let observation = await runtime.inspectBrowser(session.id);
+    await runtime.interact(session.id, {
+      observationId: observation.observationId,
+      action: {
+        kind: "fill",
+        target: target(observation, "Record title"),
+        value: "ops@example.test",
+      },
+      expectedEffects: [
+        {
+          kind: "target_value",
+          target: { name: "Record title" },
+          value: "ops@example.test",
+        },
+      ],
+    });
+    observation = await runtime.inspectBrowser(session.id);
+    await runtime.interact(session.id, {
+      observationId: observation.observationId,
+      action: {
+        kind: "fill",
+        target: target(observation, "Record notes"),
+        value: "Approved content",
+      },
+      expectedEffects: [
+        {
+          kind: "target_value",
+          target: { name: "Record notes" },
+          value: "Approved content",
+        },
+      ],
+    });
+    observation = await runtime.inspectBrowser(session.id);
+    const materialDigest = "e".repeat(64);
+    const consequenceKey = `task-result:result_concrete_plan:${materialDigest}`;
+    const commitAction = {
+      kind: "click" as const,
+      target: target(observation, "Create record"),
+    };
+    const expectedEffects = [{ kind: "url_changed" as const }];
+    await expect(
+      runtime.prepareTaskResultAction(session.id, {
+        observationId: observation.observationId,
+        consequenceKey,
+        materialDigest,
+        fieldBindings: [
+          {
+            field: "recipient",
+            targetRef: target(observation, "Record title").ref,
+          },
+          {
+            field: "content",
+            targetRef: target(observation, "Record title").ref,
+          },
+        ],
+        attachmentBindings: [],
+        commitAction,
+        expectedEffects,
+        effect: "external_commit",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+    const plan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey,
+      materialDigest,
+      fieldBindings: [
+        {
+          field: "recipient",
+          targetRef: target(observation, "Record title").ref,
+        },
+        {
+          field: "content",
+          targetRef: target(observation, "Record notes").ref,
+        },
+      ],
+      attachmentBindings: [],
+      commitAction,
+      expectedEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      consequenceKey,
+      materialDigest,
+      plan.planId,
+    );
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: commitAction,
+        expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: plan.planId,
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(server.mutationCount()).toBe(0);
+
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalInteract = liveBrowser.interact.bind(liveBrowser);
+    let commitDispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      if (args[0].kind === "click") commitDispatches += 1;
+      return originalInteract(...args);
+    };
+    const page = (
+      liveBrowser as unknown as {
+        pageRegistry: {
+          pageFor(pageId: string): {
+            locator(selector: string): {
+              fill(value: string): Promise<void>;
+            };
+          };
+        };
+      }
+    ).pageRegistry.pageFor(observation.pageId);
+    await page.locator("#record-notes").fill("Substituted content");
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: commitAction,
+        expectedEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: plan.planId,
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(commitDispatches).toBe(0);
+    expect(server.mutationCount()).toBe(0);
+
+    await page.locator("#record-notes").fill("Approved content");
+    observation = await runtime.inspectBrowser(session.id);
+    const refreshedCommitAction = {
+      kind: "click" as const,
+      target: target(observation, "Create record"),
+    };
+    const refreshedPlan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey,
+      materialDigest,
+      fieldBindings: [
+        {
+          field: "recipient",
+          targetRef: target(observation, "Record title").ref,
+        },
+        {
+          field: "content",
+          targetRef: target(observation, "Record notes").ref,
+        },
+      ],
+      attachmentBindings: [],
+      commitAction: refreshedCommitAction,
+      expectedEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      consequenceKey,
+      materialDigest,
+      refreshedPlan.planId,
+    );
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: refreshedCommitAction,
+        expectedEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: refreshedPlan.planId,
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(commitDispatches).toBe(1);
+    expect(server.mutationCount()).toBe(1);
+  });
+
+  it("does not let an unrelated uncertain result action fence a new exact action", async () => {
+    const server = await fixture();
+    const { runtime, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const prior = await effectJournal.prepare({
+      taskScope: "unrelated-task",
+      browserWorkspaceScope,
+      consequenceKey: `task-result:result_prior:${"a".repeat(64)}`,
+      actionFingerprint: "1".repeat(64),
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "phase5-effect-journal-v1",
+      preparedAt: "2026-09-13T10:00:00.000Z",
+      updatedAt: "2026-09-13T10:00:00.000Z",
+    });
+    await effectJournal.update(prior.effectId, prior.version, {
+      state: "unresolved",
+      updatedAt: "2026-09-13T10:00:01.000Z",
+    });
+
+    const observation = await runtime.inspectBrowser(session.id);
+    const materialDigest = "b".repeat(64);
+    const consequenceKey = `task-result:result_new:${materialDigest}`;
+    const commitAction = {
+      kind: "click" as const,
+      target: target(observation, "Apply consequential mutation"),
+    };
+    const expectedEffects = [{ kind: "url_changed" as const }];
+    const plan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey,
+      materialDigest,
+      fieldBindings: [],
+      attachmentBindings: [],
+      commitAction,
+      expectedEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      consequenceKey,
+      materialDigest,
+      plan.planId,
+    );
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: commitAction,
+        expectedEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: plan.planId,
+      }),
+    ).resolves.toMatchObject({ outcome: "applied" });
+    expect(server.mutationCount()).toBe(1);
+  });
+
+  it("binds attachment evidence before upload and dispatches no substituted file", async () => {
+    const server = await fixture();
+    const { runtime, browser, evidence } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const approved = await evidence.saveFileArtifact(session.id, {
+      filename: "approved.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("approved"),
+      source: "agent_generated",
+    });
+    const substituted = await evidence.saveFileArtifact(session.id, {
+      filename: "substituted.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("substituted"),
+      source: "agent_generated",
+    });
+    const observation = await runtime.inspectBrowser(session.id);
+    const uploadTarget = target(observation, "Direct file");
+    const materialDigest = "c".repeat(64);
+    const consequenceKey = `task-result:result_attachment_plan:${materialDigest}`;
+    const expectedEffects = [
+      {
+        kind: "target_files" as const,
+        target: { name: "Direct file" },
+        files: [
+          {
+            name: "approved.txt",
+            sha256: approved.metadata!.sha256 as string,
+          },
+        ],
+      },
+    ];
+    const approvedAction = {
+      kind: "upload" as const,
+      target: uploadTarget,
+      evidenceIds: [approved.id],
+    };
+    const plan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey,
+      materialDigest,
+      fieldBindings: [],
+      attachmentBindings: [
+        { evidenceId: approved.id, targetRef: uploadTarget.ref },
+      ],
+      commitAction: approvedAction,
+      expectedEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      consequenceKey,
+      materialDigest,
+      plan.planId,
+    );
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalInteract = liveBrowser.interact.bind(liveBrowser);
+    let uploadDispatches = 0;
+    let sendDispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      if (args[0].kind === "upload") uploadDispatches += 1;
+      if (args[0].kind === "click") sendDispatches += 1;
+      return originalInteract(...args);
+    };
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: {
+          ...approvedAction,
+          evidenceIds: [substituted.id],
+        },
+        expectedEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: plan.planId,
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(uploadDispatches).toBe(0);
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: approvedAction,
+        expectedEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey,
+        authorizationDigest: materialDigest,
+        authorizedPlanId: plan.planId,
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(uploadDispatches).toBe(1);
+
+    const afterApprovedUpload = await runtime.inspectBrowser(session.id);
+    const sendDigest = "d".repeat(64);
+    const sendKey = `task-result:result_send_plan:${sendDigest}`;
+    const sendAction = {
+      kind: "click" as const,
+      target: target(afterApprovedUpload, "Submit search"),
+    };
+    const sendEffects = [
+      { kind: "text_present" as const, text: "submitted:old text" },
+    ];
+    const sendPlan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: afterApprovedUpload.observationId,
+      consequenceKey: sendKey,
+      materialDigest: sendDigest,
+      fieldBindings: [],
+      attachmentBindings: [
+        {
+          evidenceId: approved.id,
+          targetRef: target(afterApprovedUpload, "Direct file").ref,
+        },
+      ],
+      commitAction: sendAction,
+      expectedEffects: sendEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      sendKey,
+      sendDigest,
+      sendPlan.planId,
+    );
+
+    const substitutedPayload = await evidence.readFilePayload(
+      session.id,
+      substituted.id,
+    );
+    const approvedPayload = await evidence.readFilePayload(
+      session.id,
+      approved.id,
+    );
+    const page = (
+      liveBrowser as unknown as {
+        pageRegistry: {
+          pageFor(pageId: string): {
+            locator(selector: string): {
+              setInputFiles(
+                files: Array<{
+                  name: string;
+                  mimeType: string;
+                  buffer: Buffer;
+                }>,
+              ): Promise<void>;
+            };
+          };
+        };
+      }
+    ).pageRegistry.pageFor(afterApprovedUpload.pageId);
+    const attemptSend = () =>
+      runtime.interact(session.id, {
+        observationId: afterApprovedUpload.observationId,
+        action: sendAction,
+        expectedEffects: sendEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: sendKey,
+        authorizationDigest: sendDigest,
+        authorizedPlanId: sendPlan.planId,
+      });
+
+    await page.locator("#direct-file").setInputFiles([
+      {
+        name: substitutedPayload.filename,
+        mimeType: "text/plain",
+        buffer: Buffer.from(substitutedPayload.bytes),
+      },
+    ]);
+    await expect(attemptSend()).rejects.toMatchObject({
+      code: "ACTION_NOT_AUTHORIZED",
+    });
+    expect(sendDispatches).toBe(0);
+
+    await page.locator("#direct-file").setInputFiles([
+      {
+        name: approvedPayload.filename,
+        mimeType: "text/plain",
+        buffer: Buffer.from(approvedPayload.bytes),
+      },
+    ]);
+    const beforeExtraFile = await runtime.inspectBrowser(session.id);
+    const extraDigest = "1".repeat(64);
+    const extraKey = `task-result:result_send_extra:${extraDigest}`;
+    const extraSendAction = {
+      kind: "click" as const,
+      target: target(beforeExtraFile, "Submit search"),
+    };
+    const extraPlan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: beforeExtraFile.observationId,
+      consequenceKey: extraKey,
+      materialDigest: extraDigest,
+      fieldBindings: [],
+      attachmentBindings: [
+        {
+          evidenceId: approved.id,
+          targetRef: target(beforeExtraFile, "Direct file").ref,
+        },
+      ],
+      commitAction: extraSendAction,
+      expectedEffects: sendEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      extraKey,
+      extraDigest,
+      extraPlan.planId,
+    );
+    await page.locator("#direct-file").setInputFiles([
+      {
+        name: approvedPayload.filename,
+        mimeType: "text/plain",
+        buffer: Buffer.from(approvedPayload.bytes),
+      },
+      {
+        name: substitutedPayload.filename,
+        mimeType: "text/plain",
+        buffer: Buffer.from(substitutedPayload.bytes),
+      },
+    ]);
+    await expect(
+      runtime.interact(session.id, {
+        observationId: beforeExtraFile.observationId,
+        action: extraSendAction,
+        expectedEffects: sendEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: extraKey,
+        authorizationDigest: extraDigest,
+        authorizedPlanId: extraPlan.planId,
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(sendDispatches).toBe(0);
+  }, 15_000);
+
+  it("sends once when a confirmed exact upload remains attached unchanged", async () => {
+    const server = await fixture();
+    const { runtime, browser, evidence } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const approved = await evidence.saveFileArtifact(session.id, {
+      filename: "approved.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("approved"),
+      source: "agent_generated",
+    });
+    let observation = await runtime.inspectBrowser(session.id);
+    const uploadTarget = target(observation, "Direct file");
+    const uploadDigest = "e".repeat(64);
+    const uploadKey = `task-result:result_upload_exact:${uploadDigest}`;
+    const uploadAction = {
+      kind: "upload" as const,
+      target: uploadTarget,
+      evidenceIds: [approved.id],
+    };
+    const uploadEffects = [
+      {
+        kind: "target_files" as const,
+        target: { name: "Direct file" },
+        files: [
+          {
+            name: "approved.txt",
+            sha256: approved.metadata!.sha256 as string,
+          },
+        ],
+      },
+    ];
+    const uploadPlan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey: uploadKey,
+      materialDigest: uploadDigest,
+      fieldBindings: [],
+      attachmentBindings: [
+        { evidenceId: approved.id, targetRef: uploadTarget.ref },
+      ],
+      commitAction: uploadAction,
+      expectedEffects: uploadEffects,
+      effect: "external_commit",
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      uploadKey,
+      uploadDigest,
+      uploadPlan.planId,
+    );
+    await runtime.interact(session.id, {
+      observationId: observation.observationId,
+      action: uploadAction,
+      expectedEffects: uploadEffects,
+      consequential: true,
+      effect: "external_commit",
+      consequenceKey: uploadKey,
+      authorizationDigest: uploadDigest,
+      authorizedPlanId: uploadPlan.planId,
+    });
+
+    observation = await runtime.inspectBrowser(session.id);
+    const sendDigest = "f".repeat(64);
+    const sendKey = `task-result:result_send_exact:${sendDigest}`;
+    const sendAction = {
+      kind: "click" as const,
+      target: target(observation, "Submit search"),
+    };
+    const sendEffects = [
+      { kind: "text_present" as const, text: "submitted:old text" },
+    ];
+    const sendPlan = await runtime.prepareTaskResultAction(session.id, {
+      observationId: observation.observationId,
+      consequenceKey: sendKey,
+      materialDigest: sendDigest,
+      fieldBindings: [],
+      attachmentBindings: [
+        {
+          evidenceId: approved.id,
+          targetRef: target(observation, "Direct file").ref,
+        },
+      ],
+      commitAction: sendAction,
+      expectedEffects: sendEffects,
+      effect: "external_commit",
+    });
+    expect(sendPlan.attachments[0]).toMatchObject({
+      evidenceId: approved.id,
+      sha256: approved.metadata!.sha256,
+      uploadEffectId: expect.stringMatching(/^[a-f0-9]{64}$/),
+      uploadPlanId: uploadPlan.planId,
+      uploadReceiptId: expect.stringMatching(/^rcpt_/),
+    });
+    await runtime.authorizeTaskResultAction(
+      session.id,
+      sendKey,
+      sendDigest,
+      sendPlan.planId,
+    );
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalInteract = liveBrowser.interact.bind(liveBrowser);
+    let sendDispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      if (args[0].kind === "click") sendDispatches += 1;
+      return originalInteract(...args);
+    };
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: sendAction,
+        expectedEffects: sendEffects,
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: sendKey,
+        authorizationDigest: sendDigest,
+        authorizedPlanId: sendPlan.planId,
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(sendDispatches).toBe(1);
+  }, 15_000);
+
+  it("does not let an unrelated uncertain result action fence an ordinary consequence", async () => {
+    const server = await fixture();
+    const { runtime, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const prior = await effectJournal.prepare({
+      taskScope: "unrelated-task",
+      browserWorkspaceScope,
+      consequenceKey: `task-result:result_prior:${"a".repeat(64)}`,
+      actionFingerprint: "1".repeat(64),
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "phase5-effect-journal-v1",
+      preparedAt: "2026-09-13T10:00:00.000Z",
+      updatedAt: "2026-09-13T10:00:00.000Z",
+    });
+    await effectJournal.update(prior.effectId, prior.version, {
+      state: "unresolved",
+      updatedAt: "2026-09-13T10:00:01.000Z",
+    });
+
+    const observation = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.interact(session.id, {
+        observationId: observation.observationId,
+        action: {
+          kind: "click",
+          target: target(observation, "Apply consequential mutation"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: "ordinary:new-exact-action",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied" });
+    expect(server.mutationCount()).toBe(1);
   });
 
   it("reconciles a dispatch-stage control error when successor evidence proves the effect", async () => {

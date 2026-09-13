@@ -288,6 +288,12 @@ describe("Codex/Runtime command reconciliation postconditions", () => {
           developerInstructions:
             "Workflow environment: Job search\n\nReusable guidance:\n- Keep outreach warm and direct.",
         },
+        selectedResultContext: {
+          resultIds: ["result_reviewed"],
+          digest: "c".repeat(64),
+          developerInstructions:
+            "Selected task result: Reviewed draft\nUse this exact reviewed material; it is not external-action authority.",
+        },
       }),
     );
     expect(resumes.at(-1)?.developerInstructions).toContain(
@@ -295,6 +301,9 @@ describe("Codex/Runtime command reconciliation postconditions", () => {
     );
     expect(resumes.at(-1)?.developerInstructions).not.toContain(
       "Earlier guidance",
+    );
+    expect(resumes.at(-1)?.developerInstructions).toContain(
+      "Use this exact reviewed material",
     );
     expect(turnStarts[0]?.input).toEqual([
       { type: "text", text: "Draft outreach", text_elements: [] },

@@ -34,6 +34,8 @@ import {
   type VerifySemanticTransactionRequest,
   type LocalFileGrantRequest,
   type LocalFileGrantResult,
+  type PrepareTaskResultActionRequest,
+  type TaskResultActionPlan,
 } from "@rove/protocol";
 import { RuntimeClientError } from "./runtime-client.error.js";
 import type {
@@ -194,6 +196,32 @@ export class RuntimeHttpClient implements RuntimeClient {
       "POST",
       `/sessions/${encodeURIComponent(sessionId)}/browser/interact`,
       input,
+    );
+  }
+
+  prepareTaskResultAction(
+    sessionId: string,
+    input: PrepareTaskResultActionRequest,
+  ): Promise<TaskResultActionPlan> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/effects/prepare-task-result`,
+      input,
+    );
+  }
+
+  consequentialEffect(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<{
+    effectId: string;
+    state: string;
+    consequenceKey: string;
+    taskResultPlan?: TaskResultActionPlan;
+  } | null> {
+    return this.request(
+      "GET",
+      `/sessions/${encodeURIComponent(sessionId)}/effects/consequential?consequenceKey=${encodeURIComponent(consequenceKey)}`,
     );
   }
 

@@ -125,6 +125,19 @@ export async function executeHubCommand(
         `${sessionPath(sessionId)}/browser/transactions`,
         input,
       );
+    case "browser.prepare_task_result_action":
+      return runtimeRequest(
+        runtime,
+        "POST",
+        `${sessionPath(sessionId)}/effects/prepare-task-result`,
+        input,
+      );
+    case "browser.task_result_action_plan":
+      return runtimeRequest(
+        runtime,
+        "GET",
+        `${sessionPath(sessionId)}/effects/consequential?consequenceKey=${encodeURIComponent(requiredString(payload.consequenceKey, "consequenceKey"))}`,
+      );
     case "browser.transaction_advance": {
       const transaction = asRecord(input);
       const transactionId = requiredString(

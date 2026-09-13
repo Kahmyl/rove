@@ -44,7 +44,7 @@ const ACTIONS_HTML = `<!doctype html>
         </select>
         <button id="submit" type="submit">Submit search</button>
       </form>
-      <label for="direct-file">Direct file</label><input id="direct-file" type="file" />
+      <label for="direct-file">Direct file</label><input id="direct-file" type="file" multiple />
       <button id="file-upload-trigger" type="button">File upload trigger</button>
       <input id="chooser-file" type="file" hidden />
       <p id="result-state">idle</p>

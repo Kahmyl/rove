@@ -65,6 +65,12 @@ export interface TaskWorkflowContextSnapshot {
   developerInstructions: string;
 }
 
+export interface TaskSelectedResultContextSnapshot {
+  resultIds: readonly string[];
+  digest: string;
+  developerInstructions: string;
+}
+
 export interface TaskConversationItem {
   id: string;
   turnId: string;
@@ -129,6 +135,7 @@ export type TaskEvent =
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
       workflowContext?: TaskWorkflowContextSnapshot;
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
     })
   | (TaskEventBase & {
       type: "task_return_requested";
@@ -163,6 +170,7 @@ export type TaskEvent =
       message: string;
       attachmentIds?: readonly string[];
       workflowContext?: TaskWorkflowContextSnapshot;
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
     })
   | (TaskEventBase & {
       type: "codex_availability_observed";
@@ -581,6 +589,32 @@ function validateWorkflowContextSnapshot(
     throw new Error("Workflow context instructions are invalid.");
 }
 
+function validateSelectedResultContextSnapshot(
+  value: TaskSelectedResultContextSnapshot,
+): void {
+  if (
+    !Array.isArray(value.resultIds) ||
+    value.resultIds.length < 1 ||
+    value.resultIds.length > 8 ||
+    value.resultIds.some(
+      (resultId) =>
+        typeof resultId !== "string" ||
+        resultId.trim().length < 1 ||
+        resultId.length > 160,
+    ) ||
+    new Set(value.resultIds).size !== value.resultIds.length
+  )
+    throw new Error("Selected result context identities are invalid.");
+  if (!/^[a-f0-9]{64}$/.test(value.digest))
+    throw new Error("Selected result context digest is invalid.");
+  if (
+    typeof value.developerInstructions !== "string" ||
+    value.developerInstructions.length < 1 ||
+    value.developerInstructions.length > 16_000
+  )
+    throw new Error("Selected result context instructions are invalid.");
+}
+
 export function validateTaskEvent(event: TaskEvent): void {
   if (event.schemaVersion !== 1)
     throw new Error("Task event version is invalid.");
@@ -604,6 +638,13 @@ export function validateTaskEvent(event: TaskEvent): void {
         ? event.workflowContext
         : undefined;
   if (workflowContext) validateWorkflowContextSnapshot(workflowContext);
+  const selectedResultContext =
+    event.type === "task_message_requested" ||
+    event.type === "explicit_continuation_response_requested"
+      ? event.selectedResultContext
+      : undefined;
+  if (selectedResultContext)
+    validateSelectedResultContextSnapshot(selectedResultContext);
   if (event.type === "codex_item_observed" && event.item?.clientId)
     requireIdentity(event.item.clientId, "Codex item client identity");
   if (event.type === "codex_item_observed" && event.item?.attachments) {
@@ -1514,6 +1555,11 @@ function makeCommand(
         event.type === "explicit_continuation_response_requested") &&
       event.workflowContext
         ? { workflowContext: event.workflowContext }
+        : {}),
+      ...((event.type === "task_message_requested" ||
+        event.type === "explicit_continuation_response_requested") &&
+      event.selectedResultContext
+        ? { selectedResultContext: event.selectedResultContext }
         : {}),
     }),
     classification: TASK_COMMAND_MANIFEST[type],

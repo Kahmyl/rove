@@ -3633,6 +3633,119 @@ span.composer-control-icon {
   margin: 0 auto;
 }
 
+.result-shelf {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 18px 24px 0;
+}
+
+.result-shelf > header,
+.result-card-heading,
+.result-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-shelf > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.result-shelf > header .eyebrow {
+  margin: 0;
+}
+
+.result-shelf > header small,
+.result-card > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.result-card-list {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.result-card {
+  display: grid;
+  min-width: min(340px, 82vw);
+  max-width: 420px;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+}
+
+.result-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.result-card-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-card-heading span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--surface-raised);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.result-card .message-body {
+  max-height: 120px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.result-action-material {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  padding: 9px;
+  border-radius: 9px;
+  background: var(--surface-raised);
+  font-size: 10px;
+}
+
+.result-action-material dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.result-action-material dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.result-card footer {
+  justify-content: flex-end;
+}
+
+.product-app .result-card footer button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
 .task-timeline {
   padding-top: 34px;
 }
@@ -4374,6 +4487,26 @@ span.composer-control-icon {
   box-shadow: none;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.selected-result-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+
+.product-app .selected-result-rail button {
+  min-height: 27px;
+  max-width: 240px;
+  padding: 0 9px;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--sage) 42%, var(--border));
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--sage) 8%, var(--surface-raised));
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-composer-shell .composer-action-row {
@@ -5321,6 +5454,38 @@ html[data-rove-theme="dark"] .account-avatar {
   gap: 10px;
   margin: 0;
   padding: 12px;
+}
+
+.result-action-editor {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.result-action-editor legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.result-action-attachments {
+  display: grid;
+  gap: 7px;
+}
+
+.result-action-attachments > span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.result-action-attachments label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
 }
 
 .workflow-entry-editor legend {

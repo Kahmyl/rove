@@ -326,8 +326,37 @@ export class CodexExecutionCore {
                     ),
                 }
               : {}),
+            ...(this.options.runtime.consequentialEffect
+              ? {
+                  consequentialEffect: (
+                    sessionId: string,
+                    consequenceKey: string,
+                  ) =>
+                    this.options.runtime.consequentialEffect!(
+                      sessionId,
+                      consequenceKey,
+                    ),
+                }
+              : {}),
+            ...(this.options.runtime.authorizeTaskResultAction
+              ? {
+                  authorizeTaskResultAction: (
+                    sessionId: string,
+                    consequenceKey: string,
+                    materialDigest: string,
+                    planId: string,
+                  ) =>
+                    this.options.runtime.authorizeTaskResultAction!(
+                      sessionId,
+                      consequenceKey,
+                      materialDigest,
+                      planId,
+                    ),
+                }
+              : {}),
           }
         : undefined,
+      store,
       store,
     );
     await this.options.onProductStateChanged?.();

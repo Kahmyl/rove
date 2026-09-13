@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,6 +20,192 @@ async function store() {
 }
 
 describe("FileEffectJournalStore", () => {
+  it("persists a concrete task-result plan across restart before dispatch", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-effect-plan-test-"));
+    roots.push(root);
+    const journal = new FileEffectJournalStore(root);
+    const consequenceKey = `task-result:result_plan:${"d".repeat(64)}`;
+    const actionFingerprint = "e".repeat(64);
+    const planBase = {
+      schemaVersion: 1 as const,
+      planId: `plan_${"a".repeat(32)}`,
+      consequenceKey,
+      materialDigest: "d".repeat(64),
+      taskScope: "task-plan",
+      browserWorkspaceScope: "workspace-plan",
+      observationId: "obs-plan",
+      pageId: "page-plan",
+      pageRevision: 3,
+      url: "https://example.test/compose",
+      fields: [],
+      attachments: [],
+      commitAction: {
+        kind: "click" as const,
+        target: { pageId: "page-plan", revision: 3, ref: "send" },
+      },
+      expectedEffects: [{ kind: "url_changed" as const }],
+      effect: "external_commit" as const,
+      actionFingerprint,
+      preparedAt: "2026-09-13T12:00:00.000Z",
+    };
+    const plan = {
+      ...planBase,
+      planDigest: createHash("sha256")
+        .update(JSON.stringify(planBase))
+        .digest("hex"),
+    };
+    const planned = await journal.prepare({
+      taskScope: plan.taskScope,
+      browserWorkspaceScope: plan.browserWorkspaceScope,
+      consequenceKey,
+      actionFingerprint,
+      taskResultPlan: plan,
+      state: "planned",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover",
+      preparedAt: plan.preparedAt,
+      updatedAt: plan.preparedAt,
+    });
+
+    const recovered = await new FileEffectJournalStore(root).findById(
+      planned.effectId,
+    );
+    expect(recovered).toMatchObject({
+      state: "planned",
+      taskResultPlan: { planId: plan.planId, actionFingerprint },
+    });
+    await expect(
+      new FileEffectJournalStore(root).findPotentialConflicts(
+        plan.browserWorkspaceScope,
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("replaces a concrete plan only before the dispatch boundary", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "rove-effect-plan-replace-test-"),
+    );
+    roots.push(root);
+    const journal = new FileEffectJournalStore(root);
+    const consequenceKey = `task-result:result_replace:${"d".repeat(64)}`;
+    const makePlan = (planId: string, actionFingerprint: string) => {
+      const planBase = {
+        schemaVersion: 1 as const,
+        planId,
+        consequenceKey,
+        materialDigest: "d".repeat(64),
+        taskScope: "task-plan-replace",
+        browserWorkspaceScope: "workspace-plan-replace",
+        observationId: "obs-plan-replace",
+        pageId: "page-plan-replace",
+        pageRevision: 3,
+        url: "https://example.test/compose",
+        fields: [],
+        attachments: [],
+        commitAction: {
+          kind: "click" as const,
+          target: { pageId: "page-plan-replace", revision: 3, ref: "send" },
+        },
+        expectedEffects: [{ kind: "url_changed" as const }],
+        effect: "external_commit" as const,
+        actionFingerprint,
+        preparedAt: "2026-09-13T12:00:00.000Z",
+      };
+      return {
+        ...planBase,
+        planDigest: createHash("sha256")
+          .update(JSON.stringify(planBase))
+          .digest("hex"),
+      };
+    };
+    const firstPlan = makePlan(`plan_${"a".repeat(32)}`, "a".repeat(64));
+    let record = await journal.prepare({
+      taskScope: firstPlan.taskScope,
+      browserWorkspaceScope: firstPlan.browserWorkspaceScope,
+      consequenceKey,
+      actionFingerprint: firstPlan.actionFingerprint,
+      taskResultPlan: firstPlan,
+      state: "planned",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover",
+      preparedAt: firstPlan.preparedAt,
+      updatedAt: firstPlan.preparedAt,
+    });
+    record = await journal.update(record.effectId, record.version, {
+      state: "authorized",
+      updatedAt: "2026-09-13T12:00:01.000Z",
+    });
+
+    const replacementPlan = makePlan(`plan_${"b".repeat(32)}`, "b".repeat(64));
+    record = await journal.update(record.effectId, record.version, {
+      state: "planned",
+      updatedAt: "2026-09-13T12:00:02.000Z",
+      actionFingerprint: replacementPlan.actionFingerprint,
+      taskResultPlan: replacementPlan,
+    });
+    await expect(
+      new FileEffectJournalStore(root).findById(record.effectId),
+    ).resolves.toMatchObject({
+      state: "planned",
+      actionFingerprint: replacementPlan.actionFingerprint,
+      taskResultPlan: { planId: replacementPlan.planId },
+    });
+
+    record = await journal.update(record.effectId, record.version, {
+      state: "authorized",
+      updatedAt: "2026-09-13T12:00:03.000Z",
+    });
+    record = await journal.update(record.effectId, record.version, {
+      state: "prepared",
+      updatedAt: "2026-09-13T12:00:04.000Z",
+    });
+    const latePlan = makePlan(
+      `plan_${"c".repeat(32)}`,
+      record.actionFingerprint,
+    );
+    await expect(
+      journal.update(record.effectId, record.version, {
+        state: "applied",
+        updatedAt: "2026-09-13T12:00:05.000Z",
+        actionFingerprint: latePlan.actionFingerprint,
+        taskResultPlan: latePlan,
+      }),
+    ).rejects.toThrow("identity transition is invalid");
+    await expect(
+      journal.update(record.effectId, record.version, {
+        state: "applied",
+        updatedAt: "2026-09-13T12:00:05.000Z",
+        taskResultPlan: undefined,
+      }),
+    ).rejects.toThrow("identity transition is invalid");
+    await expect(journal.findById(record.effectId)).resolves.toEqual(record);
+  });
+
+  it("keeps registered authorization distinct from possible dispatch", async () => {
+    const journal = await store();
+    const authorized = await journal.prepare({
+      taskScope: "boot_authorized",
+      browserWorkspaceScope: "wrk_authorized",
+      consequenceKey: "task-result:result_1:digest",
+      actionFingerprint: "f".repeat(64),
+      state: "authorized",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover_1",
+      preparedAt: "2026-09-13T12:00:00.000Z",
+      updatedAt: "2026-09-13T12:00:00.000Z",
+    });
+    expect(await journal.findPotentialConflicts("wrk_authorized")).toEqual([]);
+    const prepared = await journal.update(authorized.effectId, 1, {
+      state: "prepared",
+      updatedAt: "2026-09-13T12:00:01.000Z",
+      observationId: "obs_dispatch_boundary",
+    });
+    expect(prepared.state).toBe("prepared");
+    expect(await journal.findPotentialConflicts("wrk_authorized")).toEqual([
+      prepared,
+    ]);
+  });
+
   it("creates prepared state exclusively and persists a versioned result", async () => {
     const journal = await store();
     const input = {

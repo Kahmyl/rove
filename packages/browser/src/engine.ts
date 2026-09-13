@@ -23,6 +23,12 @@ export interface BrowserInteractionUpload {
   bytes: Uint8Array;
 }
 
+export interface BrowserTargetFileState {
+  name: string;
+  size: number;
+  sha256: string;
+}
+
 export interface BrowserInteractionContext {
   observationId: string;
   /** Requests exclusive admission against mutations sharing this context. */
@@ -47,6 +53,8 @@ export interface BrowserSession {
   ): Promise<BrowserObservation>;
   resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;
   readObservation(observationId: string): Promise<BrowserObservation>;
+  readTargetFiles(target: TargetReference): Promise<BrowserTargetFileState[]>;
+  readTargetValue(target: TargetReference): Promise<string>;
   interact(
     request: BrowserInteractionRequest,
     context: BrowserInteractionContext,

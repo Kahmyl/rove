@@ -311,6 +311,7 @@ describe("local Workflow environments", () => {
     ).toEqual([
       { migration_id: "0002_task_engine_event_aggregate_outbox" },
       { migration_id: "0003_add_workflow_configuration" },
+      { migration_id: "0004_add_task_results" },
     ]);
     inspected.close();
   });

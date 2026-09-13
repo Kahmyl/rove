@@ -8,6 +8,7 @@ import type {
   TaskEngineStore,
   TaskLaunchConfiguration,
   TaskObservedFact,
+  TaskSelectedResultContextSnapshot,
 } from "@rove/protocol";
 import {
   canonicalRoveToolDefinitionsJsonWire,
@@ -917,6 +918,7 @@ async function resumeBoundThread(
   aggregate: BoundAggregate,
   excludeTurns: boolean,
   workflowContext = aggregate.launch.workflowContext,
+  selectedResultContext?: TaskSelectedResultContextSnapshot,
 ): Promise<CodexThread> {
   const threadId = aggregate.record?.identity.threadId;
   if (!threadId) throw new Error("Resume lacks a durable thread binding.");
@@ -933,6 +935,7 @@ async function resumeBoundThread(
       aggregate,
       capability.token,
       workflowContext,
+      selectedResultContext,
     ),
     excludeTurns,
   });
@@ -977,6 +980,7 @@ function threadLaunchParams(
   aggregate: BoundAggregate,
   capability: string,
   workflowContext = aggregate.launch.workflowContext,
+  selectedResultContext?: TaskSelectedResultContextSnapshot,
 ) {
   const sessionId = aggregate.record?.identity.sessionId;
   const attachmentInstructions = sessionId
@@ -996,6 +1000,7 @@ function threadLaunchParams(
       browserRouteDeveloperInstructions(aggregate.launch),
       attachmentInstructions,
       workflowContext?.developerInstructions,
+      selectedResultContext?.developerInstructions,
     ]
       .filter((value): value is string => Boolean(value))
       .join("\n\n"),
@@ -1183,6 +1188,13 @@ function messageHandler(
             command.payload.workflowContext,
           ) as BoundAggregate["launch"]["workflowContext"])
         : undefined;
+    const selectedResultContext =
+      command.payload.selectedResultContext &&
+      typeof command.payload.selectedResultContext === "object"
+        ? (structuredClone(
+            command.payload.selectedResultContext,
+          ) as TaskSelectedResultContextSnapshot)
+        : undefined;
     return {
       aggregate,
       threadId,
@@ -1190,6 +1202,7 @@ function messageHandler(
       operationId,
       attachments,
       workflowContext,
+      selectedResultContext,
     };
   };
   const readLoadedThread = async (
@@ -1223,6 +1236,7 @@ function messageHandler(
       operationId,
       attachments,
       workflowContext,
+      selectedResultContext,
     } = await durableInput(command);
     let thread = await readLoadedThread(aggregate, threadId, false);
     const activeTurnId =
@@ -1231,13 +1245,14 @@ function messageHandler(
         : undefined;
     if (thread.status.type === "active" && !activeTurnId)
       throw new Error("Active Codex thread lacks an exact bound turn.");
-    if (!activeTurnId && workflowContext) {
+    if (!activeTurnId && (workflowContext || selectedResultContext)) {
       thread = await resumeBoundThread(
         options,
         session,
         aggregate,
         true,
         workflowContext,
+        selectedResultContext,
       );
     }
     const delivery = await session.dispatch({

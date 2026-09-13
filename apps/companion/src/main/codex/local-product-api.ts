@@ -25,7 +25,11 @@ import type {
   TaskAttachmentDescriptor,
   TaskFileAttention,
 } from "./task-attachments.js";
-import type { TaskAcceptance, TaskPortableValue } from "@rove/protocol";
+import type {
+  TaskAcceptance,
+  TaskPortableValue,
+  TaskResultActionPlan,
+} from "@rove/protocol";
 import {
   assembleWorkflowContext,
   textDigest,
@@ -35,8 +39,15 @@ import {
   type WorkflowPromotionCategory,
   type WorkflowStore,
 } from "./workflows.js";
+import {
+  assembleTaskResultContext,
+  taskResultConsequenceKey,
+  type ResultStore,
+  type TaskResult,
+  type TaskResultKind,
+} from "./results.js";
 
-export const LOCAL_PRODUCT_API_VERSION = 8 as const;
+export const LOCAL_PRODUCT_API_VERSION = 9 as const;
 export interface ProductTaskLaunchInput {
   outcome: string;
   executionMode: ExecutionMode;
@@ -84,7 +95,53 @@ export type LocalProductCommand =
       text: string;
       appliesTo: readonly string[];
       sourceTaskId: string;
+      sourceItemId?: string;
+      sourceResultId?: string;
+      sourceResultRevision?: number;
+    }
+  | {
+      type: "result.create";
+      operationId: string;
+      taskId: string;
       sourceItemId: string;
+      kind: Exclude<TaskResultKind, "artifact">;
+      title: string;
+      body: string;
+      actionMaterial?: {
+        recipient?: string;
+        recipientControl?: string;
+        content: string;
+        contentControl?: string;
+        target?: string;
+        commitControl?: string;
+        attachmentIds: readonly string[];
+        attachmentControl?: string;
+        scope?: string;
+      };
+    }
+  | {
+      type: "result.revise";
+      operationId: string;
+      taskId: string;
+      resultId: string;
+      expectedRevision: number;
+      title: string;
+      body: string;
+    }
+  | {
+      type: "result.select";
+      operationId: string;
+      taskId: string;
+      resultId: string;
+      expectedRevision: number;
+      selected: boolean;
+    }
+  | {
+      type: "result.authorize";
+      operationId: string;
+      taskId: string;
+      resultId: string;
+      materialDigest: string;
     }
   | { type: "attachments.remove"; attachmentId: string }
   | { type: "attachments.replace"; attachmentId: string }
@@ -112,6 +169,7 @@ export type LocalProductCommand =
       operationId: string;
       outcome: string;
       attachmentIds?: readonly string[];
+      selectedResultIds?: readonly string[];
     }
   | { type: "task.close"; taskId: string; operationId: string }
   | { type: "task.return-control"; taskId: string; operationId: string }
@@ -167,7 +225,11 @@ export type RendererProductIntent =
           | "workflow.edit"
           | "workflow.archive"
           | "workflow.unarchive"
-          | "workflow.promote";
+          | "workflow.promote"
+          | "result.create"
+          | "result.revise"
+          | "result.select"
+          | "result.authorize";
       }
     >
   | { type: "attachments.remove"; attachmentId: string }
@@ -196,6 +258,7 @@ export type RendererProductIntent =
       operationId: string;
       outcome: string;
       attachmentIds?: readonly string[];
+      selectedResultIds?: readonly string[];
     }
   | { type: "task.stop"; taskId: string; operationId: string }
   | { type: "task.return-control"; taskId: string; operationId: string }
@@ -312,6 +375,7 @@ export interface ProductTaskProjection {
   reasoningEffort?: string;
   approvalsReviewer: ApprovalsReviewer;
   conversation?: ProductConversationProjection;
+  results: readonly TaskResult[];
   lifecycle: ProductTaskSnapshot["lifecycle"];
   availableActions: ProductTaskSnapshot["availableActions"];
   runtime?: ProductTaskSnapshot["runtime"];
@@ -448,6 +512,42 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
     "appliesTo",
     "sourceTaskId",
     "sourceItemId",
+    "sourceResultId",
+    "sourceResultRevision",
+  ],
+  "result.create": [
+    "type",
+    "operationId",
+    "taskId",
+    "sourceItemId",
+    "kind",
+    "title",
+    "body",
+    "actionMaterial",
+  ],
+  "result.revise": [
+    "type",
+    "operationId",
+    "taskId",
+    "resultId",
+    "expectedRevision",
+    "title",
+    "body",
+  ],
+  "result.select": [
+    "type",
+    "operationId",
+    "taskId",
+    "resultId",
+    "expectedRevision",
+    "selected",
+  ],
+  "result.authorize": [
+    "type",
+    "operationId",
+    "taskId",
+    "resultId",
+    "materialDigest",
   ],
   "attachments.remove": ["type", "attachmentId"],
   "attachments.replace": ["type", "attachmentId"],
@@ -455,7 +555,14 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
   "file-attention.select": ["type", "requestId", "taskId", "sessionId"],
   "file-attention.cancel": ["type", "requestId", "taskId", "sessionId"],
   "task.launch": ["type", "operationId", "input"],
-  "task.message": ["type", "taskId", "operationId", "outcome", "attachmentIds"],
+  "task.message": [
+    "type",
+    "taskId",
+    "operationId",
+    "outcome",
+    "attachmentIds",
+    "selectedResultIds",
+  ],
   "task.stop": ["type", "taskId", "operationId"],
   "task.return-control": ["type", "taskId", "operationId"],
   "task.restore": ["type", "taskId", "operationId"],
@@ -1079,6 +1186,7 @@ function projectConversation(
 function projectTask(
   task: ProductTaskSnapshot,
   attachments: readonly TaskAttachmentDescriptor[] = [],
+  results: readonly TaskResult[] = [],
 ): ProductTaskProjection {
   const { context } = task;
   return {
@@ -1129,6 +1237,7 @@ function projectTask(
       ? {}
       : { reasoningEffort: context.policy.reasoningEffort.slice(0, 40) }),
     approvalsReviewer: context.policy.approvalsReviewer,
+    results: results.map((result) => structuredClone(result)),
     ...(task.conversation === undefined
       ? {}
       : { conversation: projectConversation(task.conversation) }),
@@ -1321,12 +1430,36 @@ export class LocalProductApi {
   private readonly attachments: TaskAttachmentAuthority | undefined;
   private readonly attachmentRuntime: AttachmentRuntimeMaterializer | undefined;
   private readonly workflows: WorkflowStore | undefined;
+  private readonly results: ResultStore | undefined;
   private readonly legacyEffects:
     | {
         acknowledgeLegacyEffectScope(sessionId: string): Promise<void>;
         authorizeEffectRepetition?(
           sessionId: string,
           effectId: string,
+        ): Promise<object>;
+        consequentialEffect?(
+          sessionId: string,
+          consequenceKey: string,
+        ): Promise<{
+          effectId: string;
+          state:
+            | "planned"
+            | "authorized"
+            | "prepared"
+            | "applied"
+            | "not_applied"
+            | "unresolved";
+          consequenceKey: string;
+          observationId?: string;
+          evidenceId?: string;
+          taskResultPlan?: TaskResultActionPlan;
+        } | null>;
+        authorizeTaskResultAction?(
+          sessionId: string,
+          consequenceKey: string,
+          materialDigest: string,
+          planId: string,
         ): Promise<object>;
       }
     | undefined;
@@ -1346,8 +1479,32 @@ export class LocalProductApi {
         sessionId: string,
         effectId: string,
       ): Promise<object>;
+      consequentialEffect?(
+        sessionId: string,
+        consequenceKey: string,
+      ): Promise<{
+        effectId: string;
+        state:
+          | "planned"
+          | "authorized"
+          | "prepared"
+          | "applied"
+          | "not_applied"
+          | "unresolved";
+        consequenceKey: string;
+        observationId?: string;
+        evidenceId?: string;
+        taskResultPlan?: TaskResultActionPlan;
+      } | null>;
+      authorizeTaskResultAction?(
+        sessionId: string,
+        consequenceKey: string,
+        materialDigest: string,
+        planId: string,
+      ): Promise<object>;
     },
     workflows?: WorkflowStore,
+    results?: ResultStore,
   ) {
     this.health = health;
     this.account = account;
@@ -1359,6 +1516,168 @@ export class LocalProductApi {
     this.attachmentRuntime = attachmentRuntime;
     this.legacyEffects = legacyEffects;
     this.workflows = workflows;
+    this.results = results;
+  }
+  private taskResultPlanMatches(
+    result: TaskResult,
+    plan: TaskResultActionPlan,
+  ): boolean {
+    const material = result.actionMaterial;
+    if (
+      result.kind !== "action" ||
+      !material ||
+      plan.consequenceKey !== taskResultConsequenceKey(result) ||
+      plan.materialDigest !== result.materialDigest
+    )
+      return false;
+    const fields = new Map(plan.fields.map((field) => [field.field, field]));
+    if (
+      fields.get("content")?.value !== material.content ||
+      material.contentControl === undefined ||
+      fields.get("content")?.targetName !== material.contentControl
+    )
+      return false;
+    if (
+      material.recipient === undefined
+        ? fields.has("recipient")
+        : fields.get("recipient")?.value !== material.recipient ||
+          material.recipientControl === undefined ||
+          fields.get("recipient")?.targetName !== material.recipientControl
+    )
+      return false;
+    const attachments = this.attachments?.listForTask?.(result.taskId) ?? [];
+    const expectedFiles = material.attachmentIds.map((attachmentId) =>
+      attachments.find((attachment) => attachment.id === attachmentId),
+    );
+    if (
+      expectedFiles.some(
+        (attachment) =>
+          !attachment?.evidenceId ||
+          attachment.status !== "bound" ||
+          !attachment.sha256,
+      ) ||
+      plan.attachments.length !== expectedFiles.length ||
+      plan.attachments.some((attachment) =>
+        expectedFiles.every(
+          (expected) =>
+            expected?.evidenceId !== attachment.evidenceId ||
+            expected.filename !== attachment.filename ||
+            expected.size !== attachment.size ||
+            expected.sha256 !== attachment.sha256,
+        ),
+      )
+    )
+      return false;
+    if (
+      expectedFiles.length > 0 &&
+      (material.attachmentControl === undefined ||
+        plan.attachments.some(
+          (attachment) => attachment.targetName !== material.attachmentControl,
+        ))
+    )
+      return false;
+    if (
+      plan.commitTarget &&
+      (material.commitControl === undefined ||
+        plan.commitTarget.targetName !== material.commitControl)
+    )
+      return false;
+    if (
+      material.target !== undefined &&
+      plan.commitTarget?.targetName !== material.target &&
+      plan.url !== material.target
+    )
+      return false;
+    if (
+      material.scope !== undefined &&
+      !plan.commitTarget?.scopeLabels.includes(material.scope) &&
+      plan.url !== material.scope
+    )
+      return false;
+    return true;
+  }
+  private async reconcileActionResults(
+    tasks: readonly ProductTaskSnapshot[],
+  ): Promise<void> {
+    if (!this.results || !this.legacyEffects?.consequentialEffect) return;
+    for (const task of tasks) {
+      const sessionId = task.context.roveSessionId;
+      if (!sessionId) continue;
+      for (const candidate of this.results.listResults(
+        task.context.roveTaskId,
+      )) {
+        if (
+          candidate.kind !== "action" ||
+          !["authorized", "dispatched", "unresolved"].includes(
+            candidate.lifecycle,
+          )
+        )
+          continue;
+        let effect;
+        try {
+          effect = await this.legacyEffects.consequentialEffect(
+            sessionId,
+            taskResultConsequenceKey(candidate),
+          );
+        } catch {
+          continue;
+        }
+        if (!effect || effect.state === "authorized") continue;
+        if (effect.state === "planned") {
+          if (
+            candidate.lifecycle === "authorized" &&
+            effect.taskResultPlan &&
+            this.taskResultPlanMatches(candidate, effect.taskResultPlan) &&
+            this.legacyEffects.authorizeTaskResultAction
+          )
+            try {
+              await this.legacyEffects.authorizeTaskResultAction(
+                sessionId,
+                taskResultConsequenceKey(candidate),
+                candidate.materialDigest!,
+                effect.taskResultPlan.planId,
+              );
+            } catch {
+              // A later snapshot retries exact plan activation. The result
+              // remains authorized locally and no dispatch has occurred.
+            }
+          continue;
+        }
+        const evidenceIds = [
+          effect.effectId,
+          ...(effect.observationId ? [effect.observationId] : []),
+          ...(effect.evidenceId ? [effect.evidenceId] : []),
+        ];
+        let current = candidate;
+        const transition = (
+          lifecycle: "dispatched" | "confirmed" | "failed" | "unresolved",
+        ) => {
+          current = this.results!.transitionAction({
+            operationId: `result-effect:${effect.effectId}:${lifecycle}`,
+            taskId: current.taskId,
+            resultId: current.resultId,
+            expectedLifecycle: current.lifecycle,
+            lifecycle,
+            evidenceIds,
+          });
+        };
+        if (effect.state === "applied") {
+          if (current.lifecycle === "authorized") transition("dispatched");
+          if (
+            current.lifecycle === "dispatched" ||
+            current.lifecycle === "unresolved"
+          )
+            transition("confirmed");
+        } else if (effect.state === "not_applied") {
+          transition("failed");
+        } else if (
+          (effect.state === "prepared" || effect.state === "unresolved") &&
+          current.lifecycle !== "unresolved"
+        ) {
+          transition("unresolved");
+        }
+      }
+    }
   }
   snapshot(): LocalProductSnapshot {
     return {
@@ -1381,12 +1700,15 @@ export class LocalProductApi {
       .list()
       .slice(-256)
       .map(projectAttention);
-    const tasks = (await this.tasks.productTasks())
+    const productTasks = await this.tasks.productTasks();
+    await this.reconcileActionResults(productTasks);
+    const tasks = productTasks
       .slice(-256)
       .map((task) =>
         projectTask(
           task,
           this.attachments?.listForTask?.(task.context.roveTaskId) ?? [],
+          this.results?.listResults(task.context.roveTaskId) ?? [],
         ),
       );
     const current = tasks.find((task) => task.taskId === this.currentTaskId);
@@ -1536,13 +1858,35 @@ export class LocalProductApi {
       )
         throw new Error("Workflow promotion topics are invalid.");
       const sourceTaskId = nonempty(value.sourceTaskId, "source task id");
-      const sourceItemId = nonempty(value.sourceItemId, "source item id");
+      const sourceItemId =
+        typeof value.sourceItemId === "string" ? value.sourceItemId : undefined;
+      const sourceResultId =
+        typeof value.sourceResultId === "string"
+          ? value.sourceResultId
+          : undefined;
+      if (Boolean(sourceItemId) === Boolean(sourceResultId))
+        throw new Error("Workflow promotion requires exactly one source.");
       const sourceTask = await this.tasks.readTask(sourceTaskId);
-      const sourceItem = sourceTask?.conversation?.items[sourceItemId];
-      if (!sourceItem?.text || sourceItem.attachments?.length)
+      if (!sourceTask) throw new Error("Workflow promotion task is stale.");
+      const sourceItem = sourceItemId
+        ? sourceTask.conversation?.items[sourceItemId]
+        : undefined;
+      const sourceResult = sourceResultId
+        ? this.results?.result(sourceTaskId, sourceResultId)
+        : undefined;
+      if (sourceItemId && (!sourceItem?.text || sourceItem.attachments?.length))
         throw new Error(
           "Workflow promotion source is stale or includes attachments.",
         );
+      if (
+        sourceResultId &&
+        (!sourceResult ||
+          sourceResult.currentRevision !== Number(value.sourceResultRevision))
+      )
+        throw new Error("Workflow promotion result revision is stale.");
+      const sourceText = sourceItem?.text ?? sourceResult?.revision.body;
+      if (!sourceText)
+        throw new Error("Workflow promotion source is unavailable.");
       return this.workflows.promoteToWorkflow({
         operationId,
         workflowId,
@@ -1551,9 +1895,208 @@ export class LocalProductApi {
         text: nonempty(value.text, "promoted Workflow text"),
         appliesTo: value.appliesTo as readonly string[],
         sourceTaskId,
-        sourceItemId,
-        sourceTextDigest: textDigest(sourceItem.text),
+        ...(sourceItemId ? { sourceItemId } : {}),
+        ...(sourceResult
+          ? {
+              sourceResultId: sourceResult.resultId,
+              sourceResultRevision: sourceResult.currentRevision,
+            }
+          : {}),
+        sourceTextDigest: textDigest(sourceText),
       });
+    }
+    if (typeof value.type === "string" && value.type.startsWith("result.")) {
+      if (!this.results) throw new Error("Task results are unavailable.");
+      const operationId = stableOperationId(
+        value.operationId,
+        "Result operation id",
+      );
+      const taskId = nonempty(value.taskId, "result task id");
+      if (!(await this.tasks.readTask(taskId)))
+        throw new Error("Result task is unavailable.");
+      if (value.type === "result.create") {
+        if (
+          ![
+            "finding_collection",
+            "draft",
+            "report",
+            "journey",
+            "action",
+          ].includes(String(value.kind))
+        )
+          throw new Error("Result kind is unavailable for manual creation.");
+        const sourceItemId = nonempty(
+          value.sourceItemId,
+          "result source item id",
+        );
+        const task = await this.tasks.readTask(taskId);
+        if (!task) throw new Error("Result task is unavailable.");
+        const sourceItem = task?.conversation?.items[sourceItemId];
+        if (
+          !sourceItem?.text ||
+          sourceItem.status !== "completed" ||
+          sourceItem.kind !== "assistant_message"
+        )
+          throw new Error(
+            "Result source is stale or is not a completed response.",
+          );
+        const createBase = {
+          operationId,
+          taskId,
+          turnId: sourceItem.turnId,
+          title: nonempty(value.title, "result title"),
+          body: nonempty(value.body, "result body"),
+          source: {
+            conversationItemId: sourceItemId,
+            conversationTextDigest: textDigest(sourceItem.text),
+            evidenceIds: [],
+          },
+        };
+        if (value.kind === "action") {
+          const material = record(value.actionMaterial);
+          if (!material) throw new Error("Action result material is required.");
+          exactCommand(material, [
+            "recipient",
+            "recipientControl",
+            "content",
+            "contentControl",
+            "target",
+            "commitControl",
+            "attachmentIds",
+            "attachmentControl",
+            "scope",
+          ]);
+          if (
+            !Array.isArray(material.attachmentIds) ||
+            material.attachmentIds.some((id) => typeof id !== "string") ||
+            new Set(material.attachmentIds).size !==
+              material.attachmentIds.length
+          )
+            throw new Error("Action result attachments are invalid.");
+          const availableAttachments = new Set(
+            this.attachments
+              ?.listForTask?.(taskId)
+              .map((attachment) => attachment.id) ?? [],
+          );
+          if (
+            material.attachmentIds.some(
+              (attachmentId) => !availableAttachments.has(attachmentId),
+            )
+          )
+            throw new Error(
+              "Action result attachments are stale or belong to another task.",
+            );
+          return this.results.createAction({
+            ...createBase,
+            material: {
+              ...(material.recipient === undefined
+                ? {}
+                : {
+                    recipient: nonempty(material.recipient, "action recipient"),
+                  }),
+              ...(material.recipientControl === undefined
+                ? {}
+                : {
+                    recipientControl: nonempty(
+                      material.recipientControl,
+                      "recipient control",
+                    ),
+                  }),
+              content: nonempty(material.content, "action content"),
+              ...(material.contentControl === undefined
+                ? {}
+                : {
+                    contentControl: nonempty(
+                      material.contentControl,
+                      "content control",
+                    ),
+                  }),
+              ...(material.target === undefined
+                ? {}
+                : { target: nonempty(material.target, "action target") }),
+              ...(material.commitControl === undefined
+                ? {}
+                : {
+                    commitControl: nonempty(
+                      material.commitControl,
+                      "commit control",
+                    ),
+                  }),
+              attachmentIds: material.attachmentIds as string[],
+              ...(material.attachmentControl === undefined
+                ? {}
+                : {
+                    attachmentControl: nonempty(
+                      material.attachmentControl,
+                      "attachment control",
+                    ),
+                  }),
+              ...(material.scope === undefined
+                ? {}
+                : { scope: nonempty(material.scope, "action scope") }),
+            },
+          });
+        }
+        if (value.actionMaterial !== undefined)
+          throw new Error("Only action results accept action material.");
+        return this.results.createResult({
+          ...createBase,
+          kind: value.kind as Exclude<TaskResultKind, "artifact" | "action">,
+        });
+      }
+      const resultId = nonempty(value.resultId, "result id");
+      const result = this.results.result(taskId, resultId);
+      if (!result) throw new Error("Result is unavailable for this task.");
+      if (value.type === "result.authorize") {
+        if (
+          result.kind !== "action" ||
+          !["prepared", "authorized"].includes(result.lifecycle)
+        )
+          throw new Error("Only a prepared action can be authorized.");
+        const materialDigest = nonempty(
+          value.materialDigest,
+          "action material digest",
+        );
+        if (materialDigest !== result.materialDigest)
+          throw new Error(
+            "Action authorization does not match current material.",
+          );
+        return this.results.transitionAction({
+          operationId,
+          taskId,
+          resultId,
+          expectedLifecycle: "prepared",
+          lifecycle: "authorized",
+          materialDigest,
+        });
+      }
+      if (
+        !Number.isSafeInteger(value.expectedRevision) ||
+        Number(value.expectedRevision) < 1
+      )
+        throw new Error("Result expected revision is invalid.");
+      const expectedRevision = Number(value.expectedRevision);
+      if (value.type === "result.revise")
+        return this.results.reviseDraft({
+          operationId,
+          taskId,
+          resultId,
+          expectedRevision,
+          title: nonempty(value.title, "result title"),
+          body: nonempty(value.body, "result body"),
+        });
+      if (value.type === "result.select") {
+        if (typeof value.selected !== "boolean")
+          throw new Error("Result selection is invalid.");
+        return this.results.setResultSelected({
+          operationId,
+          taskId,
+          resultId,
+          expectedRevision,
+          selected: value.selected,
+        });
+      }
+      throw new Error("Unsupported result command.");
     }
     if (value.type === "attachments.pick") {
       if (!this.attachments)
@@ -1652,6 +2195,16 @@ export class LocalProductApi {
           )
       )
         throw new Error("Task message attachment selection is stale.");
+      const selectedResultIds = value.selectedResultIds ?? [];
+      if (
+        !Array.isArray(selectedResultIds) ||
+        selectedResultIds.length > 8 ||
+        selectedResultIds.some(
+          (id) => typeof id !== "string" || id.trim().length < 1,
+        ) ||
+        new Set(selectedResultIds).size !== selectedResultIds.length
+      )
+        throw new Error("Task result selection is invalid.");
       return this.execute({
         type: value.type,
         taskId,
@@ -1661,6 +2214,7 @@ export class LocalProductApi {
         ),
         outcome: nonempty(value.outcome, "task outcome"),
         attachmentIds: [...attachmentIds],
+        selectedResultIds: [...selectedResultIds] as string[],
       });
     }
     if (value.type === "task.stop") {
@@ -1871,6 +2425,42 @@ export class LocalProductApi {
         "appliesTo",
         "sourceTaskId",
         "sourceItemId",
+        "sourceResultId",
+        "sourceResultRevision",
+      ],
+      "result.create": [
+        "type",
+        "operationId",
+        "taskId",
+        "sourceItemId",
+        "kind",
+        "title",
+        "body",
+        "actionMaterial",
+      ],
+      "result.revise": [
+        "type",
+        "operationId",
+        "taskId",
+        "resultId",
+        "expectedRevision",
+        "title",
+        "body",
+      ],
+      "result.select": [
+        "type",
+        "operationId",
+        "taskId",
+        "resultId",
+        "expectedRevision",
+        "selected",
+      ],
+      "result.authorize": [
+        "type",
+        "operationId",
+        "taskId",
+        "resultId",
+        "materialDigest",
       ],
       "attachments.pick": ["type"],
       "attachments.remove": ["type", "attachmentId"],
@@ -1885,6 +2475,7 @@ export class LocalProductApi {
         "operationId",
         "outcome",
         "attachmentIds",
+        "selectedResultIds",
       ],
       "task.close": ["type", "taskId", "operationId"],
       "task.return-control": ["type", "taskId", "operationId"],
@@ -1933,6 +2524,11 @@ export class LocalProductApi {
       case "account.logout":
         await this.account.logout();
         return undefined;
+      case "result.create":
+      case "result.revise":
+      case "result.select":
+      case "result.authorize":
+        return this.executeRendererIntent(command);
       case "task.launch": {
         const input = command.input;
         const operationId = stableOperationId(
@@ -2040,6 +2636,34 @@ export class LocalProductApi {
             )
         )
           throw new Error("Task message attachment selection is stale.");
+        const selectedResultIds = command.selectedResultIds ?? [];
+        if (
+          selectedResultIds.length > 8 ||
+          selectedResultIds.some(
+            (resultId) =>
+              typeof resultId !== "string" || resultId.trim().length < 1,
+          ) ||
+          new Set(selectedResultIds).size !== selectedResultIds.length
+        )
+          throw new Error("Task result selection is invalid.");
+        const selectedResults = selectedResultIds.map((resultId) => {
+          const result = this.results?.result(taskId, resultId);
+          if (!result || !result.selected)
+            throw new Error(
+              "Selected result is stale or belongs to another task.",
+            );
+          return result;
+        });
+        if (
+          selectedResults.length > 0 &&
+          existingTask?.conversation?.turnStatus === "in_progress"
+        )
+          throw new Error(
+            "Selected results can be applied after the current turn finishes.",
+          );
+        const selectedResultContext = selectedResults.length
+          ? assembleTaskResultContext(selectedResults)
+          : undefined;
         const explicitContinuation = this.attention
           .list()
           .some(
@@ -2069,6 +2693,7 @@ export class LocalProductApi {
           message: outcome,
           attachmentIds: [...attachmentIds],
           ...(workflowContext ? { workflowContext } : {}),
+          ...(selectedResultContext ? { selectedResultContext } : {}),
           operationId: stableOperationId(
             command.operationId,
             "message operation id",

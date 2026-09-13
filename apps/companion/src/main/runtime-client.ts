@@ -9,6 +9,7 @@ import type {
   RuntimeSessionInventory,
   Session,
   StartSessionRequest,
+  TaskResultActionPlan,
 } from "@rove/protocol";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -24,6 +25,21 @@ export interface CompanionRuntimeClientOptions {
   token?: string;
   sessionId?: string;
   fetchImpl?: typeof fetch;
+}
+
+export interface RuntimeConsequentialEffect {
+  effectId: string;
+  state:
+    | "planned"
+    | "authorized"
+    | "prepared"
+    | "applied"
+    | "not_applied"
+    | "unresolved";
+  consequenceKey: string;
+  observationId?: string;
+  evidenceId?: string;
+  taskResultPlan?: TaskResultActionPlan;
 }
 
 export class CompanionRuntimeClient {
@@ -86,6 +102,34 @@ export class CompanionRuntimeClient {
       {
         method: "POST",
         body: JSON.stringify({ effectId, authorizationId }),
+      },
+    );
+  }
+
+  consequentialEffect(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<RuntimeConsequentialEffect | null> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/effects/consequential?consequenceKey=${encodeURIComponent(consequenceKey)}`,
+    );
+  }
+
+  authorizeTaskResultAction(
+    sessionId: string,
+    consequenceKey: string,
+    materialDigest: string,
+    planId: string,
+  ): Promise<{
+    effectId: string;
+    state: "authorized";
+    consequenceKey: string;
+  }> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/effects/authorize-task-result`,
+      {
+        method: "POST",
+        body: JSON.stringify({ consequenceKey, materialDigest, planId }),
       },
     );
   }

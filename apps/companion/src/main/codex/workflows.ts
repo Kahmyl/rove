@@ -82,7 +82,9 @@ export interface WorkflowStore {
     text: string;
     appliesTo: readonly string[];
     sourceTaskId: string;
-    sourceItemId: string;
+    sourceItemId?: string;
+    sourceResultId?: string;
+    sourceResultRevision?: number;
     sourceTextDigest: string;
   }): WorkflowEnvironment;
 }

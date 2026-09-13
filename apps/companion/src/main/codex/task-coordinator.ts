@@ -26,6 +26,7 @@ import {
   type Session,
   type RuntimeSessionInventory,
   type StartSessionRequest,
+  type TaskResultActionPlan,
 } from "@rove/protocol";
 
 export type ProductionLifecycleCommandClass =
@@ -903,6 +904,29 @@ export interface TaskRuntimePort {
   authorizeEffectRepetition?(
     sessionId: string,
     effectId: string,
+  ): Promise<object>;
+  consequentialEffect?(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<{
+    effectId: string;
+    state:
+      | "planned"
+      | "authorized"
+      | "prepared"
+      | "applied"
+      | "not_applied"
+      | "unresolved";
+    consequenceKey: string;
+    observationId?: string;
+    evidenceId?: string;
+    taskResultPlan?: TaskResultActionPlan;
+  } | null>;
+  authorizeTaskResultAction?(
+    sessionId: string,
+    consequenceKey: string,
+    materialDigest: string,
+    planId: string,
   ): Promise<object>;
 }
 export interface RoveMcpInspection {

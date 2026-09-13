@@ -22,6 +22,7 @@ import type {
   WorkflowEnvironment,
   WorkflowPromotionCategory,
 } from "../main/codex/workflows.js";
+import type { TaskResult, TaskResultKind } from "../main/codex/results.js";
 import type {
   ApprovalsReviewer,
   ExecutionMode,
@@ -87,7 +88,43 @@ interface WorkflowPromotionDraft {
   text: string;
   appliesTo: string;
   sourceTaskId: string;
-  sourceItemId: string;
+  sourceItemId?: string;
+  sourceResultId?: string;
+  sourceResultRevision?: number;
+}
+
+interface ResultEditorDraft {
+  taskId: string;
+  sourceItemId?: string;
+  resultId?: string;
+  expectedRevision?: number;
+  kind: Exclude<TaskResultKind, "artifact">;
+  title: string;
+  body: string;
+  actionRecipient: string;
+  actionRecipientControl: string;
+  actionContent: string;
+  actionContentControl: string;
+  actionTarget: string;
+  actionCommitControl: string;
+  actionScope: string;
+  actionAttachmentIds: string[];
+  actionAttachmentControl: string;
+}
+
+export function followupDraftForTask(
+  drafts: Readonly<Record<string, string>>,
+  taskId: string | undefined,
+): string {
+  return taskId ? (drafts[taskId] ?? "") : "";
+}
+
+export function withTaskFollowupDraft(
+  drafts: Readonly<Record<string, string>>,
+  taskId: string,
+  value: string,
+): Record<string, string> {
+  return { ...drafts, [taskId]: value };
 }
 
 function workflowLines(value: string): string[] {
@@ -856,7 +893,9 @@ export function ProductSurface({
       : "chip"
     : "full";
   const [outcome, setOutcome] = useState("");
-  const [followup, setFollowup] = useState("");
+  const [followupDrafts, setFollowupDrafts] = useState<Record<string, string>>(
+    {},
+  );
   const [mode, setMode] = useState<ExecutionMode>("agent");
   const [browserChoice, setBrowserChoice] = useState("");
   const [model, setModel] = useState("");
@@ -898,6 +937,9 @@ export function ProductSurface({
     useState<WorkflowEditorDraft | null>(null);
   const [workflowPromotion, setWorkflowPromotion] =
     useState<WorkflowPromotionDraft | null>(null);
+  const [resultEditor, setResultEditor] = useState<ResultEditorDraft | null>(
+    null,
+  );
   const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
@@ -1022,6 +1064,13 @@ export function ProductSurface({
     ? undefined
     : (product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
       activeTask);
+  const followup = followupDraftForTask(followupDrafts, viewedTask?.taskId);
+  const setFollowup = (value: string) => {
+    if (!viewedTask) return;
+    setFollowupDrafts((current) =>
+      withTaskFollowupDraft(current, viewedTask.taskId, value),
+    );
+  };
   const viewedTaskControl = taskControlProjection(viewedTask, product);
   const activeTaskControl = taskControlProjection(activeTask, product);
   useEffect(() => {
@@ -1271,6 +1320,25 @@ export function ProductSurface({
       sourceItemId: item.id,
     });
   };
+  const beginResultPromotion = (result: TaskResult) => {
+    const destination =
+      product?.workflows.find(
+        (workflow) =>
+          !workflow.archived &&
+          workflow.workflowId === viewedTask?.workflowAssociation?.workflowId,
+      ) ?? product?.workflows.find((workflow) => !workflow.archived);
+    if (!destination) return;
+    setWorkflowPromotion({
+      workflowId: destination.workflowId,
+      expectedRevision: destination.currentRevision,
+      category: "knowledge",
+      text: result.revision.body,
+      appliesTo: "",
+      sourceTaskId: result.taskId,
+      sourceResultId: result.resultId,
+      sourceResultRevision: result.currentRevision,
+    });
+  };
   const saveWorkflowPromotion = async () => {
     if (!workflowPromotion) return;
     const result = await run(() =>
@@ -1283,10 +1351,148 @@ export function ProductSurface({
         text: workflowPromotion.text.trim(),
         appliesTo: workflowLines(workflowPromotion.appliesTo),
         sourceTaskId: workflowPromotion.sourceTaskId,
-        sourceItemId: workflowPromotion.sourceItemId,
+        ...(workflowPromotion.sourceItemId
+          ? { sourceItemId: workflowPromotion.sourceItemId }
+          : {}),
+        ...(workflowPromotion.sourceResultId
+          ? {
+              sourceResultId: workflowPromotion.sourceResultId,
+              sourceResultRevision: workflowPromotion.sourceResultRevision,
+            }
+          : {}),
       }),
     );
     if (result !== undefined) setWorkflowPromotion(null);
+  };
+  const beginResultCreate = (
+    item: ProjectedConversationItem,
+    taskId: string,
+  ) => {
+    const body = messageText(item).trim();
+    if (!body) return;
+    setResultEditor({
+      taskId,
+      sourceItemId: item.id,
+      kind: "finding_collection",
+      title: "Saved result",
+      body,
+      actionRecipient: "",
+      actionRecipientControl: "",
+      actionContent: body,
+      actionContentControl: "",
+      actionTarget: "",
+      actionCommitControl: "",
+      actionScope: "",
+      actionAttachmentIds: [],
+      actionAttachmentControl: "",
+    });
+  };
+  const beginResultRevision = (result: TaskResult) => {
+    if (result.kind !== "draft") return;
+    setResultEditor({
+      taskId: result.taskId,
+      resultId: result.resultId,
+      expectedRevision: result.currentRevision,
+      kind: "draft",
+      title: result.revision.title,
+      body: result.revision.body,
+      actionRecipient: "",
+      actionRecipientControl: "",
+      actionContent: "",
+      actionContentControl: "",
+      actionTarget: "",
+      actionCommitControl: "",
+      actionScope: "",
+      actionAttachmentIds: [],
+      actionAttachmentControl: "",
+    });
+  };
+  const saveResult = async () => {
+    if (!resultEditor) return;
+    const result = await run(() =>
+      command({
+        type: resultEditor.resultId ? "result.revise" : "result.create",
+        operationId: `intent_${crypto.randomUUID()}`,
+        taskId: resultEditor.taskId,
+        ...(resultEditor.resultId
+          ? {
+              resultId: resultEditor.resultId,
+              expectedRevision: resultEditor.expectedRevision!,
+            }
+          : {
+              sourceItemId: resultEditor.sourceItemId!,
+              kind: resultEditor.kind,
+              ...(resultEditor.kind === "action"
+                ? {
+                    actionMaterial: {
+                      ...(resultEditor.actionRecipient.trim()
+                        ? { recipient: resultEditor.actionRecipient.trim() }
+                        : {}),
+                      ...(resultEditor.actionRecipientControl.trim()
+                        ? {
+                            recipientControl:
+                              resultEditor.actionRecipientControl.trim(),
+                          }
+                        : {}),
+                      content: resultEditor.actionContent.trim(),
+                      ...(resultEditor.actionContentControl.trim()
+                        ? {
+                            contentControl:
+                              resultEditor.actionContentControl.trim(),
+                          }
+                        : {}),
+                      ...(resultEditor.actionTarget.trim()
+                        ? { target: resultEditor.actionTarget.trim() }
+                        : {}),
+                      ...(resultEditor.actionCommitControl.trim()
+                        ? {
+                            commitControl:
+                              resultEditor.actionCommitControl.trim(),
+                          }
+                        : {}),
+                      attachmentIds: resultEditor.actionAttachmentIds,
+                      ...(resultEditor.actionAttachmentControl.trim()
+                        ? {
+                            attachmentControl:
+                              resultEditor.actionAttachmentControl.trim(),
+                          }
+                        : {}),
+                      ...(resultEditor.actionScope.trim()
+                        ? { scope: resultEditor.actionScope.trim() }
+                        : {}),
+                    },
+                  }
+                : {}),
+            }),
+        title: resultEditor.title.trim(),
+        body: resultEditor.body.trim(),
+      } as RendererProductIntent),
+    );
+    if (result !== undefined) setResultEditor(null);
+  };
+  const toggleResultSelection = async (result: TaskResult) => {
+    await run(() =>
+      command({
+        type: "result.select",
+        operationId: `intent_${crypto.randomUUID()}`,
+        taskId: result.taskId,
+        resultId: result.resultId,
+        expectedRevision: result.currentRevision,
+        selected: !result.selected,
+      }),
+    );
+  };
+  const authorizeResult = async (result: TaskResult) => {
+    if (result.kind !== "action" || !result.materialDigest) return;
+    await run(() =>
+      command({
+        type: "result.authorize",
+        operationId: `intent_${crypto.randomUUID()}`,
+        taskId: result.taskId,
+        resultId: result.resultId,
+        materialDigest: result.materialDigest!,
+      }),
+    );
   };
   const startLogin = async (loginType: "chatgpt" | "deviceCode") => {
     setBusy(true);
@@ -1502,6 +1708,13 @@ export function ProductSurface({
               attachmentIds: product.draftAttachments.map(
                 (attachment) => attachment.id,
               ),
+            }
+          : {}),
+        ...(viewedTask.results.some((result) => result.selected)
+          ? {
+              selectedResultIds: viewedTask.results
+                .filter((result) => result.selected)
+                .map((result) => result.resultId),
             }
           : {}),
       });
@@ -2237,6 +2450,276 @@ export function ProductSurface({
                 </button>
                 <button className="primary" type="submit" disabled={busy}>
                   Save approved revision
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {resultEditor && (
+        <div className="profile-modal-backdrop" role="presentation">
+          <section
+            className="profile-modal workflow-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="result-editor-title"
+          >
+            <header>
+              <div>
+                <div className="eyebrow">Stable task result</div>
+                <h2 id="result-editor-title">
+                  {resultEditor.resultId ? "Revise draft" : "Save result"}
+                </h2>
+                <p>
+                  Review the exact local material. Saving does not authorize or
+                  prove an external action.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="profile-modal-close"
+                aria-label="Close result editor"
+                onClick={() => setResultEditor(null)}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              className="workflow-editor-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveResult();
+              }}
+            >
+              {!resultEditor.resultId && (
+                <label>
+                  <span>Result type</span>
+                  <select
+                    aria-label="Result type"
+                    value={resultEditor.kind}
+                    onChange={(event) =>
+                      setResultEditor({
+                        ...resultEditor,
+                        kind: event.target.value as ResultEditorDraft["kind"],
+                      })
+                    }
+                  >
+                    <option value="finding_collection">Findings</option>
+                    <option value="draft">Draft</option>
+                    <option value="report">Report</option>
+                    <option value="journey">Journey</option>
+                    <option value="action">Action</option>
+                  </select>
+                </label>
+              )}
+              <label>
+                <span>Title</span>
+                <input
+                  aria-label="Result title"
+                  required
+                  maxLength={240}
+                  value={resultEditor.title}
+                  onChange={(event) =>
+                    setResultEditor({
+                      ...resultEditor,
+                      title: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              {resultEditor.kind === "action" && (
+                <fieldset className="result-action-editor">
+                  <legend>Exact action material</legend>
+                  <p>
+                    Rove will bind these values and files to a concrete, freshly
+                    grounded browser plan before any external disclosure. Enter
+                    the exact accessible names shown for each browser control.
+                  </p>
+                  <label>
+                    <span>Recipient</span>
+                    <input
+                      aria-label="Action recipient"
+                      maxLength={1000}
+                      value={resultEditor.actionRecipient}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionRecipient: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Recipient control name</span>
+                    <input
+                      aria-label="Action recipient control"
+                      required={Boolean(resultEditor.actionRecipient.trim())}
+                      maxLength={500}
+                      value={resultEditor.actionRecipientControl}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionRecipientControl: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Content</span>
+                    <textarea
+                      aria-label="Action content"
+                      required
+                      maxLength={16000}
+                      value={resultEditor.actionContent}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionContent: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Content control name</span>
+                    <input
+                      aria-label="Action content control"
+                      required
+                      maxLength={500}
+                      value={resultEditor.actionContentControl}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionContentControl: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Target or resource</span>
+                    <input
+                      aria-label="Action target"
+                      maxLength={2000}
+                      value={resultEditor.actionTarget}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionTarget: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Commit control name</span>
+                    <input
+                      aria-label="Action commit control"
+                      required
+                      maxLength={500}
+                      value={resultEditor.actionCommitControl}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionCommitControl: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Scope</span>
+                    <input
+                      aria-label="Action scope"
+                      maxLength={1000}
+                      value={resultEditor.actionScope}
+                      onChange={(event) =>
+                        setResultEditor({
+                          ...resultEditor,
+                          actionScope: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  {(viewedTask?.attachments?.length ?? 0) > 0 && (
+                    <div className="result-action-attachments">
+                      <span>Attachments included in authorization</span>
+                      <label>
+                        <span>Attachment control name</span>
+                        <input
+                          aria-label="Action attachment control"
+                          required={resultEditor.actionAttachmentIds.length > 0}
+                          maxLength={500}
+                          value={resultEditor.actionAttachmentControl}
+                          onChange={(event) =>
+                            setResultEditor({
+                              ...resultEditor,
+                              actionAttachmentControl: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      {(viewedTask?.attachments ?? []).map((attachment) => (
+                        <label key={attachment.id}>
+                          <input
+                            type="checkbox"
+                            checked={resultEditor.actionAttachmentIds.includes(
+                              attachment.id,
+                            )}
+                            onChange={(event) =>
+                              setResultEditor({
+                                ...resultEditor,
+                                actionAttachmentIds: event.target.checked
+                                  ? [
+                                      ...resultEditor.actionAttachmentIds,
+                                      attachment.id,
+                                    ]
+                                  : resultEditor.actionAttachmentIds.filter(
+                                      (id) => id !== attachment.id,
+                                    ),
+                              })
+                            }
+                          />
+                          <span>{attachment.filename}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+              <label>
+                <span>Result material</span>
+                <textarea
+                  aria-label="Result material"
+                  required
+                  maxLength={32000}
+                  value={resultEditor.body}
+                  onChange={(event) =>
+                    setResultEditor({
+                      ...resultEditor,
+                      body: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <div className="auth-actions">
+                <button type="button" onClick={() => setResultEditor(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !resultEditor.title.trim() ||
+                    !resultEditor.body.trim() ||
+                    (resultEditor.kind === "action" &&
+                      (!resultEditor.actionContent.trim() ||
+                        !resultEditor.actionContentControl.trim() ||
+                        !resultEditor.actionCommitControl.trim() ||
+                        (Boolean(resultEditor.actionRecipient.trim()) &&
+                          !resultEditor.actionRecipientControl.trim()) ||
+                        (resultEditor.actionAttachmentIds.length > 0 &&
+                          !resultEditor.actionAttachmentControl.trim())))
+                  }
+                >
+                  {resultEditor.resultId ? "Save revision" : "Save result"}
                 </button>
               </div>
             </form>
@@ -3198,6 +3681,131 @@ export function ProductSurface({
 
           {viewedTask && (
             <div className="task-detail">
+              {viewedTask.results.length > 0 && (
+                <section className="result-shelf" aria-label="Task results">
+                  <header>
+                    <div>
+                      <div className="eyebrow">Saved results</div>
+                      <strong>Working material for follow-up</strong>
+                    </div>
+                    <small>
+                      {
+                        viewedTask.results.filter((result) => result.selected)
+                          .length
+                      }{" "}
+                      selected
+                    </small>
+                  </header>
+                  <div className="result-card-list">
+                    {viewedTask.results.map((result) => (
+                      <article className="result-card" key={result.resultId}>
+                        <label className="result-select">
+                          <input
+                            type="checkbox"
+                            checked={result.selected}
+                            disabled={busy}
+                            onChange={() => void toggleResultSelection(result)}
+                          />
+                          <span>Select for follow-up</span>
+                        </label>
+                        <div className="result-card-heading">
+                          <strong>{result.revision.title}</strong>
+                          <span data-result-state={result.lifecycle}>
+                            {result.lifecycle.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <small>
+                          {result.kind.replaceAll("_", " ")} · Revision{" "}
+                          {result.currentRevision}
+                        </small>
+                        <MessageBody text={result.revision.body} />
+                        {result.kind === "action" && result.actionMaterial && (
+                          <dl className="result-action-material">
+                            {result.actionMaterial.recipient && (
+                              <>
+                                <dt>Recipient</dt>
+                                <dd>{result.actionMaterial.recipient}</dd>
+                                <dt>Recipient control</dt>
+                                <dd>
+                                  {result.actionMaterial.recipientControl}
+                                </dd>
+                              </>
+                            )}
+                            <dt>Content</dt>
+                            <dd>{result.actionMaterial.content}</dd>
+                            <dt>Content control</dt>
+                            <dd>{result.actionMaterial.contentControl}</dd>
+                            {result.actionMaterial.target && (
+                              <>
+                                <dt>Target</dt>
+                                <dd>{result.actionMaterial.target}</dd>
+                              </>
+                            )}
+                            {result.actionMaterial.attachmentIds.length > 0 && (
+                              <>
+                                <dt>Attachments</dt>
+                                <dd>
+                                  {result.actionMaterial.attachmentIds.join(
+                                    ", ",
+                                  )}
+                                </dd>
+                                <dt>Attachment control</dt>
+                                <dd>
+                                  {result.actionMaterial.attachmentControl}
+                                </dd>
+                              </>
+                            )}
+                            <dt>Commit control</dt>
+                            <dd>{result.actionMaterial.commitControl}</dd>
+                            {result.actionMaterial.scope && (
+                              <>
+                                <dt>Scope</dt>
+                                <dd>{result.actionMaterial.scope}</dd>
+                              </>
+                            )}
+                          </dl>
+                        )}
+                        <footer>
+                          {result.kind === "draft" && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => beginResultRevision(result)}
+                            >
+                              Revise draft
+                            </button>
+                          )}
+                          {result.kind === "action" &&
+                            result.lifecycle === "prepared" && (
+                              <button
+                                type="button"
+                                className="primary"
+                                disabled={busy}
+                                onClick={() => void authorizeResult(result)}
+                              >
+                                Authorize exact action
+                              </button>
+                            )}
+                          {result.kind !== "action" &&
+                            result.kind !== "artifact" &&
+                            (product?.workflows.some(
+                              (workflow) => !workflow.archived,
+                            ) ??
+                              false) && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => beginResultPromotion(result)}
+                              >
+                                Save to Workflow
+                              </button>
+                            )}
+                        </footer>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
               <section
                 className="task-timeline"
                 aria-label="Conversation and activity"
@@ -3399,6 +4007,16 @@ export function ProductSurface({
                               Save
                             </button>
                           )}
+                          <button
+                            type="button"
+                            aria-label="Save response as result"
+                            title="Save result"
+                            onClick={() =>
+                              beginResultCreate(item, viewedTask.taskId)
+                            }
+                          >
+                            Result
+                          </button>
                         </footer>
                       </article>
                     ))}
@@ -3447,6 +4065,27 @@ export function ProductSurface({
                         )
                       }
                     >
+                      {viewedTask.results.some((result) => result.selected) && (
+                        <div
+                          className="selected-result-rail"
+                          aria-label="Selected results for follow-up"
+                        >
+                          {viewedTask.results
+                            .filter((result) => result.selected)
+                            .map((result) => (
+                              <button
+                                type="button"
+                                key={result.resultId}
+                                disabled={busy}
+                                onClick={() =>
+                                  void toggleResultSelection(result)
+                                }
+                              >
+                                {result.revision.title} ×
+                              </button>
+                            ))}
+                        </div>
+                      )}
                       <textarea
                         ref={followupComposer}
                         aria-label={

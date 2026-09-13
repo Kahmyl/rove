@@ -9,6 +9,7 @@ import {
   beginSemanticTransactionRequestSchema,
   semanticTransactionReferenceSchema,
   verifySemanticTransactionRequestSchema,
+  prepareTaskResultActionRequestSchema,
 } from "@rove/protocol";
 import type { PageInspection } from "@rove/protocol";
 import { z } from "zod";
@@ -671,9 +672,109 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
       },
     },
     {
+      name: "browser.prepare_task_result_action",
+      description:
+        "Prepare, but do not dispatch, one concrete commit for a saved task-result action. First stage the exact recipient/content/files with ordinary grounded interactions. This call snapshots the current field values, immutable file evidence, commit target, expected effects, page revision, and action fingerprint. It remains non-dispatching until the Companion validates the plan against the user's saved authorization. Use browser.task_result_action_plan to observe authorization, then commit the unchanged plan once with browser.interact.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", minLength: 1 },
+          observationId: { type: "string", minLength: 1, maxLength: 200 },
+          consequenceKey: { type: "string", minLength: 1, maxLength: 500 },
+          materialDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          fieldBindings: {
+            type: "array",
+            maxItems: 2,
+            items: {
+              type: "object",
+              properties: {
+                field: { type: "string", enum: ["recipient", "content"] },
+                targetRef: { type: "string", minLength: 1, maxLength: 200 },
+              },
+              required: ["field", "targetRef"],
+              additionalProperties: false,
+            },
+          },
+          attachmentBindings: {
+            type: "array",
+            maxItems: 64,
+            items: {
+              type: "object",
+              properties: {
+                evidenceId: { type: "string", pattern: "^ev_" },
+                targetRef: { type: "string", minLength: 1, maxLength: 200 },
+              },
+              required: ["evidenceId", "targetRef"],
+              additionalProperties: false,
+            },
+          },
+          commitAction: browserInteractionActionJsonSchema,
+          expectedEffects: {
+            type: "array",
+            minItems: 1,
+            maxItems: 20,
+            items: expectedEffectJsonSchema,
+          },
+          effect: {
+            type: "string",
+            enum: ["external_commit", "irreversible"],
+          },
+        },
+        required: [
+          "sessionId",
+          "observationId",
+          "consequenceKey",
+          "materialDigest",
+          "fieldBindings",
+          "attachmentBindings",
+          "commitAction",
+          "expectedEffects",
+          "effect",
+        ],
+        additionalProperties: false,
+      },
+      handler: (input) => {
+        const value = z
+          .object({ sessionId: sessionIdSchema })
+          .passthrough()
+          .parse(input);
+        const { sessionId, ...request } = value;
+        return runtime.prepareTaskResultAction(
+          sessionId,
+          prepareTaskResultActionRequestSchema.parse(request),
+        );
+      },
+    },
+    {
+      name: "browser.task_result_action_plan",
+      description:
+        "Read the durable state of an exact prepared task-result action plan. Commit only when state is authorized, using the returned planId unchanged. Planned means the Companion has not yet validated the concrete plan; prepared or unresolved means dispatch may have happened and must not be replayed.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", minLength: 1 },
+          consequenceKey: { type: "string", minLength: 1, maxLength: 500 },
+        },
+        required: ["sessionId", "consequenceKey"],
+        additionalProperties: false,
+      },
+      handler: (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            consequenceKey: z.string().min(1).max(500),
+          })
+          .parse(input);
+        return runtime.consequentialEffect(
+          parsed.sessionId,
+          parsed.consequenceKey,
+        );
+      },
+    },
+    {
       name: "browser.interact",
       description:
-        'The single agent-facing tool for target-bound mutation. Put the target inside action, for example action:{kind:"fill",target:{pageId,revision,ref},value:"..."}; never put target beside action. Perform a grounded browser interaction, authorize its contextual effect, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. If INVALID_INPUT or schema validation identifies an exact invalid path, a mechanically corrected request is allowed when the returned result proves the handler never ran and no effect was dispatched and fresh grounding supplies the correction; never replay an identical malformed request. A recoverable pre-dispatch freshness rejection does not end the task: inspect freshly, re-ground the current state, and continue with a safe newly grounded action or route. Unrelated dynamic DOM churn triggers automatic exact-target revalidation immediately before dispatch; navigation, viewport/scroll change, ownership change, target/frame/root replacement, target identity/state/geometry change, ambiguity, occlusion, or disabled/hidden state still rejects before dispatch. Coordinate actions retain strict whole-observation freshness. The receipt outcome is authoritative for the requested effect: applied means positive predecessor-to-successor evidence reconciled the action; an already-visible text, already-equal URL, or already-satisfied target state is not causal proof. For named-link navigation, resolve kind:"link" and use url_changed, an exact new url_equals, or a condition absent before and present after. unknown is the consequential stop/reconciliation boundary and must not be replayed. download_completed waits for a new action-correlated managed download persisted as Runtime file evidence. Omit its optional filename when the user\'s request is to discover, confirm, or report the actual saved filename; include filename only when the user explicitly requires the saved artifact to equal that exact predeclared name. A browser collision suffix is a valid completed download when filename is omitted, and the actual filename must be read from durable evidence. An exact-name mismatch is not_applied and must never cause a second download. A pageState such as unknown_interstitial is observational evidence, not a page-wide stop: ordinary dialogs and overlays may be handled when the exact current target is freshly grounded and the declared effect is authorized. Ignore optional survey or feedback cards after the requested outcome is proven. If one blocks a still-required target, dismiss it only with a freshly grounded nonconsequential action. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Expected text_present/text_absent effects apply to the whole visible page; for rename, move, or removal outcomes where history/activity/toasts can retain old text, use exact target_present/target_absent or target-within-scope effects instead. Upload accepts either a direct file-input target that advertises upload or an exactly grounded activation target expected to open a dynamic file chooser; ground the latter by activate plus exact text/scope. External or irreversible actions must be marked consequential, include a stable consequenceKey, and include expected effects so Runtime can reconcile the outcome. Unknown consequential outcomes block replay of the same key.',
+        'The single agent-facing tool for target-bound mutation. Put the target inside action, for example action:{kind:"fill",target:{pageId,revision,ref},value:"..."}; never put target beside action. Perform a grounded browser interaction, authorize its contextual effect, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. If INVALID_INPUT or schema validation identifies an exact invalid path, a mechanically corrected request is allowed when the returned result proves the handler never ran and no effect was dispatched and fresh grounding supplies the correction; never replay an identical malformed request. A recoverable pre-dispatch freshness rejection does not end the task: inspect freshly, re-ground the current state, and continue with a safe newly grounded action or route. Unrelated dynamic DOM churn triggers automatic exact-target revalidation immediately before dispatch; navigation, viewport/scroll change, ownership change, target/frame/root replacement, target identity/state/geometry change, ambiguity, occlusion, or disabled/hidden state still rejects before dispatch. Coordinate actions retain strict whole-observation freshness. The receipt outcome is authoritative for the requested effect: applied means positive predecessor-to-successor evidence reconciled the action; an already-visible text, already-equal URL, or already-satisfied target state is not causal proof. For named-link navigation, resolve kind:"link" and use url_changed, an exact new url_equals, or a condition absent before and present after. unknown is the consequential stop/reconciliation boundary and must not be replayed. download_completed waits for a new action-correlated managed download persisted as Runtime file evidence. Omit its optional filename when the user\'s request is to discover, confirm, or report the actual saved filename; include filename only when the user explicitly requires the saved artifact to equal that exact predeclared name. A browser collision suffix is a valid completed download when filename is omitted, and the actual filename must be read from durable evidence. An exact-name mismatch is not_applied and must never cause a second download. A pageState such as unknown_interstitial is observational evidence, not a page-wide stop: ordinary dialogs and overlays may be handled when the exact current target is freshly grounded and the declared effect is authorized. Ignore optional survey or feedback cards after the requested outcome is proven. If one blocks a still-required target, dismiss it only with a freshly grounded nonconsequential action. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Expected text_present/text_absent effects apply to the whole visible page; for rename, move, or removal outcomes where history/activity/toasts can retain old text, use exact target_present/target_absent or target-within-scope effects instead. Upload accepts either a direct file-input target that advertises upload or an exactly grounded activation target expected to open a dynamic file chooser; ground the latter by activate plus exact text/scope. External or irreversible actions must be marked consequential, include a stable consequenceKey, and include expected effects so Runtime can reconcile the outcome. A task-result commit additionally requires the exact authorizedPlanId and authorizationDigest returned by the concrete-plan status tool. Unknown consequential outcomes block replay of the same key.',
       inputSchema: {
         type: "object",
         properties: {
@@ -715,6 +816,18 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             type: "string",
             minLength: 1,
             maxLength: 500,
+          },
+          authorizationDigest: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+            description:
+              "Exact material digest registered by the host for a task-result action.",
+          },
+          authorizedPlanId: {
+            type: "string",
+            pattern: "^plan_[a-f0-9]{32}$",
+            description:
+              "Opaque Runtime plan identity authorized for this exact commit.",
           },
         },
         required: ["sessionId", "observationId", "action"],
@@ -760,6 +873,14 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
               ])
               .optional(),
             consequenceKey: z.string().min(1).max(500).optional(),
+            authorizationDigest: z
+              .string()
+              .regex(/^[a-f0-9]{64}$/)
+              .optional(),
+            authorizedPlanId: z
+              .string()
+              .regex(/^plan_[a-f0-9]{32}$/)
+              .optional(),
           })
           .parse(input);
 
@@ -772,6 +893,8 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             consequential: parsed.consequential,
             effect: parsed.effect,
             consequenceKey: parsed.consequenceKey,
+            authorizationDigest: parsed.authorizationDigest,
+            authorizedPlanId: parsed.authorizedPlanId,
           }),
         );
       },

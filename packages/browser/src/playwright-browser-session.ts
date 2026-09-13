@@ -1428,6 +1428,61 @@ export class PlaywrightBrowserSession implements BrowserSession {
         };
   }
 
+  async readTargetFiles(
+    target: TargetReference,
+  ): Promise<Array<{ name: string; size: number; sha256: string }>> {
+    this.ensureOpen();
+    const resolved = await this.resolveActionTarget(target);
+    if (
+      resolved.state.identity.tag !== "input" ||
+      resolved.state.identity.type !== "file"
+    )
+      throw new RoveError({
+        code: "TARGET_NOT_INTERACTIVE",
+        message: "The referenced control is not a file input.",
+      });
+    return resolved.locator.evaluate(async (element) => {
+      const input = element as HTMLInputElement;
+      return Promise.all(
+        Array.from(input.files ?? [])
+          .slice(0, 100)
+          .map(async (file) => {
+            const digest = await crypto.subtle.digest(
+              "SHA-256",
+              await file.arrayBuffer(),
+            );
+            return {
+              name: file.name,
+              size: file.size,
+              sha256: Array.from(new Uint8Array(digest), (byte) =>
+                byte.toString(16).padStart(2, "0"),
+              ).join(""),
+            };
+          }),
+      );
+    });
+  }
+
+  async readTargetValue(target: TargetReference): Promise<string> {
+    this.ensureOpen();
+    const resolved = await this.resolveActionTarget(target);
+    return resolved.locator.evaluate((element) => {
+      if (
+        element instanceof HTMLInputElement &&
+        element.type !== "password" &&
+        element.type !== "file"
+      )
+        return element.value;
+      if (element instanceof HTMLTextAreaElement) return element.value;
+      if (element instanceof HTMLSelectElement) return element.value;
+      if (element instanceof HTMLElement && element.isContentEditable)
+        return element.textContent ?? "";
+      throw new Error(
+        "The referenced control does not expose a readable value.",
+      );
+    });
+  }
+
   async pageStateIdentity(
     pageId = this.requireActivePageId(),
   ): Promise<PageStateIdentity> {

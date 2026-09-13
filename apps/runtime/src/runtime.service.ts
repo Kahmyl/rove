@@ -63,6 +63,8 @@ import {
   type SemanticTransactionAdvanceResult,
   type SemanticTransactionVerificationResult,
   type ExpectedEffect,
+  type PrepareTaskResultActionRequest,
+  type TaskResultActionPlan,
 } from "@rove/protocol";
 import {
   BrowserWorkspaceRegistry,
@@ -104,6 +106,46 @@ import { RUNTIME_PROVENANCE } from "./runtime-provenance.js";
 
 function normalizedIdentity(value: string | undefined): string {
   return (value ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function taskResultPlanActionFingerprint(input: {
+  action: PrepareTaskResultActionRequest["commitAction"];
+  expectedEffects: PrepareTaskResultActionRequest["expectedEffects"];
+  effect: PrepareTaskResultActionRequest["effect"];
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        action: input.action,
+        expectedEffects: input.expectedEffects,
+        effect: input.effect,
+      }),
+    )
+    .digest("hex");
+}
+
+function exactTaskResultFiles(
+  actual: readonly { name: string; size: number; sha256: string }[],
+  expected: readonly { filename: string; size: number; sha256: string }[],
+): boolean {
+  const identities = (
+    files: readonly { name: string; size: number; sha256: string }[],
+  ) =>
+    files
+      .map((file) => `${file.name}\u0000${file.size}\u0000${file.sha256}`)
+      .sort();
+  return (
+    JSON.stringify(identities(actual)) ===
+    JSON.stringify(
+      identities(
+        expected.map((binding) => ({
+          name: binding.filename,
+          size: binding.size,
+          sha256: binding.sha256,
+        })),
+      ),
+    )
+  );
 }
 
 function sameExpectedTarget(
@@ -1113,8 +1155,173 @@ export class RuntimeService implements RoveRuntime {
               taskScope,
               browserWorkspaceScope,
             );
-            const conflicts = await this.effectJournal.findPotentialConflicts(
-              browserWorkspaceScope,
+            const registeredTaskResult = input.consequenceKey.startsWith(
+              "task-result:",
+            )
+              ? await this.effectJournal.find(
+                  taskScope,
+                  browserWorkspaceScope,
+                  input.consequenceKey,
+                )
+              : null;
+            if (
+              input.consequenceKey.startsWith("task-result:") &&
+              (!input.authorizationDigest ||
+                !input.authorizedPlanId ||
+                !registeredTaskResult ||
+                registeredTaskResult.state !== "authorized" ||
+                registeredTaskResult.taskResultPlan?.planId !==
+                  input.authorizedPlanId ||
+                registeredTaskResult.taskResultPlan.materialDigest !==
+                  input.authorizationDigest)
+            )
+              throw new RoveError({
+                code: "ACTION_NOT_AUTHORIZED",
+                message:
+                  "This task-result action does not have matching user authorization.",
+              });
+            if (registeredTaskResult?.taskResultPlan) {
+              const plan = registeredTaskResult.taskResultPlan;
+              const fingerprint = taskResultPlanActionFingerprint({
+                action: input.action,
+                expectedEffects: input.expectedEffects,
+                effect:
+                  input.effect === "irreversible"
+                    ? "irreversible"
+                    : "external_commit",
+              });
+              const fieldsMatch = (
+                await Promise.all(
+                  plan.fields.map(async (binding) => {
+                    const target = predecessor.targets?.find(
+                      (candidate) => candidate.ref === binding.targetRef,
+                    );
+                    if (
+                      target?.name !== binding.targetName ||
+                      target.kind !== binding.targetKind ||
+                      target.state?.value !== binding.value
+                    )
+                      return false;
+                    const liveValue = await browser
+                      .readTargetValue({
+                        pageId: predecessor.pageId,
+                        revision: predecessor.revision,
+                        ref: binding.targetRef,
+                      })
+                      .catch(() => undefined);
+                    return liveValue === binding.value;
+                  }),
+                )
+              ).every(Boolean);
+              const attachmentGroups = new Map<
+                string,
+                typeof plan.attachments
+              >();
+              for (const binding of plan.attachments) {
+                attachmentGroups.set(binding.targetRef, [
+                  ...(attachmentGroups.get(binding.targetRef) ?? []),
+                  binding,
+                ]);
+              }
+              const attachmentsMatch =
+                input.action.kind !== "upload" &&
+                (
+                  await Promise.all(
+                    [...attachmentGroups.entries()].map(
+                      async ([targetRef, bindings]) => {
+                        const target = predecessor.targets?.find(
+                          (candidate) => candidate.ref === targetRef,
+                        );
+                        if (
+                          !target ||
+                          bindings.some(
+                            (binding) =>
+                              target.name !== binding.targetName ||
+                              !binding.uploadEffectId ||
+                              !binding.uploadPlanId,
+                          )
+                        )
+                          return false;
+                        const liveFiles = await browser
+                          .readTargetFiles({
+                            pageId: predecessor.pageId,
+                            revision: predecessor.revision,
+                            ref: targetRef,
+                          })
+                          .catch(() => []);
+                        if (!exactTaskResultFiles(liveFiles, bindings))
+                          return false;
+                        return (
+                          await Promise.all(
+                            bindings.map(async (binding) => {
+                              const upload = await this.effectJournal.findById(
+                                binding.uploadEffectId!,
+                              );
+                              const uploadPlan = upload?.taskResultPlan;
+                              return (
+                                upload?.state === "applied" &&
+                                uploadPlan !== undefined &&
+                                uploadPlan.planId === binding.uploadPlanId &&
+                                uploadPlan.attachments.some(
+                                  (uploaded) =>
+                                    uploaded.evidenceId ===
+                                      binding.evidenceId &&
+                                    uploaded.sha256 === binding.sha256 &&
+                                    uploaded.size === binding.size,
+                                )
+                              );
+                            }),
+                          )
+                        ).every(Boolean);
+                      },
+                    ),
+                  )
+                ).every(Boolean);
+              let plannedUploadMatches = false;
+              if (
+                input.action.kind === "upload" &&
+                plan.commitAction.kind === "upload"
+              ) {
+                const uploadAction = input.action;
+                const uploadEvidenceIds = uploadAction.evidenceIds ?? [
+                  uploadAction.evidenceId!,
+                ];
+                plannedUploadMatches =
+                  uploadAction.target !== undefined &&
+                  plan.attachments.length === uploadEvidenceIds.length &&
+                  plan.attachments.every(
+                    (binding) =>
+                      binding.targetRef === uploadAction.target!.ref &&
+                      uploadEvidenceIds.includes(binding.evidenceId),
+                  );
+              }
+              if (
+                fingerprint !== plan.actionFingerprint ||
+                predecessor.pageId !== plan.pageId ||
+                predecessor.revision !== plan.pageRevision ||
+                predecessor.url !== plan.url ||
+                !fieldsMatch ||
+                (input.action.kind === "upload"
+                  ? !plannedUploadMatches
+                  : !attachmentsMatch)
+              )
+                throw new RoveError({
+                  code: "ACTION_NOT_AUTHORIZED",
+                  message:
+                    "The concrete task-result action plan changed after authorization.",
+                });
+            }
+            const conflicts = (
+              await this.effectJournal.findPotentialConflicts(
+                browserWorkspaceScope,
+              )
+            ).filter(
+              (record) =>
+                record.effectId !== registeredTaskResult?.effectId &&
+                !(
+                  record.consequenceKey.startsWith("task-result:") &&
+                  record.consequenceKey !== input.consequenceKey
+                ),
             );
             let authorizedAttemptId: string | undefined;
             if (conflicts.length > 0) {
@@ -1157,15 +1364,27 @@ export class RuntimeService implements RoveRuntime {
               .update(JSON.stringify(input.action))
               .digest("hex");
             const existing =
-              authorizedAttemptId === undefined
+              registeredTaskResult ??
+              (authorizedAttemptId === undefined
                 ? await this.effectJournal.find(
                     taskScope,
                     browserWorkspaceScope,
                     input.consequenceKey,
                   )
-                : null;
+                : null);
             if (existing) {
-              if (
+              if (existing === registeredTaskResult) {
+                journalRecord = await this.effectJournal.update(
+                  existing.effectId,
+                  existing.version,
+                  {
+                    state: "prepared",
+                    updatedAt: new Date().toISOString(),
+                    observationId: input.observationId,
+                    ownershipGeneration: lease.token.generation,
+                  },
+                );
+              } else if (
                 existing.state === "not_applied" &&
                 existing.actionFingerprint === actionFingerprint
               ) {
@@ -1598,10 +1817,29 @@ export class RuntimeService implements RoveRuntime {
                 dispatched: receipt.dispatched,
                 outcome: receipt.outcome,
                 consequential: receipt.consequential,
+                ...(input.consequenceKey === undefined
+                  ? {}
+                  : { consequenceKey: input.consequenceKey }),
+                ...(input.authorizationDigest === undefined
+                  ? {}
+                  : { authorizationDigest: input.authorizationDigest }),
+                ...(input.authorizedPlanId === undefined
+                  ? {}
+                  : { authorizedPlanId: input.authorizedPlanId }),
+                ...(input.action.kind === "upload"
+                  ? {
+                      uploadEvidenceIds: input.action.evidenceIds ?? [
+                        input.action.evidenceId!,
+                      ],
+                    }
+                  : {}),
                 ...(target === undefined
                   ? {}
                   : {
                       targetRef: target.ref,
+                      targetName: predecessor.targets?.find(
+                        (candidate) => candidate.ref === target.ref,
+                      )?.name,
                     }),
                 ...(successor === undefined
                   ? {}
@@ -1827,6 +2065,441 @@ export class RuntimeService implements RoveRuntime {
       effectId,
       authorizationId,
       new Date().toISOString(),
+    );
+  }
+
+  async prepareTaskResultAction(
+    sessionId: string,
+    input: PrepareTaskResultActionRequest,
+  ): Promise<TaskResultActionPlan> {
+    await this.effectJournalReady;
+    if (!input.consequenceKey.endsWith(`:${input.materialDigest}`))
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Task-result action material identity is invalid.",
+      });
+    if (
+      new Set(input.fieldBindings.map((binding) => binding.field)).size !==
+        input.fieldBindings.length ||
+      new Set(input.fieldBindings.map((binding) => binding.targetRef)).size !==
+        input.fieldBindings.length
+    )
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message:
+          "Task-result action field bindings contain duplicate roles or controls.",
+      });
+    if (
+      new Set(input.attachmentBindings.map((binding) => binding.evidenceId))
+        .size !== input.attachmentBindings.length
+    )
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Task-result action attachments contain duplicates.",
+      });
+    const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const observation = await this.browser
+      .get(sessionId)
+      .readObservation(input.observationId);
+    const boundTargetRefs = [
+      ...input.fieldBindings.map((binding) => binding.targetRef),
+      ...new Set(input.attachmentBindings.map((binding) => binding.targetRef)),
+    ];
+    const commitReference = interactionTarget(input.commitAction);
+    if (commitReference && input.commitAction.kind !== "upload")
+      boundTargetRefs.push(commitReference.ref);
+    if (new Set(boundTargetRefs).size !== boundTargetRefs.length)
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Task-result action controls must be distinct.",
+      });
+    const fields = await Promise.all(
+      input.fieldBindings.map(async (binding) => {
+        const target = observation.targets?.find(
+          (candidate) => candidate.ref === binding.targetRef,
+        );
+        if (
+          !target ||
+          !target.visible ||
+          !target.enabled ||
+          !target.perceived?.capabilities.includes("fill") ||
+          typeof target.name !== "string" ||
+          typeof target.state?.value !== "string"
+        )
+          throw new RoveError({
+            code: "TARGET_NOT_FOUND",
+            message:
+              "A concrete task-result field binding is not visible with an exact value.",
+          });
+        const liveValue = await this.browser
+          .get(sessionId)
+          .readTargetValue({
+            pageId: observation.pageId,
+            revision: observation.revision,
+            ref: binding.targetRef,
+          })
+          .catch(() => undefined);
+        if (liveValue !== target.state.value)
+          throw new RoveError({
+            code: "ACTION_NOT_AUTHORIZED",
+            message:
+              "The live task-result field value does not match the inspected value.",
+          });
+        return {
+          field: binding.field,
+          targetRef: target.ref,
+          targetName: target.name,
+          targetKind: target.kind,
+          value: target.state.value,
+        };
+      }),
+    );
+    const activity = await this.observations.list(sessionId, { limit: 1_000 });
+    const attachments = await Promise.all(
+      input.attachmentBindings.map(async (binding) => {
+        const evidenceId = binding.evidenceId;
+        const evidence = await this.evidence.metadata(sessionId, evidenceId);
+        const filename =
+          typeof evidence.metadata?.filename === "string"
+            ? evidence.metadata.filename
+            : evidence.label;
+        const sha256 = evidence.metadata?.sha256;
+        const size = evidence.metadata?.sizeBytes;
+        if (
+          evidence.type !== "file" ||
+          typeof filename !== "string" ||
+          typeof sha256 !== "string" ||
+          !/^[a-f0-9]{64}$/.test(sha256) ||
+          typeof size !== "number" ||
+          !Number.isSafeInteger(size) ||
+          size < 0
+        )
+          throw new RoveError({
+            code: "INVALID_CONFIGURATION",
+            message: "Task-result attachment evidence is invalid.",
+          });
+        const target = observation.targets?.find(
+          (candidate) => candidate.ref === binding.targetRef,
+        );
+        if (
+          !target ||
+          !target.visible ||
+          !target.enabled ||
+          typeof target.name !== "string" ||
+          (!target.perceived?.capabilities.includes("upload") &&
+            !(
+              input.commitAction.kind === "upload" &&
+              input.commitAction.target?.ref === target.ref
+            ))
+        )
+          throw new RoveError({
+            code: "INVALID_CONFIGURATION",
+            message:
+              "Task-result attachment control is not a visible upload target.",
+          });
+        let uploadProvenance:
+          | {
+              uploadEffectId: string;
+              uploadPlanId: string;
+              uploadReceiptId: string;
+            }
+          | undefined;
+        if (input.commitAction.kind !== "upload") {
+          const uploadReceipt = activity.items.find((item) => {
+            if (
+              item.type !== "agent_interaction_receipt" ||
+              typeof item.data !== "object" ||
+              item.data === null ||
+              Array.isArray(item.data)
+            )
+              return false;
+            const data = item.data as Record<string, unknown>;
+            return (
+              data.action === "upload" &&
+              data.outcome === "applied" &&
+              data.targetName === target.name &&
+              Array.isArray(data.uploadEvidenceIds) &&
+              data.uploadEvidenceIds.includes(evidenceId) &&
+              typeof data.consequenceKey === "string" &&
+              data.consequenceKey.startsWith("task-result:") &&
+              typeof data.authorizedPlanId === "string" &&
+              typeof data.receiptId === "string"
+            );
+          });
+          const receiptData = uploadReceipt?.data as
+            Record<string, unknown> | undefined;
+          const uploadRecord = receiptData
+            ? await this.effectJournal.find(
+                taskScope,
+                browserWorkspaceScope,
+                receiptData.consequenceKey as string,
+              )
+            : null;
+          const uploadPlan = uploadRecord?.taskResultPlan;
+          if (
+            !uploadRecord ||
+            uploadRecord.state !== "applied" ||
+            !uploadPlan ||
+            uploadPlan.planId !== receiptData?.authorizedPlanId
+          )
+            throw new RoveError({
+              code: "ACTION_NOT_AUTHORIZED",
+              message:
+                "The attachment is not backed by a confirmed exact upload authorization.",
+            });
+          if (
+            !uploadPlan.attachments.some(
+              (uploaded) =>
+                uploaded.evidenceId === evidenceId &&
+                uploaded.sha256 === sha256 &&
+                uploaded.size === size,
+            )
+          )
+            throw new RoveError({
+              code: "ACTION_NOT_AUTHORIZED",
+              message:
+                "The attachment is not backed by a confirmed exact upload authorization.",
+            });
+          uploadProvenance = {
+            uploadEffectId: uploadRecord.effectId,
+            uploadPlanId: uploadPlan.planId,
+            uploadReceiptId: receiptData!.receiptId as string,
+          };
+        }
+        return {
+          evidenceId,
+          filename,
+          size,
+          sha256,
+          targetRef: target.ref,
+          targetName: target.name,
+          ...uploadProvenance,
+        };
+      }),
+    );
+    if (attachments.length > 0 && input.commitAction.kind !== "upload") {
+      const attachmentGroups = new Map<string, typeof attachments>();
+      for (const binding of attachments) {
+        attachmentGroups.set(binding.targetRef, [
+          ...(attachmentGroups.get(binding.targetRef) ?? []),
+          binding,
+        ]);
+      }
+      const exact = (
+        await Promise.all(
+          [...attachmentGroups.entries()].map(async ([targetRef, bindings]) =>
+            exactTaskResultFiles(
+              await this.browser
+                .get(sessionId)
+                .readTargetFiles({
+                  pageId: observation.pageId,
+                  revision: observation.revision,
+                  ref: targetRef,
+                })
+                .catch(() => []),
+              bindings,
+            ),
+          ),
+        )
+      ).every(Boolean);
+      if (!exact)
+        throw new RoveError({
+          code: "ACTION_NOT_AUTHORIZED",
+          message:
+            "The complete live attachment set does not match the authorized evidence.",
+        });
+    }
+    const commitTarget = commitReference
+      ? observation.targets?.find(
+          (candidate) => candidate.ref === commitReference.ref,
+        )
+      : undefined;
+    if (
+      commitReference &&
+      (commitReference.pageId !== observation.pageId ||
+        commitReference.revision !== observation.revision ||
+        !commitTarget ||
+        !commitTarget.visible ||
+        !commitTarget.enabled)
+    )
+      throw new RoveError({
+        code: "TARGET_NOT_FOUND",
+        message: "The concrete task-result commit target is unavailable.",
+      });
+    if (attachments.length > 0 && input.commitAction.kind === "upload") {
+      if (!commitReference)
+        throw new RoveError({
+          code: "INVALID_CONFIGURATION",
+          message: "The exact attachment upload requires a target control.",
+        });
+      const uploadEvidenceIds = input.commitAction.evidenceIds ?? [
+        input.commitAction.evidenceId!,
+      ];
+      if (
+        uploadEvidenceIds.length !== attachments.length ||
+        attachments.some(
+          (binding) =>
+            binding.targetRef !== commitReference.ref ||
+            !uploadEvidenceIds.includes(binding.evidenceId),
+        )
+      )
+        throw new RoveError({
+          code: "INVALID_CONFIGURATION",
+          message:
+            "The exact upload action must match every authorized attachment and its upload control.",
+        });
+    }
+    const actionFingerprint = taskResultPlanActionFingerprint({
+      action: input.commitAction,
+      expectedEffects: input.expectedEffects,
+      effect: input.effect,
+    });
+    const preparedAt = new Date().toISOString();
+    const planBase = {
+      schemaVersion: 1 as const,
+      planId: `plan_${randomUUID().replaceAll("-", "")}`,
+      consequenceKey: input.consequenceKey,
+      materialDigest: input.materialDigest,
+      taskScope,
+      browserWorkspaceScope,
+      observationId: observation.observationId,
+      pageId: observation.pageId,
+      pageRevision: observation.revision,
+      url: observation.url,
+      fields,
+      attachments,
+      ...(commitTarget
+        ? {
+            commitTarget: {
+              targetRef: commitTarget.ref,
+              targetName: commitTarget.name ?? "",
+              targetKind: commitTarget.kind,
+              scopeLabels: (commitTarget.perceived?.scopes ?? []).flatMap(
+                (scope) => (scope.label ? [scope.label] : []),
+              ),
+            },
+          }
+        : {}),
+      commitAction: input.commitAction,
+      expectedEffects: input.expectedEffects,
+      effect: input.effect,
+      actionFingerprint,
+      preparedAt,
+    };
+    const plan: TaskResultActionPlan = {
+      ...planBase,
+      planDigest: createHash("sha256")
+        .update(JSON.stringify(planBase))
+        .digest("hex"),
+    };
+    const existing = await this.effectJournal.find(
+      taskScope,
+      browserWorkspaceScope,
+      input.consequenceKey,
+    );
+    if (existing) {
+      if (existing.state !== "planned" && existing.state !== "authorized")
+        throw new RoveError({
+          code: "ACTION_NOT_AUTHORIZED",
+          message:
+            "This task-result action already has dispatch authority or effect history.",
+        });
+      const replaced = await this.effectJournal.update(
+        existing.effectId,
+        existing.version,
+        {
+          state: "planned",
+          updatedAt: preparedAt,
+          observationId: observation.observationId,
+          ownershipGeneration: session.ownershipGeneration ?? 1,
+          actionFingerprint,
+          taskResultPlan: plan,
+        },
+      );
+      return replaced.taskResultPlan!;
+    }
+    const record = await this.effectJournal.prepare({
+      taskScope,
+      browserWorkspaceScope,
+      consequenceKey: input.consequenceKey,
+      actionFingerprint,
+      taskResultPlan: plan,
+      state: "planned",
+      ownershipGeneration: session.ownershipGeneration ?? 1,
+      cutoverEpoch: "phase5-effect-journal-v1",
+      preparedAt,
+      updatedAt: preparedAt,
+    });
+    return record.taskResultPlan!;
+  }
+
+  async authorizeTaskResultAction(
+    sessionId: string,
+    consequenceKey: string,
+    materialDigest: string,
+    planId: string,
+  ): Promise<EffectJournalRecord> {
+    await this.effectJournalReady;
+    if (
+      !/^task-result:[^:]{1,200}:[a-f0-9]{64}$/.test(consequenceKey) ||
+      !/^[a-f0-9]{64}$/.test(materialDigest) ||
+      !/^plan_[a-f0-9]{32}$/.test(planId) ||
+      !consequenceKey.endsWith(`:${materialDigest}`)
+    )
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Task-result action authorization is invalid.",
+      });
+    const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const existing = await this.effectJournal.find(
+      taskScope,
+      browserWorkspaceScope,
+      consequenceKey,
+    );
+    if (existing) {
+      if (
+        existing.taskResultPlan?.planId === planId &&
+        existing.taskResultPlan.materialDigest === materialDigest &&
+        existing.state === "authorized"
+      )
+        return existing;
+      if (
+        existing.taskResultPlan?.planId === planId &&
+        existing.taskResultPlan.materialDigest === materialDigest &&
+        existing.state === "planned"
+      )
+        return this.effectJournal.update(existing.effectId, existing.version, {
+          state: "authorized",
+          updatedAt: new Date().toISOString(),
+        });
+      throw new RoveError({
+        code: "ACTION_NOT_AUTHORIZED",
+        message:
+          "This task-result action already has incompatible effect history.",
+      });
+    }
+    throw new RoveError({
+      code: "ACTION_NOT_AUTHORIZED",
+      message: "A concrete task-result action plan must be prepared first.",
+    });
+  }
+
+  async consequentialEffect(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<EffectJournalRecord | null> {
+    await this.effectJournalReady;
+    const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    return this.effectJournal.find(
+      taskScope,
+      browserWorkspaceScope,
+      consequenceKey,
     );
   }
 

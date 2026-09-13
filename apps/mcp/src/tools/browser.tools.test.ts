@@ -219,6 +219,86 @@ describe("browser.interact MCP schema", () => {
     expect(record(conditional.then).required).toEqual(["consequenceKey"]);
   });
 
+  it("forwards the exact task-result authorization digest to Runtime", async () => {
+    const runtime = {
+      interact: vi.fn().mockResolvedValue({}),
+    } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
+    const authorizationDigest = "a".repeat(64);
+    const consequenceKey = `task-result:result_01:${authorizationDigest}`;
+    const authorizedPlanId = `plan_${"b".repeat(32)}`;
+
+    expect(record(interact.inputSchema.properties)).toHaveProperty(
+      "authorizationDigest",
+    );
+    await interact.handler({
+      sessionId: `ses_${"b".repeat(32)}`,
+      observationId: "bobs_current",
+      action: {
+        kind: "click",
+        target: { pageId: "page_01", revision: 1, ref: "t1" },
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      consequential: true,
+      effect: "external_commit",
+      consequenceKey,
+      authorizationDigest,
+      authorizedPlanId,
+    });
+
+    expect(runtime.interact).toHaveBeenCalledWith(
+      `ses_${"b".repeat(32)}`,
+      expect.objectContaining({
+        consequenceKey,
+        authorizationDigest,
+        authorizedPlanId,
+      }),
+    );
+  });
+
+  it("prepares and reads a concrete task-result plan without dispatching", async () => {
+    const runtime = {
+      prepareTaskResultAction: vi.fn().mockResolvedValue({ state: "planned" }),
+      consequentialEffect: vi.fn().mockResolvedValue({ state: "planned" }),
+    } as unknown as RuntimeClient;
+    const tools = browserTools(runtime);
+    const prepare = tools.find(
+      (tool) => tool.name === "browser.prepare_task_result_action",
+    )!;
+    const status = tools.find(
+      (tool) => tool.name === "browser.task_result_action_plan",
+    )!;
+    const sessionId = `ses_${"c".repeat(32)}`;
+    const materialDigest = "d".repeat(64);
+    const consequenceKey = `task-result:result_1:${materialDigest}`;
+    const request = {
+      observationId: "bobs_plan",
+      consequenceKey,
+      materialDigest,
+      fieldBindings: [{ field: "content", targetRef: "notes" }],
+      attachmentBindings: [],
+      commitAction: {
+        kind: "click",
+        target: { pageId: "page_1", revision: 3, ref: "send" },
+      },
+      expectedEffects: [{ kind: "url_changed" }],
+      effect: "external_commit",
+    };
+
+    await prepare.handler({ sessionId, ...request });
+    await status.handler({ sessionId, consequenceKey });
+    expect(runtime.prepareTaskResultAction).toHaveBeenCalledWith(
+      sessionId,
+      request,
+    );
+    expect(runtime.consequentialEffect).toHaveBeenCalledWith(
+      sessionId,
+      consequenceKey,
+    );
+  });
+
   it("rejects unsupported and duplicate download expectations before Runtime", () => {
     const runtime = { interact: vi.fn() } as unknown as RuntimeClient;
     const interact = browserTools(runtime).find(

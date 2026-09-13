@@ -4,11 +4,13 @@ import { describe, expect, it } from "vitest";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   ProductSurface,
+  followupDraftForTask,
   permissionReviewDescription,
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   workflowConfigurationFromDraft,
   workflowDraft,
+  withTaskFollowupDraft,
 } from "./product-surface.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
@@ -42,7 +44,7 @@ function snapshot(
       ],
     },
     product: {
-      version: 8,
+      version: 9,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out" },
@@ -63,6 +65,20 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("keeps follow-up drafts isolated while switching tasks", () => {
+    const first = withTaskFollowupDraft({}, "task_a", "Follow up on A");
+    const switched = withTaskFollowupDraft(
+      first,
+      "task_b",
+      "Different follow-up for B",
+    );
+    expect(followupDraftForTask(switched, "task_a")).toBe("Follow up on A");
+    expect(followupDraftForTask(switched, "task_b")).toBe(
+      "Different follow-up for B",
+    );
+    expect(followupDraftForTask(switched, "task_missing")).toBe("");
+  });
+
   it("round-trips every represented Workflow configuration class without a lossy edit", () => {
     const workflow = {
       workflowId: "workflow_roundtrip",
@@ -220,6 +236,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-13T10:00:00Z",
         approvalsReviewer: "auto_review",
         bootstrapStage: "complete",
+        results: [],
         workflowAssociation: {
           workflowId: "workflow_jobs",
           workflowName: "Job search",
@@ -308,6 +325,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-08T00:00:00Z",
         approvalsReviewer: "auto_review",
         bootstrapStage: "complete",
+        results: [],
         lifecycle: { phase: "closed", reason: "Closed." },
         availableActions: ["archive"],
       },
@@ -496,6 +514,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-07T00:00:00Z",
         approvalsReviewer: "user",
         bootstrapStage: "complete",
+        results: [],
         roveSessionId: "ses_active",
         codexThreadId: "thread_active",
         lifecycle: { phase: "working", reason: "Codex is working." },
@@ -688,6 +707,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-08T00:00:00Z",
         approvalsReviewer: "auto_review",
         bootstrapStage: "complete",
+        results: [],
         lifecycle: { phase: "working", reason: "Working." },
         availableActions: ["finish"],
         conversation: {
@@ -744,6 +764,66 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-12T00:00:00Z",
         approvalsReviewer: "auto_review",
         bootstrapStage: "complete",
+        results: [
+          {
+            resultId: "result_timeline",
+            taskId: "task_timeline",
+            turnId: "turn_timeline",
+            kind: "draft",
+            lifecycle: "prepared",
+            selected: true,
+            currentRevision: 2,
+            revision: {
+              resultId: "result_timeline",
+              revision: 2,
+              title: "Reviewed folder summary",
+              body: "Use the reviewed folder list for the next turn.",
+              artifactIds: [],
+              digest: "f".repeat(64),
+              createdAt: "2026-09-12T00:00:05.000Z",
+            },
+            source: {
+              conversationItemId: "final",
+              conversationTextDigest: "e".repeat(64),
+              evidenceIds: [],
+            },
+            createdAt: "2026-09-12T00:00:05.000Z",
+            updatedAt: "2026-09-12T00:00:06.000Z",
+          },
+          {
+            resultId: "result_action",
+            taskId: "task_timeline",
+            turnId: "turn_timeline",
+            kind: "action",
+            lifecycle: "prepared",
+            selected: false,
+            currentRevision: 1,
+            revision: {
+              resultId: "result_action",
+              revision: 1,
+              title: "Send folder summary",
+              body: "Prepared external update",
+              artifactIds: [],
+              digest: "a".repeat(64),
+              createdAt: "2026-09-12T00:00:07.000Z",
+            },
+            source: {
+              conversationItemId: "final",
+              conversationTextDigest: "e".repeat(64),
+              evidenceIds: [],
+            },
+            actionMaterial: {
+              recipient: "ops@example.test",
+              content: "The folder is organized.",
+              target: "mailbox:ops",
+              attachmentIds: [],
+              scope: "one message",
+            },
+            materialDigest: "b".repeat(64),
+            createdAt: "2026-09-12T00:00:07.000Z",
+            updatedAt: "2026-09-12T00:00:07.000Z",
+          },
+        ],
         lifecycle: { phase: "working", reason: "Working." },
         availableActions: ["message", "finish"],
         attachments: [
@@ -892,6 +972,13 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
     expect(html.match(/aria-label="Copy response"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Task results"');
+    expect(html).toContain("Reviewed folder summary");
+    expect(html).toContain('aria-label="Selected results for follow-up"');
+    expect(html).toContain('aria-label="Save response as result"');
+    expect(html).toContain("Send folder summary");
+    expect(html).toContain("ops@example.test");
+    expect(html).toContain("Authorize exact action");
     expect(html).toContain("Organize the Drive folder</strong>");
     expect(html).toContain('aria-label="Sent attachments"');
     expect(html).not.toContain('aria-label="Current task attachments"');
@@ -963,6 +1050,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       selectedAt: "2026-09-08T00:00:00Z",
       approvalsReviewer: "auto_review" as const,
       bootstrapStage: "complete" as const,
+      results: [],
       lifecycle: {
         phase: "cleanup_required" as const,
         reason: `Cleanup remains for ${suffix}.`,
@@ -1000,6 +1088,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         selectedAt: "2026-09-10T00:00:00Z",
         approvalsReviewer: "auto_review",
         bootstrapStage: "complete",
+        results: [],
         lifecycle: { phase: "ready", reason: "Ready." },
         availableActions: ["finish", "acknowledge_legacy_effects"],
         runtime: {
@@ -1051,6 +1140,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           selectedAt: "2026-09-08T00:00:00Z",
           approvalsReviewer: "auto_review",
           bootstrapStage: "complete",
+          results: [],
           roveSessionId: "ses_explicit",
           codexThreadId: "thread_explicit",
           lifecycle: {

@@ -27,7 +27,7 @@ function snapshot(matched: boolean): DesktopSurfaceSnapshot {
     notice: null,
     workspaces: { workspaces: [] },
     product: {
-      version: 8,
+      version: 9,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out", requiresOpenaiAuth: true },
@@ -47,6 +47,7 @@ function snapshot(matched: boolean): DesktopSurfaceSnapshot {
               selectedAt: "2026-09-08T00:00:00Z",
               approvalsReviewer: "auto_review",
               bootstrapStage: "complete",
+              results: [],
               roveSessionId: sessionId,
               lifecycle: { phase: "working", reason: "Working." },
               availableActions: ["finish"],

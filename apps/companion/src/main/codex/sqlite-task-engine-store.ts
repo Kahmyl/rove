@@ -16,6 +16,7 @@ import type {
 import { emptyTaskAggregate, projectTaskAggregate } from "@rove/protocol";
 import {
   newWorkflowEntry,
+  textDigest,
   validateWorkflowConfiguration,
   validateWorkflowName,
   workflowConfigurationDigest,
@@ -25,9 +26,21 @@ import {
   type WorkflowRevision,
   type WorkflowStore,
 } from "./workflows.js";
+import {
+  newResultId,
+  taskActionMaterialDigest,
+  taskResultRevisionDigest,
+  validateTaskResult,
+  type ResultStore,
+  type TaskResult,
+  type TaskResultKind,
+  type TaskResultLifecycle,
+  type TaskResultSource,
+} from "./results.js";
 
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
+const RESULT_MIGRATION_ID = "0004_add_task_results";
 const PERSISTED_TASK_SCHEMA_VERSION = 2;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
 
@@ -87,7 +100,9 @@ export interface SqliteTaskEngineStoreOptions {
 
 /** The single production lifecycle ledger. Every accepted event, aggregate,
  * projection and next command is committed by one IMMEDIATE transaction. */
-export class SqliteTaskEngineStore implements TaskEngineStore, WorkflowStore {
+export class SqliteTaskEngineStore
+  implements TaskEngineStore, WorkflowStore, ResultStore
+{
   private readonly db: Database.Database;
   private readonly now: () => string;
   private readonly leaseMilliseconds: number;
@@ -310,10 +325,59 @@ export class SqliteTaskEngineStore implements TaskEngineStore, WorkflowStore {
         promoted_at TEXT NOT NULL,
         FOREIGN KEY(workflow_id, revision) REFERENCES workflow_revision(workflow_id, revision) ON DELETE RESTRICT
       );
+      CREATE TABLE IF NOT EXISTS task_result (
+        result_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES task_engine_aggregate(task_id) ON DELETE RESTRICT,
+        turn_id TEXT,
+        kind TEXT NOT NULL CHECK (kind IN ('finding_collection', 'draft', 'report', 'journey', 'artifact', 'action')),
+        lifecycle TEXT NOT NULL CHECK (lifecycle IN ('prepared', 'authorized', 'dispatched', 'confirmed', 'failed', 'unresolved')),
+        selected INTEGER NOT NULL CHECK (selected IN (0, 1)),
+        current_revision INTEGER NOT NULL CHECK (current_revision > 0),
+        source_json TEXT NOT NULL CHECK (json_valid(source_json)),
+        action_material_json TEXT CHECK (action_material_json IS NULL OR json_valid(action_material_json)),
+        material_digest TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS task_result_by_task
+        ON task_result(task_id, updated_at, result_id);
+      CREATE TABLE IF NOT EXISTS task_result_revision (
+        result_id TEXT NOT NULL REFERENCES task_result(result_id) ON DELETE RESTRICT,
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        artifact_ids_json TEXT NOT NULL CHECK (json_valid(artifact_ids_json)),
+        digest TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(result_id, revision)
+      );
+      CREATE TABLE IF NOT EXISTS task_result_operation (
+        operation_id TEXT PRIMARY KEY,
+        request_digest TEXT NOT NULL,
+        result_id TEXT NOT NULL REFERENCES task_result(result_id) ON DELETE RESTRICT,
+        result_revision INTEGER NOT NULL,
+        accepted_at TEXT NOT NULL,
+        FOREIGN KEY(result_id, result_revision) REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
+      );
+      CREATE TABLE IF NOT EXISTS workflow_result_promotion_provenance (
+        operation_id TEXT PRIMARY KEY REFERENCES workflow_operation(operation_id) ON DELETE RESTRICT,
+        workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
+        revision INTEGER NOT NULL,
+        source_task_id TEXT NOT NULL REFERENCES task_engine_aggregate(task_id) ON DELETE RESTRICT,
+        source_result_id TEXT NOT NULL REFERENCES task_result(result_id) ON DELETE RESTRICT,
+        source_result_revision INTEGER NOT NULL,
+        source_text_digest TEXT NOT NULL,
+        promoted_at TEXT NOT NULL,
+        FOREIGN KEY(workflow_id, revision) REFERENCES workflow_revision(workflow_id, revision) ON DELETE RESTRICT,
+        FOREIGN KEY(source_result_id, source_result_revision)
+          REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
+      );
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${WORKFLOW_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
+      INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
+      VALUES ('${RESULT_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       COMMIT;
     `);
   }
@@ -582,9 +646,30 @@ export class SqliteTaskEngineStore implements TaskEngineStore, WorkflowStore {
     text: string;
     appliesTo: readonly string[];
     sourceTaskId: string;
-    sourceItemId: string;
+    sourceItemId?: string;
+    sourceResultId?: string;
+    sourceResultRevision?: number;
     sourceTextDigest: string;
   }): WorkflowEnvironment {
+    if (Boolean(input.sourceItemId) === Boolean(input.sourceResultId))
+      throw new Error("Workflow promotion requires exactly one source.");
+    if (
+      input.sourceResultId &&
+      (!Number.isSafeInteger(input.sourceResultRevision) ||
+        input.sourceResultRevision! < 1)
+    )
+      throw new Error("Workflow result promotion revision is invalid.");
+    if (input.sourceResultId) {
+      const source = this.result(input.sourceTaskId, input.sourceResultId);
+      if (
+        !source ||
+        source.currentRevision !== input.sourceResultRevision ||
+        textDigest(source.revision.body) !== input.sourceTextDigest
+      )
+        throw new Error(
+          "Workflow result promotion source is stale or belongs to another task.",
+        );
+    }
     const requestDigest = this.workflowRequestDigest(input);
     const prior = this.priorWorkflowOperation(input.operationId, requestDigest);
     if (prior) return prior;
@@ -643,13 +728,416 @@ export class SqliteTaskEngineStore implements TaskEngineStore, WorkflowStore {
           nextRevision,
           input.category,
           input.sourceTaskId,
-          input.sourceItemId,
+          input.sourceItemId ?? `result:${input.sourceResultId}`,
           input.sourceTextDigest,
           now,
         );
+      if (input.sourceResultId)
+        this.db
+          .prepare(
+            `INSERT INTO workflow_result_promotion_provenance(operation_id, workflow_id, revision,
+             source_task_id, source_result_id, source_result_revision, source_text_digest, promoted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            input.operationId,
+            input.workflowId,
+            nextRevision,
+            input.sourceTaskId,
+            input.sourceResultId,
+            input.sourceResultRevision,
+            input.sourceTextDigest,
+            now,
+          );
     });
     promote.immediate();
     return this.workflow(input.workflowId)!;
+  }
+
+  private resultFromRow(row: {
+    result_id: string;
+    task_id: string;
+    turn_id: string | null;
+    kind: TaskResultKind;
+    lifecycle: TaskResultLifecycle;
+    selected: number;
+    current_revision: number;
+    source_json: string;
+    action_material_json: string | null;
+    material_digest: string | null;
+    created_at: string;
+    updated_at: string;
+    title: string;
+    body: string;
+    artifact_ids_json: string;
+    digest: string;
+    revision_created_at: string;
+  }): TaskResult {
+    return validateTaskResult({
+      resultId: row.result_id,
+      taskId: row.task_id,
+      ...(row.turn_id ? { turnId: row.turn_id } : {}),
+      kind: row.kind,
+      lifecycle: row.lifecycle,
+      selected: row.selected === 1,
+      currentRevision: row.current_revision,
+      revision: {
+        resultId: row.result_id,
+        revision: row.current_revision,
+        title: row.title,
+        body: row.body,
+        artifactIds: parse<string[]>(row.artifact_ids_json),
+        digest: row.digest,
+        createdAt: row.revision_created_at,
+      },
+      source: parse<TaskResultSource>(row.source_json),
+      ...(row.action_material_json
+        ? { actionMaterial: parse(row.action_material_json) }
+        : {}),
+      ...(row.material_digest ? { materialDigest: row.material_digest } : {}),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  listResults(taskId?: string): readonly TaskResult[] {
+    const rows = this.db
+      .prepare(
+        `SELECT result.*, revision.title, revision.body, revision.artifact_ids_json,
+                revision.digest, revision.created_at AS revision_created_at
+         FROM task_result result
+         JOIN task_result_revision revision
+           ON revision.result_id = result.result_id
+          AND revision.revision = result.current_revision
+         ${taskId ? "WHERE result.task_id = ?" : ""}
+         ORDER BY result.updated_at DESC, result.result_id ASC`,
+      )
+      .all(...(taskId ? [taskId] : [])) as Parameters<
+      SqliteTaskEngineStore["resultFromRow"]
+    >[0][];
+    return rows.map((row) => this.resultFromRow(row));
+  }
+
+  result(taskId: string, resultId: string): TaskResult | null {
+    return (
+      this.listResults(taskId).find((entry) => entry.resultId === resultId) ??
+      null
+    );
+  }
+
+  private priorResultOperation(
+    operationId: string,
+    requestDigest: string,
+  ): TaskResult | null {
+    const row = this.db
+      .prepare(
+        `SELECT operation.request_digest, result.task_id, operation.result_id
+         FROM task_result_operation operation
+         JOIN task_result result ON result.result_id = operation.result_id
+         WHERE operation.operation_id = ?`,
+      )
+      .get(operationId) as
+      | { request_digest: string; task_id: string; result_id: string }
+      | undefined;
+    if (!row) return null;
+    if (row.request_digest !== requestDigest)
+      throw new Error(
+        "Result operation identity was reused with different input.",
+      );
+    const result = this.result(row.task_id, row.result_id);
+    if (!result) throw new Error("Result operation outcome is unavailable.");
+    return result;
+  }
+
+  private createStoredResult(input: {
+    operationId: string;
+    taskId: string;
+    turnId?: string;
+    kind: TaskResultKind;
+    title: string;
+    body: string;
+    artifactIds?: readonly string[];
+    source: TaskResultSource;
+    actionMaterial?: NonNullable<TaskResult["actionMaterial"]>;
+  }): TaskResult {
+    const title = input.title.trim();
+    const body = input.body.trim();
+    const artifactIds = [...(input.artifactIds ?? [])];
+    const materialDigest = input.actionMaterial
+      ? taskActionMaterialDigest(input.actionMaterial)
+      : undefined;
+    const requestDigest = this.workflowRequestDigest({
+      type: "result.create",
+      ...input,
+      title,
+      body,
+      artifactIds,
+      materialDigest,
+    });
+    const prior = this.priorResultOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const resultId = newResultId();
+    const now = this.now();
+    const digest = taskResultRevisionDigest({ title, body, artifactIds });
+    const candidate = validateTaskResult({
+      resultId,
+      taskId: input.taskId,
+      ...(input.turnId ? { turnId: input.turnId } : {}),
+      kind: input.kind,
+      lifecycle: "prepared",
+      selected: false,
+      currentRevision: 1,
+      revision: {
+        resultId,
+        revision: 1,
+        title,
+        body,
+        artifactIds,
+        digest,
+        createdAt: now,
+      },
+      source: input.source,
+      ...(input.actionMaterial
+        ? {
+            actionMaterial: input.actionMaterial,
+            materialDigest: taskActionMaterialDigest(input.actionMaterial),
+          }
+        : {}),
+      createdAt: now,
+      updatedAt: now,
+    });
+    const create = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO task_result(result_id, task_id, turn_id, kind, lifecycle, selected,
+           current_revision, source_json, action_material_json, material_digest, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'prepared', 0, 1, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          resultId,
+          candidate.taskId,
+          candidate.turnId ?? null,
+          candidate.kind,
+          json(candidate.source),
+          candidate.actionMaterial ? json(candidate.actionMaterial) : null,
+          candidate.materialDigest ?? null,
+          now,
+          now,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO task_result_revision(result_id, revision, title, body, artifact_ids_json, digest, created_at)
+           VALUES (?, 1, ?, ?, ?, ?, ?)`,
+        )
+        .run(resultId, title, body, json(artifactIds), digest, now);
+      this.db
+        .prepare(
+          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, 1, ?)`,
+        )
+        .run(input.operationId, requestDigest, resultId, now);
+    });
+    create.immediate();
+    return this.result(candidate.taskId, resultId)!;
+  }
+
+  createResult(input: Parameters<ResultStore["createResult"]>[0]): TaskResult {
+    return this.createStoredResult(input);
+  }
+
+  createAction(input: Parameters<ResultStore["createAction"]>[0]): TaskResult {
+    return this.createStoredResult({
+      ...input,
+      kind: "action",
+      actionMaterial: input.material,
+    });
+  }
+
+  reviseDraft(input: Parameters<ResultStore["reviseDraft"]>[0]): TaskResult {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorResultOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.result(input.taskId, input.resultId);
+    if (!current) throw new Error("Result is unavailable for this task.");
+    if (current.kind !== "draft")
+      throw new Error("Only drafts can be revised.");
+    if (current.currentRevision !== input.expectedRevision)
+      throw new Error("Result revision conflict. Refresh before saving.");
+    const title = input.title.trim();
+    const body = input.body.trim();
+    const artifactIds = [...current.revision.artifactIds];
+    const revision = current.currentRevision + 1;
+    const digest = taskResultRevisionDigest({ title, body, artifactIds });
+    validateTaskResult({
+      ...current,
+      currentRevision: revision,
+      revision: {
+        resultId: current.resultId,
+        revision,
+        title,
+        body,
+        artifactIds,
+        digest,
+        createdAt: this.now(),
+      },
+    });
+    const now = this.now();
+    const revise = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO task_result_revision(result_id, revision, title, body, artifact_ids_json, digest, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.resultId,
+          revision,
+          title,
+          body,
+          json(artifactIds),
+          digest,
+          now,
+        );
+      const changed = this.db
+        .prepare(
+          `UPDATE task_result SET current_revision = ?, updated_at = ?
+           WHERE result_id = ? AND task_id = ? AND current_revision = ?`,
+        )
+        .run(
+          revision,
+          now,
+          input.resultId,
+          input.taskId,
+          input.expectedRevision,
+        );
+      if (changed.changes !== 1) throw new Error("Result revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(input.operationId, requestDigest, input.resultId, revision, now);
+    });
+    revise.immediate();
+    return this.result(input.taskId, input.resultId)!;
+  }
+
+  setResultSelected(
+    input: Parameters<ResultStore["setResultSelected"]>[0],
+  ): TaskResult {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorResultOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.result(input.taskId, input.resultId);
+    if (!current) throw new Error("Result is unavailable for this task.");
+    if (current.currentRevision !== input.expectedRevision)
+      throw new Error("Result revision conflict. Refresh before selecting.");
+    const now = this.now();
+    const update = this.db.transaction(() => {
+      const changed = this.db
+        .prepare(
+          `UPDATE task_result SET selected = ?, updated_at = ?
+           WHERE result_id = ? AND task_id = ? AND current_revision = ?`,
+        )
+        .run(
+          input.selected ? 1 : 0,
+          now,
+          input.resultId,
+          input.taskId,
+          input.expectedRevision,
+        );
+      if (changed.changes !== 1) throw new Error("Result revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.resultId,
+          input.expectedRevision,
+          now,
+        );
+    });
+    update.immediate();
+    return this.result(input.taskId, input.resultId)!;
+  }
+
+  transitionAction(
+    input: Parameters<ResultStore["transitionAction"]>[0],
+  ): TaskResult {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorResultOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.result(input.taskId, input.resultId);
+    if (!current || current.kind !== "action")
+      throw new Error("Action result is unavailable for this task.");
+    if (current.lifecycle !== input.expectedLifecycle)
+      throw new Error("Action result lifecycle conflict.");
+    if (
+      input.lifecycle === "authorized" &&
+      input.materialDigest !== current.materialDigest
+    )
+      throw new Error("Action authorization does not match current material.");
+    const allowed: Record<TaskResultLifecycle, readonly TaskResultLifecycle[]> =
+      {
+        prepared: ["authorized"],
+        authorized: ["dispatched", "failed", "unresolved"],
+        dispatched: ["confirmed", "failed", "unresolved"],
+        unresolved: ["confirmed", "failed"],
+        confirmed: [],
+        failed: [],
+      };
+    if (!allowed[current.lifecycle].includes(input.lifecycle))
+      throw new Error("Action result lifecycle transition is invalid.");
+    if (
+      ["dispatched", "confirmed"].includes(input.lifecycle) &&
+      !input.evidenceIds?.length
+    )
+      throw new Error(
+        "Dispatched and confirmed actions require host evidence.",
+      );
+    const now = this.now();
+    const source = {
+      ...current.source,
+      evidenceIds: [
+        ...new Set([
+          ...current.source.evidenceIds,
+          ...(input.evidenceIds ?? []),
+        ]),
+      ],
+    };
+    const transition = this.db.transaction(() => {
+      const changed = this.db
+        .prepare(
+          `UPDATE task_result SET lifecycle = ?, source_json = ?, updated_at = ?
+           WHERE result_id = ? AND task_id = ? AND lifecycle = ?`,
+        )
+        .run(
+          input.lifecycle,
+          json(source),
+          now,
+          input.resultId,
+          input.taskId,
+          input.expectedLifecycle,
+        );
+      if (changed.changes !== 1)
+        throw new Error("Action result lifecycle conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.resultId,
+          current.currentRevision,
+          now,
+        );
+    });
+    transition.immediate();
+    return this.result(input.taskId, input.resultId)!;
   }
 
   nextHostGeneration(component: "codex" | "runtime"): number {

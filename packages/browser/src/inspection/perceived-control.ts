@@ -385,6 +385,10 @@ export async function readTargetSnapshots(
           !["checkbox", "radio", "file"].includes(field.type)
         ) {
           state.value = field.value.slice(0, 100_000);
+        } else if (!sensitive && field?.type === "file") {
+          state.fileNames = Array.from(field.files ?? [])
+            .map((file) => file.name)
+            .slice(0, 100);
         } else if (!sensitive && element instanceof HTMLTextAreaElement) {
           state.value = element.value.slice(0, 100_000);
         }
@@ -409,6 +413,42 @@ export async function readTargetSnapshots(
     { viewport, offset },
   );
 
+  const fileEvidence = await frame
+    .locator('input[type="file"][data-rove-target]')
+    .evaluateAll(async (elements) =>
+      Promise.all(
+        elements.map(async (element) => {
+          const input = element as HTMLInputElement;
+          const files = await Promise.all(
+            Array.from(input.files ?? [])
+              .slice(0, 100)
+              .map(async (file) => {
+                const digest = await crypto.subtle.digest(
+                  "SHA-256",
+                  await file.arrayBuffer(),
+                );
+                return {
+                  name: file.name,
+                  size: file.size,
+                  sha256: Array.from(new Uint8Array(digest), (byte) =>
+                    byte.toString(16).padStart(2, "0"),
+                  ).join(""),
+                };
+              }),
+          );
+          return {
+            marker: input.getAttribute("data-rove-target"),
+            files,
+          };
+        }),
+      ),
+    );
+  const filesByMarker = new Map(
+    fileEvidence.flatMap((entry) =>
+      entry.marker === null ? [] : [[entry.marker, entry.files] as const],
+    ),
+  );
+
   return new Map(
     snapshots.map((snapshot) => [
       snapshot.marker,
@@ -429,7 +469,12 @@ export async function readTargetSnapshots(
               }),
         },
         perceived: snapshot.perceived,
-        state: snapshot.state,
+        state: {
+          ...snapshot.state,
+          ...(filesByMarker.has(snapshot.marker)
+            ? { files: filesByMarker.get(snapshot.marker)! }
+            : {}),
+        },
       },
     ]),
   );
@@ -602,6 +647,7 @@ export async function readVerificationState(
   checked?: boolean;
   selectedValues?: string[];
   value?: string;
+  fileNames?: string[];
 }> {
   return locator.evaluate((element, isSensitive) => {
     if (
@@ -617,6 +663,18 @@ export async function readVerificationState(
       return {
         selectedValues: Array.from(element.selectedOptions)
           .map((option) => option.value)
+          .slice(0, 100),
+      };
+    }
+
+    if (
+      element instanceof HTMLInputElement &&
+      element.type === "file" &&
+      !isSensitive
+    ) {
+      return {
+        fileNames: Array.from(element.files ?? [])
+          .map((file) => file.name)
           .slice(0, 100),
       };
     }

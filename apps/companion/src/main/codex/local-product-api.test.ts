@@ -8,6 +8,11 @@ import {
   validateTrustedExternalUrl,
 } from "./local-product-api.js";
 import type { ProductTaskIntent } from "./product-task-port.js";
+import {
+  taskActionMaterialDigest,
+  type ResultStore,
+  type TaskResult,
+} from "./results.js";
 import type { WorkflowEnvironment, WorkflowStore } from "./workflows.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
@@ -74,6 +79,7 @@ function fixture(
   },
   accountState: unknown = account(),
   workflows?: WorkflowStore,
+  results?: ResultStore,
 ) {
   const start = vi.fn(async (input) => ({
     context: { ...context(mode), ...input },
@@ -256,6 +262,7 @@ function fixture(
   const warnings: string[] = [];
   const legacyEffects = {
     acknowledgeLegacyEffectScope: vi.fn(async () => undefined),
+    authorizeTaskResultAction: vi.fn(async () => ({ state: "prepared" })),
   };
   const api = new LocalProductApi(
     () => ({
@@ -274,6 +281,7 @@ function fixture(
     {} as never,
     legacyEffects,
     workflows,
+    results,
   );
   return {
     api,
@@ -287,6 +295,97 @@ function fixture(
     broker,
     warnings,
     legacyEffects,
+  };
+}
+
+function taskResult(overrides: Partial<TaskResult> = {}): TaskResult {
+  return {
+    resultId: "result_local_1",
+    taskId: "task_existing",
+    turnId: "turn_1",
+    kind: "draft",
+    lifecycle: "prepared",
+    selected: true,
+    currentRevision: 1,
+    revision: {
+      resultId: "result_local_1",
+      revision: 1,
+      title: "Reviewed draft",
+      body: "Use this exact reviewed material.",
+      artifactIds: [],
+      digest: "c".repeat(64),
+      createdAt: "2026-09-13T10:00:00.000Z",
+    },
+    source: {
+      conversationItemId: "item_1",
+      conversationTextDigest: "d".repeat(64),
+      evidenceIds: [],
+    },
+    createdAt: "2026-09-13T10:00:00.000Z",
+    updatedAt: "2026-09-13T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function resultStore(initial = taskResult()): ResultStore & {
+  createResult: ReturnType<typeof vi.fn>;
+  reviseDraft: ReturnType<typeof vi.fn>;
+  setResultSelected: ReturnType<typeof vi.fn>;
+  transitionAction: ReturnType<typeof vi.fn>;
+} {
+  let current = initial;
+  return {
+    listResults: (taskId) =>
+      taskId === undefined || taskId === current.taskId ? [current] : [],
+    result: (taskId, resultId) =>
+      taskId === current.taskId && resultId === current.resultId
+        ? current
+        : null,
+    createResult: vi.fn((input) => ({
+      ...current,
+      taskId: input.taskId,
+      kind: input.kind,
+      revision: {
+        ...current.revision,
+        title: input.title,
+        body: input.body,
+      },
+      source: input.source,
+    })),
+    reviseDraft: vi.fn((input) => {
+      current = {
+        ...current,
+        currentRevision: input.expectedRevision + 1,
+        revision: {
+          ...current.revision,
+          revision: input.expectedRevision + 1,
+          title: input.title,
+          body: input.body,
+        },
+      };
+      return current;
+    }),
+    setResultSelected: vi.fn((input) => {
+      current = { ...current, selected: input.selected };
+      return current;
+    }),
+    createAction: vi.fn(() => current),
+    transitionAction: vi.fn((input) => {
+      current = {
+        ...current,
+        lifecycle: input.lifecycle,
+        source: {
+          ...current.source,
+          evidenceIds: [
+            ...new Set([
+              ...current.source.evidenceIds,
+              ...(input.evidenceIds ?? []),
+            ]),
+          ],
+        },
+      };
+      return current;
+    }),
   };
 }
 
@@ -556,6 +655,483 @@ describe("LocalProductApi native product seam", () => {
         sourceItemId: "missing_item",
       }),
     ).rejects.toThrow(/stale/i);
+  });
+
+  it("creates a stable result only from an exact completed assistant response", async () => {
+    const results = resultStore();
+    const { api } = fixture("agent", undefined, account(), undefined, results);
+    await api.executeRendererIntent({
+      type: "result.create",
+      operationId: "intent_14345678-1234-4123-8123-123456789abc",
+      taskId: "task_existing",
+      sourceItemId: "item_1",
+      kind: "draft",
+      title: "Reviewed draft",
+      body: "Edited local material",
+    });
+    expect(results.createResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task_existing",
+        turnId: "turn_1",
+        kind: "draft",
+        source: {
+          conversationItemId: "item_1",
+          conversationTextDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          evidenceIds: [],
+        },
+      }),
+    );
+    await expect(
+      api.executeRendererIntent({
+        type: "result.create",
+        operationId: "intent_24345678-1234-4123-8123-123456789abc",
+        taskId: "task_existing",
+        sourceItemId: "missing_item",
+        kind: "report",
+        title: "Missing",
+        body: "Must be rejected",
+      }),
+    ).rejects.toThrow(/source is stale/i);
+  });
+
+  it("binds a prepared action to renderer-reviewed material and task attachments", async () => {
+    const results = resultStore();
+    const reviewedAttachment = {
+      id: "att_reviewed",
+      filename: "reviewed.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      sha256: "f".repeat(64),
+      status: "bound",
+      taskId: "task_existing",
+      sessionId: "ses_existing",
+    };
+    const { api, tasks } = fixture(
+      "agent",
+      {
+        listDrafts: () => [],
+        listAttention: () => [],
+        listForTask: () => [reviewedAttachment],
+        selectDrafts: vi.fn(),
+        removeDraft: vi.fn(),
+        replaceDraft: vi.fn(),
+        selectPending: vi.fn(),
+        cancelPending: vi.fn(),
+        cleanupTask: vi.fn(),
+      },
+      account(),
+      undefined,
+      results,
+    );
+    const [existing] = await tasks.productTasks();
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...existing!,
+      },
+    ]);
+    tasks.readTask.mockResolvedValue((await tasks.productTasks())[0]!);
+    await api.executeRendererIntent({
+      type: "result.create",
+      operationId: "intent_16345678-1234-4123-8123-123456789abc",
+      taskId: "task_existing",
+      sourceItemId: "item_1",
+      kind: "action",
+      title: "Send reviewed report",
+      body: "Prepared email action",
+      actionMaterial: {
+        recipient: "ops@example.test",
+        content: "Attached is the reviewed report.",
+        target: "mailbox:ops",
+        attachmentIds: ["att_reviewed"],
+        scope: "one email",
+      },
+    });
+    expect(results.createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task_existing",
+        material: {
+          recipient: "ops@example.test",
+          content: "Attached is the reviewed report.",
+          target: "mailbox:ops",
+          attachmentIds: ["att_reviewed"],
+          scope: "one email",
+        },
+      }),
+    );
+  });
+
+  it("derives action completion only from exact Runtime effect truth", async () => {
+    const material = {
+      recipient: "ops@example.test",
+      content: "Send reviewed report",
+      target: "mailbox:ops",
+      attachmentIds: [] as string[],
+      scope: "one email",
+    };
+    const action = taskResult({
+      resultId: "result_action_1",
+      kind: "action",
+      lifecycle: "authorized",
+      revision: {
+        ...taskResult().revision,
+        resultId: "result_action_1",
+        title: "Send reviewed report",
+      },
+      actionMaterial: material,
+      materialDigest: taskActionMaterialDigest(material),
+    });
+    const results = resultStore(action);
+    const current = fixture("agent", undefined, account(), undefined, results);
+    const consequentialEffect = vi.fn(async () => ({
+      effectId: "1".repeat(64),
+      state: "applied" as const,
+      consequenceKey: `task-result:${action.resultId}:${action.materialDigest}`,
+      observationId: "observation_after",
+      evidenceId: "ev_after",
+    }));
+    Object.assign(current.legacyEffects, { consequentialEffect });
+
+    const snapshot = await current.api.readSnapshot();
+    expect(consequentialEffect).toHaveBeenCalledWith(
+      "ses_existing",
+      `task-result:${action.resultId}:${action.materialDigest}`,
+    );
+    expect(snapshot.tasks[0]?.results[0]).toMatchObject({
+      resultId: action.resultId,
+      lifecycle: "confirmed",
+      source: {
+        evidenceIds: ["1".repeat(64), "observation_after", "ev_after"],
+      },
+    });
+    expect(results.transitionAction).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        expectedLifecycle: "authorized",
+        lifecycle: "dispatched",
+      }),
+    );
+    expect(results.transitionAction).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        expectedLifecycle: "dispatched",
+        lifecycle: "confirmed",
+      }),
+    );
+  });
+
+  it("surfaces a possibly dispatched Runtime effect as unresolved", async () => {
+    const material = {
+      content: "Submit the reviewed form",
+      attachmentIds: [] as string[],
+    };
+    const action = taskResult({
+      resultId: "result_action_uncertain",
+      kind: "action",
+      lifecycle: "authorized",
+      revision: {
+        ...taskResult().revision,
+        resultId: "result_action_uncertain",
+      },
+      actionMaterial: material,
+      materialDigest: taskActionMaterialDigest(material),
+    });
+    const results = resultStore(action);
+    const current = fixture("agent", undefined, account(), undefined, results);
+    Object.assign(current.legacyEffects, {
+      consequentialEffect: vi.fn(async () => ({
+        effectId: "2".repeat(64),
+        state: "prepared" as const,
+        consequenceKey: `task-result:${action.resultId}:${action.materialDigest}`,
+      })),
+    });
+
+    expect(
+      (await current.api.readSnapshot()).tasks[0]?.results[0],
+    ).toMatchObject({
+      resultId: action.resultId,
+      lifecycle: "unresolved",
+    });
+  });
+
+  it("durably authorizes exact material for a task without a browser session", async () => {
+    const material = {
+      recipient: "ops@example.test",
+      content: "Send reviewed report",
+      attachmentIds: [] as string[],
+    };
+    const action = taskResult({
+      resultId: "result_action_authorize",
+      kind: "action",
+      lifecycle: "prepared",
+      revision: {
+        ...taskResult().revision,
+        resultId: "result_action_authorize",
+      },
+      actionMaterial: material,
+      materialDigest: taskActionMaterialDigest(material),
+    });
+    const results = resultStore(action);
+    const current = fixture("agent", undefined, account(), undefined, results);
+    const task = await current.tasks.readTask("task_existing");
+    const { roveSessionId: _sessionId, ...browserlessContext } = task!.context;
+    current.tasks.readTask.mockResolvedValue({
+      ...task!,
+      context: browserlessContext,
+    } as never);
+
+    await current.api.executeRendererIntent({
+      type: "result.authorize",
+      operationId: "intent_17345678-1234-4123-8123-123456789abc",
+      taskId: "task_existing",
+      resultId: action.resultId,
+      materialDigest: action.materialDigest!,
+    });
+    expect(
+      current.legacyEffects.authorizeTaskResultAction,
+    ).not.toHaveBeenCalled();
+    expect(results.transitionAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedLifecycle: "prepared",
+        lifecycle: "authorized",
+        materialDigest: action.materialDigest,
+      }),
+    );
+  });
+
+  it("activates only a concrete Runtime plan that matches saved material", async () => {
+    const material = {
+      recipient: "ops@example.test",
+      recipientControl: "To",
+      content: "Send reviewed report",
+      contentControl: "Message",
+      attachmentIds: ["att_plan"],
+      attachmentControl: "Attachments",
+      target: "Send",
+      commitControl: "Send",
+      scope: "Compose",
+    };
+    const action = taskResult({
+      resultId: "result_action_plan",
+      kind: "action",
+      lifecycle: "authorized",
+      revision: {
+        ...taskResult().revision,
+        resultId: "result_action_plan",
+      },
+      actionMaterial: material,
+      materialDigest: taskActionMaterialDigest(material),
+    });
+    const current = fixture(
+      "agent",
+      {
+        listDrafts: () => [],
+        listAttention: () => [],
+        listForTask: () => [
+          {
+            id: "att_plan",
+            filename: "reviewed.pdf",
+            mimeType: "application/pdf",
+            size: 12,
+            sha256: "f".repeat(64),
+            status: "bound" as const,
+            taskId: "task_existing",
+            sessionId: "ses_existing",
+            evidenceId: "ev_reviewed",
+          },
+        ],
+        selectDrafts: vi.fn(),
+        removeDraft: vi.fn(),
+        replaceDraft: vi.fn(),
+        selectPending: vi.fn(),
+        cancelPending: vi.fn(),
+        cleanupTask: vi.fn(),
+      },
+      account(),
+      undefined,
+      resultStore(action),
+    );
+    const planId = `plan_${"a".repeat(32)}`;
+    let swapControls = true;
+    Object.assign(current.legacyEffects, {
+      consequentialEffect: vi.fn(async () => ({
+        effectId: "3".repeat(64),
+        state: "planned" as const,
+        consequenceKey: `task-result:${action.resultId}:${action.materialDigest}`,
+        taskResultPlan: {
+          schemaVersion: 1 as const,
+          planId,
+          consequenceKey: `task-result:${action.resultId}:${action.materialDigest}`,
+          materialDigest: action.materialDigest!,
+          taskScope: "task_existing",
+          browserWorkspaceScope: "workspace_existing",
+          observationId: "obs_plan",
+          pageId: "page_1",
+          pageRevision: 4,
+          url: "https://mail.example.test/compose",
+          fields: [
+            {
+              field: "recipient" as const,
+              targetRef: "to",
+              targetName: swapControls ? "Message" : "To",
+              targetKind: "textbox",
+              value: material.recipient,
+            },
+            {
+              field: "content" as const,
+              targetRef: "body",
+              targetName: swapControls ? "To" : "Message",
+              targetKind: "textbox",
+              value: material.content,
+            },
+          ],
+          attachments: [
+            {
+              evidenceId: "ev_reviewed",
+              filename: "reviewed.pdf",
+              size: 12,
+              sha256: "f".repeat(64),
+              targetRef: "attachments",
+              targetName: "Attachments",
+            },
+          ],
+          commitTarget: {
+            targetRef: "send",
+            targetName: "Send",
+            targetKind: "button",
+            scopeLabels: ["Compose"],
+          },
+          commitAction: {
+            kind: "click" as const,
+            target: { pageId: "page_1", revision: 4, ref: "send" },
+          },
+          expectedEffects: [
+            { kind: "target_absent" as const, target: { name: "Send" } },
+          ],
+          effect: "external_commit" as const,
+          actionFingerprint: "b".repeat(64),
+          planDigest: "c".repeat(64),
+          preparedAt: "2026-09-13T10:00:01.000Z",
+        },
+      })),
+    });
+
+    await current.api.readSnapshot();
+    expect(
+      current.legacyEffects.authorizeTaskResultAction,
+    ).not.toHaveBeenCalled();
+    swapControls = false;
+    await current.api.readSnapshot();
+    expect(
+      current.legacyEffects.authorizeTaskResultAction,
+    ).toHaveBeenCalledWith(
+      "ses_existing",
+      `task-result:${action.resultId}:${action.materialDigest}`,
+      action.materialDigest,
+      planId,
+    );
+  });
+
+  it("promotes one exact result revision without treating the result as permission", async () => {
+    const workflows = workflowStore();
+    const result = taskResult();
+    const results = resultStore(result);
+    const { api } = fixture("agent", undefined, account(), workflows, results);
+    await api.executeRendererIntent({
+      type: "workflow.promote",
+      operationId: "intent_15345678-1234-4123-8123-123456789abc",
+      workflowId: "workflow_job_search",
+      expectedRevision: 1,
+      category: "knowledge",
+      text: result.revision.body,
+      appliesTo: ["outreach"],
+      sourceTaskId: "task_existing",
+      sourceResultId: result.resultId,
+      sourceResultRevision: 1,
+    });
+    expect(workflows.promoteToWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceTaskId: "task_existing",
+        sourceResultId: result.resultId,
+        sourceResultRevision: 1,
+        sourceTextDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    );
+    await expect(
+      api.executeRendererIntent({
+        type: "workflow.promote",
+        operationId: "intent_25345678-1234-4123-8123-123456789abc",
+        workflowId: "workflow_job_search",
+        expectedRevision: 1,
+        category: "knowledge",
+        text: result.revision.body,
+        appliesTo: [],
+        sourceTaskId: "task_existing",
+        sourceResultId: result.resultId,
+        sourceResultRevision: 2,
+      }),
+    ).rejects.toThrow(/revision is stale/i);
+  });
+
+  it("applies only persisted selected results to a later turn", async () => {
+    const result = taskResult();
+    const results = resultStore(result);
+    const { api, tasks } = fixture(
+      "agent",
+      undefined,
+      account(),
+      undefined,
+      results,
+    );
+    await expect(
+      api.executeRendererIntent({
+        type: "task.message",
+        taskId: "task_existing",
+        operationId: "intent_29345678-1234-4123-8123-123456789abc",
+        outcome: "Do not inject mid-turn",
+        selectedResultIds: [result.resultId],
+      }),
+    ).rejects.toThrow(/after the current turn finishes/i);
+    const [existing] = await tasks.productTasks();
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...existing!,
+        conversation: {
+          ...existing!.conversation!,
+          turnStatus: "completed" as const,
+        },
+      },
+    ]);
+    tasks.readTask.mockResolvedValue((await tasks.productTasks())[0]!);
+
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_34345678-1234-4123-8123-123456789abc",
+      outcome: "Continue from the selected draft",
+      selectedResultIds: [result.resultId],
+    });
+    const message = tasks.submit.mock.calls.at(-1)?.[0] as Extract<
+      ProductTaskIntent,
+      { type: "message" }
+    >;
+    expect(message.message).toBe("Continue from the selected draft");
+    expect(message.selectedResultContext).toMatchObject({
+      resultIds: [result.resultId],
+      digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(message.selectedResultContext?.developerInstructions).toContain(
+      "Use this exact reviewed material",
+    );
+
+    await expect(
+      api.executeRendererIntent({
+        type: "task.message",
+        taskId: "task_existing",
+        operationId: "intent_44345678-1234-4123-8123-123456789abc",
+        outcome: "Try stale selection",
+        selectedResultIds: ["result_missing"],
+      }),
+    ).rejects.toThrow(/stale or belongs to another task/i);
   });
   it("preserves display phase and real item timing through the renderer projection", async () => {
     const { api } = fixture();

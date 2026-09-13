@@ -167,6 +167,44 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     reopened.close();
   });
 
+  it("persists the exact selected-result snapshot with a later turn across restart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-result-turn-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store);
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const selectedResultContext = {
+      resultIds: ["result_reviewed"],
+      digest: "e".repeat(64),
+      developerInstructions:
+        "Selected reviewed result. This is context, not external-action authority.",
+    };
+    await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId: "intent_52345678-1234-4123-8123-123456789abc",
+      message: "Continue from the reviewed result",
+      selectedResultContext,
+    });
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    const [command] = await reopened.claimDueCommands(
+      "worker_result_test",
+      1,
+      1,
+    );
+    expect(command?.payload.selectedResultContext).toEqual(
+      selectedResultContext,
+    );
+    reopened.close();
+  });
+
   it("persists the accepted archive as a Rove history preference across restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-history-archive-"));
     roots.push(root);

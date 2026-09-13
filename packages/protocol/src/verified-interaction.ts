@@ -221,6 +221,19 @@ export const expectedEffectSchema = z.discriminatedUnion("kind", [
     value: z.string().max(100_000),
   }),
   z.object({
+    kind: z.literal("target_files"),
+    target: expectedTargetSchema,
+    files: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(500),
+          sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        }),
+      )
+      .min(1)
+      .max(100),
+  }),
+  z.object({
     kind: z.literal("target_numeric_value"),
     target: expectedTargetSchema,
     value: z.number().finite(),
@@ -414,6 +427,14 @@ export const verifiedInteractionRequestSchema = z
       ] satisfies BrowserActionEffect[])
       .optional(),
     consequenceKey: z.string().trim().min(1).max(500).optional(),
+    authorizationDigest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    authorizedPlanId: z
+      .string()
+      .regex(/^plan_[a-f0-9]{32}$/)
+      .optional(),
   })
   .superRefine((value, context) => {
     if (
@@ -446,6 +467,21 @@ export const verifiedInteractionRequestSchema = z
         code: "custom",
         path: ["consequenceKey"],
         message: "Consequential actions require a stable consequence key.",
+      });
+    }
+    if (
+      value.consequenceKey?.startsWith("task-result:") &&
+      (value.authorizationDigest === undefined ||
+        value.authorizedPlanId === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path:
+          value.authorizationDigest === undefined
+            ? ["authorizationDigest"]
+            : ["authorizedPlanId"],
+        message:
+          "Task-result actions require the exact registered authorization and concrete plan.",
       });
     }
     if (

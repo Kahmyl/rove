@@ -191,6 +191,7 @@ function verifyEffect(
     case "target_open":
     case "target_closed":
     case "target_value":
+    case "target_files":
     case "target_numeric_value":
     case "target_within_scope":
     case "target_outside_scope":
@@ -384,6 +385,34 @@ function verifyEffect(
           state: causalTransition(
             beforeTarget.state.value === effect.value,
             target.state.value === effect.value,
+          ),
+        };
+      }
+
+      if (effect.kind === "target_files") {
+        if (
+          target.sensitive === true ||
+          beforeTarget.sensitive === true ||
+          target.state?.files === undefined ||
+          beforeTarget.state?.files === undefined
+        ) {
+          return { effect, state: "unresolved" };
+        }
+        const matches = (
+          files: Array<{ name: string; size: number; sha256: string }>,
+        ) =>
+          files.length === effect.files.length &&
+          effect.files.every((expected) =>
+            files.some(
+              (file) =>
+                file.name === expected.name && file.sha256 === expected.sha256,
+            ),
+          );
+        return {
+          effect,
+          state: causalTransition(
+            matches(beforeTarget.state.files),
+            matches(target.state.files),
           ),
         };
       }

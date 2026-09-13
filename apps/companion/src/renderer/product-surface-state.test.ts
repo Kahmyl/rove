@@ -22,7 +22,7 @@ function product(
   account: "unavailable" | "logged_out" | "logged_in" = "logged_in",
 ): LocalProductSnapshot {
   return {
-    version: 8,
+    version: 9,
     host: { state: "ready", ready: true, restartAttempt: 0 },
     catalog: {
       account: { status: account },
@@ -206,6 +206,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-01T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete" as const,
+      results: [],
       lifecycle: {
         phase: "cleanup_required" as const,
         reason: "Runtime cleanup is unconfirmed.",
@@ -251,6 +252,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-12T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete",
+      results: [],
       lifecycle: { phase: "working", reason: "Working." },
       availableActions: ["message", "interrupt", "finish"],
     };
@@ -284,6 +286,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-12T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete",
+      results: [],
       lifecycle: { phase: "closed", reason: "Closed." },
       availableActions: [],
       conversation: {
@@ -335,6 +338,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-07T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete",
+      results: [],
       lifecycle: { phase: "closed", reason: "Closed." },
       availableActions: [],
       conversation: {
@@ -434,6 +438,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-08T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete",
+      results: [],
       lifecycle: { phase: "waiting_for_human", reason: "Handoff." },
       availableActions: ["finish"],
       runtime: {
@@ -480,6 +485,7 @@ describe("native product composer state", () => {
       selectedAt: "2026-09-08T00:00:00.000Z",
       approvalsReviewer: "auto_review",
       bootstrapStage: "complete",
+      results: [],
       lifecycle: { phase: "closed", reason: "Closed." },
       availableActions: [],
     };

@@ -41,6 +41,8 @@ import type {
   VerifySemanticTransactionRequest,
   LocalFileGrantRequest,
   LocalFileGrantResult,
+  PrepareTaskResultActionRequest,
+  TaskResultActionPlan,
 } from "@rove/protocol";
 
 import { RuntimeClientError } from "./runtime-client.error.js";
@@ -136,6 +138,31 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt> {
     return this.call("browser.interact", { sessionId, input });
+  }
+
+  prepareTaskResultAction(
+    sessionId: string,
+    input: PrepareTaskResultActionRequest,
+  ): Promise<TaskResultActionPlan> {
+    return this.call("browser.prepare_task_result_action", {
+      sessionId,
+      input,
+    });
+  }
+
+  consequentialEffect(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<{
+    effectId: string;
+    state: string;
+    consequenceKey: string;
+    taskResultPlan?: TaskResultActionPlan;
+  } | null> {
+    return this.call("browser.task_result_action_plan", {
+      sessionId,
+      consequenceKey,
+    });
   }
 
   beginSemanticTransaction(

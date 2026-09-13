@@ -768,6 +768,14 @@ class GroupBrowserSession implements BrowserSession {
     this.assertPage(result.pageId);
     return result;
   }
+  readTargetFiles(target: TargetReference) {
+    this.assertPage(target.pageId);
+    return this.read(() => this.host.browser.readTargetFiles(target));
+  }
+  readTargetValue(target: TargetReference) {
+    this.assertPage(target.pageId);
+    return this.read(() => this.host.browser.readTargetValue(target));
+  }
   interact(
     request: BrowserInteractionRequest,
     context: BrowserInteractionContext,

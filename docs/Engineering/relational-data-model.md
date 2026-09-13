@@ -1,6 +1,6 @@
 # Relational Data Model
 
-**Status:** Target storage contract and migration guidance. The tables below are a proposed relational shape, not a report that new migrations have already been applied.
+**Status:** Target storage contract plus implemented local Workflow/result mappings. Proposed relation names below are not a requirement to rename compatible installed tables.
 
 ## Storage boundaries
 
@@ -59,9 +59,9 @@ Use conditional updates against the known remote revision. Local revision and re
 
 ## Existing persistence and migration
 
-The reviewed source contains `SqliteTaskStore`/task-ledger storage and `SqliteTaskEngineStore` in `apps/companion/src/main/codex`. Existing migrations include `0001_durable_task_ledger`, `0002_task_engine_event_aggregate_outbox`, and the additive `0003_add_workflow_configuration`. The third migration adds local Workflow environments, immutable configuration revisions, idempotent operation records, and local promotion provenance to the existing task-engine database. These describe actual storage history and are not product release versions. Keep their identities for existing local databases.
+The reviewed source contains `SqliteTaskStore`/task-ledger storage and `SqliteTaskEngineStore` in `apps/companion/src/main/codex`. Existing migrations include `0001_durable_task_ledger`, `0002_task_engine_event_aggregate_outbox`, `0003_add_workflow_configuration`, and `0004_add_task_results`. The third migration adds local Workflow environments, immutable configuration revisions, idempotent operation records, and local conversation-item promotion provenance. The fourth adds task-owned stable results, immutable result revisions, idempotent result operations, and exact result-revision Workflow-promotion provenance. These describe actual storage history and are not product release versions. Keep their identities for existing local databases.
 
-Task/Workflow association and applied per-turn Workflow snapshots remain in the durable task event/aggregate/outbox records rather than introducing another task authority. Future portable synchronization still requires a deliberate migration/provider boundary and must not upload these local execution records. Do not create a second task authority in parallel without a defined cutover, data mapping, backup, and reconciliation plan. Existing compatibility epochs must remain interpretable even when their historical string contains a milestone label.
+Task/Workflow association plus applied per-turn Workflow and selected-result snapshots remain in the durable task event/aggregate/outbox records rather than introducing another task authority. Result rows retain only local source/evidence references and bounded action material; Runtime's effect journal remains authoritative for external dispatch and observed outcome. Future portable synchronization still requires a deliberate migration/provider boundary and must not upload these local execution records. Do not create a second task authority in parallel without a defined cutover, data mapping, backup, and reconciliation plan. Existing compatibility epochs must remain interpretable even when their historical string contains a milestone label.
 
 New migration names identify their effect, such as `0003_add_workflow_configuration`. The numeric prefix is application order, not a product edition. Never relabel an already-applied migration or change its checksum just to clean naming. A test-only temporary migration label may be renamed because it is not an installed database's history. [Kysely migrations](https://kysely.dev/docs/migrations) document the relevant migration model.
 

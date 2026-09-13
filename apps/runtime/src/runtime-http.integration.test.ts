@@ -536,6 +536,17 @@ describe("runtime HTTP API", () => {
       transaction: { status: "committed" },
       receipt: { consequential: true, outcome: "applied" },
     });
+    const effect = await json(
+      baseUrl,
+      `/sessions/${sessionId}/effects/consequential?consequenceKey=${encodeURIComponent("http:move:quarterly-report:archive")}`,
+      {},
+      authorization,
+    );
+    expect(effect.body).toMatchObject({
+      state: "applied",
+      consequenceKey: "http:move:quarterly-report:archive",
+      effectId: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
 
     const finalObservation = await inspect();
     const verified = await json(
@@ -564,6 +575,64 @@ describe("runtime HTTP API", () => {
       status: "verified",
       steps: [{ phase: "prepare" }, { phase: "commit" }],
     });
+
+    const materialDigest = "d".repeat(64);
+    const resultConsequenceKey = `task-result:result_http:${materialDigest}`;
+    const planObservation = await inspect();
+    const resultPlan = await json(
+      baseUrl,
+      `/sessions/${sessionId}/effects/prepare-task-result`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          observationId: planObservation.observationId,
+          consequenceKey: resultConsequenceKey,
+          materialDigest,
+          fieldBindings: [],
+          attachmentBindings: [],
+          commitAction: {
+            kind: "click",
+            target: reference(planObservation, "Quarterly report"),
+          },
+          expectedEffects: [
+            { kind: "target_focused", target: { name: "Quarterly report" } },
+          ],
+          effect: "external_commit",
+        }),
+      },
+      authorization,
+    );
+    expect(resultPlan.body).toMatchObject({
+      planId: expect.stringMatching(/^plan_/),
+      consequenceKey: resultConsequenceKey,
+    });
+    const resultAuthorization = await json(
+      baseUrl,
+      `/sessions/${sessionId}/effects/authorize-task-result`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          consequenceKey: resultConsequenceKey,
+          materialDigest,
+          planId: resultPlan.body.planId,
+        }),
+      },
+      authorization,
+    );
+    expect(resultAuthorization.body).toMatchObject({
+      state: "authorized",
+      consequenceKey: resultConsequenceKey,
+    });
+    expect(
+      (
+        await json(
+          baseUrl,
+          `/sessions/${sessionId}/effects/consequential?consequenceKey=${encodeURIComponent(resultConsequenceKey)}`,
+          {},
+          authorization,
+        )
+      ).body,
+    ).toMatchObject({ state: "authorized" });
 
     await json(
       baseUrl,

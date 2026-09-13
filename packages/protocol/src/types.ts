@@ -184,6 +184,8 @@ export interface PageTargetState {
   checked?: boolean;
   selectedValues?: string[];
   value?: string;
+  fileNames?: string[];
+  files?: Array<{ name: string; size: number; sha256: string }>;
   focused?: boolean;
   expanded?: boolean;
   pressed?: boolean | "mixed";

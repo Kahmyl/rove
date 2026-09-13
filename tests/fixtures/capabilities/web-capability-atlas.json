@@ -124,6 +124,7 @@
       "target_open",
       "target_closed",
       "target_value",
+      "target_files",
       "target_numeric_value",
       "target_within_scope",
       "target_outside_scope",

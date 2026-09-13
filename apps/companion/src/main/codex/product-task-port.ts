@@ -9,6 +9,7 @@ import type {
   TaskIntent,
   TaskLaunchConfiguration,
   TaskPortableValue,
+  TaskSelectedResultContextSnapshot,
 } from "@rove/protocol";
 
 import type {
@@ -49,6 +50,7 @@ export type ProductTaskIntent =
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
     }
   | { type: "interrupt"; taskId: string; operationId: string }
   | { type: "finish"; taskId: string; operationId: string }
@@ -70,6 +72,7 @@ export type ProductTaskIntent =
       message: string;
       attachmentIds?: readonly string[];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
     };
 
 export interface ProductTaskPort {
@@ -209,6 +212,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           ...(intent.workflowContext
             ? { workflowContext: structuredClone(intent.workflowContext) }
             : {}),
+          ...(intent.selectedResultContext
+            ? {
+                selectedResultContext: structuredClone(
+                  intent.selectedResultContext,
+                ),
+              }
+            : {}),
         };
         break;
       case "interrupt":
@@ -274,6 +284,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             : {}),
           ...(intent.workflowContext
             ? { workflowContext: structuredClone(intent.workflowContext) }
+            : {}),
+          ...(intent.selectedResultContext
+            ? {
+                selectedResultContext: structuredClone(
+                  intent.selectedResultContext,
+                ),
+              }
             : {}),
         };
         break;

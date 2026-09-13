@@ -11,6 +11,7 @@ import {
   RoveError,
   sessionModeSchema,
   startSessionRequestSchema,
+  prepareTaskResultActionRequestSchema,
   type StartSessionRequest,
 } from "@rove/protocol";
 
@@ -93,5 +94,83 @@ export class SessionController {
       authorizationId: record.repeatAuthorization!.authorizationId,
       authorizedAt: record.repeatAuthorization!.authorizedAt,
     };
+  }
+
+  @Post(":id/effects/authorize-task-result")
+  async authorizeTaskResultAction(
+    @Param("id") id: string,
+    @Body()
+    body: {
+      consequenceKey?: unknown;
+      materialDigest?: unknown;
+      planId?: unknown;
+    },
+  ) {
+    if (
+      !body ||
+      Object.keys(body).some(
+        (key) =>
+          key !== "consequenceKey" &&
+          key !== "materialDigest" &&
+          key !== "planId",
+      ) ||
+      typeof body.consequenceKey !== "string" ||
+      typeof body.materialDigest !== "string" ||
+      typeof body.planId !== "string"
+    )
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Task-result action authorization request is invalid.",
+      });
+    const record = await this.runtime.authorizeTaskResultAction(
+      id,
+      body.consequenceKey,
+      body.materialDigest,
+      body.planId,
+    );
+    return {
+      effectId: record.effectId,
+      state: record.state,
+      consequenceKey: record.consequenceKey,
+    };
+  }
+
+  @Post(":id/effects/prepare-task-result")
+  prepareTaskResultAction(@Param("id") id: string, @Body() body: unknown) {
+    return this.runtime.prepareTaskResultAction(
+      id,
+      prepareTaskResultActionRequestSchema.parse(body),
+    );
+  }
+
+  @Get(":id/effects/consequential")
+  async consequentialEffect(
+    @Param("id") id: string,
+    @Query("consequenceKey") consequenceKey?: string,
+  ) {
+    if (
+      typeof consequenceKey !== "string" ||
+      consequenceKey.trim().length < 1 ||
+      consequenceKey.length > 500
+    )
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Consequential effect query is invalid.",
+      });
+    const record = await this.runtime.consequentialEffect(id, consequenceKey);
+    return record
+      ? {
+          effectId: record.effectId,
+          state: record.state,
+          consequenceKey: record.consequenceKey,
+          ...(record.observationId
+            ? { observationId: record.observationId }
+            : {}),
+          ...(record.evidenceId ? { evidenceId: record.evidenceId } : {}),
+          ...(record.taskResultPlan
+            ? { taskResultPlan: record.taskResultPlan }
+            : {}),
+        }
+      : null;
   }
 }

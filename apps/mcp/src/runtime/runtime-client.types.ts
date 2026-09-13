@@ -30,6 +30,8 @@ import type {
   VerifySemanticTransactionRequest,
   LocalFileGrantRequest,
   LocalFileGrantResult,
+  PrepareTaskResultActionRequest,
+  TaskResultActionPlan,
 } from "@rove/protocol";
 
 export interface ScrollInput {
@@ -65,6 +67,19 @@ export interface RuntimeClient {
     sessionId: string,
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt>;
+  prepareTaskResultAction(
+    sessionId: string,
+    input: PrepareTaskResultActionRequest,
+  ): Promise<TaskResultActionPlan>;
+  consequentialEffect(
+    sessionId: string,
+    consequenceKey: string,
+  ): Promise<{
+    effectId: string;
+    state: string;
+    consequenceKey: string;
+    taskResultPlan?: TaskResultActionPlan;
+  } | null>;
   beginSemanticTransaction(
     sessionId: string,
     input: BeginSemanticTransactionRequest,
