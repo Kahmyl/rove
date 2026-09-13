@@ -18,6 +18,7 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Events and Live State](Engineering/events-and-live-state.md)                                       | Durable facts, streaming presentation, ordering, resubscription, and replay boundaries.       |
 | [Security and Authentication](Engineering/security-and-authentication.md)                           | Rove identity, Codex connection, device secrets, untrusted input, and data disclosure.        |
 | [Workflow Context and Portability](Engineering/workflow-context-and-portability.md)                 | Guided setup, context assembly, curated knowledge, and limited synchronization.               |
+| [Workflow Portability Decision](Engineering/workflow-portability-decision.md)                       | Provider/identity authority decision, evaluated alternatives, and completed neutral boundary. |
 | [Structured Results and Actions](Engineering/structured-results-and-actions.md)                     | Stable local results, draft revisions, selected follow-up, and evidence-backed action states. |
 | [Browser Control and Recording](Engineering/browser-control-and-recording.md)                       | Task-owned pages, shared resources, perception, handoff, capture, and requested video.        |
 | [Testing and Operations](Engineering/testing-and-operations.md)                                     | Executable checks, acceptance scenarios, packaging, recovery, backup, and evidence.           |

@@ -1,6 +1,6 @@
 # Workflow Context and Portability
 
-**Status:** Local Workflow setup, revisioning, explicit promotion, and turn-boundary context assembly are implemented. Portable synchronization remains a target contract and is deliberately not task, browser, or credential synchronization.
+**Status:** Local Workflow setup, revisioning, explicit promotion, and turn-boundary context assembly are implemented. A strict provider-neutral portable projection, provider contract, tombstone semantics, and deterministic conflict planner are also implemented, but no production identity/provider is selected or connected. Portable synchronization remains unavailable and is deliberately not task, browser, or credential synchronization.
 
 ## Current local implementation
 
@@ -8,7 +8,7 @@ The companion stores Workflow identities and immutable approved configuration re
 
 Task association is separate from disclosure. When starting a Workflow task, the user must explicitly choose whether relevant approved Workflow text may be sent to Codex or whether the association stays local only. For shared tasks, launch and each later idle-turn request assemble only applicable topic-scoped entries and record the exact revision and digest in the durable task event/outbox command. Steering an already-active turn does not change its context mid-action. A later approved edit or promotion can therefore apply at the next turn boundary without rewriting historical task or approval truth.
 
-Save to Workflow identifies one attachment-free task conversation item, shows editable proposed reusable text and a destination/category, and stores local source task/item/digest provenance. It does not copy the conversation, attachments, approvals, credentials, browser state, or execution state. Configuration synchronization, provider ownership, cross-device conflicts, tombstones, and remote recovery below are not implemented.
+Save to Workflow identifies one attachment-free task conversation item, shows editable proposed reusable text and a destination/category, and stores local source task/item/digest provenance. It does not copy the conversation, attachments, approvals, credentials, browser state, or execution state. The provider-neutral boundary validates the same allowlist and defines owner-scoped compare-and-set writes, idempotent operations, tombstone/non-resurrection semantics, bounded stable pagination, cursor invalidation with authoritative refresh, and explicit upload/download/conflict plans. Local persistence of sync cursors, a real Rove identity, a production provider, cross-device UI, and deployed recovery remain unimplemented.
 
 ## Approved environment
 
@@ -73,6 +73,6 @@ Approved knowledge remains editable/removable. Saving guidance is not permission
 
 ## Provider acceptance
 
-A provider must demonstrate owner isolation, conditional updates, idempotent writes, offline conflict recovery, deletion convergence, export, account deletion, and realistic quotas. It is not necessary to deploy a general row-sync platform. The particular provider remains unselected; this contract deliberately prevents that choice from expanding scope to cloud task storage.
+A provider must demonstrate owner isolation, conditional updates, idempotent writes, offline conflict recovery, deletion convergence, export, account deletion, and realistic quotas. It is not necessary to deploy a general row-sync platform. The particular provider remains unselected; this contract deliberately prevents that choice from expanding scope to cloud task storage. The [Workflow Portability Decision](workflow-portability-decision.md) records the exact authority decision, recommendation, alternatives, current provider-neutral implementation, and work remaining after selection.
 
 Test two devices editing the same revision, an offline edit after deletion, expired cursors, sign-out/account switch, secret-field rejection, missing local resources, and a remote update arriving during an active turn. In every case, configuration synchronization must produce zero model or external-action dispatches.
