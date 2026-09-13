@@ -1041,6 +1041,16 @@ select:focus-visible {
   font-weight: 650;
 }
 
+.product-app .product-health-action {
+  min-height: 28px;
+  padding: 0 10px;
+  border-color: var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+}
+
 .product-topbar-actions {
   display: flex;
   align-items: center;
@@ -1102,6 +1112,22 @@ select:focus-visible {
   text-align: left;
 }
 
+.app-menu-status {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app-menu-status strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .profile-modal-backdrop {
   position: fixed;
   z-index: 100;
@@ -1124,6 +1150,19 @@ select:focus-visible {
   border-radius: 20px;
   background: var(--surface-raised);
   box-shadow: 0 28px 80px rgb(0 0 0 / 0.28);
+}
+
+.codex-recovery-dialog {
+  width: min(430px, 100%);
+  gap: 18px;
+}
+
+.codex-recovery-dialog .eyebrow {
+  margin-bottom: 7px;
+}
+
+.codex-recovery-dialog .auth-device-code {
+  margin-top: 0;
 }
 
 .profile-modal > header {
@@ -3700,10 +3739,10 @@ span.composer-control-icon {
 
 .result-card {
   display: grid;
-  min-width: min(340px, 82vw);
-  max-width: 420px;
-  gap: 8px;
-  padding: 14px;
+  min-width: min(420px, 82vw);
+  max-width: 560px;
+  gap: 10px;
+  padding: 16px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--surface-subtle);
@@ -3729,26 +3768,47 @@ span.composer-control-icon {
   border-radius: 999px;
   color: var(--ink-soft);
   background: var(--surface-raised);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: capitalize;
+}
+
+.result-card-heading span[data-result-state="confirmed"],
+.result-card-heading span[data-result-state="available"] {
+  color: #2f6f52;
+  background: #e7f2eb;
+}
+
+.result-card-heading span[data-result-state="authorized"],
+.result-card-heading span[data-result-state="dispatched"],
+.result-card-heading span[data-result-state="unresolved"],
+.result-card-heading span[data-result-state="finalizing"] {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.result-card-heading span[data-result-state="failed"] {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .result-card .message-body {
   max-height: 120px;
   overflow: auto;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .result-action-material {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 10px;
+  gap: 5px 12px;
   margin: 0;
-  padding: 9px;
-  border-radius: 9px;
+  padding: 11px 12px;
+  border-radius: 10px;
   background: var(--surface-raised);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .result-action-material dt {
@@ -3767,9 +3827,9 @@ span.composer-control-icon {
 }
 
 .product-app .result-card footer button {
-  min-height: 30px;
-  padding: 0 9px;
-  font-size: 10px;
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 11px;
 }
 
 .task-timeline {
@@ -4523,11 +4583,14 @@ span.composer-control-icon {
 }
 
 .product-app .selected-result-rail button {
+  width: auto;
+  min-width: 0;
   min-height: 27px;
   max-width: 240px;
   padding: 0 9px;
   overflow: hidden;
   border-color: color-mix(in srgb, var(--sage) 42%, var(--border));
+  border-radius: 999px;
   color: var(--ink-soft);
   background: color-mix(in srgb, var(--sage) 8%, var(--surface-raised));
   font-size: 10px;
@@ -4704,9 +4767,12 @@ span.composer-control-icon {
 }
 
 .product-inspector {
+  display: grid;
   grid-area: inspector;
   min-width: 0;
   min-height: 0;
+  align-content: start;
+  gap: 12px;
   padding: 14px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -4837,7 +4903,7 @@ span.composer-control-icon {
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .composer-control-rail {
     display: contents;
   }
@@ -4855,8 +4921,12 @@ span.composer-control-icon {
     position: fixed;
     right: 16px;
     bottom: 84px;
-    left: 16px;
-    width: auto;
+    left: auto;
+    width: min(380px, calc(100vw - 32px));
+  }
+
+  .model-popover {
+    width: min(280px, calc(100vw - 32px));
   }
 }
 
@@ -5385,15 +5455,20 @@ html[data-rove-theme="dark"] .account-avatar {
   }
 }
 .workflow-list .side-heading button {
+  display: grid;
+  width: 24px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0;
   border: 0;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font-size: 18px;
 }
 
-.workflow-list-row,
-.workflow-empty {
+.product-app .workflow-list-row {
   width: 100%;
   border: 0;
   border-radius: 8px;
@@ -5403,29 +5478,62 @@ html[data-rove-theme="dark"] .account-avatar {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 8px 10px;
+  padding: 7px 6px;
   text-align: left;
 }
 
-.workflow-list-row:hover,
-.workflow-empty:hover {
+.product-app .workflow-list-row:hover {
+  border: 0;
   background: var(--surface-hover, rgba(127, 127, 127, 0.12));
 }
 
-.workflow-list-row small,
-.workflow-empty {
+.workflow-list-row small {
   color: var(--text-muted, #737373);
   font-size: 11px;
+}
+
+.workflow-list-row strong,
+.workflow-list-row small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workflow-task-choice {
   align-items: center;
   display: flex;
-  gap: 6px;
-  font-size: 12px;
+  gap: 0;
+  font-size: 11.5px;
 }
 
-.workflow-task-choice select,
+.workflow-task-choice > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.product-app .workflow-task-choice select {
+  min-height: 30px;
+  padding: 0 24px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background-color: transparent;
+  font-size: 11.5px;
+}
+
+.product-app .workflow-task-choice select:hover,
+.product-app .workflow-task-choice select:focus-visible {
+  border: 0;
+  background-color: var(--surface-subtle);
+}
+
 .workflow-editor-form select,
 .workflow-editor-form input,
 .workflow-editor-form textarea {
@@ -5456,6 +5564,32 @@ html[data-rove-theme="dark"] .account-avatar {
 .workflow-editor-form {
   display: grid;
   gap: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.modal-actions .danger-text {
+  margin-right: auto;
+}
+
+.product-app .modal-actions button {
+  min-height: 38px;
+  padding-inline: 14px;
+}
+
+.profile-modal .modal-error,
+.settings-modal .modal-error {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  font-size: 11px;
 }
 
 .workflow-editor-form label {
@@ -5540,4 +5674,134 @@ html[data-rove-theme="dark"] .account-avatar {
   font-size: 12px;
   line-height: 1.45;
   margin: 0;
+}
+
+.recording-panel {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 0.07);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.075);
+}
+
+.recording-panel .inspector-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.recording-panel .inspector-heading::-webkit-details-marker {
+  display: none;
+}
+
+.recording-panel > summary:focus-visible {
+  outline: 3px solid rgb(23 63 51 / 0.17);
+  outline-offset: -3px;
+}
+
+.recording-panel .inspector-heading::after {
+  color: var(--muted);
+  content: "›";
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.recording-panel[open] .inspector-heading::after {
+  transform: rotate(-90deg);
+}
+
+.recording-panel .inspector-heading small,
+.recording-summary span,
+.recording-actions > small,
+.recording-history small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.recording-summary,
+.recording-scope,
+.recording-actions,
+.recording-history {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid rgb(0 0 0 / 0.06);
+}
+
+.recording-summary,
+.recording-actions,
+.recording-history,
+.recording-history article {
+  display: grid;
+  gap: 7px;
+}
+
+.recording-summary strong {
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.recording-scope,
+.recording-actions > small,
+.recording-history p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.recording-consent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.recording-consent input {
+  margin: 1px 0 0;
+}
+
+.product-app .recording-actions button,
+.product-app .recording-history button {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.recording-history article + article {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+html[data-rove-theme="dark"] .recording-panel {
+  border-color: rgb(255 255 255 / 0.075);
+  background: #1b1c1a;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28);
+}
+
+html[data-rove-theme="dark"] .recording-summary,
+html[data-rove-theme="dark"] .recording-scope,
+html[data-rove-theme="dark"] .recording-actions,
+html[data-rove-theme="dark"] .recording-history {
+  border-color: rgb(255 255 255 / 0.065);
+}
+
+html[data-rove-theme="dark"]
+  .result-card-heading
+  span[data-result-state="confirmed"],
+html[data-rove-theme="dark"]
+  .result-card-heading
+  span[data-result-state="available"] {
+  color: #9ad4b3;
+  background: #20372a;
 }

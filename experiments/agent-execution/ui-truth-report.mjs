@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import process from "node:process";
 
 import { UI_TRUTH_SCENARIOS } from "./ui-truth-scenarios.mjs";
 

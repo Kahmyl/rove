@@ -1,3 +1,4 @@
+import type { LoginProjection } from "../main/codex/account-catalog.js";
 import type {
   LocalProductSnapshot,
   ProductTaskProjection,
@@ -29,6 +30,113 @@ export interface ComposerGate {
   ready: boolean;
   reason?: string;
   browserIdentity?: BrowserIdentity;
+}
+
+export type CodexCustomerStatusKind =
+  | "starting"
+  | "signing_in"
+  | "signed_out"
+  | "ready"
+  | "usage_limit_reached"
+  | "account_check_failed"
+  | "startup_failed"
+  | "unknown_failure";
+
+export interface CodexCustomerStatus {
+  kind: CodexCustomerStatusKind;
+  label: string;
+  ready: boolean;
+  recovery: "sign_in" | "retry" | null;
+}
+
+/**
+ * Customer-facing Codex state derived only from typed desktop/account state.
+ * Raw host and compatibility errors remain developer diagnostics and never
+ * become product copy through this projection.
+ */
+export function codexCustomerStatus(
+  desktop: DesktopSurfaceSnapshot | null,
+  login: LoginProjection | null = null,
+  connectionFailed = false,
+): CodexCustomerStatus {
+  if (connectionFailed)
+    return {
+      kind: "unknown_failure",
+      label: "Something went wrong with Codex",
+      ready: false,
+      recovery: "retry",
+    };
+  if (desktop === null)
+    return {
+      kind: "starting",
+      label: "Starting Codex",
+      ready: false,
+      recovery: null,
+    };
+  if (desktop.productError !== null)
+    return {
+      kind: "startup_failed",
+      label: "Codex couldn't start",
+      ready: false,
+      recovery: null,
+    };
+  const product = desktop.product;
+  if (product === null || product.host.state === "failed")
+    return {
+      kind: "startup_failed",
+      label: "Codex couldn't start",
+      ready: false,
+      recovery: null,
+    };
+  if (!product.host.ready)
+    return {
+      kind: "starting",
+      label:
+        product.host.state === "degraded"
+          ? "Restarting Codex"
+          : "Starting Codex",
+      ready: false,
+      recovery: null,
+    };
+  if (login !== null || product.catalog.login !== undefined)
+    return {
+      kind: "signing_in",
+      label: "Signing in…",
+      ready: false,
+      recovery: null,
+    };
+  const account = product.catalog.account;
+  if (account.status === "unavailable")
+    return {
+      kind: "account_check_failed",
+      label: "Couldn't check your Codex account",
+      ready: false,
+      recovery: "retry",
+    };
+  if (account.status === "logged_out")
+    return {
+      kind: "signed_out",
+      label: "Not signed in to Codex",
+      ready: false,
+      recovery: "sign_in",
+    };
+  if (
+    product.catalog.rateLimits?.some(
+      (limit) => limit.usedPercent !== null && limit.usedPercent >= 100,
+    )
+  )
+    return {
+      kind: "usage_limit_reached",
+      label: "Codex usage limit reached",
+      ready: false,
+      recovery: null,
+    };
+  return {
+    kind: "ready",
+    label: "Codex ready",
+    ready: true,
+    recovery: null,
+  };
 }
 
 export interface TaskControlProjection {
@@ -174,17 +282,24 @@ export function composerGate(
   desktop: DesktopSurfaceSnapshot | null,
   selection: ComposerSelection,
 ): ComposerGate {
-  if (desktop === null) return { ready: false, reason: "Rove is connecting." };
+  if (desktop === null) return { ready: false, reason: "Starting Codex." };
   if (desktop.productError)
-    return { ready: false, reason: desktop.productError };
+    return { ready: false, reason: "Codex couldn't start." };
   const product = desktop.product;
-  if (!product?.host.ready)
-    return { ready: false, reason: "Codex App Server is not ready." };
-  if (product.catalog.account.status !== "logged_in")
+  if (!product?.host.ready) return { ready: false, reason: "Starting Codex." };
+  if (product.catalog.account.status === "unavailable")
     return {
       ready: false,
-      reason: "Sign in to Rove with ChatGPT before starting.",
+      reason: "Couldn't check your Codex account.",
     };
+  if (product.catalog.account.status === "logged_out")
+    return { ready: false, reason: "Not signed in to Codex." };
+  if (
+    product.catalog.rateLimits?.some(
+      (limit) => limit.usedPercent !== null && limit.usedPercent >= 100,
+    )
+  )
+    return { ready: false, reason: "Codex usage limit reached." };
   if (selection.outcome.trim().length === 0)
     return { ready: false, reason: "Describe the outcome you want." };
   const browserIdentity = selectedBrowserIdentity(
@@ -206,14 +321,7 @@ export function composerGate(
 }
 
 export function recoveryLabel(desktop: DesktopSurfaceSnapshot | null): string {
-  if (desktop === null) return "Connecting";
-  if (desktop.productError) return "Codex unavailable";
-  const state = desktop.product?.host.state;
-  if (state === "resolving" || state === "starting" || state === "initializing")
-    return "Starting Codex";
-  if (state === "degraded") return "Restarting Codex";
-  if (state === "failed") return "Codex needs attention";
-  return desktop.product?.host.ready ? "Ready" : "Recovering";
+  return codexCustomerStatus(desktop).label;
 }
 
 export function modeLabel(mode: ExecutionMode): string {

@@ -33,10 +33,10 @@ import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
 import {
   activeProductTask,
+  codexCustomerStatus,
   composerGate,
   modeLabel,
   reconcileSelectedTaskId,
-  recoveryLabel,
   selectableProductTasks,
   taskHistoryTitle,
   taskControlProjection,
@@ -638,21 +638,6 @@ function ConversationAttachment({
   );
 }
 
-function accountPlanLabel(planType: string | undefined): string {
-  if (!planType) return "Signed in";
-  const normalized = planType.toLowerCase();
-  if (normalized.includes("pro")) return "Pro";
-  if (normalized.includes("plus")) return "Plus";
-  if (normalized.includes("business") || normalized.includes("team"))
-    return "Business";
-  if (normalized.includes("enterprise")) return "Enterprise";
-  return planType
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function closeParentMenu(event: MouseEvent<HTMLButtonElement>): void {
   event.currentTarget.closest("details")?.removeAttribute("open");
 }
@@ -958,9 +943,11 @@ export function ProductSurface({
     () => new Set(),
   );
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [recordingConfirmed, setRecordingConfirmed] = useState(false);
   const [login, setLogin] = useState<LoginProjection | null>(null);
+  const [codexRecoveryOpen, setCodexRecoveryOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
@@ -974,6 +961,19 @@ export function ProductSurface({
   const [resultEditor, setResultEditor] = useState<ResultEditorDraft | null>(
     null,
   );
+  const activeModal = workflowEditor
+    ? "workflow"
+    : resultEditor
+      ? "result"
+      : workflowPromotion
+        ? "promotion"
+        : profileManagerOpen
+          ? "profiles"
+          : settingsOpen
+            ? "settings"
+            : codexRecoveryOpen
+              ? "codex"
+              : null;
   const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
@@ -990,9 +990,12 @@ export function ProductSurface({
   const initializedDefaults = useRef(false);
   const previousCurrentTaskId = useRef(activeTask?.taskId ?? null);
   const dragPointer = useRef<number | null>(null);
-  const accountMenu = useRef<HTMLDetailsElement | null>(null);
   const outcomeComposer = useRef<HTMLTextAreaElement | null>(null);
   const followupComposer = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (activeModal !== null) setOperationError(null);
+  }, [activeModal]);
 
   useEffect(() => {
     const dismissOpenMenus = (event: globalThis.PointerEvent) => {
@@ -1022,6 +1025,7 @@ export function ProductSurface({
         });
       setProfileManagerOpen(false);
       setSettingsOpen(false);
+      setCodexRecoveryOpen(false);
       setTaskContextMenu(null);
       setRenamingTaskId(null);
     };
@@ -1170,7 +1174,7 @@ export function ProductSurface({
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
   });
-  const error = operationError ?? connectionError ?? desktop?.productError;
+  const error = operationError;
   const activeAttention =
     product?.attention.filter((entry) =>
       [
@@ -1270,6 +1274,15 @@ export function ProductSurface({
   const visibleLogin =
     product?.catalog.login ??
     (product?.catalog.account.status === "logged_in" ? null : login);
+  const customerCodexStatus = codexCustomerStatus(
+    desktop,
+    visibleLogin,
+    connectionError !== null,
+  );
+
+  useEffect(() => {
+    if (customerCodexStatus.ready) setCodexRecoveryOpen(false);
+  }, [customerCodexStatus.ready]);
 
   useEffect(() => {
     if (
@@ -1319,6 +1332,23 @@ export function ProductSurface({
       setShareWorkflowContext("");
       setShowNewTask(false);
     }
+  };
+  const attemptLaunch = async () => {
+    if (
+      busy ||
+      outcome.trim().length === 0 ||
+      (selectedWorkflowId && !shareWorkflowContext)
+    )
+      return;
+    if (!customerCodexStatus.ready) {
+      setCodexRecoveryOpen(true);
+      return;
+    }
+    if (!gate.ready) {
+      setOperationError(gate.reason ?? "Something went wrong with Codex.");
+      return;
+    }
+    await launch();
   };
   const saveWorkflow = async () => {
     if (!workflowEditor) return;
@@ -1559,21 +1589,15 @@ export function ProductSurface({
           purpose: "account_login",
           loginId: result.loginId,
         });
-        setOperationError(null);
+        setLoginError(null);
       } catch (cause) {
-        setOperationError(
-          cause instanceof Error
-            ? cause.message
-            : "Rove could not open the sign-in page.",
-        );
+        console.error("[codex-login] Could not open sign-in page.", cause);
+        setLoginError("Rove couldn't open the Codex sign-in page. Try again.");
       }
       await refresh();
     } catch (cause) {
-      setOperationError(
-        cause instanceof Error
-          ? cause.message
-          : "Codex sign-in could not start.",
-      );
+      console.error("[codex-login] Sign-in could not start.", cause);
+      setLoginError("Codex sign-in couldn't start. Try again.");
     } finally {
       setBusy(false);
     }
@@ -1585,13 +1609,10 @@ export function ProductSurface({
         purpose: "account_login",
         loginId,
       });
-      setOperationError(null);
+      setLoginError(null);
     } catch (cause) {
-      setOperationError(
-        cause instanceof Error
-          ? cause.message
-          : "Rove could not open the sign-in page.",
-      );
+      console.error("[codex-login] Could not reopen sign-in page.", cause);
+      setLoginError("Rove couldn't open the Codex sign-in page. Try again.");
     } finally {
       setBusy(false);
     }
@@ -1601,14 +1622,12 @@ export function ProductSurface({
     try {
       await command({ type: "account.login.cancel", loginId });
       setLogin((current) => (current?.loginId === loginId ? null : current));
-      setOperationError(null);
+      setLoginError(null);
       await refresh();
+      setCodexRecoveryOpen(false);
     } catch (cause) {
-      setOperationError(
-        cause instanceof Error
-          ? cause.message
-          : "Codex sign-in could not be cancelled.",
-      );
+      console.error("[codex-login] Sign-in could not be cancelled.", cause);
+      setLoginError("Codex sign-in couldn't be cancelled. Try again.");
     } finally {
       setBusy(false);
     }
@@ -2040,7 +2059,7 @@ export function ProductSurface({
         />
         <button
           type="button"
-          aria-label={`Expand Rove. ${unmatchedSession ? "Browser session needs cleanup" : awaitingExplicitResponse ? "Your response is needed" : taskAttention.length ? "Attention required" : recoveryLabel(desktop)}`}
+          aria-label={`Expand Rove. ${unmatchedSession ? "Browser session needs cleanup" : awaitingExplicitResponse ? "Your response is needed" : taskAttention.length ? "Attention required" : customerCodexStatus.label}`}
           onClick={() =>
             void run(() => window.rove.transitionSurface("expand"))
           }
@@ -2071,7 +2090,7 @@ export function ProductSurface({
               ? "Cleanup required"
               : taskAttention.length || fileAttention.length
                 ? "Attention needed"
-                : recoveryLabel(desktop)}
+                : customerCodexStatus.label}
           </span>
           <strong>
             {unmatchedSession
@@ -2216,12 +2235,6 @@ export function ProductSurface({
     (task) => task.taskId === taskContextMenu?.taskId,
   );
   const account = product?.catalog.account;
-  const planLabel =
-    account?.status === "logged_in"
-      ? accountPlanLabel(account.planType)
-      : account?.status === "logged_out"
-        ? "Signed out"
-        : "Connecting…";
   const primaryRateLimit = product?.catalog.rateLimits?.[0];
   const usageRemaining =
     primaryRateLimit?.usedPercent === null ||
@@ -2229,96 +2242,126 @@ export function ProductSurface({
       ? "Unavailable"
       : `${Math.max(0, 100 - Math.round(primaryRateLimit.usedPercent))}% left`;
 
-  const accountGate =
-    account?.status === "logged_in" ? null : (
-      <section className="auth-panel local-auth-panel">
-        <img src={roveMarkUrl} alt="" />
-        <div className="eyebrow">Local work remains available</div>
-        <h1>
-          {account?.status === "logged_out"
-            ? "Sign in to run tasks"
-            : "Getting Codex ready"}
-        </h1>
-        <p>
-          You can inspect and edit local Workflows and return to task history
-          while Codex is disconnected.
-        </p>
-        {account?.error && <small role="alert">{account.error}</small>}
-        {account?.status === "logged_out" && !visibleLogin && (
-          <div className="auth-actions">
-            <button
-              className="primary"
-              onClick={() => void startLogin("chatgpt")}
-              disabled={busy}
-            >
-              Sign in with ChatGPT
-            </button>
-            <button
-              onClick={() => void startLogin("deviceCode")}
-              disabled={busy}
-            >
-              Use device code
-            </button>
+  const retryCodexStatus = async () => {
+    if (product !== null) await run(() => command({ type: "account.refresh" }));
+    else await refresh();
+  };
+  const codexRecoveryDialog = codexRecoveryOpen ? (
+    <div
+      className="profile-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setCodexRecoveryOpen(false);
+      }}
+    >
+      <section
+        className="profile-modal codex-recovery-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="codex-recovery-title"
+      >
+        <header>
+          <div>
+            <div className="eyebrow">Codex execution</div>
+            <h2 id="codex-recovery-title">
+              {customerCodexStatus.kind === "signed_out"
+                ? "Sign in to Codex"
+                : customerCodexStatus.label}
+            </h2>
+            <p>
+              {customerCodexStatus.kind === "signed_out"
+                ? "Rove uses Codex to work on your tasks. Sign in with your ChatGPT account to continue."
+                : customerCodexStatus.kind === "signing_in"
+                  ? "Complete sign-in in your browser, or cancel to return to your draft."
+                  : customerCodexStatus.kind === "usage_limit_reached"
+                    ? "Your draft is saved here. You can try again after your Codex usage limit resets."
+                    : customerCodexStatus.kind === "startup_failed"
+                      ? "Restart Rove to try again. Your draft is saved here."
+                      : "Your draft is saved here. Retry when you are ready."}
+            </p>
           </div>
-        )}
-        {visibleLogin?.type === "chatgpt" && (
-          <div className="auth-actions">
-            <button
-              className="primary"
-              onClick={() => void openLogin(visibleLogin.loginId)}
-              disabled={busy}
-            >
-              Continue sign-in
-            </button>
-            <button
-              onClick={() => void cancelLogin(visibleLogin.loginId)}
-              disabled={busy}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
+          <button
+            className="profile-modal-close"
+            type="button"
+            aria-label="Close Codex recovery"
+            onClick={() => setCodexRecoveryOpen(false)}
+          >
+            ×
+          </button>
+        </header>
         {visibleLogin?.type === "chatgptDeviceCode" && (
           <div className="auth-device-code">
             <span>Enter this code on the verification page</span>
             <code>{visibleLogin.userCode}</code>
-            <div className="auth-actions">
-              <button
-                className="primary"
-                onClick={() => void openLogin(visibleLogin.loginId)}
-                disabled={busy}
-              >
-                Open verification page
-              </button>
-              <button
-                onClick={() => void cancelLogin(visibleLogin.loginId)}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         )}
-        {error && (
-          <div className="product-error" role="alert">
+        {(loginError ||
+          (account?.status === "logged_out" ? account.error : undefined)) && (
+          <div className="product-error modal-error" role="alert">
             <strong>Sign-in needs attention</strong>
-            <span>{error}</span>
+            <span>{loginError ?? account?.error}</span>
           </div>
         )}
-        <button
-          className="auth-refresh"
-          onClick={() => void run(() => command({ type: "account.refresh" }))}
-          disabled={busy}
-        >
-          Refresh account status
-        </button>
+        <div className="modal-actions">
+          {customerCodexStatus.kind === "signed_out" && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void startLogin("chatgpt")}
+              disabled={busy}
+            >
+              Sign in
+            </button>
+          )}
+          {customerCodexStatus.kind === "signing_in" && visibleLogin && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void openLogin(visibleLogin.loginId)}
+              disabled={busy}
+            >
+              {visibleLogin.type === "chatgptDeviceCode"
+                ? "Open verification page"
+                : "Continue sign-in"}
+            </button>
+          )}
+          {customerCodexStatus.recovery === "retry" && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void retryCodexStatus()}
+              disabled={busy}
+            >
+              Retry
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (visibleLogin) void cancelLogin(visibleLogin.loginId);
+              else setCodexRecoveryOpen(false);
+            }}
+            disabled={busy}
+          >
+            {visibleLogin ? "Cancel" : "Not now"}
+          </button>
+        </div>
       </section>
-    );
+    </div>
+  ) : null;
+  const renderModalError = () =>
+    error ? (
+      <div className="product-error modal-error" role="alert">
+        <strong>Rove needs attention</strong>
+        <span>{error}</span>
+      </div>
+    ) : null;
 
   return (
     <div
       className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
     >
+      {codexRecoveryDialog}
       {workflowEditor && (
         <div className="profile-modal-backdrop" role="presentation">
           <section
@@ -2471,7 +2514,8 @@ export function ProductSurface({
                 connected in the future. Secrets, credentials, local paths, task
                 history, attachments, and browser state are rejected.
               </p>
-              <div className="auth-actions">
+              {renderModalError()}
+              <div className="modal-actions">
                 {workflowEditor.workflowId &&
                   product?.workflows.find(
                     (entry) => entry.workflowId === workflowEditor.workflowId,
@@ -2750,7 +2794,8 @@ export function ProductSurface({
                   }
                 />
               </label>
-              <div className="auth-actions">
+              {renderModalError()}
+              <div className="modal-actions">
                 <button type="button" onClick={() => setResultEditor(null)}>
                   Cancel
                 </button>
@@ -2885,7 +2930,8 @@ export function ProductSurface({
                   }
                 />
               </label>
-              <div className="auth-actions">
+              {renderModalError()}
+              <div className="modal-actions">
                 <button
                   type="button"
                   onClick={() => setWorkflowPromotion(null)}
@@ -2957,9 +3003,20 @@ export function ProductSurface({
         <div className="product-topbar-actions">
           <div className="product-health" aria-live="polite">
             <span
-              className={`status-pip status-${product?.host.state ?? "offline"}`}
+              className={`status-pip status-${customerCodexStatus.ready ? "ready" : customerCodexStatus.kind === "starting" || customerCodexStatus.kind === "signing_in" ? "starting" : "offline"}`}
             />
-            {recoveryLabel(desktop)}
+            <span>{customerCodexStatus.label}</span>
+            {!codexRecoveryOpen && customerCodexStatus.recovery !== null && (
+              <button
+                className="product-health-action"
+                type="button"
+                onClick={() => setCodexRecoveryOpen(true)}
+              >
+                {customerCodexStatus.recovery === "sign_in"
+                  ? "Sign in"
+                  : "Retry"}
+              </button>
+            )}
           </div>
           <details className="app-menu">
             <summary aria-label="Rove settings" title="Rove settings">
@@ -2975,6 +3032,32 @@ export function ProductSurface({
               >
                 Browser profiles
               </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  closeParentMenu(event);
+                  setSettingsOpen(true);
+                }}
+              >
+                Settings
+              </button>
+              {account?.status === "logged_in" && (
+                <>
+                  <div className="app-menu-status">
+                    <span>Codex usage</span>
+                    <strong>{usageRemaining}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void run(() => command({ type: "account.logout" }))
+                    }
+                    disabled={busy}
+                  >
+                    Sign out of Codex
+                  </button>
+                </>
+              )}
             </div>
           </details>
         </div>
@@ -3223,6 +3306,7 @@ export function ProductSurface({
               </div>
             </form>
 
+            {renderModalError()}
             <footer>
               <p>
                 Guest browsing is available from Task setup. Guest data is
@@ -3315,6 +3399,7 @@ export function ProductSurface({
                   .finally(() => setBusy(false));
               }}
             />
+            {renderModalError()}
           </section>
         </div>
       )}
@@ -3325,7 +3410,6 @@ export function ProductSurface({
           aria-label="Task workspace"
           tabIndex={0}
         >
-          {accountGate}
           {unmatchedSession !== null && (
             <section
               className="product-warning"
@@ -3485,12 +3569,7 @@ export function ProductSurface({
                     )
                       return;
                     event.preventDefault();
-                    if (
-                      gate.ready &&
-                      !busy &&
-                      (!selectedWorkflowId || shareWorkflowContext)
-                    )
-                      void launch();
+                    void attemptLaunch();
                   }}
                 />
                 <div className="composer-action-row">
@@ -3741,23 +3820,26 @@ export function ProductSurface({
                             : gate.reason
                       }
                       disabled={
-                        !gate.ready ||
                         busy ||
+                        outcome.trim().length === 0 ||
                         Boolean(selectedWorkflowId && !shareWorkflowContext)
                       }
-                      onClick={() => void launch()}
+                      onClick={() => void attemptLaunch()}
                     >
                       <span aria-hidden="true">↑</span>
                     </button>
                   </div>
                 </div>
               </ComposerInputShell>
-              {!gate.ready && gate.reason && outcome.trim().length > 0 && (
-                <div className="product-warning" role="status">
-                  <strong>Choose how to continue</strong>
-                  <span>{gate.reason}</span>
-                </div>
-              )}
+              {customerCodexStatus.ready &&
+                !gate.ready &&
+                gate.reason &&
+                outcome.trim().length > 0 && (
+                  <div className="product-warning" role="status">
+                    <strong>Choose how to continue</strong>
+                    <span>{gate.reason}</span>
+                  </div>
+                )}
             </div>
           )}
 
@@ -3771,6 +3853,7 @@ export function ProductSurface({
                 )
                 .map((recording) => ({ task, recording })),
             )
+            .filter(({ task }) => task.taskId !== viewedTask?.taskId)
             .map(({ task, recording }) => (
               <div
                 className="product-warning"
@@ -3786,129 +3869,6 @@ export function ProductSurface({
 
           {viewedTask && (
             <div className="task-detail">
-              <section className="result-shelf" aria-label="Task recordings">
-                <header>
-                  <div>
-                    <div className="eyebrow">Page recording</div>
-                    <strong>Task-owned browser evidence</strong>
-                  </div>
-                  <small>{modeLabel(viewedTask.executionMode)}</small>
-                </header>
-                <p>
-                  Records the selected page only, without audio. Browser chrome,
-                  other tabs, popups, and native dialogs are excluded.
-                  Continuous video is not masked.
-                </p>
-                {(viewedTask.recordings ?? []).some((recording) =>
-                  ["requested", "recording", "finalizing"].includes(
-                    recording.state,
-                  ),
-                ) ? (
-                  (viewedTask.recordings ?? [])
-                    .filter((recording) =>
-                      ["requested", "recording", "finalizing"].includes(
-                        recording.state,
-                      ),
-                    )
-                    .map((recording) => (
-                      <button
-                        type="button"
-                        className="secondary"
-                        key={recording.id}
-                        disabled={busy || recording.state === "finalizing"}
-                        onClick={() =>
-                          void stopRecording(viewedTask.taskId, recording.id)
-                        }
-                      >
-                        {recording.state === "finalizing"
-                          ? "Finalizing recording…"
-                          : "Stop page recording"}
-                      </button>
-                    ))
-                ) : (
-                  <>
-                    <label className="result-select">
-                      <input
-                        type="checkbox"
-                        checked={recordingConfirmed}
-                        disabled={busy}
-                        onChange={(event) =>
-                          setRecordingConfirmed(event.currentTarget.checked)
-                        }
-                      />
-                      <span>
-                        I understand visible sensitive content will be recorded
-                        and will stop before revealing secrets.
-                      </span>
-                    </label>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={
-                        busy ||
-                        !recordingConfirmed ||
-                        ["closed", "failed"].includes(
-                          viewedTask.lifecycle.phase,
-                        )
-                      }
-                      onClick={() => void startPageRecording(viewedTask.taskId)}
-                    >
-                      Start page recording
-                    </button>
-                    <small>
-                      Browser-window recording is unavailable until Rove can
-                      isolate one task per browser window.
-                    </small>
-                  </>
-                )}
-                {(viewedTask.recordings ?? []).filter((recording) =>
-                  ["available", "failed"].includes(recording.state),
-                ).length > 0 && (
-                  <div className="result-card-list">
-                    {(viewedTask.recordings ?? [])
-                      .filter((recording) =>
-                        ["available", "failed"].includes(recording.state),
-                      )
-                      .map((recording) => (
-                        <article className="result-card" key={recording.id}>
-                          <div className="result-card-heading">
-                            <strong>Page recording</strong>
-                            <span data-result-state={recording.state}>
-                              {recording.state}
-                            </span>
-                          </div>
-                          <small>
-                            {recording.scope.kind === "page"
-                              ? recording.scope.url
-                              : "Browser window"}{" "}
-                            · no audio
-                          </small>
-                          {recording.state === "failed" ? (
-                            <p role="status">
-                              Recording unavailable:{" "}
-                              {recording.failure?.message}
-                            </p>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() =>
-                                void run(() =>
-                                  window.rove.openRecording(
-                                    viewedTask.taskId,
-                                    recording.id,
-                                  ),
-                                )
-                              }
-                            >
-                              Open recording
-                            </button>
-                          )}
-                        </article>
-                      ))}
-                  </div>
-                )}
-              </section>
               {viewedTask.results.length > 0 && (
                 <section className="result-shelf" aria-label="Task results">
                   <header>
@@ -4500,7 +4460,7 @@ export function ProductSurface({
             </div>
           )}
 
-          {error && (
+          {error && activeModal === null && (
             <div className="product-error" role="alert">
               <strong>Rove needs attention</strong>
               <span>{error}</span>
@@ -4558,15 +4518,6 @@ export function ProductSurface({
                 </small>
               </button>
             ))}
-            {(product?.workflows.length ?? 0) === 0 && (
-              <button
-                className="workflow-empty"
-                type="button"
-                onClick={() => setWorkflowEditor(workflowDraft())}
-              >
-                Create a reusable environment for recurring work
-              </button>
-            )}
           </section>
 
           {(product?.tasks.length ?? 0) > 0 && (
@@ -4698,64 +4649,6 @@ export function ProductSurface({
               )}
             </div>
           )}
-
-          <details className="account-menu" ref={accountMenu}>
-            <summary>
-              <span className="account-avatar" aria-hidden="true">
-                R
-              </span>
-              <span className="account-summary-copy">
-                <strong>ChatGPT account</strong>
-                <small>{planLabel}</small>
-              </span>
-              <span className="account-chevron" aria-hidden="true">
-                ···
-              </span>
-            </summary>
-            <div className="account-popover" role="menu">
-              {account?.status === "logged_in" && (
-                <div className="account-popover-row" role="menuitem">
-                  <svg viewBox="0 0 20 20" aria-hidden="true">
-                    <path d="M3.2 13.8a7 7 0 1 1 13.6 0M10 10l3.3-2.4" />
-                    <circle cx="10" cy="10" r="1" />
-                  </svg>
-                  <span>Usage</span>
-                  <strong>{usageRemaining}</strong>
-                </div>
-              )}
-              <button
-                className="account-popover-row"
-                type="button"
-                role="menuitem"
-                onClick={(event) => {
-                  closeParentMenu(event);
-                  setSettingsOpen(true);
-                }}
-              >
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <circle cx="10" cy="10" r="3" />
-                  <path d="M10 2.5v1.4M10 16.1v1.4M17.5 10h-1.4M3.9 10H2.5M15.3 4.7l-1 1M5.7 14.3l-1 1M15.3 15.3l-1-1M5.7 5.7l-1-1" />
-                </svg>
-                <span>Settings</span>
-              </button>
-              {account?.status === "logged_in" && (
-                <button
-                  className="account-popover-row"
-                  type="button"
-                  role="menuitem"
-                  onClick={() =>
-                    void run(() => command({ type: "account.logout" }))
-                  }
-                  disabled={busy}
-                >
-                  <svg viewBox="0 0 20 20" aria-hidden="true">
-                    <path d="M8 3.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1H8M11.5 6.5 15 10l-3.5 3.5M7 10h8" />
-                  </svg>
-                  Sign out
-                </button>
-              )}
-            </div>
-          </details>
         </aside>
         {viewedTask && (
           <aside className="product-inspector" aria-label="Task inspector">
@@ -4834,6 +4727,148 @@ export function ProductSurface({
                 )}
               </div>
             </section>
+            <details
+              className="inspector-panel recording-panel"
+              aria-label="Task recordings"
+              open={(viewedTask.recordings ?? []).length > 0}
+            >
+              <summary className="inspector-heading">
+                <span>Recording</span>
+                <small>
+                  {
+                    {
+                      agent: "Agent",
+                      companion: "Companion",
+                      capture: "Capture · Human-driven",
+                    }[viewedTask.executionMode]
+                  }
+                </small>
+              </summary>
+              <div className="recording-summary">
+                <strong>
+                  {(viewedTask.recordings ?? []).some((recording) =>
+                    ["requested", "recording"].includes(recording.state),
+                  )
+                    ? "Page recording active"
+                    : (viewedTask.recordings ?? []).some(
+                          (recording) => recording.state === "finalizing",
+                        )
+                      ? "Finalizing recording"
+                      : "Task-owned page evidence"}
+                </strong>
+                <span>Selected page only · no audio</span>
+              </div>
+              <p className="recording-scope">
+                Browser chrome, other tabs, popups, and native dialogs are
+                excluded. Continuous video is not masked.
+              </p>
+              {(viewedTask.recordings ?? []).some((recording) =>
+                ["requested", "recording", "finalizing"].includes(
+                  recording.state,
+                ),
+              ) ? (
+                (viewedTask.recordings ?? [])
+                  .filter((recording) =>
+                    ["requested", "recording", "finalizing"].includes(
+                      recording.state,
+                    ),
+                  )
+                  .map((recording) => (
+                    <div className="recording-actions" key={recording.id}>
+                      <small>{recording.state.replaceAll("_", " ")}</small>
+                      <button
+                        type="button"
+                        disabled={busy || recording.state === "finalizing"}
+                        onClick={() =>
+                          void stopRecording(viewedTask.taskId, recording.id)
+                        }
+                      >
+                        {recording.state === "finalizing"
+                          ? "Finalizing recording…"
+                          : "Stop page recording"}
+                      </button>
+                    </div>
+                  ))
+              ) : (
+                <div className="recording-actions">
+                  <label className="recording-consent">
+                    <input
+                      type="checkbox"
+                      checked={recordingConfirmed}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setRecordingConfirmed(event.currentTarget.checked)
+                      }
+                    />
+                    <span>
+                      I understand visible sensitive content will be recorded
+                      and will stop before revealing secrets.
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !recordingConfirmed ||
+                      ["closed", "failed"].includes(viewedTask.lifecycle.phase)
+                    }
+                    onClick={() => void startPageRecording(viewedTask.taskId)}
+                  >
+                    Start page recording
+                  </button>
+                  <small>
+                    Browser-window recording is unavailable until Rove can
+                    isolate one task per browser window.
+                  </small>
+                </div>
+              )}
+              {(viewedTask.recordings ?? []).filter((recording) =>
+                ["available", "failed"].includes(recording.state),
+              ).length > 0 && (
+                <div className="recording-history">
+                  {(viewedTask.recordings ?? [])
+                    .filter((recording) =>
+                      ["available", "failed"].includes(recording.state),
+                    )
+                    .map((recording) => (
+                      <article key={recording.id}>
+                        <div className="result-card-heading">
+                          <strong>Page recording</strong>
+                          <span data-result-state={recording.state}>
+                            {recording.state}
+                          </span>
+                        </div>
+                        <small>
+                          {recording.scope.kind === "page"
+                            ? recording.scope.url
+                            : "Browser window"}{" "}
+                          · no audio
+                        </small>
+                        {recording.state === "failed" ? (
+                          <p role="status">
+                            Recording unavailable: {recording.failure?.message}
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(() =>
+                                window.rove.openRecording(
+                                  viewedTask.taskId,
+                                  recording.id,
+                                ),
+                              )
+                            }
+                          >
+                            Open recording
+                          </button>
+                        )}
+                      </article>
+                    ))}
+                </div>
+              )}
+            </details>
           </aside>
         )}
       </main>

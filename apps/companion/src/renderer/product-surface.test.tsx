@@ -364,7 +364,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
     expect(html).toContain('aria-label="Create Workflow"');
-    expect(html).toContain("Local work remains available");
+    expect(html).not.toContain("Local work remains available");
     expect(html).toContain("Job search");
     expect(html).toContain("Revision 2");
     expect(html).toContain("Past reviews");
@@ -460,7 +460,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("New task blocked");
   });
 
-  it("gates the product on sign-in, then renders compact task controls and account details", () => {
+  it("keeps first launch task-focused and places Codex access in execution status", () => {
     const value = snapshot();
     const signedOut = renderToStaticMarkup(
       <ProductSurface
@@ -470,11 +470,16 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(signedOut).toContain("Sign in to run tasks");
-    expect(signedOut).toContain("Sign in with ChatGPT");
+    expect(signedOut).toContain("Not signed in to Codex");
+    expect(signedOut).toContain(">Sign in</button>");
     expect(signedOut).toContain('aria-label="Desired outcome"');
     expect(signedOut).toContain('aria-label="Create Workflow"');
-    expect(signedOut).toContain('aria-label="Start task" title="Sign in');
+    expect(signedOut).not.toContain("Reusable guidance for recurring work");
+    expect(signedOut).not.toContain("ChatGPT account");
+    expect(signedOut).not.toContain("Connecting");
+    expect(signedOut).toContain(
+      'aria-label="Start task" title="Not signed in to Codex."',
+    );
 
     value.product!.catalog.account = {
       status: "logged_in",
@@ -502,12 +507,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-pressed="true"><span>Approve for me</span>');
     expect(html).toContain("Always ask");
     expect(html).not.toContain("Routine eligible requests are reviewed");
-    expect(html).toContain("ChatGPT account");
-    expect(html).toContain("Pro");
+    expect(html).toContain("Codex ready");
+    expect(html).not.toContain("ChatGPT account");
     expect(html).not.toContain("self_serve_business_prolite");
-    expect(html).toContain(">Usage</span>");
-    expect(html).toContain(">Settings</span>");
-    expect(html).toContain("Sign out");
+    expect(html).toContain("Codex usage");
+    expect(html).toContain("Settings");
+    expect(html).toContain("Sign out of Codex");
     expect(html).not.toContain("Usage window");
     expect(html).not.toContain("Token activity");
     expect(html).not.toContain(">Refresh</button>");
@@ -519,7 +524,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
   });
 
-  it("renders only the bounded actionable Rove login failure", () => {
+  it("does not scatter a login failure outside the focused recovery surface", () => {
     const value = snapshot();
     value.product!.catalog.account = {
       status: "logged_out",
@@ -534,9 +539,30 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain(
-      '<small role="alert">Rove sign-in did not complete. Try again or use device code.</small>',
+    expect(html).toContain("Not signed in to Codex");
+    expect(html).not.toContain(
+      "Rove sign-in did not complete. Try again or use device code.",
     );
+    expect(html.match(/>Sign in<\/button>/g)).toHaveLength(1);
+  });
+
+  it("keeps local Codex compatibility diagnostics out of customer recovery copy", () => {
+    const value = snapshot();
+    value.product = null;
+    value.productError =
+      "Codex 0.154.0 is not reviewed baseline 0.153.4; sha256 deadbeef.";
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Codex couldn&#x27;t start");
+    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(/0\.154|0\.153|baseline|sha256|App Server/);
+    expect(html).not.toContain("Rove needs attention");
   });
 
   it("shows an unmatched Runtime cleanup card without inventing a product task", () => {
@@ -1141,7 +1167,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(chip).toContain('aria-label="Expand Rove. Ready"');
+    expect(chip).toContain('aria-label="Expand Rove. Not signed in to Codex"');
     expect(expanded).toContain("Go to Rove");
     expect(expanded).toContain('aria-label="Collapse Rove"');
   });

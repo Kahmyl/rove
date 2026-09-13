@@ -7,6 +7,7 @@ import type {
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   activeProductTask,
+  codexCustomerStatus,
   composerGate,
   newestDesktopSnapshot,
   reconcileSelectedTaskId,
@@ -157,7 +158,7 @@ describe("native product composer state", () => {
         mode: "agent",
         browserChoice: `workspace:${workspaceId}`,
       }).reason,
-    ).toBe("Sign in to Rove with ChatGPT before starting.");
+    ).toBe("Not signed in to Codex.");
 
     state.product!.catalog.account = { status: "logged_in" };
     expect(
@@ -515,8 +516,8 @@ describe("native product composer state", () => {
     ).toBeNull();
   });
 
-  it("distinguishes startup, restart, sign-in, MCP/product failure, and ready state", () => {
-    expect(recoveryLabel(null)).toBe("Connecting");
+  it("projects exact customer Codex states without exposing technical failures", () => {
+    expect(recoveryLabel(null)).toBe("Starting Codex");
     const starting = desktop();
     starting.product!.host = {
       state: "initializing",
@@ -530,9 +531,54 @@ describe("native product composer state", () => {
       restartAttempt: 1,
     };
     expect(recoveryLabel(starting)).toBe("Restarting Codex");
-    starting.productError = "Rove MCP unavailable";
-    expect(recoveryLabel(starting)).toBe("Codex unavailable");
-    expect(recoveryLabel(desktop())).toBe("Ready");
+    starting.productError =
+      "Codex 0.154.0 is not reviewed baseline 0.153.4 (sha256 deadbeef).";
+    expect(recoveryLabel(starting)).toBe("Codex couldn't start");
+    expect(recoveryLabel(starting)).not.toMatch(
+      /0\.154|baseline|sha256|App Server/,
+    );
+
+    const signedOut = desktop("logged_out");
+    expect(codexCustomerStatus(signedOut)).toMatchObject({
+      kind: "signed_out",
+      label: "Not signed in to Codex",
+      recovery: "sign_in",
+    });
+    expect(
+      codexCustomerStatus(signedOut, {
+        type: "chatgpt",
+        loginId: "login_a",
+      }),
+    ).toMatchObject({ kind: "signing_in", label: "Signing in…" });
+
+    const accountFailure = desktop("unavailable");
+    accountFailure.product!.catalog.account.error = "RPC unavailable";
+    expect(codexCustomerStatus(accountFailure)).toMatchObject({
+      kind: "account_check_failed",
+      label: "Couldn't check your Codex account",
+      recovery: "retry",
+    });
+
+    const usageLimited = desktop();
+    usageLimited.product!.catalog.rateLimits = [
+      {
+        limitId: "codex",
+        limitName: "Five-hour window",
+        usedPercent: 100,
+        resetsAt: 1788825600,
+        windowDurationMins: 300,
+        planType: "Plus",
+      },
+    ];
+    expect(codexCustomerStatus(usageLimited)).toMatchObject({
+      kind: "usage_limit_reached",
+      label: "Codex usage limit reached",
+    });
+    expect(recoveryLabel(desktop())).toBe("Codex ready");
+    expect(codexCustomerStatus(desktop(), null, true)).toMatchObject({
+      kind: "unknown_failure",
+      label: "Something went wrong with Codex",
+    });
   });
 
   it("contains no browser profile filesystem path in the renderer workspace projection", () => {

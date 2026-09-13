@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global document, getComputedStyle, localStorage, window */
+/* global document, getComputedStyle, HTMLButtonElement, HTMLDetailsElement, HTMLElement, localStorage, window */
 
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -961,6 +961,105 @@ async function requireInputValue(page, value, label) {
   if (!matched) throw new Error(`[UI Truth] Expected form value: ${label}`);
 }
 
+async function captureVisualMetrics(page) {
+  return page.evaluate(() => {
+    const selectors = [
+      ".product-topbar",
+      ".product-sidebar",
+      ".sidebar-new-task",
+      ".workflow-list",
+      ".workflow-list-row",
+      ".side-heading",
+      ".task-history-row",
+      ".product-main",
+      ".composer-welcome h1",
+      ".composer-input-shell",
+      ".composer-input-shell > textarea",
+      ".composer-menu > summary",
+      ".workflow-task-choice select",
+      ".task-detail",
+      ".task-timeline",
+      ".timeline-message .message-body",
+      ".attention-card",
+      ".result-shelf",
+      ".result-card",
+      ".result-card-heading strong",
+      ".result-action-material",
+      ".recording-panel",
+      ".product-inspector",
+      ".inspector-panel",
+      ".profile-modal",
+      ".settings-modal",
+      ".workflow-editor-form",
+      ".modal-actions",
+      ".modal-actions button",
+      ".auth-actions",
+      ".settings-data",
+      ".settings-data button",
+      ".theme-options",
+      ".theme-options button",
+      ".control-actions button",
+      ".selected-result-rail button",
+    ];
+    const properties = [
+      "display",
+      "position",
+      "fontFamily",
+      "fontSize",
+      "fontWeight",
+      "lineHeight",
+      "letterSpacing",
+      "color",
+      "backgroundColor",
+      "borderTopWidth",
+      "borderTopColor",
+      "borderRadius",
+      "boxShadow",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "marginTop",
+      "marginRight",
+      "marginBottom",
+      "marginLeft",
+      "gap",
+      "alignItems",
+      "justifyContent",
+      "overflowX",
+      "overflowY",
+      "opacity",
+      "transitionDuration",
+    ];
+
+    return selectors.flatMap((selector) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return [];
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return [
+        {
+          selector,
+          tag: element.tagName.toLowerCase(),
+          text: (element.innerText || "")
+            .trim()
+            .replace(/\s+/g, " ")
+            .slice(0, 120),
+          rect: {
+            x: Math.round(rect.x * 100) / 100,
+            y: Math.round(rect.y * 100) / 100,
+            width: Math.round(rect.width * 100) / 100,
+            height: Math.round(rect.height * 100) / 100,
+          },
+          style: Object.fromEntries(
+            properties.map((property) => [property, style[property]]),
+          ),
+        },
+      ];
+    });
+  });
+}
+
 async function assertUiTruthCase(page, item) {
   if (!item.truthScenarioId) return;
 
@@ -1126,10 +1225,18 @@ async function assertUiTruthCase(page, item) {
 
     case "W01": {
       await requireVisible(
-        page.getByRole("button", {
-          name: "Create a reusable environment for recurring work",
+        page.getByText("Workflows", { exact: true }),
+        "W01 quiet Workflow section heading",
+      );
+      await requireVisible(
+        page.getByRole("button", { name: "Create Workflow", exact: true }),
+        "W01 quiet Workflow creation action",
+      );
+      await requireAbsent(
+        page.getByText("Reusable guidance for recurring work", {
+          exact: true,
         }),
-        "W01 useful empty-state creation path",
+        "W01 empty navigation must not compete with New task",
       );
       await requireAbsent(
         page.getByText(/failed to load Workflows/i),
@@ -1416,10 +1523,10 @@ async function assertUiTruthCase(page, item) {
     case "D02":
     case "D03": {
       const opened = await page.evaluate(() => {
-        const details = document.querySelector("details.account-menu");
-        const button = [
-          ...document.querySelectorAll(".account-menu button"),
-        ].find((candidate) => candidate.textContent?.trim() === "Settings");
+        const details = document.querySelector("details.app-menu");
+        const button = [...document.querySelectorAll(".app-menu button")].find(
+          (candidate) => candidate.textContent?.trim() === "Settings",
+        );
         if (
           !(details instanceof HTMLDetailsElement) ||
           !(button instanceof HTMLButtonElement)
@@ -1474,6 +1581,126 @@ async function assertUiTruthCase(page, item) {
         `[UI Truth] No semantic qualification implemented for ${scenario.id}.`,
       );
   }
+}
+
+async function captureDesignStateEvidence(page, item) {
+  const assertions = {};
+  const stateEvidence = [];
+
+  const recordingHeader = page.locator(".recording-panel .inspector-heading");
+  if ((await recordingHeader.count()) > 0) {
+    const layout = await recordingHeader.evaluate((header) => {
+      const headerRect = header.getBoundingClientRect();
+      const children = [...header.children].map((child) => {
+        const rect = child.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+        };
+      });
+      const nonOverlapping = children.every(
+        (child, index) =>
+          index === 0 || child.left >= children[index - 1].right - 0.5,
+      );
+      return {
+        contained: children.every(
+          (child) =>
+            child.left >= headerRect.left - 0.5 &&
+            child.right <= headerRect.right + 0.5 &&
+            child.top >= headerRect.top - 0.5 &&
+            child.bottom <= headerRect.bottom + 0.5,
+        ),
+        nonOverlapping,
+      };
+    });
+    if (!layout.contained || !layout.nonOverlapping)
+      throw new Error(
+        `Recording header geometry drifted: ${JSON.stringify(layout)}`,
+      );
+    assertions.recordingHeaderContained = true;
+    assertions.recordingHeaderNonOverlapping = true;
+  }
+
+  if (item.truthScenarioId === "R02") {
+    const chip = page.locator(".selected-result-rail button");
+    const layout = await chip.evaluate((element) => ({
+      width: element.getBoundingClientRect().width,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      text: element.textContent?.trim(),
+    }));
+    if (layout.width <= 42 || layout.scrollWidth > layout.clientWidth)
+      throw new Error(
+        `Selected-result chip is unreadable: ${JSON.stringify(layout)}`,
+      );
+    assertions.selectedResultChipReadable = true;
+    assertions.selectedResultChipWidth = layout.width;
+  }
+
+  const statePath = (suffix) => join(outputRoot, `${item.id}-${suffix}.png`);
+  if (item.truthScenarioId === "W01") {
+    await page.getByRole("button", { name: "Create Workflow" }).focus();
+    const path = statePath("focus");
+    await page.screenshot({ path, fullPage: true });
+    stateEvidence.push({
+      state: "focus",
+      target: ".workflow-list .side-heading button",
+      path: relative(repositoryRoot, path),
+    });
+    assertions.workflowCreateFocusInspected = true;
+  }
+  if (item.truthScenarioId === "T01") {
+    await page.getByLabel("Workflow environment").focus();
+    const path = statePath("focus");
+    await page.screenshot({ path, fullPage: true });
+    stateEvidence.push({
+      state: "focus",
+      target: ".workflow-task-choice select",
+      path: relative(repositoryRoot, path),
+    });
+    assertions.workflowChoiceFocusInspected = true;
+  }
+  if (item.truthScenarioId === "W04") {
+    await page
+      .getByRole("button", { name: "Save approved information" })
+      .focus();
+    const path = statePath("focus");
+    await page.screenshot({ path, fullPage: true });
+    stateEvidence.push({
+      state: "focus",
+      target: ".modal-actions .primary",
+      path: relative(repositoryRoot, path),
+    });
+    assertions.promotionPrimaryFocusInspected = true;
+  }
+  if (item.truthScenarioId === "V02") {
+    assertions.finalizingControlDisabled = !(await page
+      .getByRole("button", { name: "Finalizing recording…" })
+      .isEnabled());
+  }
+
+  const transitionLabels = {
+    W03: "Workflow list to current revision editor",
+    W04: "task conversation to Save to Workflow review",
+    R02: "structured result to selected follow-up context",
+    C02: "human browser control to explicit return-control action",
+    C04: "task setup to human-led Capture task",
+    V01: "task to active recording controls",
+    V02: "recording to disabled finalization state",
+    V03: "recording completion to playable evidence",
+    V04: "recording interruption to truthful failure state",
+    D01: "account menu to backup completion",
+    D02: "account menu to cancelled backup outcome",
+    D03: "account menu to unavailable restore disclosure",
+  };
+  if (transitionLabels[item.truthScenarioId]) {
+    assertions.transitionInspected = transitionLabels[item.truthScenarioId];
+  }
+
+  await page.mouse.move(1, 1);
+  return { assertions, stateEvidence };
 }
 
 const cases = [
@@ -1667,10 +1894,46 @@ const cases = [
     follower: false,
     viewport: UI_TRUTH_VIEWPORTS.product,
   })),
+  ...[
+    ["w01", "W01", baseSnapshot("full", "logged_in")],
+    ["w03", "W03", uiTruthWorkflowSnapshot({ revision: 2 })],
+    ["w04", "W04", uiTruthWorkflowSnapshot({ promote: true })],
+    [
+      "r02",
+      "R02",
+      uiTruthResultSnapshot({
+        kind: "draft",
+        selected: true,
+        revision: 2,
+        title: "Revised research brief",
+        body: "Current selected revision.",
+      }),
+    ],
+    ["a01", "A01", uiTruthActionSnapshot("prepared")],
+    ["v03", "V03", uiTruthRecordingSnapshot("available")],
+    ["v04", "V04", uiTruthRecordingSnapshot("failed")],
+    ["d01", "D01", baseSnapshot("full", "logged_in")],
+  ].map(([suffix, truthScenarioId, snapshot]) => ({
+    id: `visual-dark-${suffix}`,
+    truthScenarioId,
+    snapshot,
+    backupOutcome: truthScenarioId === "D01" ? "success" : undefined,
+    follower: false,
+    colorScheme: "dark",
+    themePreference: "dark",
+    viewport: UI_TRUTH_VIEWPORTS.product,
+  })),
   {
     id: "full-onboarding",
     snapshot: baseSnapshot("full", "logged_out"),
     failFirstLoginOpen: true,
+    follower: false,
+    viewport: { width: 1180, height: 780 },
+  },
+  {
+    id: "signed-out-local-operation-error",
+    snapshot: baseSnapshot("full", "logged_out"),
+    failWorkflowSave: true,
     follower: false,
     viewport: { width: 1180, height: 780 },
   },
@@ -1782,7 +2045,17 @@ try {
       process.stderr.write(`[product-surface:${item.id}] ${error.message}\n`);
     });
     await page.addInitScript(
-      ({ snapshot, failFirstLoginOpen, themePreference, backupOutcome }) => {
+      ({
+        snapshot,
+        failFirstLoginOpen,
+        failWorkflowSave,
+        themePreference,
+        backupOutcome,
+      }) => {
+        for (const task of snapshot.product?.tasks ?? []) {
+          task.results ??= [];
+          task.recordings ??= [];
+        }
         if (themePreference)
           localStorage.setItem("rove.theme-preference.v1", themePreference);
         const listeners = new Set();
@@ -1806,6 +2079,8 @@ try {
           transitionSurface: async () => snapshot,
           executeProductIntent: async (intent) => {
             window.__roveCalls.push({ type: "product", command: intent });
+            if (failWorkflowSave && intent.type === "workflow.create")
+              throw new Error("The local Workflow could not be saved.");
             if (intent.type === "account.login") {
               return intent.loginType === "deviceCode"
                 ? {
@@ -1862,6 +2137,7 @@ try {
       {
         snapshot: item.snapshot,
         failFirstLoginOpen: item.failFirstLoginOpen ?? false,
+        failWorkflowSave: item.failWorkflowSave ?? false,
         themePreference: item.themePreference,
         backupOutcome: item.backupOutcome,
       },
@@ -1876,20 +2152,21 @@ try {
     let keyboardOrder;
     let interactionAssertions;
     if (item.id === "full-onboarding") {
-      await page.getByRole("button", { name: "Sign in with ChatGPT" }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Sign in to Codex" })
+        .getByRole("button", { name: "Sign in", exact: true })
+        .click();
       await page
         .getByRole("alert")
-        .filter({ hasText: "The sign-in page could not be opened." })
+        .filter({
+          hasText: "Rove couldn't open the Codex sign-in page. Try again.",
+        })
         .waitFor();
       await page.getByRole("button", { name: "Continue sign-in" }).click();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await page
-        .getByRole("button", { name: "Sign in with ChatGPT" })
-        .waitFor();
-      await page.getByRole("button", { name: "Use device code" }).click();
-      await page.getByText("ABCD-EFGH", { exact: true }).waitFor();
-      await page
-        .getByRole("button", { name: "Open verification page" })
+        .getByRole("button", { name: "Sign in", exact: true })
         .waitFor();
 
       const loginCalls = await page.evaluate(() => window.__roveCalls);
@@ -1928,16 +2205,6 @@ try {
           command: "account.login.cancel",
           loginId: "login_browser",
         },
-        {
-          type: "product",
-          command: "account.login",
-          loginType: "deviceCode",
-        },
-        {
-          type: "openTrustedExternal",
-          purpose: "account_login",
-          loginId: "login_device",
-        },
       ];
       if (
         JSON.stringify(loginSequence) !== JSON.stringify(expectedLoginSequence)
@@ -1950,14 +2217,65 @@ try {
         failedOpenWasActionable: true,
         browserRetryRemainedAvailable: true,
         successfulCancelClearedLocalProjection: true,
-        deviceCodeVisible: true,
-        deviceVerificationRetryRemainedAvailable: true,
+        singlePrimarySignInPath: true,
+      };
+    }
+    if (item.id === "signed-out-local-operation-error") {
+      await page
+        .getByRole("button", { name: "Create Workflow", exact: true })
+        .click();
+      await page.getByLabel("Workflow name").fill("Local research");
+      await page
+        .getByLabel("Workflow purpose")
+        .fill("Keep local research guidance reusable.");
+      await page
+        .getByRole("button", { name: "Save approved revision" })
+        .click();
+      const localFailure = page
+        .getByRole("alert")
+        .filter({ hasText: "The local Workflow could not be saved." });
+      await localFailure.waitFor();
+      const errorGeometry = await localFailure.evaluate((alert) => {
+        const dialog = alert.closest('[role="dialog"]');
+        if (!(dialog instanceof HTMLElement)) return { insideDialog: false };
+        const alertRect = alert.getBoundingClientRect();
+        const dialogRect = dialog.getBoundingClientRect();
+        return {
+          insideDialog:
+            alertRect.left >= dialogRect.left &&
+            alertRect.right <= dialogRect.right &&
+            alertRect.top >= dialogRect.top &&
+            alertRect.bottom <= dialogRect.bottom,
+          width: alertRect.width,
+          height: alertRect.height,
+        };
+      });
+      if (
+        !errorGeometry.insideDialog ||
+        errorGeometry.width === undefined ||
+        errorGeometry.width < 200 ||
+        (await page
+          .getByText("Rove needs attention", { exact: true })
+          .count()) !== 1 ||
+        (await page
+          .getByText("Sign-in needs attention", { exact: true })
+          .count()) !== 0
+      )
+        throw new Error(
+          "Signed-out local failure was misclassified as a sign-in failure.",
+        );
+      interactionAssertions = {
+        signedOutLocalWorkflowRemainedAvailable: true,
+        localFailureRemainedVisible: true,
+        localFailureWasNotMisclassifiedAsLogin: true,
+        localFailureContainedByActiveDialog: true,
+        localFailureGeometry: errorGeometry,
       };
     }
     if (item.id.startsWith("full-composer")) {
       await page.getByLabel("Desired outcome").focus();
       keyboardOrder = [];
-      for (let index = 0; index < 6; index += 1) {
+      for (let index = 0; index < 7; index += 1) {
         keyboardOrder.push(
           await page.evaluate(() => {
             const active = document.activeElement;
@@ -1973,6 +2291,7 @@ try {
       const expectedOrder = [
         "Desired outcome",
         "Attach files",
+        "Workflow environment",
         "Task setup",
         "Permission review",
         "Model and reasoning effort",
@@ -2043,40 +2362,38 @@ try {
         .evaluate((menu) => menu.open));
       if (!modelOutsideClickDismissed)
         throw new Error("Model menu remained open after an outside click.");
-      await page.locator(".account-menu > summary").click();
-      await page.getByRole("menuitem", { name: "Sign out" }).waitFor();
+      await page.locator(".app-menu > summary").click();
+      await page.getByRole("button", { name: "Sign out of Codex" }).waitFor();
       if ((await page.getByText("Token activity").count()) !== 0)
         throw new Error("Account popover still exposes token activity.");
       if ((await page.getByRole("menuitem", { name: "Refresh" }).count()) !== 0)
         throw new Error("Account popover still exposes refresh.");
-      const popoverBox = await page.locator(".account-popover").boundingBox();
+      const popoverBox = await page.locator(".app-menu-popover").boundingBox();
       const popoverWithinViewport =
         popoverBox !== null &&
         popoverBox.x >= 0 &&
         popoverBox.x + popoverBox.width <= item.viewport.width;
       if (!popoverWithinViewport)
         throw new Error(
-          `Account popover escaped the viewport: ${JSON.stringify({ popoverBox, viewport: item.viewport })}`,
+          `App menu escaped the viewport: ${JSON.stringify({ popoverBox, viewport: item.viewport })}`,
         );
       await page.getByLabel("Desired outcome").click();
       const outsideClickDismissed = !(await page
-        .locator(".account-menu")
+        .locator(".app-menu")
         .evaluate((menu) => menu.open));
       if (!outsideClickDismissed)
-        throw new Error(
-          "Account popover remained open after an outside click.",
-        );
-      await page.locator(".account-menu > summary").click();
+        throw new Error("App menu remained open after an outside click.");
+      await page.locator(".app-menu > summary").click();
       await page.keyboard.press("Escape");
       const escapeDismissed = !(await page
-        .locator(".account-menu")
+        .locator(".app-menu")
         .evaluate((menu) => menu.open));
       if (!escapeDismissed)
-        throw new Error("Account popover remained open after Escape.");
-      await page.locator(".account-menu > summary").click();
-      await page.getByRole("menuitem", { name: "Settings" }).click();
+        throw new Error("App menu remained open after Escape.");
+      await page.locator(".app-menu > summary").click();
+      await page.getByRole("button", { name: "Settings" }).click();
       await page
-        .getByRole("dialog", { name: "Appearance" })
+        .getByRole("dialog", { name: "Settings" })
         .waitFor({ state: "visible" });
       await page.getByRole("button", { name: /Dark/ }).click();
       const darkThemeApplied =
@@ -2171,22 +2488,13 @@ try {
         const inspector = document.querySelector(
           ".inspector-panel.browser-status",
         );
-        const account = document.querySelector(".account-menu");
-        if (
-          !composer ||
-          !textarea ||
-          !toolbar ||
-          !userMessage ||
-          !inspector ||
-          !account
-        )
+        if (!composer || !textarea || !toolbar || !userMessage || !inspector)
           return null;
         const composerStyle = getComputedStyle(composer);
         const textareaStyle = getComputedStyle(textarea);
         const toolbarStyle = getComputedStyle(toolbar);
         const userMessageStyle = getComputedStyle(userMessage);
         const inspectorStyle = getComputedStyle(inspector);
-        const accountStyle = getComputedStyle(account);
         return {
           theme: document.documentElement.dataset.roveTheme,
           composerBackground: composerStyle.backgroundColor,
@@ -2199,7 +2507,6 @@ try {
           userMessageRadius: userMessageStyle.borderRadius,
           inspectorBackground: inspectorStyle.backgroundColor,
           inspectorShadow: inspectorStyle.boxShadow,
-          accountSeparator: accountStyle.borderTopColor,
         };
       });
       if (
@@ -2344,7 +2651,7 @@ try {
       await page.getByRole("menu", { name: /^Actions for / }).waitFor();
       await page.getByRole("menuitem", { name: "Rename" }).click();
       await page.getByLabel("Rename task").fill("Historical comparison");
-      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByRole("button", { name: "Save", exact: true }).click();
       await historicalSelect.getByText("Historical comparison").waitFor();
       await historicalRow.click({ button: "right" });
       if ((await page.getByRole("menuitem", { name: "Archive" }).count()) !== 1)
@@ -2481,6 +2788,14 @@ try {
         throw new Error(`Constrained layout failed: ${JSON.stringify(layout)}`);
       interactionAssertions = layout;
     }
+    const designStateEvidence = await captureDesignStateEvidence(page, item);
+    if (Object.keys(designStateEvidence.assertions).length > 0) {
+      interactionAssertions = {
+        ...(interactionAssertions ?? {}),
+        ...designStateEvidence.assertions,
+      };
+    }
+    const visualMetrics = await captureVisualMetrics(page);
     const path = join(outputRoot, `${item.id}.png`);
     await page.screenshot({ path, fullPage: true });
     if (tracePath) await page.context().tracing.stop({ path: tracePath });
@@ -2505,6 +2820,10 @@ try {
       ...(tracePath ? { tracePath: relative(repositoryRoot, tracePath) } : {}),
       ...(keyboardOrder ? { keyboardOrder } : {}),
       ...(interactionAssertions ? { interactionAssertions } : {}),
+      ...(designStateEvidence.stateEvidence.length > 0
+        ? { stateEvidence: designStateEvidence.stateEvidence }
+        : {}),
+      visualMetrics,
     });
     await page.close();
   }
