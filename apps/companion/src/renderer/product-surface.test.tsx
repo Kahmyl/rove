@@ -5,6 +5,7 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   LocalBackupSettings,
   ProductSurface,
+  commandPaletteMatches,
   followupDraftForTask,
   permissionReviewDescription,
   removeWorkflowGuidanceEntry,
@@ -67,6 +68,28 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("keeps secondary task controls searchable behind the command palette", () => {
+    expect(commandPaletteMatches("work", "Workflow", "Task mode")).toBe(true);
+    expect(commandPaletteMatches("reason", "Model", "Reasoning effort")).toBe(
+      true,
+    );
+    expect(commandPaletteMatches("record", "Workflow", "Task mode")).toBe(
+      false,
+    );
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={snapshot()}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Commands and settings"');
+    expect(html).toContain('aria-label="Search commands"');
+    expect(html).toContain('aria-label="Workflow environment"');
+    expect(html).toContain('aria-label="Model and reasoning effort"');
+  });
+
   it("offers an explicit managed-credential-store exclusion boundary", () => {
     const html = renderToStaticMarkup(
       <LocalBackupSettings busy={false} status={null} onExport={() => {}} />,

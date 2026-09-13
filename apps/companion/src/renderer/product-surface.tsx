@@ -731,6 +731,16 @@ function humanizeIdentifier(value: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+export function commandPaletteMatches(
+  query: string,
+  ...terms: string[]
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  return (
+    !normalized || terms.some((term) => term.toLowerCase().includes(normalized))
+  );
+}
+
 function activityCopy(item: ProjectedConversationItem): {
   label: string;
   detail?: string;
@@ -965,6 +975,7 @@ export function ProductSurface({
   const [effort, setEffort] = useState("");
   const [approvalsReviewer, setApprovalsReviewer] =
     useState<ApprovalsReviewer>("auto_review");
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [workspaceDraft, setWorkspaceDraft] = useState("");
   const [profileManagerOpen, setProfileManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1002,7 +1013,7 @@ export function ProductSurface({
   const [selectedWorkflowWorkspaceId, setSelectedWorkflowWorkspaceId] =
     useState<string | null>(null);
   const [workflowWorkspaceSection, setWorkflowWorkspaceSection] = useState<
-    "home" | "outputs"
+    "home" | "outputs" | "context"
   >("home");
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [shareWorkflowContext, setShareWorkflowContext] = useState<
@@ -1010,6 +1021,9 @@ export function ProductSurface({
   >("");
   const [workflowEditor, setWorkflowEditor] =
     useState<WorkflowEditorDraft | null>(null);
+  const [workflowContextEditSection, setWorkflowContextEditSection] = useState<
+    "goal" | "help" | "success" | "knowledge" | "advanced" | null
+  >(null);
   const [workflowPromotion, setWorkflowPromotion] =
     useState<WorkflowPromotionDraft | null>(null);
   const [resultEditor, setResultEditor] = useState<ResultEditorDraft | null>(
@@ -1018,7 +1032,7 @@ export function ProductSurface({
   const activeModal =
     workflowCreateName !== null
       ? "workflow-create"
-      : workflowEditor
+      : workflowEditor && !selectedWorkflowWorkspaceId
         ? "workflow"
         : resultEditor
           ? "result"
@@ -1904,11 +1918,15 @@ export function ProductSurface({
 
   const renderCodexAttention = (entry: ProductAttentionProjection) => (
     <section
-      className="attention-card attention-inline attention-codex"
+      className={`attention-card attention-inline attention-codex${
+        entry.kind === "user_input" ? " task-response-surface" : ""
+      }`}
       aria-label="Current task request"
     >
-      <div className="eyebrow">Input needed</div>
-      <strong>{entry.title}</strong>
+      <div className="eyebrow">
+        {entry.kind === "user_input" ? "Rove needs your input" : "Input needed"}
+      </div>
+      <h2>{entry.title}</h2>
       <p>{attentionCopy(entry)}</p>
       {entry.context?.map((item) => (
         <p key={item.label}>
@@ -1922,7 +1940,7 @@ export function ProductSurface({
               <legend>{question.header}</legend>
               <p>{question.question}</p>
               {question.options?.map((option) => (
-                <label key={option.label}>
+                <label className="task-response-choice" key={option.label}>
                   <input
                     type="radio"
                     name={`${attentionStateKey(entry)}:${question.id}`}
@@ -1941,20 +1959,34 @@ export function ProductSurface({
                 </label>
               ))}
               {(!question.options || question.isOther) && (
-                <input
-                  aria-label={`${question.header} answer`}
-                  type={question.isSecret ? "password" : "text"}
-                  value={
-                    attentionAnswers[attentionStateKey(entry)]?.[
-                      question.id
-                    ]?.[0] ?? ""
-                  }
-                  onChange={(event) =>
-                    setQuestionAnswer(attentionStateKey(entry), question.id, [
-                      event.target.value,
-                    ])
-                  }
-                />
+                <label className="task-response-other">
+                  <span>
+                    {question.options ? "Something else" : "Your answer"}
+                  </span>
+                  <input
+                    aria-label={`${question.header} answer`}
+                    type={question.isSecret ? "password" : "text"}
+                    value={
+                      question.options &&
+                      question.options.some(
+                        (option) =>
+                          option.label ===
+                          attentionAnswers[attentionStateKey(entry)]?.[
+                            question.id
+                          ]?.[0],
+                      )
+                        ? ""
+                        : (attentionAnswers[attentionStateKey(entry)]?.[
+                            question.id
+                          ]?.[0] ?? "")
+                    }
+                    onChange={(event) =>
+                      setQuestionAnswer(attentionStateKey(entry), question.id, [
+                        event.target.value,
+                      ])
+                    }
+                  />
+                </label>
               )}
             </fieldset>
           ))}
@@ -2106,9 +2138,7 @@ export function ProductSurface({
               disabled={busy || Boolean(entry.elicitation?.unsupportedReason)}
               onClick={() => void answerAttention(entry, "accept")}
             >
-              {entry.kind === "user_input"
-                ? "Submit answers"
-                : "Approve / Send"}
+              {entry.kind === "user_input" ? "Send" : "Approve / Send"}
             </button>
           </div>
         </>
@@ -2518,7 +2548,7 @@ export function ProductSurface({
           </section>
         </div>
       )}
-      {workflowEditor && (
+      {workflowEditor && !selectedWorkflow && (
         <div className="profile-modal-backdrop" role="presentation">
           <section
             className="profile-modal workflow-editor"
@@ -3721,10 +3751,17 @@ export function ProductSurface({
                   </button>
                   <button
                     type="button"
-                    className="workflow-context-button"
-                    onClick={() =>
-                      setWorkflowEditor(workflowDraft(selectedWorkflow))
+                    aria-current={
+                      workflowWorkspaceSection === "context"
+                        ? "page"
+                        : undefined
                     }
+                    className="workflow-context-button"
+                    onClick={() => {
+                      setWorkflowWorkspaceSection("context");
+                      setWorkflowEditor(null);
+                      setWorkflowContextEditSection(null);
+                    }}
                   >
                     Context
                   </button>
@@ -3903,7 +3940,7 @@ export function ProductSurface({
                     </section>
                   )}
                 </div>
-              ) : (
+              ) : workflowWorkspaceSection === "outputs" ? (
                 <section
                   className="workflow-outputs"
                   aria-labelledby="workflow-outputs-title"
@@ -3955,6 +3992,297 @@ export function ProductSurface({
                     </div>
                   )}
                 </section>
+              ) : (
+                <section
+                  className="workflow-context-surface"
+                  aria-labelledby="workflow-context-title"
+                >
+                  <header>
+                    <div>
+                      <span className="eyebrow">Context</span>
+                      <h2 id="workflow-context-title">
+                        Help Rove understand how to work here
+                      </h2>
+                      <p>
+                        Review what Rove will use. Edit one part when it needs
+                        to change.
+                      </p>
+                    </div>
+                  </header>
+                  {(
+                    [
+                      [
+                        "goal",
+                        "Goal",
+                        selectedWorkflow.revision.configuration.purpose ||
+                          "No goal has been added yet.",
+                      ],
+                      [
+                        "help",
+                        "How Rove should help",
+                        [
+                          ...selectedWorkflow.revision.configuration
+                            .preferences,
+                          ...selectedWorkflow.revision.configuration.guidance,
+                        ]
+                          .map((entry) => entry.text)
+                          .join(" · ") || "No preferences have been added yet.",
+                      ],
+                      [
+                        "success",
+                        "What good looks like",
+                        [
+                          ...selectedWorkflow.revision.configuration.criteria,
+                          ...selectedWorkflow.revision.configuration
+                            .resultConventions,
+                        ]
+                          .map((entry) => entry.text)
+                          .join(" · ") ||
+                          "No success expectations have been added yet.",
+                      ],
+                      [
+                        "knowledge",
+                        "Knowledge & resources",
+                        [
+                          ...selectedWorkflow.revision.configuration.approvedKnowledge.map(
+                            (entry) => entry.text,
+                          ),
+                          ...selectedWorkflow.revision.configuration.resourceRequirements.map(
+                            (entry) => entry.label,
+                          ),
+                        ].join(" · ") ||
+                          "No knowledge or resources have been added yet.",
+                      ],
+                    ] as const
+                  ).map(([section, title, summary]) => (
+                    <article className="workflow-context-section" key={section}>
+                      <header>
+                        <h3>{title}</h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkflowEditor(workflowDraft(selectedWorkflow));
+                            setWorkflowContextEditSection(section);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </header>
+                      {workflowContextEditSection === section &&
+                      workflowEditor ? (
+                        <form
+                          className="workflow-context-focused-editor"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void saveWorkflow();
+                            setWorkflowContextEditSection(null);
+                          }}
+                        >
+                          {section === "goal" && (
+                            <label>
+                              <span>What is this work for?</span>
+                              <textarea
+                                aria-label="Workflow goal"
+                                value={workflowEditor.purpose}
+                                onChange={(event) =>
+                                  setWorkflowEditor({
+                                    ...workflowEditor,
+                                    purpose: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          )}
+                          {section === "help" && (
+                            <>
+                              <WorkflowGuidanceEditor
+                                label="Preferences"
+                                entries={workflowEditor.preferences}
+                                defaultTopic={workflowEditor.focus}
+                                onChange={(preferences) =>
+                                  setWorkflowEditor({
+                                    ...workflowEditor,
+                                    preferences,
+                                  })
+                                }
+                              />
+                              <WorkflowGuidanceEditor
+                                label="Helpful guidance"
+                                entries={workflowEditor.guidance}
+                                defaultTopic={workflowEditor.focus}
+                                onChange={(guidance) =>
+                                  setWorkflowEditor({
+                                    ...workflowEditor,
+                                    guidance,
+                                  })
+                                }
+                              />
+                            </>
+                          )}
+                          {section === "success" && (
+                            <WorkflowGuidanceEditor
+                              label="Success expectations"
+                              entries={workflowEditor.criteria}
+                              defaultTopic={workflowEditor.focus}
+                              onChange={(criteria) =>
+                                setWorkflowEditor({
+                                  ...workflowEditor,
+                                  criteria,
+                                })
+                              }
+                            />
+                          )}
+                          {section === "knowledge" && (
+                            <>
+                              <WorkflowGuidanceEditor
+                                label="Useful knowledge"
+                                entries={workflowEditor.approvedKnowledge}
+                                defaultTopic={workflowEditor.focus}
+                                onChange={(approvedKnowledge) =>
+                                  setWorkflowEditor({
+                                    ...workflowEditor,
+                                    approvedKnowledge,
+                                  })
+                                }
+                              />
+                              <WorkflowResourceEditor
+                                entries={workflowEditor.resourceRequirements}
+                                onChange={(resourceRequirements) =>
+                                  setWorkflowEditor({
+                                    ...workflowEditor,
+                                    resourceRequirements,
+                                  })
+                                }
+                              />
+                            </>
+                          )}
+                          <div className="workflow-context-edit-actions">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWorkflowEditor(null);
+                                setWorkflowContextEditSection(null);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="primary"
+                              type="submit"
+                              disabled={busy}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <p>{summary}</p>
+                      )}
+                    </article>
+                  ))}
+                  <details className="workflow-context-advanced">
+                    <summary>Advanced</summary>
+                    <p>
+                      Procedures, work type, and output preferences remain
+                      available when you need them.
+                    </p>
+                    {workflowContextEditSection === "advanced" &&
+                    workflowEditor ? (
+                      <form
+                        className="workflow-context-focused-editor"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveWorkflow();
+                          setWorkflowContextEditSection(null);
+                        }}
+                      >
+                        <label>
+                          <span>Primary kind of work</span>
+                          <select
+                            aria-label="Workflow kind"
+                            value={workflowEditor.focus}
+                            onChange={(event) =>
+                              setWorkflowEditor({
+                                ...workflowEditor,
+                                focus: event.target
+                                  .value as WorkflowEditorDraft["focus"],
+                              })
+                            }
+                          >
+                            <option value="research">
+                              Research and discovery
+                            </option>
+                            <option value="review">Review and decisions</option>
+                            <option value="outreach">
+                              Drafting and outreach
+                            </option>
+                            <option value="custom">Custom / not sure</option>
+                          </select>
+                        </label>
+                        <WorkflowGuidanceEditor
+                          label="Procedures"
+                          entries={workflowEditor.procedures}
+                          defaultTopic={workflowEditor.focus}
+                          onChange={(procedures) =>
+                            setWorkflowEditor({ ...workflowEditor, procedures })
+                          }
+                        />
+                        <label>
+                          <span>Output preference</span>
+                          <select
+                            aria-label="Workflow result style"
+                            value={workflowEditor.resultStyle}
+                            onChange={(event) =>
+                              setWorkflowEditor({
+                                ...workflowEditor,
+                                resultStyle: event.target
+                                  .value as WorkflowEditorDraft["resultStyle"],
+                              })
+                            }
+                          >
+                            <option value="sources">
+                              With sources and uncertainty
+                            </option>
+                            <option value="concise">
+                              Concise and actionable
+                            </option>
+                            <option value="detailed">
+                              Detailed with reasoning
+                            </option>
+                          </select>
+                        </label>
+                        <div className="workflow-context-edit-actions">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWorkflowEditor(null);
+                              setWorkflowContextEditSection(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="primary"
+                            type="submit"
+                            disabled={busy}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorkflowEditor(workflowDraft(selectedWorkflow));
+                          setWorkflowContextEditSection("advanced");
+                        }}
+                      >
+                        Edit advanced settings
+                      </button>
+                    )}
+                  </details>
+                </section>
               )}
             </div>
           )}
@@ -3991,6 +4319,21 @@ export function ProductSurface({
                   value={outcome}
                   onChange={(event) => setOutcome(event.target.value)}
                   onKeyDown={(event) => {
+                    if (event.key === "/" && outcome.length === 0) {
+                      event.preventDefault();
+                      const palette = document.getElementById(
+                        "task-command-palette",
+                      ) as HTMLDetailsElement | null;
+                      if (palette) palette.open = true;
+                      window.setTimeout(() =>
+                        document
+                          .querySelector<HTMLInputElement>(
+                            "#task-command-palette input[type='search']",
+                          )
+                          ?.focus(),
+                      );
+                      return;
+                    }
                     if (
                       event.key !== "Enter" ||
                       event.shiftKey ||
@@ -4008,233 +4351,325 @@ export function ProductSurface({
                       void run(() => command({ type: "attachments.pick" }))
                     }
                   />
-                  <div className="composer-control-rail">
-                    <label className="workflow-task-choice">
-                      <span>Workflow</span>
-                      <select
-                        aria-label="Workflow environment"
-                        value={selectedWorkflowId}
-                        onChange={(event) => {
-                          setSelectedWorkflowId(event.target.value);
-                          setShareWorkflowContext("");
-                        }}
-                      >
-                        <option value="">Standalone task</option>
-                        {product?.workflows
-                          .filter((workflow) => !workflow.archived)
-                          .map((workflow) => (
-                            <option
-                              key={workflow.workflowId}
-                              value={workflow.workflowId}
-                            >
-                              {workflow.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                    <details className="composer-menu composer-setup-menu">
-                      <summary aria-label="Task setup">Task setup</summary>
-                      <div className="composer-popover">
+                  <details
+                    className="composer-menu composer-command-menu"
+                    id="task-command-palette"
+                  >
+                    <summary
+                      aria-label="Commands and settings"
+                      title="Commands and settings"
+                    >
+                      <span aria-hidden="true">/</span>
+                    </summary>
+                    <div
+                      className="composer-command-palette"
+                      aria-label="Task commands and settings"
+                    >
+                      <label className="composer-command-search">
+                        <span>Commands</span>
+                        <input
+                          type="search"
+                          aria-label="Search commands"
+                          placeholder="Search actions and settings"
+                          value={commandPaletteQuery}
+                          onChange={(event) =>
+                            setCommandPaletteQuery(event.target.value)
+                          }
+                        />
+                      </label>
+                      {commandPaletteMatches(
+                        commandPaletteQuery,
+                        "attach",
+                        "file",
+                      ) && (
                         <section>
-                          <strong>How Rove helps</strong>
-                          {(
-                            [
-                              ["agent", "Agent", "Rove completes the task"],
-                              [
-                                "companion",
-                                "Companion",
-                                "Work together with handoffs",
-                              ],
-                              ["capture", "Capture", "You drive the browser"],
-                            ] as const
-                          ).map(([value, label, description]) => (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-label={`Execution mode: ${label}`}
-                              aria-pressed={mode === value}
-                              onClick={(event) => {
-                                setMode(value);
-                                closeParentMenu(event);
-                              }}
-                            >
-                              <span>{label}</span>
-                              <small>{description}</small>
-                            </button>
-                          ))}
-                        </section>
-                        <section>
-                          <strong>Browser profile</strong>
-                          {desktop?.workspaces.workspaces.map((workspace) => (
-                            <button
-                              key={workspace.id}
-                              type="button"
-                              aria-label={`Browser profile: ${workspace.displayName}`}
-                              disabled={product?.tasks.some((task) =>
-                                taskHasAttachedBrowserWorkspace(
-                                  task,
-                                  workspace.id,
-                                ),
-                              )}
-                              aria-pressed={
-                                browserChoice === `workspace:${workspace.id}`
-                              }
-                              onClick={(event) => {
-                                setBrowserChoice(`workspace:${workspace.id}`);
-                                closeParentMenu(event);
-                              }}
-                            >
-                              <span>{workspace.displayName}</span>
-                              <small>
-                                {product?.tasks.some((task) =>
-                                  taskHasAttachedBrowserWorkspace(
-                                    task,
-                                    workspace.id,
-                                  ),
-                                )
-                                  ? "Still attached to another task"
-                                  : "Saved sign-ins and browsing data"}
-                              </small>
-                            </button>
-                          ))}
+                          <strong>Actions</strong>
                           <button
                             type="button"
-                            aria-label="Browser profile: Guest"
-                            aria-pressed={browserChoice === "temporary"}
-                            onClick={(event) => {
-                              setBrowserChoice("temporary");
-                              closeParentMenu(event);
-                            }}
+                            onClick={() =>
+                              void run(() =>
+                                command({ type: "attachments.pick" }),
+                              )
+                            }
                           >
-                            <span>Guest</span>
-                            <small>Starts fresh and is deleted locally</small>
+                            <span>Attach file</span>
+                            <small>Add local task material</small>
                           </button>
                         </section>
-                      </div>
-                    </details>
-                    <details className="composer-menu composer-permission-menu">
-                      <summary aria-label="Permission review">
-                        <svg
-                          className="composer-control-icon"
-                          aria-hidden="true"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
-                          <path d="m7.4 10 1.65 1.65 3.55-3.55" />
-                        </svg>
-                        {approvalsReviewer === "auto_review"
-                          ? "Approve for me"
-                          : "Always ask"}
-                      </summary>
-                      <div className="composer-popover compact-popover">
-                        <button
-                          type="button"
-                          aria-pressed={approvalsReviewer === "auto_review"}
-                          disabled={mode === "capture"}
-                          onClick={(event) => {
-                            setApprovalsReviewer("auto_review");
-                            closeParentMenu(event);
-                          }}
-                        >
-                          <span>Approve for me</span>
-                          <small>Rove reviews routine requests</small>
-                        </button>
-                        <button
-                          type="button"
-                          aria-pressed={approvalsReviewer === "user"}
-                          disabled={mode === "capture"}
-                          onClick={(event) => {
-                            setApprovalsReviewer("user");
-                            closeParentMenu(event);
-                          }}
-                        >
-                          <span>Always ask</span>
-                          <small>You review every request</small>
-                        </button>
-                      </div>
-                    </details>
-                  </div>
-                  {selectedWorkflowId && (
-                    <label className="workflow-share-choice">
-                      <span>Workflow guidance</span>
-                      <select
-                        aria-label="Workflow guidance sharing"
-                        required
-                        value={shareWorkflowContext}
-                        onChange={(event) =>
-                          setShareWorkflowContext(
-                            event.target.value as "" | "share" | "local",
-                          )
-                        }
-                      >
-                        <option value="">Choose before starting…</option>
-                        <option value="share">
-                          Apply relevant guidance to Codex
-                        </option>
-                        <option value="local">
-                          Keep association local only
-                        </option>
-                      </select>
-                      <small>
-                        Applying guidance may send approved relevant text to the
-                        model service. Secrets, files, credentials, and browser
-                        state are excluded.
-                      </small>
-                    </label>
-                  )}
-                  <div className="composer-footer">
-                    <details className="composer-menu composer-model-menu">
-                      <summary aria-label="Model and reasoning effort">
-                        <span
-                          className="composer-control-icon"
-                          aria-hidden="true"
-                        >
-                          ✦
-                        </span>
-                        {selectedModel?.displayName ?? "Default model"}
-                        {effort ? ` · ${effort}` : ""}
-                        <svg
-                          className="composer-chevron"
-                          aria-hidden="true"
-                          viewBox="0 0 16 16"
-                        >
-                          <path d="m4 6 4 4 4-4" />
-                        </svg>
-                      </summary>
-                      <div className="composer-popover model-popover">
+                      )}
+                      {commandPaletteMatches(
+                        commandPaletteQuery,
+                        "workflow",
+                        "task",
+                        "mode",
+                        "approval",
+                        "browser",
+                      ) && (
+                        <section>
+                          <strong>Task</strong>
+                          <div className="composer-control-rail">
+                            <label className="workflow-task-choice">
+                              <span>Workflow</span>
+                              <select
+                                aria-label="Workflow environment"
+                                value={selectedWorkflowId}
+                                onChange={(event) => {
+                                  setSelectedWorkflowId(event.target.value);
+                                  setShareWorkflowContext("");
+                                }}
+                              >
+                                <option value="">Standalone task</option>
+                                {product?.workflows
+                                  .filter((workflow) => !workflow.archived)
+                                  .map((workflow) => (
+                                    <option
+                                      key={workflow.workflowId}
+                                      value={workflow.workflowId}
+                                    >
+                                      {workflow.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                            <details className="composer-menu composer-setup-menu">
+                              <summary aria-label="Task setup">
+                                Task setup
+                              </summary>
+                              <div className="composer-popover">
+                                <section>
+                                  <strong>How Rove helps</strong>
+                                  {(
+                                    [
+                                      [
+                                        "agent",
+                                        "Agent",
+                                        "Rove completes the task",
+                                      ],
+                                      [
+                                        "companion",
+                                        "Companion",
+                                        "Work together with handoffs",
+                                      ],
+                                      [
+                                        "capture",
+                                        "Capture",
+                                        "You drive the browser",
+                                      ],
+                                    ] as const
+                                  ).map(([value, label, description]) => (
+                                    <button
+                                      key={value}
+                                      type="button"
+                                      aria-label={`Execution mode: ${label}`}
+                                      aria-pressed={mode === value}
+                                      onClick={(event) => {
+                                        setMode(value);
+                                        closeParentMenu(event);
+                                      }}
+                                    >
+                                      <span>{label}</span>
+                                      <small>{description}</small>
+                                    </button>
+                                  ))}
+                                </section>
+                                <section>
+                                  <strong>Browser profile</strong>
+                                  {desktop?.workspaces.workspaces.map(
+                                    (workspace) => (
+                                      <button
+                                        key={workspace.id}
+                                        type="button"
+                                        aria-label={`Browser profile: ${workspace.displayName}`}
+                                        disabled={product?.tasks.some((task) =>
+                                          taskHasAttachedBrowserWorkspace(
+                                            task,
+                                            workspace.id,
+                                          ),
+                                        )}
+                                        aria-pressed={
+                                          browserChoice ===
+                                          `workspace:${workspace.id}`
+                                        }
+                                        onClick={(event) => {
+                                          setBrowserChoice(
+                                            `workspace:${workspace.id}`,
+                                          );
+                                          closeParentMenu(event);
+                                        }}
+                                      >
+                                        <span>{workspace.displayName}</span>
+                                        <small>
+                                          {product?.tasks.some((task) =>
+                                            taskHasAttachedBrowserWorkspace(
+                                              task,
+                                              workspace.id,
+                                            ),
+                                          )
+                                            ? "Still attached to another task"
+                                            : "Saved sign-ins and browsing data"}
+                                        </small>
+                                      </button>
+                                    ),
+                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label="Browser profile: Guest"
+                                    aria-pressed={browserChoice === "temporary"}
+                                    onClick={(event) => {
+                                      setBrowserChoice("temporary");
+                                      closeParentMenu(event);
+                                    }}
+                                  >
+                                    <span>Guest</span>
+                                    <small>
+                                      Starts fresh and is deleted locally
+                                    </small>
+                                  </button>
+                                </section>
+                              </div>
+                            </details>
+                            <details className="composer-menu composer-permission-menu">
+                              <summary aria-label="Permission review">
+                                <svg
+                                  className="composer-control-icon"
+                                  aria-hidden="true"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
+                                  <path d="m7.4 10 1.65 1.65 3.55-3.55" />
+                                </svg>
+                                {approvalsReviewer === "auto_review"
+                                  ? "Approve for me"
+                                  : "Always ask"}
+                              </summary>
+                              <div className="composer-popover compact-popover">
+                                <button
+                                  type="button"
+                                  aria-pressed={
+                                    approvalsReviewer === "auto_review"
+                                  }
+                                  disabled={mode === "capture"}
+                                  onClick={(event) => {
+                                    setApprovalsReviewer("auto_review");
+                                    closeParentMenu(event);
+                                  }}
+                                >
+                                  <span>Approve for me</span>
+                                  <small>Rove reviews routine requests</small>
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-pressed={approvalsReviewer === "user"}
+                                  disabled={mode === "capture"}
+                                  onClick={(event) => {
+                                    setApprovalsReviewer("user");
+                                    closeParentMenu(event);
+                                  }}
+                                >
+                                  <span>Always ask</span>
+                                  <small>You review every request</small>
+                                </button>
+                              </div>
+                            </details>
+                          </div>
+                          {selectedWorkflowId && (
+                            <label className="workflow-share-choice">
+                              <span>Workflow guidance</span>
+                              <select
+                                aria-label="Workflow guidance sharing"
+                                required
+                                value={shareWorkflowContext}
+                                onChange={(event) =>
+                                  setShareWorkflowContext(
+                                    event.target.value as
+                                      "" | "share" | "local",
+                                  )
+                                }
+                              >
+                                <option value="">
+                                  Choose before starting…
+                                </option>
+                                <option value="share">
+                                  Apply relevant guidance to Codex
+                                </option>
+                                <option value="local">
+                                  Keep association local only
+                                </option>
+                              </select>
+                              <small>
+                                Applying guidance may send approved relevant
+                                text to the model service. Secrets, files,
+                                credentials, and browser state are excluded.
+                              </small>
+                            </label>
+                          )}
+                        </section>
+                      )}
+                      {commandPaletteMatches(
+                        commandPaletteQuery,
+                        "model",
+                        "reasoning",
+                        "effort",
+                      ) && (
                         <section>
                           <strong>Model</strong>
-                          {product?.catalog.models.map((entry) => (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              aria-pressed={model === entry.id}
-                              onClick={() => setModel(entry.id)}
-                            >
-                              <span>{entry.displayName}</span>
-                            </button>
-                          ))}
-                        </section>
-                        <section>
-                          <strong>Reasoning effort</strong>
-                          {selectedModel?.efforts.map((value) => (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-pressed={effort === value}
-                              onClick={(event) => {
-                                setEffort(value);
-                                closeParentMenu(event);
-                              }}
-                            >
-                              <span>
-                                {value[0]?.toUpperCase() + value.slice(1)}
+                          <details className="composer-menu composer-model-menu">
+                            <summary aria-label="Model and reasoning effort">
+                              <span
+                                className="composer-control-icon"
+                                aria-hidden="true"
+                              >
+                                ✦
                               </span>
-                            </button>
-                          ))}
+                              {selectedModel?.displayName ?? "Default model"}
+                              {effort ? ` · ${effort}` : ""}
+                              <svg
+                                className="composer-chevron"
+                                aria-hidden="true"
+                                viewBox="0 0 16 16"
+                              >
+                                <path d="m4 6 4 4 4-4" />
+                              </svg>
+                            </summary>
+                            <div className="composer-popover model-popover">
+                              <section>
+                                <strong>Model</strong>
+                                {product?.catalog.models.map((entry) => (
+                                  <button
+                                    key={entry.id}
+                                    type="button"
+                                    aria-pressed={model === entry.id}
+                                    onClick={() => setModel(entry.id)}
+                                  >
+                                    <span>{entry.displayName}</span>
+                                  </button>
+                                ))}
+                              </section>
+                              <section>
+                                <strong>Reasoning effort</strong>
+                                {selectedModel?.efforts.map((value) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    aria-pressed={effort === value}
+                                    onClick={(event) => {
+                                      setEffort(value);
+                                      closeParentMenu(event);
+                                    }}
+                                  >
+                                    <span>
+                                      {value[0]?.toUpperCase() + value.slice(1)}
+                                    </span>
+                                  </button>
+                                ))}
+                              </section>
+                            </div>
+                          </details>
                         </section>
-                      </div>
-                    </details>
+                      )}
+                    </div>
+                  </details>
+                  <div className="composer-footer">
                     <button
                       className="primary composer-submit"
                       aria-label={
@@ -4732,6 +5167,21 @@ export function ProductSurface({
                         }
                         onChange={(event) => setFollowup(event.target.value)}
                         onKeyDown={(event) => {
+                          if (event.key === "/" && followup.length === 0) {
+                            event.preventDefault();
+                            const palette = document.getElementById(
+                              "task-followup-command-palette",
+                            ) as HTMLDetailsElement | null;
+                            if (palette) palette.open = true;
+                            window.setTimeout(() =>
+                              document
+                                .querySelector<HTMLInputElement>(
+                                  "#task-followup-command-palette input[type='search']",
+                                )
+                                ?.focus(),
+                            );
+                            return;
+                          }
                           if (
                             event.key !== "Enter" ||
                             event.shiftKey ||
@@ -4754,97 +5204,151 @@ export function ProductSurface({
                             )
                           }
                         />
-                        <div className="composer-control-rail">
-                          <details className="composer-menu composer-setup-menu">
-                            <summary aria-label="Task setup">
-                              Task setup
-                            </summary>
-                            <div className="composer-popover task-settings-popover">
-                              <section>
-                                <strong>How Rove helps</strong>
-                                <div className="task-frozen-option">
-                                  <span>
-                                    {modeLabel(viewedTask.executionMode)}
-                                  </span>
-                                  <small>Fixed for this task</small>
-                                </div>
-                              </section>
-                              <section>
-                                <strong>Browser profile</strong>
-                                <div className="task-frozen-option">
-                                  <span>{identityLabel}</span>
-                                  <small>Fixed for this task</small>
-                                </div>
-                              </section>
-                            </div>
-                          </details>
-                          <details className="composer-menu composer-permission-menu">
-                            <summary aria-label="Permission review">
-                              <svg
-                                className="composer-control-icon"
-                                aria-hidden="true"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
-                                <path d="m7.4 10 1.65 1.65 3.55-3.55" />
-                              </svg>
-                              {viewedTask.approvalsReviewer === "auto_review"
-                                ? "Approve for me"
-                                : "Always ask"}
-                            </summary>
-                            <div className="composer-popover compact-popover task-settings-popover">
-                              <div className="task-frozen-option">
-                                <span>
-                                  {viewedTask.approvalsReviewer ===
-                                  "auto_review"
-                                    ? "Approve for me"
-                                    : "Always ask"}
-                                </span>
-                                <small>Fixed for this task</small>
-                              </div>
-                            </div>
-                          </details>
-                        </div>
                         <div className="composer-footer">
-                          <details className="composer-menu composer-model-menu">
-                            <summary aria-label="Model and reasoning effort">
-                              <span
-                                className="composer-control-icon"
-                                aria-hidden="true"
-                              >
-                                ✦
-                              </span>
-                              {product?.catalog.models.find(
-                                (entry) => entry.id === viewedTask.model,
-                              )?.displayName ??
-                                viewedTask.model ??
-                                "Default model"}
-                              {viewedTask.reasoningEffort
-                                ? ` · ${viewedTask.reasoningEffort}`
-                                : ""}
-                              <svg
-                                className="composer-chevron"
-                                aria-hidden="true"
-                                viewBox="0 0 16 16"
-                              >
-                                <path d="m4 6 4 4 4-4" />
-                              </svg>
+                          <details
+                            className="composer-menu composer-command-menu"
+                            id="task-followup-command-palette"
+                          >
+                            <summary
+                              aria-label="Commands and settings"
+                              title="Commands and settings"
+                            >
+                              <span aria-hidden="true">/</span>
                             </summary>
-                            <div className="composer-popover compact-popover task-settings-popover">
-                              <div className="task-frozen-option">
-                                <span>
-                                  {product?.catalog.models.find(
-                                    (entry) => entry.id === viewedTask.model,
-                                  )?.displayName ??
-                                    viewedTask.model ??
-                                    "Default model"}
-                                </span>
-                                <small>
-                                  {viewedTask.reasoningEffort
-                                    ? `${viewedTask.reasoningEffort} reasoning · fixed for this task`
-                                    : "Fixed for this task"}
-                                </small>
-                              </div>
+                            <div
+                              className="composer-command-palette"
+                              aria-label="Task commands and settings"
+                            >
+                              <label className="composer-command-search">
+                                <span>Commands</span>
+                                <input
+                                  type="search"
+                                  aria-label="Search commands"
+                                  placeholder="Search task settings"
+                                  value={commandPaletteQuery}
+                                  onChange={(event) =>
+                                    setCommandPaletteQuery(event.target.value)
+                                  }
+                                />
+                              </label>
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "task",
+                                "mode",
+                                "browser",
+                                "approval",
+                              ) && (
+                                <section>
+                                  <strong>Task</strong>
+                                  <div className="composer-control-rail">
+                                    <details className="composer-menu composer-setup-menu">
+                                      <summary aria-label="Task setup">
+                                        Task setup
+                                      </summary>
+                                      <div className="composer-popover task-settings-popover">
+                                        <section>
+                                          <strong>How Rove helps</strong>
+                                          <div className="task-frozen-option">
+                                            <span>
+                                              {modeLabel(
+                                                viewedTask.executionMode,
+                                              )}
+                                            </span>
+                                            <small>Fixed for this task</small>
+                                          </div>
+                                        </section>
+                                        <section>
+                                          <strong>Browser profile</strong>
+                                          <div className="task-frozen-option">
+                                            <span>{identityLabel}</span>
+                                            <small>Fixed for this task</small>
+                                          </div>
+                                        </section>
+                                      </div>
+                                    </details>
+                                    <details className="composer-menu composer-permission-menu">
+                                      <summary aria-label="Permission review">
+                                        <svg
+                                          className="composer-control-icon"
+                                          aria-hidden="true"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path d="M10 2.5 16 5v4.3c0 3.7-2.35 6.55-6 8.2-3.65-1.65-6-4.5-6-8.2V5l6-2.5Z" />
+                                          <path d="m7.4 10 1.65 1.65 3.55-3.55" />
+                                        </svg>
+                                        {viewedTask.approvalsReviewer ===
+                                        "auto_review"
+                                          ? "Approve for me"
+                                          : "Always ask"}
+                                      </summary>
+                                      <div className="composer-popover compact-popover task-settings-popover">
+                                        <div className="task-frozen-option">
+                                          <span>
+                                            {viewedTask.approvalsReviewer ===
+                                            "auto_review"
+                                              ? "Approve for me"
+                                              : "Always ask"}
+                                          </span>
+                                          <small>Fixed for this task</small>
+                                        </div>
+                                      </div>
+                                    </details>
+                                  </div>
+                                </section>
+                              )}
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "model",
+                                "reasoning",
+                                "effort",
+                              ) && (
+                                <section>
+                                  <strong>Model</strong>
+                                  <details className="composer-menu composer-model-menu">
+                                    <summary aria-label="Model and reasoning effort">
+                                      <span
+                                        className="composer-control-icon"
+                                        aria-hidden="true"
+                                      >
+                                        ✦
+                                      </span>
+                                      {product?.catalog.models.find(
+                                        (entry) =>
+                                          entry.id === viewedTask.model,
+                                      )?.displayName ??
+                                        viewedTask.model ??
+                                        "Default model"}
+                                      {viewedTask.reasoningEffort
+                                        ? ` · ${viewedTask.reasoningEffort}`
+                                        : ""}
+                                      <svg
+                                        className="composer-chevron"
+                                        aria-hidden="true"
+                                        viewBox="0 0 16 16"
+                                      >
+                                        <path d="m4 6 4 4 4-4" />
+                                      </svg>
+                                    </summary>
+                                    <div className="composer-popover compact-popover task-settings-popover">
+                                      <div className="task-frozen-option">
+                                        <span>
+                                          {product?.catalog.models.find(
+                                            (entry) =>
+                                              entry.id === viewedTask.model,
+                                          )?.displayName ??
+                                            viewedTask.model ??
+                                            "Default model"}
+                                        </span>
+                                        <small>
+                                          {viewedTask.reasoningEffort
+                                            ? `${viewedTask.reasoningEffort} reasoning · fixed for this task`
+                                            : "Fixed for this task"}
+                                        </small>
+                                      </div>
+                                    </div>
+                                  </details>
+                                </section>
+                              )}
                             </div>
                           </details>
                           {viewedTask.availableActions.includes(

@@ -5611,6 +5611,181 @@ html[data-rove-theme="dark"] .account-avatar {
   width: min(460px, 100%);
 }
 
+.composer-command-menu {
+  position: relative;
+}
+
+.product-app .composer-command-menu > summary {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.product-app .composer-command-menu > summary:hover,
+.product-app .composer-command-menu[open] > summary {
+  color: var(--ink);
+  background: var(--surface-subtle);
+}
+
+.composer-command-palette {
+  position: absolute;
+  z-index: 12;
+  bottom: 42px;
+  left: 0;
+  display: grid;
+  width: min(380px, calc(100vw - 48px));
+  max-height: 430px;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 14px 44px rgb(0 0 0 / 0.16);
+}
+
+.composer-command-search {
+  display: grid;
+  gap: 6px;
+}
+
+.composer-command-search > span,
+.composer-command-palette > section > strong {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.composer-command-search input {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+
+.composer-command-palette > section {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.product-app .composer-command-palette > section > button {
+  display: grid;
+  min-height: 44px;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.product-app .composer-command-palette > section > button small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.composer-command-palette .composer-control-rail {
+  display: grid;
+  gap: 4px;
+}
+
+.composer-command-palette .workflow-task-choice {
+  width: 100%;
+}
+
+.composer-command-palette .workflow-share-choice {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  margin: 6px 0 0;
+  padding: 8px 0 0;
+}
+
+.composer-command-palette .workflow-share-choice select {
+  width: 100%;
+}
+
+.composer-command-palette .workflow-share-choice small {
+  line-height: 1.45;
+}
+
+.task-response-surface {
+  width: min(760px, 100%);
+  padding: 20px;
+  border-color: var(--border);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.07);
+}
+
+.task-response-surface h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.task-response-surface fieldset {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.task-response-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.task-response-choice:has(input:checked) {
+  border-color: var(--ink-soft);
+  background: var(--surface-subtle);
+}
+
+.task-response-other {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.attention-inline fieldset .task-response-other {
+  display: grid;
+  align-items: stretch;
+}
+
+.task-response-other input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+
 .workflow-create-form,
 .workflow-create-form label {
   display: grid;
@@ -5835,6 +6010,110 @@ html[data-rove-theme="dark"] .account-avatar {
 
 .workflow-outputs {
   padding-top: 28px;
+}
+
+.workflow-context-surface {
+  display: grid;
+  gap: 0;
+  padding-top: 32px;
+}
+
+.workflow-context-surface > header {
+  padding-bottom: 24px;
+}
+
+.workflow-context-surface > header h2 {
+  margin: 5px 0 0;
+  font-size: 22px;
+  font-weight: 670;
+  letter-spacing: -0.025em;
+}
+
+.workflow-context-surface > header p,
+.workflow-context-section > p,
+.workflow-context-advanced > p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.workflow-context-section {
+  padding: 20px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.workflow-context-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workflow-context-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.product-app .workflow-context-section > header button,
+.product-app .workflow-context-advanced > button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.workflow-context-focused-editor {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+}
+
+.workflow-context-focused-editor > label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.workflow-context-focused-editor textarea,
+.workflow-context-focused-editor select {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  font: inherit;
+}
+
+.workflow-context-focused-editor textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.workflow-context-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workflow-context-advanced {
+  padding: 20px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.workflow-context-advanced > summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .workflow-empty-state-large {
