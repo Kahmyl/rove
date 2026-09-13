@@ -65,6 +65,8 @@ import {
   type ExpectedEffect,
   type PrepareTaskResultActionRequest,
   type TaskResultActionPlan,
+  type Recording,
+  type StartRecordingRequest,
 } from "@rove/protocol";
 import {
   BrowserWorkspaceRegistry,
@@ -85,6 +87,7 @@ import { OwnershipTransitionService } from "./control/ownership-transition.servi
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { detectDownloadMimeType } from "./evidence/download-mime.js";
 import { ObservationService } from "./observation/observation.service.js";
+import { RecordingService } from "./recording/recording.service.js";
 import { PagePolicyOrchestrator } from "./orchestration/page-policy-orchestrator.js";
 import {
   InteractionPolicy,
@@ -147,6 +150,32 @@ function exactTaskResultFiles(
     )
   );
 }
+
+const unavailableRecordingService = {
+  start: async () => {
+    throw new RoveError({
+      code: "RECORDING_SCOPE_UNAVAILABLE",
+      message: "Recording service is unavailable.",
+    });
+  },
+  stop: async () => {
+    throw new RoveError({
+      code: "RECORDING_SCOPE_UNAVAILABLE",
+      message: "Recording service is unavailable.",
+    });
+  },
+  get: async () => {
+    throw new RoveError({
+      code: "RECORDING_SCOPE_UNAVAILABLE",
+      message: "Recording service is unavailable.",
+    });
+  },
+  list: async () => [],
+  stopAll: async () => undefined,
+  stopForPage: async () => undefined,
+  stopBeforeSensitiveType: async () => undefined,
+  interruptForPage: async () => undefined,
+} as unknown as RecordingService;
 
 function sameExpectedTarget(
   effect: ExpectedEffect,
@@ -280,6 +309,8 @@ export class RuntimeService implements RoveRuntime {
     private readonly effectJournal: EffectJournalStore = new FileEffectJournalStore(
       config.home,
     ),
+    @Inject(RecordingService)
+    private readonly recordings: RecordingService = unavailableRecordingService,
   ) {
     this.browserWorkspaces = new BrowserWorkspaceRegistry(this.config.home);
     this.effectJournalReady = this.initializeEffectJournalCutover();
@@ -702,6 +733,7 @@ export class RuntimeService implements RoveRuntime {
         session.controller,
         session.ownershipGeneration ?? 1,
       );
+    await this.recordings.stopAll(sessionId);
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.endSession(sessionId, {
         flushHumanActivity: () => this.flushHumanActivity(sessionId),
@@ -2639,7 +2671,12 @@ export class RuntimeService implements RoveRuntime {
     );
   }
 
-  type(sessionId: string, request: TypeRequest): Promise<ActionResult> {
+  async type(sessionId: string, request: TypeRequest): Promise<ActionResult> {
+    await this.recordings.stopBeforeSensitiveType(
+      sessionId,
+      request.target.pageId,
+      request.target.ref,
+    );
     return this.mutateAction(
       sessionId,
       `type:${request.target.ref}`,
@@ -2790,6 +2827,7 @@ export class RuntimeService implements RoveRuntime {
   }
 
   async closePage(sessionId: string, pageId: string): Promise<void> {
+    await this.recordings.stopForPage(sessionId, pageId);
     await this.mutateValue(
       sessionId,
       async (lease) => {
@@ -2836,6 +2874,25 @@ export class RuntimeService implements RoveRuntime {
         );
       },
     );
+  }
+
+  startRecording(
+    sessionId: string,
+    request: StartRecordingRequest,
+  ): Promise<Recording> {
+    return this.recordings.start(sessionId, request);
+  }
+
+  stopRecording(sessionId: string, recordingId: string): Promise<Recording> {
+    return this.recordings.stop(sessionId, recordingId);
+  }
+
+  getRecording(sessionId: string, recordingId: string): Promise<Recording> {
+    return this.recordings.get(sessionId, recordingId);
+  }
+
+  listRecordings(sessionId: string): Promise<Recording[]> {
+    return this.recordings.list(sessionId);
   }
 
   captureScreenshot(
@@ -3479,6 +3536,10 @@ export class RuntimeService implements RoveRuntime {
     sessionId: string,
     activity: BrowserActivity,
   ): void {
+    if (activity.type === "page_closed")
+      void this.recordings
+        .interruptForPage(sessionId, activity.pageId)
+        .catch(() => undefined);
     if (activity.type === "browser_evidence") {
       this.enqueueBrowserEvidence(sessionId, activity);
       return;

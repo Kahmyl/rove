@@ -29,6 +29,8 @@ import type {
   TaskAcceptance,
   TaskPortableValue,
   TaskResultActionPlan,
+  Recording,
+  StartRecordingRequest,
 } from "@rove/protocol";
 import {
   assembleWorkflowContext,
@@ -188,6 +190,14 @@ export type LocalProductCommand =
       operationId: string;
     }
   | {
+      type: "task.recording.start";
+      taskId: string;
+      scope: "page" | "browser_window";
+      pageId?: string;
+      confirmUnmaskedSensitiveContent: true;
+    }
+  | { type: "task.recording.stop"; taskId: string; recordingId: string }
+  | {
       type: "attention.decide";
       requestId: string;
       taskId: string;
@@ -229,7 +239,9 @@ export type RendererProductIntent =
           | "result.create"
           | "result.revise"
           | "result.select"
-          | "result.authorize";
+          | "result.authorize"
+          | "task.recording.start"
+          | "task.recording.stop";
       }
     >
   | { type: "attachments.remove"; attachmentId: string }
@@ -376,6 +388,7 @@ export interface ProductTaskProjection {
   approvalsReviewer: ApprovalsReviewer;
   conversation?: ProductConversationProjection;
   results: readonly TaskResult[];
+  recordings?: readonly Recording[];
   lifecycle: ProductTaskSnapshot["lifecycle"];
   availableActions: ProductTaskSnapshot["availableActions"];
   runtime?: ProductTaskSnapshot["runtime"];
@@ -569,6 +582,14 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
   "task.archive": ["type", "taskId", "operationId"],
   "task.effects.acknowledge": ["type", "taskId"],
   "task.effects.authorize-repeat": ["type", "taskId", "effectId"],
+  "task.recording.start": [
+    "type",
+    "taskId",
+    "scope",
+    "pageId",
+    "confirmUnmaskedSensitiveContent",
+  ],
+  "task.recording.stop": ["type", "taskId", "recordingId"],
   "attention.decide": [
     "type",
     "taskId",
@@ -1421,6 +1442,7 @@ function formContent(
 /** Trusted host product service. Renderer writes enter only through executeRendererIntent. */
 export class LocalProductApi {
   private currentTaskId: string | undefined;
+  private readonly recordingWarnings = new Set<string>();
   private readonly health: () => CodexHostHealth;
   private readonly account: CodexAccountCatalogService;
   private readonly tasks: ProductTaskPort;
@@ -1431,6 +1453,19 @@ export class LocalProductApi {
   private readonly attachmentRuntime: AttachmentRuntimeMaterializer | undefined;
   private readonly workflows: WorkflowStore | undefined;
   private readonly results: ResultStore | undefined;
+  private readonly recordingRuntime:
+    | {
+        startRecording(
+          sessionId: string | undefined,
+          request: StartRecordingRequest,
+        ): Promise<Recording>;
+        stopRecording(
+          sessionId: string,
+          recordingId: string,
+        ): Promise<Recording>;
+        listRecordings(sessionId: string): Promise<Recording[]>;
+      }
+    | undefined;
   private readonly legacyEffects:
     | {
         acknowledgeLegacyEffectScope(sessionId: string): Promise<void>;
@@ -1505,6 +1540,14 @@ export class LocalProductApi {
     },
     workflows?: WorkflowStore,
     results?: ResultStore,
+    recordingRuntime?: {
+      startRecording(
+        sessionId: string | undefined,
+        request: StartRecordingRequest,
+      ): Promise<Recording>;
+      stopRecording(sessionId: string, recordingId: string): Promise<Recording>;
+      listRecordings(sessionId: string): Promise<Recording[]>;
+    },
   ) {
     this.health = health;
     this.account = account;
@@ -1517,6 +1560,7 @@ export class LocalProductApi {
     this.legacyEffects = legacyEffects;
     this.workflows = workflows;
     this.results = results;
+    this.recordingRuntime = recordingRuntime;
   }
   private taskResultPlanMatches(
     result: TaskResult,
@@ -1688,6 +1732,7 @@ export class LocalProductApi {
       tasks: [],
       workflows: this.workflows?.listWorkflows({ includeArchived: true }) ?? [],
       recoveryWarnings: [...this.recoveryWarnings()]
+        .concat([...this.recordingWarnings])
         .slice(-64)
         .map((value) => value.slice(0, 500)),
       draftAttachments: this.attachments?.listDrafts() ?? [],
@@ -1702,15 +1747,39 @@ export class LocalProductApi {
       .map(projectAttention);
     const productTasks = await this.tasks.productTasks();
     await this.reconcileActionResults(productTasks);
-    const tasks = productTasks
-      .slice(-256)
-      .map((task) =>
-        projectTask(
-          task,
-          this.attachments?.listForTask?.(task.context.roveTaskId) ?? [],
-          this.results?.listResults(task.context.roveTaskId) ?? [],
-        ),
-      );
+    const tasks = await Promise.all(
+      productTasks.slice(-256).map(async (task) => {
+        const taskId = task.context.roveTaskId;
+        const sessionId = task.context.roveSessionId;
+        let recordings: Recording[] = [];
+        if (sessionId && this.recordingRuntime)
+          try {
+            recordings = (
+              await this.recordingRuntime.listRecordings(sessionId)
+            ).filter(
+              (recording) =>
+                recording.taskId === taskId &&
+                recording.sessionId === sessionId,
+            );
+            this.recordingWarnings.delete(
+              `Recording state is unavailable for task ${taskId}.`,
+            );
+          } catch {
+            recordings = [];
+            this.recordingWarnings.add(
+              `Recording state is unavailable for task ${taskId}.`,
+            );
+          }
+        return {
+          ...projectTask(
+            task,
+            this.attachments?.listForTask?.(taskId) ?? [],
+            this.results?.listResults(taskId) ?? [],
+          ),
+          recordings,
+        };
+      }),
+    );
     const current = tasks.find((task) => task.taskId === this.currentTaskId);
     const blockers = [...tasks]
       .reverse()
@@ -1734,6 +1803,31 @@ export class LocalProductApi {
     return this.tasks.taskIdForRuntimeSession(
       nonempty(sessionId, "Runtime session id"),
     );
+  }
+  async recordingForOpen(
+    taskId: string,
+    recordingId: string,
+  ): Promise<Recording> {
+    if (!this.recordingRuntime) throw new Error("Recording is unavailable.");
+    const task = await this.tasks.readTask(nonempty(taskId, "task id"));
+    const sessionId = nonempty(
+      task?.context.roveSessionId,
+      "Runtime session id",
+    );
+    const recording = (
+      await this.recordingRuntime.listRecordings(sessionId)
+    ).find(
+      (candidate) =>
+        candidate.id === recordingId && candidate.taskId === taskId,
+    );
+    if (
+      !recording ||
+      recording.state !== "available" ||
+      !recording.artifact?.playable ||
+      recording.artifact.partial
+    )
+      throw new Error("A playable recording was not found for this task.");
+    return recording;
   }
   async completeReturnControl(sessionId: string) {
     const taskId = await this.tasks.taskIdForRuntimeSession(
@@ -2288,6 +2382,29 @@ export class LocalProductApi {
         taskId,
         effectId: nonempty(value.effectId, "effect id"),
       });
+    if (value.type === "task.recording.start") {
+      if (value.scope !== "page" && value.scope !== "browser_window")
+        throw new Error("Invalid recording scope.");
+      if (value.confirmUnmaskedSensitiveContent !== true)
+        throw new Error("Recording requires sensitive-content confirmation.");
+      const pageId =
+        value.pageId === undefined
+          ? undefined
+          : nonempty(value.pageId, "recording page id");
+      return this.execute({
+        type: value.type,
+        taskId,
+        scope: value.scope,
+        ...(pageId === undefined ? {} : { pageId }),
+        confirmUnmaskedSensitiveContent: true,
+      });
+    }
+    if (value.type === "task.recording.stop")
+      return this.execute({
+        type: value.type,
+        taskId,
+        recordingId: nonempty(value.recordingId, "recording id"),
+      });
     const requestId = nonempty(value.requestId, "request id");
     if (!Number.isInteger(value.generation) || Number(value.generation) < 0)
       throw new Error("Invalid request generation.");
@@ -2484,6 +2601,14 @@ export class LocalProductApi {
       "task.thread.unarchive": ["type", "taskId", "operationId"],
       "task.effects.acknowledge": ["type", "taskId"],
       "task.effects.authorize-repeat": ["type", "taskId", "effectId"],
+      "task.recording.start": [
+        "type",
+        "taskId",
+        "scope",
+        "pageId",
+        "confirmUnmaskedSensitiveContent",
+      ],
+      "task.recording.stop": ["type", "taskId", "recordingId"],
       "task.effects.closeout": ["type", "taskId", "operationId"],
       "attention.decide": [
         "type",
@@ -2766,6 +2891,61 @@ export class LocalProductApi {
           sessionId,
           effectId,
         );
+      }
+      case "task.recording.start": {
+        if (!this.recordingRuntime)
+          throw new Error("Recording is unavailable.");
+        const taskId = nonempty(command.taskId, "task id");
+        const task = await this.tasks.readTask(taskId);
+        if (!task || ["closed", "failed"].includes(task.lifecycle.phase))
+          throw new Error("Recording requires an open task.");
+        const sessionId = task.context.roveSessionId;
+        if (command.scope !== "page" && command.scope !== "browser_window")
+          throw new Error("Invalid recording scope.");
+        if (command.confirmUnmaskedSensitiveContent !== true)
+          throw new Error("Recording requires sensitive-content confirmation.");
+        if (
+          command.pageId !== undefined &&
+          !/^page_[A-Za-z0-9_-]+$/.test(command.pageId)
+        )
+          throw new Error("Invalid recording page id.");
+        const request: StartRecordingRequest =
+          command.scope === "page"
+            ? {
+                scope: "page",
+                taskId,
+                ...(command.pageId ? { pageId: command.pageId } : {}),
+                sensitiveDataPolicy: "user_confirmed_visible_content",
+                confirmUnmaskedSensitiveContent: true,
+              }
+            : {
+                scope: "browser_window",
+                taskId,
+                sensitiveDataPolicy: "user_confirmed_visible_content",
+                confirmUnmaskedSensitiveContent: true,
+              };
+        return this.recordingRuntime.startRecording(sessionId, request);
+      }
+      case "task.recording.stop": {
+        if (!this.recordingRuntime)
+          throw new Error("Recording is unavailable.");
+        const taskId = nonempty(command.taskId, "task id");
+        const recordingId = nonempty(command.recordingId, "recording id");
+        if (!/^rec_[a-f0-9]{32}$/.test(recordingId))
+          throw new Error("Invalid recording id.");
+        const task = await this.tasks.readTask(taskId);
+        const sessionId = nonempty(
+          task?.context.roveSessionId,
+          "Runtime session id",
+        );
+        const owned = (
+          await this.recordingRuntime.listRecordings(sessionId)
+        ).find(
+          (recording) =>
+            recording.id === recordingId && recording.taskId === taskId,
+        );
+        if (!owned) throw new Error("Recording does not belong to this task.");
+        return this.recordingRuntime.stopRecording(sessionId, recordingId);
       }
       case "task.effects.closeout": {
         if (!this.legacyEffects)

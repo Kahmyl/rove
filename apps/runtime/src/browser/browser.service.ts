@@ -8,6 +8,8 @@ import {
   type BrowserEngine,
   type BrowserInteractionContext,
   type BrowserSession,
+  type PageRecordingStartRequest,
+  type PageRecordingState,
 } from "@rove/browser";
 import {
   RoveError,
@@ -33,6 +35,7 @@ interface PageGroupState {
   ensuringPage?: Promise<void>;
   releasing?: boolean;
   readonly listeners: Set<BrowserActivityListener>;
+  readonly recordings: Map<string, string>;
 }
 
 interface ManagedBrowserHost {
@@ -93,7 +96,10 @@ export class BrowserService implements OnModuleDestroy {
         createdHost = true;
       }
 
-      const group: PageGroupState = { listeners: new Set() };
+      const group: PageGroupState = {
+        listeners: new Set(),
+        recordings: new Map(),
+      };
       host.groups.set(sessionId, group);
       const scoped = new GroupBrowserSession(this, host, sessionId);
       this.sessions.set(sessionId, scoped);
@@ -882,6 +888,38 @@ class GroupBrowserSession implements BrowserSession {
     const pageId = options.target?.pageId ?? this.activePage();
     this.assertPage(pageId);
     return this.read(() => this.host.browser.screenshot(options, pageId));
+  }
+  startPageRecording(
+    request: PageRecordingStartRequest,
+  ): Promise<PageRecordingState> {
+    this.assertPage(request.pageId);
+    return this.read(async () => {
+      const state = await this.host.browser.startPageRecording(request);
+      this.assertPage(state.pageId);
+      this.group().recordings.set(state.recordingId, state.pageId);
+      return state;
+    });
+  }
+  stopPageRecording(recordingId: string): Promise<PageRecordingState> {
+    const pageId = this.group().recordings.get(recordingId);
+    if (pageId === undefined)
+      throw new RoveError({
+        code: "RECORDING_NOT_FOUND",
+        message: "The recording does not belong to this browser page group.",
+      });
+    return this.read(async () => {
+      try {
+        const state = await this.host.browser.stopPageRecording(recordingId);
+        if (state.pageId !== pageId)
+          throw new RoveError({
+            code: "RECORDING_NOT_FOUND",
+            message: "The recording page binding changed unexpectedly.",
+          });
+        return state;
+      } finally {
+        this.group().recordings.delete(recordingId);
+      }
+    });
   }
   async pages(): Promise<PageSummary[]> {
     let pages = await this.read(() => this.host.browser.pages());

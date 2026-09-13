@@ -149,6 +149,7 @@ describe("Companion preload API", () => {
       "getSnapshot",
       "getSurfaceSnapshot",
       "getWindowFullscreen",
+      "openRecording",
       "openRove",
       "openTrustedExternal",
       "pauseSession",
@@ -204,6 +205,7 @@ describe("Companion preload API", () => {
       purpose: "account_login",
       loginId: "login_current",
     });
+    await api.openRecording("task_exact", `rec_${"a".repeat(32)}`);
     await api.getBrowserWorkspaces();
     await api.createBrowserWorkspace("Personal");
     await api.selectBrowserWorkspace(
@@ -237,6 +239,7 @@ describe("Companion preload API", () => {
       companionIpcChannels.openRove,
       companionIpcChannels.showBrowser,
       companionIpcChannels.openTrustedExternal,
+      companionIpcChannels.openRecording,
       companionIpcChannels.browserWorkspaces,
       companionIpcChannels.createBrowserWorkspace,
       companionIpcChannels.selectBrowserWorkspace,

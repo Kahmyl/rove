@@ -928,6 +928,17 @@ export interface TaskRuntimePort {
     materialDigest: string,
     planId: string,
   ): Promise<object>;
+  startRecording?(
+    sessionId: string,
+    request: import("@rove/protocol").StartRecordingRequest,
+  ): Promise<import("@rove/protocol").Recording>;
+  stopRecording?(
+    sessionId: string,
+    recordingId: string,
+  ): Promise<import("@rove/protocol").Recording>;
+  listRecordings?(
+    sessionId: string,
+  ): Promise<import("@rove/protocol").Recording[]>;
 }
 export interface RoveMcpInspection {
   serverName: string;

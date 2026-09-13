@@ -38,6 +38,7 @@ import type {
   TargetResolutionRequest,
   VerifiedInteractionRequest,
 } from "./verified-interaction.js";
+import type { Recording, StartRecordingRequest } from "./recording.js";
 
 export const ROVE_RUNTIME = Symbol.for("ROVE_RUNTIME");
 
@@ -100,6 +101,13 @@ export interface RoveRuntime {
   pages(sessionId: string): Promise<PageSummary[]>;
   switchPage(sessionId: string, pageId: string): Promise<PageSummary>;
   closePage(sessionId: string, pageId: string): Promise<void>;
+  startRecording(
+    sessionId: string,
+    request: StartRecordingRequest,
+  ): Promise<Recording>;
+  stopRecording(sessionId: string, recordingId: string): Promise<Recording>;
+  getRecording(sessionId: string, recordingId: string): Promise<Recording>;
+  listRecordings(sessionId: string): Promise<Recording[]>;
   captureScreenshot(
     sessionId: string,
     options?: ScreenshotOptions,

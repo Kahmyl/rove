@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { errors as playwrightErrors, type Page } from "playwright";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   RoveError,
@@ -21,6 +24,7 @@ const config: BrowserLaunchConfig = {
 };
 const sessions: BrowserSession[] = [];
 const servers: FixtureServer[] = [];
+const recordingRoots: string[] = [];
 
 async function setup(path = "/actions") {
   const server = await startFixtureServer();
@@ -124,9 +128,41 @@ async function mutateUnrelatedContent(session: BrowserSession): Promise<void> {
 afterEach(async () => {
   while (sessions.length > 0) await sessions.pop()?.close();
   while (servers.length > 0) await servers.pop()?.close();
+  while (recordingRoots.length > 0)
+    await rm(recordingRoots.pop()!, { recursive: true, force: true });
 });
 
 describe("browser actions", () => {
+  it("records only the originally selected page and finalizes WebM", async () => {
+    const { server, session } = await setup();
+    const original = (await session.pages()).find((page) => page.active)!;
+    const root = await mkdtemp(join(tmpdir(), "rove-page-recording-test-"));
+    recordingRoots.push(root);
+    const path = join(root, "page.webm");
+    const recordingId = `rec_${"a".repeat(32)}`;
+
+    await expect(
+      session.startPageRecording({
+        recordingId,
+        pageId: original.id,
+        path,
+      }),
+    ).resolves.toMatchObject({ recordingId, pageId: original.id });
+    const other = await session.openPage(`${server.url}/capability-waves`);
+    await session.switchPage(other.id);
+    await testPage(session).waitForTimeout(150);
+    await expect(session.stopPageRecording(recordingId)).resolves.toMatchObject(
+      {
+        recordingId,
+        pageId: original.id,
+      },
+    );
+
+    const bytes = await readFile(path);
+    expect(bytes.byteLength).toBeGreaterThan(128);
+    expect(bytes.subarray(0, 4).toString("hex")).toBe("1a45dfa3");
+  }, 15_000);
+
   it("executes supported interaction primitives with action evidence", async () => {
     const { session } = await setup("/capability-waves");
     let observation = await session.inspect();

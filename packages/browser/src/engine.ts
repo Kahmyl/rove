@@ -29,6 +29,18 @@ export interface BrowserTargetFileState {
   sha256: string;
 }
 
+export interface PageRecordingStartRequest {
+  recordingId: string;
+  pageId: string;
+  path: string;
+}
+
+export interface PageRecordingState {
+  recordingId: string;
+  pageId: string;
+  url: string;
+}
+
 export interface BrowserInteractionContext {
   observationId: string;
   /** Requests exclusive admission against mutations sharing this context. */
@@ -73,6 +85,10 @@ export interface BrowserSession {
   back(pageId?: string): Promise<ActionResult>;
   forward(pageId?: string): Promise<ActionResult>;
   screenshot(options?: ScreenshotOptions, pageId?: string): Promise<Artifact>;
+  startPageRecording(
+    request: PageRecordingStartRequest,
+  ): Promise<PageRecordingState>;
+  stopPageRecording(recordingId: string): Promise<PageRecordingState>;
   pages(): Promise<PageSummary[]>;
   switchPage(pageId: string): Promise<PageSummary>;
   closePage(pageId: string): Promise<void>;

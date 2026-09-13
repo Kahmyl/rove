@@ -15,3 +15,4 @@ export * from "./native-lifecycle-contract.js";
 export * from "./task-process.js";
 export * from "./task-engine.js";
 export * from "./task-result-action.js";
+export * from "./recording.js";

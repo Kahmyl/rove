@@ -122,6 +122,13 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
         intent,
       ) as Promise<void>,
 
+    openRecording: (taskId, recordingId) =>
+      ipc.invoke(
+        companionIpcChannels.openRecording,
+        taskId,
+        recordingId,
+      ) as Promise<void>,
+
     getBrowserWorkspaces: () =>
       ipc.invoke(companionIpcChannels.browserWorkspaces) as ReturnType<
         RoveDesktopApi["getBrowserWorkspaces"]

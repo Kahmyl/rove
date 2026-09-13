@@ -926,6 +926,7 @@ export function ProductSurface({
     () => new Set(),
   );
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [recordingConfirmed, setRecordingConfirmed] = useState(false);
   const [login, setLogin] = useState<LoginProjection | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
@@ -1214,6 +1215,24 @@ export function ProductSurface({
   };
   const command = <T,>(value: RendererProductIntent) =>
     window.rove.executeProductIntent(value) as Promise<T>;
+
+  const startPageRecording = async (taskId: string) => {
+    if (!recordingConfirmed) return;
+    await run(() =>
+      command({
+        type: "task.recording.start",
+        taskId,
+        scope: "page",
+        confirmUnmaskedSensitiveContent: true,
+      }),
+    );
+  };
+
+  const stopRecording = async (taskId: string, recordingId: string) => {
+    await run(() =>
+      command({ type: "task.recording.stop", taskId, recordingId }),
+    );
+  };
 
   const visibleLogin =
     product?.catalog.login ??
@@ -3679,8 +3698,154 @@ export function ProductSurface({
             </div>
           )}
 
+          {product?.tasks
+            .flatMap((task) =>
+              (task.recordings ?? [])
+                .filter((recording) =>
+                  ["requested", "recording", "finalizing"].includes(
+                    recording.state,
+                  ),
+                )
+                .map((recording) => ({ task, recording })),
+            )
+            .map(({ task, recording }) => (
+              <div
+                className="product-warning"
+                role="status"
+                key={`active-recording:${recording.id}`}
+              >
+                <strong>Page recording active</strong>
+                <span>
+                  {displayTaskTitle(task)} · {recording.state}
+                </span>
+              </div>
+            ))}
+
           {viewedTask && (
             <div className="task-detail">
+              <section className="result-shelf" aria-label="Task recordings">
+                <header>
+                  <div>
+                    <div className="eyebrow">Page recording</div>
+                    <strong>Task-owned browser evidence</strong>
+                  </div>
+                  <small>{viewedTask.executionMode} mode</small>
+                </header>
+                <p>
+                  Records the selected page only, without audio. Browser chrome,
+                  other tabs, popups, and native dialogs are excluded.
+                  Continuous video is not masked.
+                </p>
+                {(viewedTask.recordings ?? []).some((recording) =>
+                  ["requested", "recording", "finalizing"].includes(
+                    recording.state,
+                  ),
+                ) ? (
+                  (viewedTask.recordings ?? [])
+                    .filter((recording) =>
+                      ["requested", "recording", "finalizing"].includes(
+                        recording.state,
+                      ),
+                    )
+                    .map((recording) => (
+                      <button
+                        type="button"
+                        className="secondary"
+                        key={recording.id}
+                        disabled={busy || recording.state === "finalizing"}
+                        onClick={() =>
+                          void stopRecording(viewedTask.taskId, recording.id)
+                        }
+                      >
+                        {recording.state === "finalizing"
+                          ? "Finalizing recording…"
+                          : "Stop page recording"}
+                      </button>
+                    ))
+                ) : (
+                  <>
+                    <label className="result-select">
+                      <input
+                        type="checkbox"
+                        checked={recordingConfirmed}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setRecordingConfirmed(event.currentTarget.checked)
+                        }
+                      />
+                      <span>
+                        I understand visible sensitive content will be recorded
+                        and will stop before revealing secrets.
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={
+                        busy ||
+                        !recordingConfirmed ||
+                        ["closed", "failed"].includes(
+                          viewedTask.lifecycle.phase,
+                        )
+                      }
+                      onClick={() => void startPageRecording(viewedTask.taskId)}
+                    >
+                      Start page recording
+                    </button>
+                    <small>
+                      Browser-window recording is unavailable until Rove can
+                      isolate one task per browser window.
+                    </small>
+                  </>
+                )}
+                {(viewedTask.recordings ?? []).filter((recording) =>
+                  ["available", "failed"].includes(recording.state),
+                ).length > 0 && (
+                  <div className="result-card-list">
+                    {(viewedTask.recordings ?? [])
+                      .filter((recording) =>
+                        ["available", "failed"].includes(recording.state),
+                      )
+                      .map((recording) => (
+                        <article className="result-card" key={recording.id}>
+                          <div className="result-card-heading">
+                            <strong>Page recording</strong>
+                            <span data-result-state={recording.state}>
+                              {recording.state}
+                            </span>
+                          </div>
+                          <small>
+                            {recording.scope.kind === "page"
+                              ? recording.scope.url
+                              : "Browser window"}{" "}
+                            · no audio
+                          </small>
+                          {recording.state === "failed" ? (
+                            <p role="status">
+                              Recording unavailable:{" "}
+                              {recording.failure?.message}
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(() =>
+                                  window.rove.openRecording(
+                                    viewedTask.taskId,
+                                    recording.id,
+                                  ),
+                                )
+                              }
+                            >
+                              Open recording
+                            </button>
+                          )}
+                        </article>
+                      ))}
+                  </div>
+                )}
+              </section>
               {viewedTask.results.length > 0 && (
                 <section className="result-shelf" aria-label="Task results">
                   <header>

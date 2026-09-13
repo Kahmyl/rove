@@ -143,6 +143,7 @@ export interface RoveDesktopApi {
   openRove(): Promise<void>;
   showBrowser(taskId?: string): Promise<boolean>;
   openTrustedExternal(intent: TrustedExternalIntent): Promise<void>;
+  openRecording(taskId: string, recordingId: string): Promise<void>;
   getBrowserWorkspaces(): Promise<DesktopBrowserWorkspaceStatus>;
   createBrowserWorkspace(
     displayName: string,
@@ -187,6 +188,7 @@ export const companionIpcChannels = {
   openRove: "rove:open",
   showBrowser: "rove:show-browser",
   openTrustedExternal: "rove:open-trusted-external",
+  openRecording: "rove:open-recording",
   browserWorkspaces: "rove:browser-workspaces",
   createBrowserWorkspace: "rove:create-browser-workspace",
   selectBrowserWorkspace: "rove:select-browser-workspace",

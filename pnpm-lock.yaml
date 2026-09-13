@@ -37,6 +37,9 @@ importers:
       "@rove/protocol":
         specifier: workspace:*
         version: link:../../packages/protocol
+      "@rove/storage":
+        specifier: workspace:*
+        version: link:../../packages/storage
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -59,9 +62,6 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
     devDependencies:
-      "@rove/storage":
-        specifier: workspace:*
-        version: link:../../packages/storage
       "@types/better-sqlite3":
         specifier: 9.6.0
         version: 9.6.0

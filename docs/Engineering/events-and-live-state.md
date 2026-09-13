@@ -54,6 +54,8 @@ Task needs-attention badges may aggregate in the navigation UI without globally 
 
 Recording-started, recording-stopped, finalizing, artifact-available, and artifact-failed are separate facts. Only artifact-available means the file can be opened. A browser crash or disk-full condition must not leave a false saved-video result.
 
+The implemented page-video path persists these lifecycle facts before projecting them into the product surface. Recording observations carry task, session, recording, page, and state identity but never captured frame bytes or sensitive form values. Restart recovery converts unfinished records to an explicit interrupted failure; it does not infer availability from the presence of a staging file.
+
 A download or generated file publishes a managed reference after storage availability and metadata validation. Large byte payloads do not travel through every task snapshot. Readers request bytes separately through the authorized artifact boundary.
 
 ## Synchronization events

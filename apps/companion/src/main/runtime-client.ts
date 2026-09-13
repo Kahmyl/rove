@@ -10,6 +10,8 @@ import type {
   Session,
   StartSessionRequest,
   TaskResultActionPlan,
+  Recording,
+  StartRecordingRequest,
 } from "@rove/protocol";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -136,6 +138,32 @@ export class CompanionRuntimeClient {
 
   getSession(sessionId: string): Promise<Session> {
     return this.request<Session>(`/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  startRecording(
+    sessionId: string,
+    request: StartRecordingRequest,
+  ): Promise<Recording> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/recordings`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  stopRecording(sessionId: string, recordingId: string): Promise<Recording> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/recordings/${encodeURIComponent(recordingId)}/stop`,
+      { method: "POST" },
+    );
+  }
+
+  listRecordings(sessionId: string): Promise<Recording[]> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/recordings`,
+    );
   }
 
   inspect(sessionId: string): Promise<unknown> {

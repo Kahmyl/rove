@@ -12,6 +12,7 @@ import {
 } from "electron";
 import { loadConfig } from "@rove/config";
 import type { Session } from "@rove/protocol";
+import { FileRecordingStore } from "@rove/storage";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
@@ -365,6 +366,7 @@ function createCompactFollowerWindow(): BrowserWindow {
 function registerIpc(
   runtime: CompanionRuntimeClient,
   attachmentAuthority: TaskAttachmentAuthority,
+  recordingStore: FileRecordingStore,
 ): void {
   const refreshCompanion = async (operation: () => Promise<unknown>) => {
     await operation();
@@ -454,6 +456,32 @@ function registerIpc(
         .api()
         .resolveTrustedExternalUrl(intent);
       await shell.openExternal(validateTrustedExternalUrl(value));
+    },
+  );
+
+  ipcMain.handle(
+    companionIpcChannels.openRecording,
+    async (_event, taskId: unknown, recordingId: unknown) => {
+      if (
+        typeof taskId !== "string" ||
+        taskId.length < 1 ||
+        taskId.length > 255 ||
+        typeof recordingId !== "string" ||
+        !/^rec_[a-f0-9]{32}$/.test(recordingId)
+      )
+        throw new Error("Invalid recording playback request.");
+      if (codexExecutionCore === undefined || codexProductError !== null)
+        throw new Error("Codex product service is unavailable.");
+      const recording = await codexExecutionCore
+        .api()
+        .recordingForOpen(taskId, recordingId);
+      const path = await recordingStore.artifactPath(
+        recording.sessionId,
+        recording.id,
+        false,
+      );
+      const error = await shell.openPath(path);
+      if (error) throw new Error("The recording could not be opened.");
     },
   );
 
@@ -1177,7 +1205,11 @@ async function startDesktop(): Promise<void> {
     codexProductError = "No supported Codex executable is available.";
   }
 
-  registerIpc(runtime, attachmentAuthority);
+  registerIpc(
+    runtime,
+    attachmentAuthority,
+    new FileRecordingStore(desktopHome),
+  );
 
   const surface = new CompanionSurface(
     createCompanionWindow,

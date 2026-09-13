@@ -65,6 +65,91 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("shows truthful page-recording controls and ownership in every mode", () => {
+    for (const mode of ["agent", "companion", "capture"] as const) {
+      const value = snapshot();
+      value.product!.catalog.account = {
+        status: "logged_in",
+        authMode: "chatgpt",
+      };
+      value.product!.tasks = [
+        {
+          taskId: `task_${mode}`,
+          executionMode: mode,
+          browserIdentity: { mode: "temporary" },
+          selectionSource: "user_selected",
+          selectedAt: "2026-09-13T12:00:00.000Z",
+          approvalsReviewer: "auto_review",
+          bootstrapStage: "complete",
+          results: [],
+          recordings: [
+            {
+              schemaVersion: 1,
+              id: `rec_${"a".repeat(32)}`,
+              taskId: `task_${mode}`,
+              sessionId: `ses_${"b".repeat(32)}`,
+              mode,
+              state: "recording",
+              scope: {
+                kind: "page",
+                pageId: `page_${"c".repeat(32)}`,
+                url: "https://example.test/work",
+              },
+              sensitiveDataPolicy: "user_confirmed_visible_content",
+              includesAudio: false,
+              coverage: "Selected page.",
+              exclusions: ["Other tabs"],
+              requestedAt: "2026-09-13T12:00:00.000Z",
+              updatedAt: "2026-09-13T12:00:01.000Z",
+              startedAt: "2026-09-13T12:00:01.000Z",
+            },
+            {
+              schemaVersion: 1,
+              id: `rec_${"d".repeat(32)}`,
+              taskId: `task_${mode}`,
+              sessionId: `ses_${"b".repeat(32)}`,
+              mode,
+              state: "failed",
+              scope: {
+                kind: "page",
+                pageId: `page_${"e".repeat(32)}`,
+                url: "https://example.test/failed",
+              },
+              sensitiveDataPolicy: "user_confirmed_visible_content",
+              includesAudio: false,
+              coverage: "Selected page.",
+              exclusions: ["Other tabs"],
+              requestedAt: "2026-09-13T11:00:00.000Z",
+              updatedAt: "2026-09-13T11:00:01.000Z",
+              failure: {
+                code: "FINALIZATION_FAILED",
+                message: "The recording could not be finalized.",
+              },
+            },
+          ],
+          roveSessionId: `ses_${"b".repeat(32)}`,
+          lifecycle: { phase: "working", reason: "Active." },
+          availableActions: ["finish"],
+        },
+      ];
+      value.product!.currentTaskId = `task_${mode}`;
+      const html = renderToStaticMarkup(
+        <ProductSurface
+          desktop={value}
+          connectionError={null}
+          follower={false}
+          refresh={async () => undefined}
+        />,
+      );
+      expect(html).toContain("Page recording active");
+      expect(html).toContain(`${mode} mode`);
+      expect(html).toContain("Stop page recording");
+      expect(html).toContain("Continuous video is not masked");
+      expect(html).toContain("Recording unavailable");
+      expect(html).toContain("could not be finalized");
+    }
+  });
+
   it("keeps follow-up drafts isolated while switching tasks", () => {
     const first = withTaskFollowupDraft({}, "task_a", "Follow up on A");
     const switched = withTaskFollowupDraft(

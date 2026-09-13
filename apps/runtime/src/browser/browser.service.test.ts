@@ -138,6 +138,18 @@ function fakeHost(id = "browser_host"): FakeHost {
         });
       }
     },
+    startPageRecording: vi.fn(async (request) => ({
+      recordingId: request.recordingId,
+      pageId: request.pageId,
+      url:
+        physicalPages.find((page) => page.id === request.pageId)?.url ??
+        "about:blank",
+    })),
+    stopPageRecording: vi.fn(async (recordingId: string) => ({
+      recordingId,
+      pageId: physicalPages[0]!.id,
+      url: physicalPages[0]!.url,
+    })),
     invalidateTargets: async () => undefined,
     invalidateAllTargets: async () => physicalPages.length,
     invalidatePages: async (pageIds: readonly string[]) =>
@@ -148,6 +160,40 @@ function fakeHost(id = "browser_host"): FakeHost {
 }
 
 describe("BrowserService task page groups", () => {
+  it("fences recording start and stop to the owning page group", async () => {
+    const host = fakeHost();
+    const service = new BrowserService({ start: async () => host });
+    const config = await persistentConfig("recording-fence");
+    const first = await service.start("ses_first", config);
+    const second = await service.start("ses_second", config);
+    const firstPage = (await first.pages())[0]!;
+    const secondPage = (await second.pages())[0]!;
+    const recordingId = `rec_${"a".repeat(32)}`;
+
+    await expect(
+      async () =>
+        first.startPageRecording({
+          recordingId,
+          pageId: secondPage.id,
+          path: "/tmp/should-not-start.webm",
+        }),
+    ).rejects.toMatchObject({ code: "PAGE_NOT_FOUND" });
+    expect(host.startPageRecording).not.toHaveBeenCalled();
+
+    await first.startPageRecording({
+      recordingId,
+      pageId: firstPage.id,
+      path: "/tmp/owned.webm",
+    });
+    await expect(async () =>
+      second.stopPageRecording(recordingId),
+    ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
+    expect(host.stopPageRecording).not.toHaveBeenCalled();
+    await first.stopPageRecording(recordingId);
+    expect(host.stopPageRecording).toHaveBeenCalledWith(recordingId);
+    await service.onModuleDestroy();
+  });
+
   it("closes every distinct temporary host during shutdown", async () => {
     const first = fakeHost("browser-1");
     const second = fakeHost("browser-2");

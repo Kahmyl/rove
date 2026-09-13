@@ -271,6 +271,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
   >();
   private readonly activityListeners = new Set<BrowserActivityListener>();
   private readonly pendingDialogDirectives = new Map<string, DialogDirective>();
+  private readonly pageRecordings = new Map<
+    string,
+    { pageId: string; page: Page; url: string }
+  >();
   private recovering: Promise<void> | null = null;
   private browserCdp: CDPSession | undefined;
   private activeTabTimer: ReturnType<typeof setInterval> | undefined;
@@ -3372,6 +3376,12 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   private async closeOnce(): Promise<void> {
+    await Promise.allSettled(
+      [...this.pageRecordings.keys()].map((recordingId) =>
+        this.stopPageRecording(recordingId),
+      ),
+    );
+
     if (this.activeTabTimer !== undefined) {
       clearInterval(this.activeTabTimer);
       this.activeTabTimer = undefined;
@@ -3445,6 +3455,64 @@ export class PlaywrightBrowserSession implements BrowserSession {
         recursive: true,
         force: true,
       }).catch(() => undefined);
+    }
+  }
+
+  async startPageRecording(request: {
+    recordingId: string;
+    pageId: string;
+    path: string;
+  }): Promise<{ recordingId: string; pageId: string; url: string }> {
+    if (this.closed)
+      throw new RoveError({
+        code: "BROWSER_CLOSED",
+        message: "The browser is closed.",
+      });
+    if (!/^rec_[a-f0-9]{32}$/u.test(request.recordingId))
+      throw new RoveError({
+        code: "INVALID_CONFIGURATION",
+        message: "Recording identity is invalid.",
+      });
+    if (this.pageRecordings.has(request.recordingId))
+      throw new RoveError({
+        code: "RECORDING_ALREADY_ACTIVE",
+        message: "The recording is already active.",
+      });
+    if (
+      [...this.pageRecordings.values()].some(
+        (recording) => recording.pageId === request.pageId,
+      )
+    )
+      throw new RoveError({
+        code: "RECORDING_ALREADY_ACTIVE",
+        message: "The selected page is already being recorded.",
+      });
+    const page = this.pageRegistry.pageFor(request.pageId);
+    const url = page.url();
+    await page.screencast.start({ path: request.path });
+    const state = { pageId: request.pageId, page, url };
+    this.pageRecordings.set(request.recordingId, state);
+    return { recordingId: request.recordingId, pageId: state.pageId, url };
+  }
+
+  async stopPageRecording(
+    recordingId: string,
+  ): Promise<{ recordingId: string; pageId: string; url: string }> {
+    const recording = this.pageRecordings.get(recordingId);
+    if (recording === undefined)
+      throw new RoveError({
+        code: "RECORDING_NOT_FOUND",
+        message: "The active page recording was not found.",
+      });
+    try {
+      await recording.page.screencast.stop();
+      return {
+        recordingId,
+        pageId: recording.pageId,
+        url: recording.page.isClosed() ? recording.url : recording.page.url(),
+      };
+    } finally {
+      this.pageRecordings.delete(recordingId);
     }
   }
 

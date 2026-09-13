@@ -7,6 +7,7 @@ import {
   FileEvidenceStore,
   FileEffectJournalStore,
   FileObservationStore,
+  FileRecordingStore,
   FileSessionStore,
 } from "@rove/storage";
 import { BrowserController } from "./api/browser.controller.js";
@@ -15,6 +16,7 @@ import { ControlController } from "./api/control.controller.js";
 import { EvidenceController } from "./api/evidence.controller.js";
 import { HealthController } from "./api/health.controller.js";
 import { ObservationController } from "./api/observation.controller.js";
+import { RecordingController } from "./api/recording.controller.js";
 import { RoveErrorFilter } from "./api/rove-error.filter.js";
 import {
   RuntimeAuthGuard,
@@ -29,12 +31,14 @@ import { ControlWaitService } from "./control/control-wait.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { RuntimeService } from "./runtime.service.js";
+import { RecordingService } from "./recording/recording.service.js";
 import { SessionService } from "./session/session.service.js";
 import {
   EVIDENCE_STORE,
   EFFECT_JOURNAL_STORE,
   OBSERVATION_STORE,
   ROVE_CONFIG,
+  RECORDING_STORE,
   SESSION_STORE,
 } from "./tokens.js";
 
@@ -50,6 +54,7 @@ assertRuntimeBindingSafe(config);
     ControlController,
     ObservationController,
     EvidenceController,
+    RecordingController,
   ],
   providers: [
     { provide: SESSION_STORE, useValue: new FileSessionStore(config.home) },
@@ -58,6 +63,7 @@ assertRuntimeBindingSafe(config);
       useValue: new FileObservationStore(config.home),
     },
     { provide: EVIDENCE_STORE, useValue: new FileEvidenceStore(config.home) },
+    { provide: RECORDING_STORE, useValue: new FileRecordingStore(config.home) },
     {
       provide: EFFECT_JOURNAL_STORE,
       useValue: new FileEffectJournalStore(config.home),
@@ -74,6 +80,7 @@ assertRuntimeBindingSafe(config);
     BrowserService,
     ObservationService,
     EvidenceService,
+    RecordingService,
     RuntimeService,
     { provide: ROVE_RUNTIME, useExisting: RuntimeService },
   ],

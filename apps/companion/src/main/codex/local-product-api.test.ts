@@ -80,6 +80,7 @@ function fixture(
   accountState: unknown = account(),
   workflows?: WorkflowStore,
   results?: ResultStore,
+  recordingRuntime?: ConstructorParameters<typeof LocalProductApi>[12],
 ) {
   const start = vi.fn(async (input) => ({
     context: { ...context(mode), ...input },
@@ -282,6 +283,7 @@ function fixture(
     legacyEffects,
     workflows,
     results,
+    recordingRuntime,
   );
   return {
     api,
@@ -295,6 +297,7 @@ function fixture(
     broker,
     warnings,
     legacyEffects,
+    recordingRuntime,
   };
 }
 
@@ -443,6 +446,125 @@ function workflowStore(environment = workflowEnvironment()): WorkflowStore & {
 }
 
 describe("LocalProductApi native product seam", () => {
+  it("binds recording commands to the task's exact Runtime session", async () => {
+    const recording = {
+      schemaVersion: 1 as const,
+      id: `rec_${"a".repeat(32)}`,
+      taskId: "task_existing",
+      sessionId: "ses_existing",
+      mode: "agent" as const,
+      state: "recording" as const,
+      scope: {
+        kind: "page" as const,
+        pageId: `page_${"b".repeat(32)}`,
+        url: "https://example.test/",
+      },
+      sensitiveDataPolicy: "user_confirmed_visible_content" as const,
+      includesAudio: false as const,
+      coverage: "Selected page.",
+      exclusions: ["Other tabs"],
+      requestedAt: "2026-09-13T12:00:00.000Z",
+      updatedAt: "2026-09-13T12:00:01.000Z",
+      startedAt: "2026-09-13T12:00:01.000Z",
+    };
+    const recordingRuntime = {
+      startRecording: vi.fn(async () => recording),
+      stopRecording: vi.fn(async () => recording),
+      listRecordings: vi.fn(async () => [recording]),
+    };
+    const { api } = fixture(
+      "agent",
+      undefined,
+      account(),
+      undefined,
+      undefined,
+      recordingRuntime,
+    );
+
+    await api.executeRendererIntent({
+      type: "task.recording.start",
+      taskId: "task_existing",
+      scope: "page",
+      confirmUnmaskedSensitiveContent: true,
+    });
+    expect(recordingRuntime.startRecording).toHaveBeenCalledWith(
+      "ses_existing",
+      expect.objectContaining({ taskId: "task_existing", scope: "page" }),
+    );
+
+    await api.executeRendererIntent({
+      type: "task.recording.stop",
+      taskId: "task_existing",
+      recordingId: recording.id,
+    });
+    expect(recordingRuntime.stopRecording).toHaveBeenCalledWith(
+      "ses_existing",
+      recording.id,
+    );
+  });
+
+  it("rejects a recording ID associated with another task", async () => {
+    const recordingRuntime = {
+      startRecording: vi.fn(),
+      stopRecording: vi.fn(),
+      listRecordings: vi.fn(async () => [
+        {
+          id: `rec_${"d".repeat(32)}`,
+          taskId: "task_other",
+          sessionId: "ses_existing",
+        },
+      ]),
+    };
+    const { api } = fixture(
+      "agent",
+      undefined,
+      account(),
+      undefined,
+      undefined,
+      recordingRuntime as never,
+    );
+    await expect(
+      api.executeRendererIntent({
+        type: "task.recording.stop",
+        taskId: "task_existing",
+        recordingId: `rec_${"d".repeat(32)}`,
+      }),
+    ).rejects.toThrow("does not belong");
+    expect(recordingRuntime.stopRecording).not.toHaveBeenCalled();
+  });
+
+  it("delegates a browserless task recording so the execution core can attach it", async () => {
+    const recordingRuntime = {
+      startRecording: vi.fn(async () => ({}) as never),
+      stopRecording: vi.fn(async () => ({}) as never),
+      listRecordings: vi.fn(async () => []),
+    };
+    const { api, tasks } = fixture(
+      "agent",
+      undefined,
+      account(),
+      undefined,
+      undefined,
+      recordingRuntime,
+    );
+    const task = (await tasks.productTasks())[0]!;
+    const browserlessTask = structuredClone(task);
+    delete (browserlessTask.context as Partial<typeof task.context>)
+      .roveSessionId;
+    tasks.readTask.mockResolvedValue(browserlessTask);
+
+    await api.executeRendererIntent({
+      type: "task.recording.start",
+      taskId: "task_existing",
+      scope: "page",
+      confirmUnmaskedSensitiveContent: true,
+    });
+    expect(recordingRuntime.startRecording).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ taskId: "task_existing" }),
+    );
+  });
+
   it("associates tasks locally and shares assembled guidance only after explicit choice", async () => {
     const workflows = workflowStore();
     const { api, tasks } = fixture("agent", undefined, account(), workflows);

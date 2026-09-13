@@ -358,6 +358,27 @@ export class CodexExecutionCore {
         : undefined,
       store,
       store,
+      this.options.runtime.startRecording &&
+        this.options.runtime.stopRecording &&
+        this.options.runtime.listRecordings
+        ? {
+            startRecording: async (sessionId, request) => {
+              const attachedSessionId = await this.attachBrowser(
+                request.taskId,
+              );
+              if (sessionId !== undefined && attachedSessionId !== sessionId)
+                throw new Error("Task recording session binding changed.");
+              return this.options.runtime.startRecording!(
+                attachedSessionId,
+                request,
+              );
+            },
+            stopRecording: (sessionId, recordingId) =>
+              this.options.runtime.stopRecording!(sessionId, recordingId),
+            listRecordings: (sessionId) =>
+              this.options.runtime.listRecordings!(sessionId),
+          }
+        : undefined,
     );
     await this.options.onProductStateChanged?.();
     return this.apiValue;

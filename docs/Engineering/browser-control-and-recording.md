@@ -1,6 +1,6 @@
 # Browser Control and Recording
 
-**Status:** Target capability contract. The bounded task-owned page-group behavior described as implemented below has executable evidence in the current Playwright/Runtime path. Requested video and the broader shared-state qualification matrix remain unfinished.
+**Status:** Implemented for bounded task-owned page groups and explicitly requested page video. Browser-window video and the broader shared-state qualification matrix remain unfinished and are refused rather than approximated.
 
 ## Browser ownership
 
@@ -65,6 +65,16 @@ For page video, qualify [Playwright Screencast](https://playwright.dev/docs/api/
 Use recording states such as requested, recording, finalizing, available, and failed. Publish a playable local artifact only after successful finalization. Preserve a recoverable partial file where supported, but label it honestly. Disk exhaustion, renderer failure, browser exit, and permission revocation are required tests.
 
 Sensitive-data handling is independent of screenshot masking. Test pause/exclusion around protected interactions, or explain/refuse unsupported private capture. Never silently include unrelated windows. Retain video locally under the agreed persistence boundary; interactive DOM replay and cloud storage are unnecessary for this capability.
+
+### Implemented page-video boundary
+
+Runtime records an explicitly selected task-owned page through Playwright Screencast in Agent, Companion, and Capture modes. The immutable record binds the task, Runtime session, participation mode, original page, truthful coverage and exclusions, and the explicit `user_confirmed_visible_content` policy. The UI keeps task ownership and active/finalizing state visible, and stopping recording leaves the task, browser, and Runtime session active.
+
+The recording store persists requested, recording, finalizing, available, and failed transitions beneath the local session boundary. A video becomes available only after Screencast stops, the staging file has a WebM EBML signature and minimum size, SHA-256 and byte length are computed, and an atomic rename succeeds. Interrupted active records become failed during recovery; an unverified partial is never advertised as playable. Renderer playback supplies only task and recording identifiers, which the host revalidates before deriving and opening the local path.
+
+Continuous video does not inherit screenshot masking. Start therefore requires explicit acknowledgement, known sensitive input scopes are refused, and an agent type into a recognized sensitive control first stops that page's recording. The user-facing contract still requires the human to stop before manually revealing secrets because arbitrary future page content cannot be preclassified reliably.
+
+Browser-window recording currently returns `RECORDING_SCOPE_UNAVAILABLE`. One physical browser window may contain manually selected or task-owned pages from several tasks, so Electron window capture would include browser chrome or another task's visible tab without preserving page-group ownership. Linux PipeWire source selection adds a further exact-source qualification gap. Do not enable window recording until the captured window is isolated to one task or an equivalently strong ownership and exclusion boundary is implemented and qualified.
 
 ## Qualification
 

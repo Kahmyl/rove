@@ -104,6 +104,13 @@ const api: RoveDesktopApi = {
   openTrustedExternal: (intent) =>
     ipcRenderer.invoke("rove:open-trusted-external", intent) as Promise<void>,
 
+  openRecording: (taskId, recordingId) =>
+    ipcRenderer.invoke(
+      "rove:open-recording",
+      taskId,
+      recordingId,
+    ) as Promise<void>,
+
   getBrowserWorkspaces: () =>
     ipcRenderer.invoke(
       "rove:browser-workspaces",
