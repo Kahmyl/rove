@@ -19,7 +19,7 @@ const files = [
 ].filter((p) => existsSync(p) && statSync(p).isFile());
 const errors = [];
 const forbidden =
-  /(?:^|[\/._:-])(?:phase[-_]?\d+|milestone[-_]?\d+|gate[-_]?\d+|m\d+|p\d+(?:\.\d+)*|v\d+)(?=$|[\/._:-])/i;
+  /(?:^|[/._:-])(?:phase[-_]?\d+|milestone[-_]?\d+|gate[-_]?\d+|m\d+|p\d+(?:\.\d+)*|v\d+)(?=$|[/._:-])/i;
 const ticket = /(?:^|\/)[A-Z]{2,8}-\d+(?=$|[._/-])/;
 const suffixes = [
   "",

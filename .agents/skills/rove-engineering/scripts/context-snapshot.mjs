@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import process from "node:process";
 
 function git(args, cwd) {
   return execFileSync("git", ["--no-optional-locks", ...args], {
