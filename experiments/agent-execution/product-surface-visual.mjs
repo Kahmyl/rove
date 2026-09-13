@@ -1259,13 +1259,18 @@ async function assertUiTruthCase(page, item) {
 
     case "W03": {
       await requireVisible(
-        page.getByText(/Revision 2 · 1 tasks/),
-        "W03 current immutable revision",
+        page.getByText("1 task", { exact: true }),
+        "W03 current Workflow membership",
       );
       await page
         .getByRole("button", { name: /Research review/ })
         .first()
         .click();
+      await requireVisible(
+        page.getByRole("heading", { name: "Research review" }),
+        "W03 current Workflow Home",
+      );
+      await page.getByRole("button", { name: "Context", exact: true }).click();
       await requireVisible(
         page.getByRole("dialog", { name: "Edit Workflow" }),
         "W03 current Workflow editor",
@@ -2226,10 +2231,8 @@ try {
         .click();
       await page.getByLabel("Workflow name").fill("Local research");
       await page
-        .getByLabel("Workflow purpose")
-        .fill("Keep local research guidance reusable.");
-      await page
-        .getByRole("button", { name: "Save approved revision" })
+        .getByRole("dialog")
+        .getByRole("button", { name: "Create Workflow", exact: true })
         .click();
       const localFailure = page
         .getByRole("alert")

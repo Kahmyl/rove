@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 import {
   assembleWorkflowContext,
+  emptyWorkflowConfiguration,
   validateWorkflowConfiguration,
   validateWorkflowName,
   type WorkflowConfiguration,
@@ -84,6 +85,29 @@ async function storeFixture() {
 }
 
 describe("local Workflow environments", () => {
+  it("creates a durable sparse Workflow from only a name", async () => {
+    const fixture = await storeFixture();
+    const created = fixture.store.createWorkflow({
+      operationId: "intent_00000000-0000-4000-8000-000000000010",
+      name: "Weekly product update",
+      configuration: emptyWorkflowConfiguration(),
+    });
+
+    expect(created).toMatchObject({
+      name: "Weekly product update",
+      currentRevision: 1,
+      revision: { configuration: { purpose: "" } },
+    });
+    expect(
+      assembleWorkflowContext(created, "Draft this week's update"),
+    ).toMatchObject({ workflowId: created.workflowId, revision: 1 });
+    expect(
+      assembleWorkflowContext(created, "Draft this week's update")
+        .developerInstructions,
+    ).not.toContain("Purpose:");
+    fixture.store.close();
+  });
+
   it("creates immutable revisions, rejects stale edits, and recovers after restart", async () => {
     const fixture = await storeFixture();
     const created = fixture.store.createWorkflow({

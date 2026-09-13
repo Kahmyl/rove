@@ -13,7 +13,11 @@ import {
   type ResultStore,
   type TaskResult,
 } from "./results.js";
-import type { WorkflowEnvironment, WorkflowStore } from "./workflows.js";
+import {
+  emptyWorkflowConfiguration,
+  type WorkflowEnvironment,
+  type WorkflowStore,
+} from "./workflows.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
 
@@ -563,6 +567,22 @@ describe("LocalProductApi native product seam", () => {
       undefined,
       expect.objectContaining({ taskId: "task_existing" }),
     );
+  });
+
+  it("accepts name-only Workflow creation through the renderer contract", async () => {
+    const workflows = workflowStore();
+    const { api } = fixture("agent", undefined, account(), workflows);
+    await api.executeRendererIntent({
+      type: "workflow.create",
+      operationId: "intent_09999999-9999-4999-8999-999999999999",
+      name: "Weekly product update",
+      configuration: emptyWorkflowConfiguration(),
+    });
+    expect(workflows.createWorkflow).toHaveBeenCalledWith({
+      operationId: "intent_09999999-9999-4999-8999-999999999999",
+      name: "Weekly product update",
+      configuration: emptyWorkflowConfiguration(),
+    });
   });
 
   it("associates tasks locally and shares assembled guidance only after explicit choice", async () => {

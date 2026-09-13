@@ -11,6 +11,7 @@ import {
   removeWorkflowResourceEntry,
   workflowConfigurationFromDraft,
   workflowDraft,
+  workflowWorkspaceProjection,
   withTaskFollowupDraft,
 } from "./product-surface.js";
 
@@ -286,7 +287,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       removeWorkflowResourceEntry(draft.resourceRequirements, "resource_site"),
     ).toEqual([{ id: "resource", kind: "account", label: "GitHub account" }]);
   });
-  it("shows durable Workflow environments, standalone choice, and task association", () => {
+  it("shows durable Workflow navigation, standalone choice, and task association", () => {
     const value = snapshot();
     value.product!.workflows = [
       {
@@ -366,12 +367,138 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-label="Create Workflow"');
     expect(html).not.toContain("Local work remains available");
     expect(html).toContain("Job search");
-    expect(html).toContain("Revision 2");
     expect(html).toContain("Past reviews");
-    expect(html).toContain("Archived · Revision 1");
+    expect(html).toContain("Archived · 0 tasks");
     expect(html).toContain('aria-label="Workflow environment"');
     expect(html).toContain("Standalone task");
     expect(html).toContain("Job search · Completed");
+  });
+
+  it("projects only exact Workflow tasks, outputs, and attention", () => {
+    const value = snapshot();
+    value.product!.workflows = [
+      {
+        workflowId: "workflow_jobs",
+        name: "Job search",
+        archived: false,
+        currentRevision: 1,
+        revision: {
+          workflowId: "workflow_jobs",
+          revision: 1,
+          configuration: {
+            purpose: "",
+            preferences: [],
+            criteria: [],
+            guidance: [],
+            procedures: [],
+            resourceRequirements: [],
+            resultConventions: [],
+            approvedKnowledge: [],
+          },
+          digest: "a".repeat(64),
+          approvedAt: "2026-09-13T10:00:00Z",
+        },
+        createdAt: "2026-09-13T10:00:00Z",
+        updatedAt: "2026-09-13T10:00:00Z",
+      },
+    ];
+    const result = {
+      resultId: "result_jobs",
+      taskId: "task_jobs",
+      kind: "report" as const,
+      lifecycle: "prepared" as const,
+      selected: false,
+      currentRevision: 3,
+      revision: {
+        resultId: "result_jobs",
+        revision: 3,
+        title: "Role shortlist",
+        body: "Three suitable roles.",
+        artifactIds: [],
+        digest: "b".repeat(64),
+        createdAt: "2026-09-13T11:00:00Z",
+      },
+      source: { evidenceIds: [] },
+      createdAt: "2026-09-13T11:00:00Z",
+      updatedAt: "2026-09-13T11:00:00Z",
+    };
+    value.product!.tasks = [
+      {
+        taskId: "task_jobs",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-13T11:00:00Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [result],
+        workflowAssociation: {
+          workflowId: "workflow_jobs",
+          workflowName: "Job search",
+        },
+        lifecycle: { phase: "waiting_for_human", reason: "Choose a role." },
+        availableActions: ["finish"],
+      },
+      {
+        taskId: "task_standalone",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-13T12:00:00Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [
+          {
+            ...result,
+            resultId: "result_unrelated",
+            taskId: "task_standalone",
+          },
+        ],
+        lifecycle: { phase: "closed", reason: "Done." },
+        availableActions: ["archive"],
+      },
+    ];
+    value.product!.attention = [
+      {
+        authority: "codex",
+        kind: "user_input",
+        requestId: "request_jobs",
+        taskId: "task_jobs",
+        threadId: "thread_jobs",
+        turnId: "turn_jobs",
+        itemId: "item_jobs",
+        generation: 1,
+        status: "pending",
+        sequence: 1,
+        title: "Choose a role",
+        questions: [],
+      },
+      {
+        authority: "codex",
+        kind: "user_input",
+        requestId: "request_unrelated",
+        taskId: "task_standalone",
+        threadId: "thread_standalone",
+        turnId: "turn_standalone",
+        itemId: "item_standalone",
+        generation: 1,
+        status: "pending",
+        sequence: 2,
+        title: "Unrelated attention",
+        questions: [],
+      },
+    ];
+
+    const projected = workflowWorkspaceProjection(
+      value.product!,
+      "workflow_jobs",
+    );
+    expect(projected.tasks.map((task) => task.taskId)).toEqual(["task_jobs"]);
+    expect(
+      projected.outputs.map(({ result: output }) => output.resultId),
+    ).toEqual(["result_jobs"]);
+    expect(projected.outputs[0]!.result.currentRevision).toBe(3);
+    expect(projected.attention.map((entry) => entry.requestId)).toEqual([
+      "request_jobs",
+    ]);
   });
 
   it("renders pre-launch attachment chips and distinct file-attention controls", () => {

@@ -5607,6 +5607,284 @@ html[data-rove-theme="dark"] .account-avatar {
   resize: vertical;
 }
 
+.workflow-create-dialog {
+  width: min(460px, 100%);
+}
+
+.workflow-create-form,
+.workflow-create-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-create-form label > span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.workflow-create-form input {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  font: inherit;
+}
+
+.product-main-workflow {
+  overflow-y: auto;
+  background: var(--surface);
+}
+
+.workflow-workspace {
+  width: min(940px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+
+.workflow-workspace-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.workflow-workspace-header h1 {
+  margin: 5px 0 0;
+  font-size: 28px;
+  font-weight: 680;
+  letter-spacing: -0.035em;
+}
+
+.workflow-workspace-header nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.product-app .workflow-workspace-header nav button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+
+.product-app .workflow-workspace-header nav button:hover,
+.product-app .workflow-workspace-header nav button[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface-subtle);
+}
+
+.product-app .workflow-workspace-header nav .workflow-context-button {
+  margin-left: 8px;
+  border-color: var(--border);
+}
+
+.workflow-home {
+  display: grid;
+  gap: 28px;
+  padding-top: 28px;
+}
+
+.workflow-start-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.035);
+}
+
+.workflow-start-card h2,
+.workflow-home-section h2,
+.workflow-outputs h2 {
+  margin: 5px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.workflow-start-card p,
+.workflow-outputs header p,
+.workflow-empty-state p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.product-app .workflow-start-card > button {
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding-inline: 16px;
+}
+
+.workflow-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.workflow-home-section {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.workflow-home-section > header,
+.workflow-outputs > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.product-app .workflow-home-section > header > button {
+  min-height: 28px;
+  padding: 4px 7px;
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+}
+
+.workflow-empty-state {
+  padding: 18px 0 4px;
+  color: var(--ink-soft);
+}
+
+.workflow-empty-state strong {
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.workflow-item-list,
+.workflow-output-list {
+  display: grid;
+}
+
+.product-app .workflow-item-list > button,
+.product-app .workflow-output-list > button {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.product-app .workflow-item-list > button:first-child,
+.product-app .workflow-output-list > button:first-child {
+  border-top: 0;
+}
+
+.product-app .workflow-item-list > button:hover,
+.product-app .workflow-output-list > button:hover {
+  color: var(--ink);
+  background: var(--surface-subtle);
+}
+
+.workflow-item-list button > span:first-child,
+.workflow-output-list button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.workflow-item-list strong,
+.workflow-output-list strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-item-list small,
+.workflow-output-list small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.workflow-attention {
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--border-soft));
+}
+
+.workflow-outputs {
+  padding-top: 28px;
+}
+
+.workflow-empty-state-large {
+  margin-top: 24px;
+  padding: 48px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.product-app .workflow-output-list > button {
+  min-height: 68px;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  padding: 12px 10px;
+}
+
+.workflow-output-kind {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workflow-list-row[data-current="true"] {
+  background: var(--surface-raised);
+}
+
+.result-card[data-opened="true"] {
+  border-color: var(--ink-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+@media (max-width: 900px) {
+  .workflow-workspace {
+    width: min(100% - 36px, 940px);
+    padding-top: 32px;
+  }
+
+  .workflow-workspace-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .workflow-home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .workflow-entry-editor {
   border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
   border-radius: 10px;

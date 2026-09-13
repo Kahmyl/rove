@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 
 import type {
   RendererProductIntent,
+  LocalProductSnapshot,
   ProductAttentionProjection,
   ProductElicitationField,
 } from "../main/codex/local-product-api.js";
@@ -119,6 +120,38 @@ export function followupDraftForTask(
   return taskId ? (drafts[taskId] ?? "") : "";
 }
 
+export function workflowWorkspaceProjection(
+  product: LocalProductSnapshot | null,
+  workflowId: string,
+) {
+  const workflow = product?.workflows.find(
+    (entry) => entry.workflowId === workflowId,
+  );
+  const tasks = (product?.tasks ?? [])
+    .filter((task) => task.workflowAssociation?.workflowId === workflowId)
+    .sort((left, right) => right.selectedAt.localeCompare(left.selectedAt));
+  const taskIds = new Set(tasks.map((task) => task.taskId));
+  const outputs = tasks
+    .flatMap((task) => task.results.map((result) => ({ task, result })))
+    .sort((left, right) =>
+      right.result.updatedAt.localeCompare(left.result.updatedAt),
+    );
+  const attention = (product?.attention ?? [])
+    .filter(
+      (entry) =>
+        taskIds.has(entry.taskId) &&
+        [
+          "pending",
+          "responding",
+          "awaiting_confirmation",
+          "resolution_unknown",
+          "stale",
+        ].includes(entry.status),
+    )
+    .sort((left, right) => left.sequence - right.sequence);
+  return { workflow, tasks, outputs, attention };
+}
+
 export function withTaskFollowupDraft(
   drafts: Readonly<Record<string, string>>,
   taskId: string,
@@ -132,6 +165,19 @@ function workflowLines(value: string): string[] {
     .split("\n")
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function emptyWorkflowDraftConfiguration(): WorkflowConfiguration {
+  return {
+    purpose: "",
+    preferences: [],
+    criteria: [],
+    guidance: [],
+    procedures: [],
+    resourceRequirements: [],
+    resultConventions: [],
+    approvedKnowledge: [],
+  };
 }
 
 function guidanceDrafts(
@@ -950,6 +996,14 @@ export function ProductSurface({
   const [codexRecoveryOpen, setCodexRecoveryOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
+  const [workflowCreateName, setWorkflowCreateName] = useState<string | null>(
+    null,
+  );
+  const [selectedWorkflowWorkspaceId, setSelectedWorkflowWorkspaceId] =
+    useState<string | null>(null);
+  const [workflowWorkspaceSection, setWorkflowWorkspaceSection] = useState<
+    "home" | "outputs"
+  >("home");
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [shareWorkflowContext, setShareWorkflowContext] = useState<
     "" | "share" | "local"
@@ -961,19 +1015,22 @@ export function ProductSurface({
   const [resultEditor, setResultEditor] = useState<ResultEditorDraft | null>(
     null,
   );
-  const activeModal = workflowEditor
-    ? "workflow"
-    : resultEditor
-      ? "result"
-      : workflowPromotion
-        ? "promotion"
-        : profileManagerOpen
-          ? "profiles"
-          : settingsOpen
-            ? "settings"
-            : codexRecoveryOpen
-              ? "codex"
-              : null;
+  const activeModal =
+    workflowCreateName !== null
+      ? "workflow-create"
+      : workflowEditor
+        ? "workflow"
+        : resultEditor
+          ? "result"
+          : workflowPromotion
+            ? "promotion"
+            : profileManagerOpen
+              ? "profiles"
+              : settingsOpen
+                ? "settings"
+                : codexRecoveryOpen
+                  ? "codex"
+                  : null;
   const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
@@ -983,6 +1040,7 @@ export function ProductSurface({
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const [openedResultId, setOpenedResultId] = useState<string | null>(null);
   const [timelineNow, setTimelineNow] = useState(() => Date.now());
   const [openWorkTurnIds, setOpenWorkTurnIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1102,6 +1160,11 @@ export function ProductSurface({
     ? undefined
     : (product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
       activeTask);
+  const workflowWorkspace = workflowWorkspaceProjection(
+    product,
+    selectedWorkflowWorkspaceId ?? "",
+  );
+  const selectedWorkflow = workflowWorkspace.workflow;
   const followup = followupDraftForTask(followupDrafts, viewedTask?.taskId);
   const setFollowup = (value: string) => {
     if (!viewedTask) return;
@@ -1166,6 +1229,13 @@ export function ProductSurface({
     viewedTask?.conversation?.activeTurnId,
     viewedTask?.conversation?.turnStatus,
   ]);
+  useEffect(() => {
+    if (!openedResultId || !viewedTask) return;
+    const result = document.getElementById(`result-card-${openedResultId}`);
+    if (!result) return;
+    result.scrollIntoView({ block: "center" });
+    result.focus({ preventScroll: true });
+  }, [openedResultId, viewedTask]);
 
   const gate = composerGate(desktop, {
     outcome,
@@ -1298,7 +1368,7 @@ export function ProductSurface({
   const launch = async () => {
     if (!gate.ready || (selectedWorkflowId && !shareWorkflowContext)) return;
     const result = await run(() =>
-      command({
+      command<{ aggregate: { taskId: string } }>({
         type: "task.launch",
         operationId: `intent_${crypto.randomUUID()}`,
         input: {
@@ -1330,6 +1400,8 @@ export function ProductSurface({
       setOutcome("");
       setSelectedWorkflowId("");
       setShareWorkflowContext("");
+      setSelectedTaskId(result.aggregate.taskId);
+      setSelectedWorkflowWorkspaceId(null);
       setShowNewTask(false);
     }
   };
@@ -1349,6 +1421,24 @@ export function ProductSurface({
       return;
     }
     await launch();
+  };
+  const createWorkflow = async () => {
+    if (workflowCreateName === null || !workflowCreateName.trim()) return;
+    const result = await run(() =>
+      command<WorkflowEnvironment>({
+        type: "workflow.create",
+        operationId: `intent_${crypto.randomUUID()}`,
+        name: workflowCreateName.trim(),
+        configuration: emptyWorkflowDraftConfiguration(),
+      }),
+    );
+    if (result !== undefined) {
+      setWorkflowCreateName(null);
+      setSelectedWorkflowWorkspaceId(result.workflowId);
+      setWorkflowWorkspaceSection("home");
+      setSelectedTaskId(null);
+      setShowNewTask(false);
+    }
   };
   const saveWorkflow = async () => {
     if (!workflowEditor) return;
@@ -2362,6 +2452,72 @@ export function ProductSurface({
       className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
     >
       {codexRecoveryDialog}
+      {workflowCreateName !== null && (
+        <div className="profile-modal-backdrop" role="presentation">
+          <section
+            className="profile-modal workflow-create-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-create-title"
+          >
+            <header>
+              <div>
+                <div className="eyebrow">New Workflow</div>
+                <h2 id="workflow-create-title">Name your Workflow</h2>
+                <p>
+                  You can start working now and add context whenever it helps.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="profile-modal-close"
+                aria-label="Close Workflow creation"
+                onClick={() => setWorkflowCreateName(null)}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              className="workflow-create-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createWorkflow();
+              }}
+            >
+              <label>
+                <span>Workflow name</span>
+                <input
+                  aria-label="Workflow name"
+                  autoFocus
+                  required
+                  maxLength={120}
+                  placeholder="e.g. Weekly product update"
+                  value={workflowCreateName}
+                  onChange={(event) =>
+                    setWorkflowCreateName(event.target.value)
+                  }
+                />
+              </label>
+              {renderModalError()}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setWorkflowCreateName(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={busy || !workflowCreateName.trim()}
+                >
+                  Create Workflow
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {workflowEditor && (
         <div className="profile-modal-backdrop" role="presentation">
           <section
@@ -2372,13 +2528,13 @@ export function ProductSurface({
           >
             <header>
               <div>
-                <div className="eyebrow">Reusable operating environment</div>
+                <div className="eyebrow">Workflow context</div>
                 <h2 id="workflow-editor-title">
                   {workflowEditor.workflowId ? "Edit Workflow" : "New Workflow"}
                 </h2>
                 <p>
-                  Answer a few structured questions. You can refine the approved
-                  guidance later; each save creates a revision.
+                  Add only the context that helps Rove work the way you prefer.
+                  You can leave any section empty.
                 </p>
               </div>
               <button
@@ -2417,7 +2573,6 @@ export function ProductSurface({
                 <textarea
                   aria-label="Workflow purpose"
                   maxLength={2000}
-                  required
                   value={workflowEditor.purpose}
                   onChange={(event) =>
                     setWorkflowEditor({
@@ -2545,7 +2700,7 @@ export function ProductSurface({
                   Cancel
                 </button>
                 <button className="primary" type="submit" disabled={busy}>
-                  Save approved revision
+                  Save changes
                 </button>
               </div>
             </form>
@@ -2969,11 +3124,16 @@ export function ProductSurface({
             <path d="M2.75 5.75A1.75 1.75 0 0 1 4.5 4h3l1.6 1.75h6.4a1.75 1.75 0 0 1 1.75 1.75v7A1.75 1.75 0 0 1 15.5 16h-11a1.75 1.75 0 0 1-1.75-1.75v-8.5Z" />
           </svg>
           <strong
-            title={viewedTask ? displayTaskTitle(viewedTask) : "New task"}
+            title={
+              selectedWorkflow?.name ??
+              (viewedTask ? displayTaskTitle(viewedTask) : "New task")
+            }
           >
-            {viewedTask ? displayTaskTitle(viewedTask) : "New task"}
+            {selectedWorkflow?.name ??
+              (viewedTask ? displayTaskTitle(viewedTask) : "New task")}
           </strong>
-          {viewedTask &&
+          {!selectedWorkflow &&
+            viewedTask &&
             (viewedTask.availableActions.includes("retry_cleanup") ||
               viewedTask.availableActions.includes(
                 "acknowledge_legacy_effects",
@@ -3406,8 +3566,10 @@ export function ProductSurface({
 
       <main className="product-layout">
         <section
-          className={`product-main${viewedTask ? " product-main-task" : " product-main-composer"}`}
-          aria-label="Task workspace"
+          className={`product-main${selectedWorkflow ? " product-main-workflow" : viewedTask ? " product-main-task" : " product-main-composer"}`}
+          aria-label={
+            selectedWorkflow ? "Workflow workspace" : "Task workspace"
+          }
           tabIndex={0}
         >
           {unmatchedSession !== null && (
@@ -3529,7 +3691,274 @@ export function ProductSurface({
                 ))}
             </section>
           )}
-          {!viewedTask && (
+          {selectedWorkflow && (
+            <div className="workflow-workspace">
+              <header className="workflow-workspace-header">
+                <div>
+                  <div className="eyebrow">Workflow</div>
+                  <h1>{selectedWorkflow.name}</h1>
+                </div>
+                <nav aria-label="Workflow sections">
+                  <button
+                    type="button"
+                    aria-current={
+                      workflowWorkspaceSection === "home" ? "page" : undefined
+                    }
+                    onClick={() => setWorkflowWorkspaceSection("home")}
+                  >
+                    Home
+                  </button>
+                  <button
+                    type="button"
+                    aria-current={
+                      workflowWorkspaceSection === "outputs"
+                        ? "page"
+                        : undefined
+                    }
+                    onClick={() => setWorkflowWorkspaceSection("outputs")}
+                  >
+                    Outputs
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-context-button"
+                    onClick={() =>
+                      setWorkflowEditor(workflowDraft(selectedWorkflow))
+                    }
+                  >
+                    Context
+                  </button>
+                </nav>
+              </header>
+
+              {workflowWorkspaceSection === "home" ? (
+                <div className="workflow-home">
+                  <section className="workflow-start-card">
+                    <div>
+                      <span className="eyebrow">Start here</span>
+                      <h2>What would you like to get done?</h2>
+                      <p>
+                        New tasks started here stay connected to this Workflow.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => {
+                        setSelectedWorkflowId(selectedWorkflow.workflowId);
+                        setShareWorkflowContext("");
+                        setSelectedWorkflowWorkspaceId(null);
+                        setSelectedTaskId(null);
+                        setShowNewTask(true);
+                      }}
+                    >
+                      New task
+                    </button>
+                  </section>
+
+                  <div className="workflow-home-grid">
+                    <section
+                      className="workflow-home-section"
+                      aria-labelledby="workflow-recent-tasks"
+                    >
+                      <header>
+                        <div>
+                          <span className="eyebrow">Continue</span>
+                          <h2 id="workflow-recent-tasks">Recent tasks</h2>
+                        </div>
+                      </header>
+                      {workflowWorkspace.tasks.length === 0 ? (
+                        <div className="workflow-empty-state">
+                          <strong>No tasks yet</strong>
+                          <p>Start the first task when you’re ready.</p>
+                        </div>
+                      ) : (
+                        <div className="workflow-item-list">
+                          {workflowWorkspace.tasks.slice(0, 5).map((task) => (
+                            <button
+                              type="button"
+                              key={task.taskId}
+                              aria-label={`Open Workflow task: ${task.taskId}`}
+                              onClick={() => {
+                                setSelectedTaskId(task.taskId);
+                                setSelectedWorkflowWorkspaceId(null);
+                                setShowNewTask(false);
+                              }}
+                            >
+                              <span>
+                                <strong>{displayTaskTitle(task)}</strong>
+                                <small>
+                                  {task.conversation?.turnStatus ===
+                                  "in_progress"
+                                    ? "Working"
+                                    : terminalProductTask(task)
+                                      ? "Completed"
+                                      : task.lifecycle.phase.replaceAll(
+                                          "_",
+                                          " ",
+                                        )}
+                                </small>
+                              </span>
+                              <span aria-hidden="true">›</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+
+                    <section
+                      className="workflow-home-section"
+                      aria-labelledby="workflow-recent-outputs"
+                    >
+                      <header>
+                        <div>
+                          <span className="eyebrow">Keep using</span>
+                          <h2 id="workflow-recent-outputs">Recent outputs</h2>
+                        </div>
+                        {workflowWorkspace.outputs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setWorkflowWorkspaceSection("outputs")
+                            }
+                          >
+                            View all
+                          </button>
+                        )}
+                      </header>
+                      {workflowWorkspace.outputs.length === 0 ? (
+                        <div className="workflow-empty-state">
+                          <strong>No outputs yet</strong>
+                          <p>Saved results from tasks will appear here.</p>
+                        </div>
+                      ) : (
+                        <div className="workflow-item-list">
+                          {workflowWorkspace.outputs
+                            .slice(0, 3)
+                            .map(({ task, result }) => (
+                              <button
+                                type="button"
+                                key={result.resultId}
+                                aria-label={`Open Workflow output: ${result.resultId}`}
+                                onClick={() => {
+                                  setOpenedResultId(result.resultId);
+                                  setSelectedTaskId(task.taskId);
+                                  setSelectedWorkflowWorkspaceId(null);
+                                  setShowNewTask(false);
+                                }}
+                              >
+                                <span>
+                                  <strong>{result.revision.title}</strong>
+                                  <small>
+                                    {result.kind.replaceAll("_", " ")} ·{" "}
+                                    {displayTaskTitle(task)}
+                                  </small>
+                                </span>
+                                <span aria-hidden="true">›</span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+
+                  {workflowWorkspace.attention.length > 0 && (
+                    <section
+                      className="workflow-home-section workflow-attention"
+                      aria-labelledby="workflow-needs-attention"
+                    >
+                      <header>
+                        <div>
+                          <span className="eyebrow">Needs attention</span>
+                          <h2 id="workflow-needs-attention">
+                            Your input is needed
+                          </h2>
+                        </div>
+                      </header>
+                      <div className="workflow-item-list">
+                        {workflowWorkspace.attention.map((entry) => (
+                          <button
+                            type="button"
+                            key={`${entry.taskId}:${entry.requestId}:${entry.generation}`}
+                            onClick={() => {
+                              setSelectedTaskId(entry.taskId);
+                              setSelectedWorkflowWorkspaceId(null);
+                              setShowNewTask(false);
+                            }}
+                          >
+                            <span>
+                              <strong>{entry.title}</strong>
+                              <small>
+                                {displayTaskTitle(
+                                  workflowWorkspace.tasks.find(
+                                    (task) => task.taskId === entry.taskId,
+                                  )!,
+                                )}
+                              </small>
+                            </span>
+                            <span aria-hidden="true">›</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              ) : (
+                <section
+                  className="workflow-outputs"
+                  aria-labelledby="workflow-outputs-title"
+                >
+                  <header>
+                    <div>
+                      <span className="eyebrow">Outputs</span>
+                      <h2 id="workflow-outputs-title">
+                        Useful work to return to
+                      </h2>
+                      <p>Saved results from tasks in this Workflow.</p>
+                    </div>
+                  </header>
+                  {workflowWorkspace.outputs.length === 0 ? (
+                    <div className="workflow-empty-state workflow-empty-state-large">
+                      <strong>No outputs yet</strong>
+                      <p>
+                        When a task produces a saved result, it will appear
+                        here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="workflow-output-list">
+                      {workflowWorkspace.outputs.map(({ task, result }) => (
+                        <button
+                          type="button"
+                          key={result.resultId}
+                          aria-label={`Open Workflow output: ${result.resultId}`}
+                          onClick={() => {
+                            setOpenedResultId(result.resultId);
+                            setSelectedTaskId(task.taskId);
+                            setSelectedWorkflowWorkspaceId(null);
+                            setShowNewTask(false);
+                          }}
+                        >
+                          <span className="workflow-output-kind">
+                            {result.kind.replaceAll("_", " ")}
+                          </span>
+                          <span>
+                            <strong>{result.revision.title}</strong>
+                            <small>
+                              {result.lifecycle.replaceAll("_", " ")} · From{" "}
+                              {displayTaskTitle(task)}
+                            </small>
+                          </span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+          )}
+          {!viewedTask && !selectedWorkflow && (
             <div className="composer-card">
               <div className="composer-welcome">
                 <div className="eyebrow">New task</div>
@@ -3867,7 +4296,7 @@ export function ProductSurface({
               </div>
             ))}
 
-          {viewedTask && (
+          {viewedTask && !selectedWorkflow && (
             <div className="task-detail">
               {viewedTask.results.length > 0 && (
                 <section className="result-shelf" aria-label="Task results">
@@ -3886,7 +4315,17 @@ export function ProductSurface({
                   </header>
                   <div className="result-card-list">
                     {viewedTask.results.map((result) => (
-                      <article className="result-card" key={result.resultId}>
+                      <article
+                        className="result-card"
+                        id={`result-card-${result.resultId}`}
+                        key={result.resultId}
+                        tabIndex={-1}
+                        data-opened={
+                          openedResultId === result.resultId
+                            ? "true"
+                            : undefined
+                        }
+                      >
                         <label className="result-select">
                           <input
                             type="checkbox"
@@ -4477,6 +4916,9 @@ export function ProductSurface({
             className="sidebar-new-task"
             type="button"
             onClick={() => {
+              setSelectedWorkflowWorkspaceId(null);
+              setSelectedWorkflowId("");
+              setShareWorkflowContext("");
               setSelectedTaskId(null);
               setShowNewTask(true);
             }}
@@ -4491,7 +4933,7 @@ export function ProductSurface({
               <button
                 type="button"
                 aria-label="Create Workflow"
-                onClick={() => setWorkflowEditor(workflowDraft())}
+                onClick={() => setWorkflowCreateName("")}
               >
                 ＋
               </button>
@@ -4501,12 +4943,21 @@ export function ProductSurface({
                 className="workflow-list-row"
                 type="button"
                 key={workflow.workflowId}
-                onClick={() => setWorkflowEditor(workflowDraft(workflow))}
+                data-current={
+                  workflow.workflowId === selectedWorkflow?.workflowId
+                    ? "true"
+                    : undefined
+                }
+                onClick={() => {
+                  setSelectedWorkflowWorkspaceId(workflow.workflowId);
+                  setWorkflowWorkspaceSection("home");
+                  setSelectedTaskId(null);
+                  setShowNewTask(false);
+                }}
               >
                 <strong>{workflow.name}</strong>
                 <small>
-                  {workflow.archived ? "Archived · " : ""}Revision{" "}
-                  {workflow.currentRevision} ·{" "}
+                  {workflow.archived ? "Archived · " : ""}
                   {
                     product.tasks.filter(
                       (task) =>
@@ -4514,7 +4965,13 @@ export function ProductSurface({
                         workflow.workflowId,
                     ).length
                   }{" "}
-                  tasks
+                  {product.tasks.filter(
+                    (task) =>
+                      task.workflowAssociation?.workflowId ===
+                      workflow.workflowId,
+                  ).length === 1
+                    ? "task"
+                    : "tasks"}
                 </small>
               </button>
             ))}
@@ -4541,6 +4998,7 @@ export function ProductSurface({
                       entry.taskId === viewedTask?.taskId ? "true" : undefined
                     }
                     onClick={() => {
+                      setSelectedWorkflowWorkspaceId(null);
                       setSelectedTaskId(entry.taskId);
                       setShowNewTask(false);
                     }}
@@ -4650,7 +5108,7 @@ export function ProductSurface({
             </div>
           )}
         </aside>
-        {viewedTask && (
+        {viewedTask && !selectedWorkflow && (
           <aside className="product-inspector" aria-label="Task inspector">
             <section
               className="inspector-panel browser-status"
