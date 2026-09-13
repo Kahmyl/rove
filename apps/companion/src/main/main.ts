@@ -72,6 +72,7 @@ import {
 } from "./codex/local-product-api.js";
 import { createProductIntentIpcHandler } from "./codex/product-intent-ipc.js";
 import { DesktopSnapshotCoordinator } from "./desktop-snapshot-coordinator.js";
+import { LocalBackupExporter } from "./local-backup-exporter.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 
@@ -367,6 +368,7 @@ function registerIpc(
   runtime: CompanionRuntimeClient,
   attachmentAuthority: TaskAttachmentAuthority,
   recordingStore: FileRecordingStore,
+  backupExporter: LocalBackupExporter,
 ): void {
   const refreshCompanion = async (operation: () => Promise<unknown>) => {
     await operation();
@@ -484,6 +486,31 @@ function registerIpc(
       if (error) throw new Error("The recording could not be opened.");
     },
   );
+
+  ipcMain.handle(companionIpcChannels.exportLocalBackup, async () => {
+    openFullSurface();
+    const options = {
+      title: "Export a local Rove backup",
+      message:
+        "Choose a folder for local task history and artifacts. Task content may contain secrets; Rove-managed credential stores and browser profiles are excluded.",
+      buttonLabel: "Export backup",
+      properties: ["openDirectory" as const, "createDirectory" as const],
+    };
+    const parent =
+      companionWindow !== undefined && !companionWindow.isDestroyed()
+        ? companionWindow
+        : undefined;
+    const selection =
+      parent === undefined
+        ? await dialog.showOpenDialog(options)
+        : await dialog.showOpenDialog(parent, options);
+    if (selection.canceled || selection.filePaths.length !== 1)
+      return { status: "cancelled" as const };
+    return {
+      status: "created" as const,
+      ...(await backupExporter.exportTo(selection.filePaths[0]!)),
+    };
+  });
 
   ipcMain.handle(companionIpcChannels.snapshot, async () =>
     projectCompanionSnapshot(await runtime.getSnapshot()),
@@ -1209,6 +1236,7 @@ async function startDesktop(): Promise<void> {
     runtime,
     attachmentAuthority,
     new FileRecordingStore(desktopHome),
+    new LocalBackupExporter({ home: desktopHome }),
   );
 
   const surface = new CompanionSurface(

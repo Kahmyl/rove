@@ -874,6 +874,38 @@ export function permissionReviewDescription(
     : "Codex will pause and ask you to review permission requests.";
 }
 
+export function LocalBackupSettings({
+  busy,
+  status,
+  onExport,
+}: {
+  busy: boolean;
+  status: string | null;
+  onExport(): void;
+}) {
+  return (
+    <section className="settings-data" aria-labelledby="local-data-title">
+      <div>
+        <strong id="local-data-title">Local data</strong>
+        <p>
+          Export task history, evidence, recordings, and attachments. The backup
+          may contain sensitive task content. Rove excludes its managed
+          credential stores, browser profiles, and arbitrary task workspace
+          files.
+        </p>
+      </div>
+      <button type="button" disabled={busy} onClick={onExport}>
+        Export local backup…
+      </button>
+      {status && <p role="status">{status}</p>}
+      <small>
+        This is a device-local backup, not Workflow sync. Restore is not
+        available yet; Rove will not overwrite active data with this folder.
+      </small>
+    </section>
+  );
+}
+
 export function ProductSurface({
   desktop,
   connectionError,
@@ -926,6 +958,7 @@ export function ProductSurface({
     () => new Set(),
   );
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [recordingConfirmed, setRecordingConfirmed] = useState(false);
   const [login, setLogin] = useState<LoginProjection | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -3212,12 +3245,12 @@ export function ProductSurface({
             className="settings-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="appearance-settings-title"
+            aria-labelledby="settings-title"
           >
             <header>
               <div>
                 <span className="eyebrow">Settings</span>
-                <h2 id="appearance-settings-title">Appearance</h2>
+                <h2 id="settings-title">Settings</h2>
               </div>
               <button
                 className="settings-modal-close"
@@ -3252,6 +3285,36 @@ export function ProductSurface({
                 </button>
               ))}
             </div>
+            <LocalBackupSettings
+              busy={busy}
+              status={backupStatus}
+              onExport={() => {
+                setBusy(true);
+                setBackupStatus(null);
+                void window.rove
+                  .exportLocalBackup()
+                  .then((result) => {
+                    if (result.status === "created") {
+                      setBackupStatus(
+                        `${result.name} created with ${result.fileCount} files${
+                          result.missingCount > 0
+                            ? `; ${result.missingCount} missing or excluded entries are listed in its manifest`
+                            : ""
+                        }.`,
+                      );
+                      setOperationError(null);
+                    }
+                  })
+                  .catch((cause: unknown) => {
+                    setOperationError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Rove could not export the local backup.",
+                    );
+                  })
+                  .finally(() => setBusy(false));
+              }}
+            />
           </section>
         </div>
       )}

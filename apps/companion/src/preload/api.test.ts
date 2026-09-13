@@ -141,6 +141,7 @@ describe("Companion preload API", () => {
       "deleteBrowserWorkspace",
       "endFollowerDrag",
       "executeProductIntent",
+      "exportLocalBackup",
       "finishSession",
       "getBrowserWorkspaces",
       "getFollowerPresentation",
@@ -206,6 +207,7 @@ describe("Companion preload API", () => {
       loginId: "login_current",
     });
     await api.openRecording("task_exact", `rec_${"a".repeat(32)}`);
+    await api.exportLocalBackup();
     await api.getBrowserWorkspaces();
     await api.createBrowserWorkspace("Personal");
     await api.selectBrowserWorkspace(
@@ -240,6 +242,7 @@ describe("Companion preload API", () => {
       companionIpcChannels.showBrowser,
       companionIpcChannels.openTrustedExternal,
       companionIpcChannels.openRecording,
+      companionIpcChannels.exportLocalBackup,
       companionIpcChannels.browserWorkspaces,
       companionIpcChannels.createBrowserWorkspace,
       companionIpcChannels.selectBrowserWorkspace,

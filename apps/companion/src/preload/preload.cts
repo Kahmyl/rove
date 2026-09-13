@@ -111,6 +111,11 @@ const api: RoveDesktopApi = {
       recordingId,
     ) as Promise<void>,
 
+  exportLocalBackup: () =>
+    ipcRenderer.invoke("rove:export-local-backup") as ReturnType<
+      RoveDesktopApi["exportLocalBackup"]
+    >,
+
   getBrowserWorkspaces: () =>
     ipcRenderer.invoke(
       "rove:browser-workspaces",

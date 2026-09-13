@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
+  LocalBackupSettings,
   ProductSurface,
   followupDraftForTask,
   permissionReviewDescription,
@@ -65,6 +66,18 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("offers an explicit managed-credential-store exclusion boundary", () => {
+    const html = renderToStaticMarkup(
+      <LocalBackupSettings busy={false} status={null} onExport={() => {}} />,
+    );
+    expect(html).toContain("Export local backup");
+    expect(html).toContain("may contain sensitive task content");
+    expect(html).toContain("excludes its managed");
+    expect(html).toContain("credential stores");
+    expect(html).toContain("not Workflow sync");
+    expect(html).toContain("Restore is not available yet");
+  });
+
   it("shows truthful page-recording controls and ownership in every mode", () => {
     for (const mode of ["agent", "companion", "capture"] as const) {
       const value = snapshot();

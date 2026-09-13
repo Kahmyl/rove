@@ -129,6 +129,11 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
         recordingId,
       ) as Promise<void>,
 
+    exportLocalBackup: () =>
+      ipc.invoke(companionIpcChannels.exportLocalBackup) as ReturnType<
+        RoveDesktopApi["exportLocalBackup"]
+      >,
+
     getBrowserWorkspaces: () =>
       ipc.invoke(companionIpcChannels.browserWorkspaces) as ReturnType<
         RoveDesktopApi["getBrowserWorkspaces"]
