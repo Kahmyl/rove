@@ -105,6 +105,8 @@ export class OwnershipTransitionService {
 
     const requested = session.handoff !== undefined;
 
+    await this.browser.beginHumanControl(sessionId);
+
     const transition = this.ownershipFence.beginTransition(sessionId);
 
     await transition.waitForDrain();
@@ -120,6 +122,7 @@ export class OwnershipTransitionService {
       });
     } catch (error) {
       this.ownershipFence.completeTransition(transition, session.controller);
+      await this.browser.abortHumanControl(sessionId);
 
       throw error;
     }
@@ -161,12 +164,14 @@ export class OwnershipTransitionService {
       await flushHumanActivity();
 
       const browser = this.browser.get(sessionId);
-
       const pages = await browser.pages();
 
       const activePageId = pages.find((page) => page.active)?.id;
 
-      const invalidatedPages = await browser.invalidateAllTargets();
+      const invalidatedPages =
+        session.controller === "human"
+          ? await this.browser.prepareHumanControlReturn(sessionId)
+          : await browser.invalidateAllTargets();
 
       // No inspection from the previous ownership era may
       // authorize a mutation in the new agent generation.
@@ -191,6 +196,7 @@ export class OwnershipTransitionService {
 
       // Establish the new agent generation only after
       // target + policy invalidation is complete.
+      this.browser.endHumanControl(sessionId);
       this.ownershipFence.completeTransition(transition, "agent");
 
       ownershipCompleted = true;

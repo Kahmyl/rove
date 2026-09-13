@@ -4,6 +4,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, posix, win32 } from "node:path";
 
+import { RoveError } from "@rove/protocol";
+
 const LOOPBACK_HOST = "127.0.0.1";
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
 const PROCESS_EXIT_TIMEOUT_MS = 3_000;
@@ -51,6 +53,9 @@ export interface ExternalChromeAttachOptions {
   port: number;
   processId: number;
   userDataDir: string;
+  /** Deterministic process probe override for ownership/recovery tests. */
+  processAlive?: (pid: number) => boolean;
+  exitTimeoutMs?: number;
 }
 
 function processIdIsAlive(pid: number): boolean {
@@ -69,14 +74,25 @@ function processIdIsAlive(pid: number): boolean {
 async function waitForProcessIdExit(
   pid: number,
   timeoutMs: number,
-): Promise<void> {
+  isAlive: (pid: number) => boolean = processIdIsAlive,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && processIdIsAlive(pid)) {
+  while (Date.now() < deadline && isAlive(pid)) {
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 50);
       timer.unref();
     });
   }
+  return !isAlive(pid);
+}
+
+function browserProcessStillAlive(pid: number): RoveError {
+  return new RoveError({
+    code: "RUNTIME_UNAVAILABLE",
+    message: "The managed browser process did not stop.",
+    retryable: true,
+    details: { state: "shutdown_incomplete", processId: pid },
+  });
 }
 
 /**
@@ -87,12 +103,22 @@ async function waitForProcessIdExit(
 export function attachExternalChrome(
   options: ExternalChromeAttachOptions,
 ): ExternalChromeRuntime {
+  const isAlive = options.processAlive ?? processIdIsAlive;
   let closePromise: Promise<void> | undefined;
   const close = (): Promise<void> => {
-    closePromise ??= waitForProcessIdExit(
-      options.processId,
-      PROCESS_EXIT_TIMEOUT_MS,
-    );
+    if (closePromise !== undefined) return closePromise;
+    const attempt = (async () => {
+      const exited = await waitForProcessIdExit(
+        options.processId,
+        options.exitTimeoutMs ?? PROCESS_EXIT_TIMEOUT_MS,
+        isAlive,
+      );
+      if (!exited) throw browserProcessStillAlive(options.processId);
+    })();
+    closePromise = attempt;
+    void attempt.catch(() => {
+      if (closePromise === attempt) closePromise = undefined;
+    });
     return closePromise;
   };
 
@@ -101,7 +127,7 @@ export function attachExternalChrome(
     port: options.port,
     processId: options.processId,
     currentProcessId: () =>
-      processIdIsAlive(options.processId) ? options.processId : undefined,
+      isAlive(options.processId) ? options.processId : undefined,
     userDataDir: options.userDataDir,
     temporaryProfile: false,
     reused: true,
@@ -394,7 +420,18 @@ async function terminateOwnedChrome(child: ChildProcess): Promise<void> {
     await signalProcessTree(pid, "SIGKILL");
   }
 
-  await waitForExit(child, PROCESS_KILL_TIMEOUT_MS);
+  if (!(await waitForExit(child, PROCESS_KILL_TIMEOUT_MS))) {
+    const processId = child.pid;
+    throw new RoveError({
+      code: "RUNTIME_UNAVAILABLE",
+      message: "The managed browser process did not stop after termination.",
+      retryable: true,
+      details: {
+        state: "shutdown_incomplete",
+        ...(processId === undefined ? {} : { processId }),
+      },
+    });
+  }
 }
 
 async function waitForDevTools(
@@ -507,13 +544,26 @@ export async function launchExternalChrome(
       return closePromise;
     }
 
-    closePromise = (async () => {
+    const attempt = (async () => {
       if (allowNaturalExit && !processExited(child)) {
         await waitForExit(child, PROCESS_EXIT_TIMEOUT_MS);
       }
 
       if (!processExited(child)) {
-        await terminateOwnedChrome(child).catch(() => undefined);
+        await terminateOwnedChrome(child);
+      }
+
+      if (!processExited(child)) {
+        const processId = child.pid;
+        throw new RoveError({
+          code: "RUNTIME_UNAVAILABLE",
+          message: "The managed browser process remains live after shutdown.",
+          retryable: true,
+          details: {
+            state: "shutdown_incomplete",
+            ...(processId === undefined ? {} : { processId }),
+          },
+        });
       }
 
       if (temporaryProfile) {
@@ -523,6 +573,10 @@ export async function launchExternalChrome(
         }).catch(() => undefined);
       }
     })();
+    closePromise = attempt;
+    void attempt.catch(() => {
+      if (closePromise === attempt) closePromise = undefined;
+    });
 
     return closePromise;
   };

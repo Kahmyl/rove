@@ -337,6 +337,58 @@ describe("external Chrome engine integration", () => {
 
     expect(cleanup).toHaveBeenCalledTimes(1);
   }, 15_000);
+
+  it("surfaces incomplete owned-runtime cleanup and retries before closing", async () => {
+    const userDataDir = await mkdtemp(
+      join(tmpdir(), "rove-owned-runtime-close-retry-"),
+    );
+    temporaryDirectories.push(userDataDir);
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      headless: true,
+    });
+    const browser = context.browser();
+    if (browser === null) {
+      throw new Error("Persistent test context has no browser.");
+    }
+    const cdp = await browser.newBrowserCDPSession();
+    vi.spyOn(cdp, "send").mockResolvedValue(undefined as never);
+    vi.spyOn(browser, "newBrowserCDPSession").mockResolvedValue(cdp);
+    const cleanup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("browser process remains live"))
+      .mockResolvedValueOnce(undefined);
+    const session = await PlaywrightBrowserSession.createPersistent(
+      context,
+      {
+        headless: true,
+        browser: "chrome",
+        profile: {
+          mode: "persistent",
+          name: "owned-runtime-close-retry",
+        },
+        profileUserDataDir: userDataDir,
+      },
+      {
+        distribution: "chrome",
+        sandbox: true,
+        diagnostics: [],
+      },
+      undefined,
+      "browser_owned_runtime_close_retry_test",
+      cleanup,
+    );
+
+    try {
+      await expect(session.close()).rejects.toThrow(
+        "browser process remains live",
+      );
+      await expect(session.close()).resolves.toBeUndefined();
+      expect(cleanup).toHaveBeenCalledTimes(2);
+    } finally {
+      await context.close().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    }
+  }, 15_000);
 });
 
 describe("external Chrome host identity propagation", () => {

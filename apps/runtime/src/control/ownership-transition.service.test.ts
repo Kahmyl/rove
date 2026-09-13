@@ -102,6 +102,9 @@ function harness(initial: Session) {
   const invalidateAllTargets = vi.fn(async () => 2);
 
   const close = vi.fn(async () => undefined);
+  const beginHumanControl = vi.fn(async () => undefined);
+  const abortHumanControl = vi.fn(async () => undefined);
+  const endHumanControl = vi.fn();
 
   const browserSession = {
     pages,
@@ -111,6 +114,10 @@ function harness(initial: Session) {
   const browser = {
     get: vi.fn(() => browserSession),
     close,
+    beginHumanControl,
+    abortHumanControl,
+    prepareHumanControlReturn: invalidateAllTargets,
+    endHumanControl,
   } as unknown as BrowserService;
 
   const sessions = {
@@ -159,6 +166,9 @@ function harness(initial: Session) {
     pages,
     invalidateAllTargets,
     close,
+    beginHumanControl,
+    abortHumanControl,
+    endHumanControl,
     current: () => current,
   };
 }
@@ -344,6 +354,11 @@ describe("OwnershipTransitionService", () => {
     expect(test.pages).toHaveBeenCalledTimes(1);
 
     expect(test.invalidateAllTargets).toHaveBeenCalledTimes(1);
+
+    expect(test.endHumanControl).toHaveBeenCalledTimes(1);
+    expect(test.invalidateAllTargets.mock.invocationCallOrder[0]).toBeLessThan(
+      test.endHumanControl.mock.invocationCallOrder[0]!,
+    );
 
     expect(requireInspection).toHaveBeenCalledWith("ses_test");
 

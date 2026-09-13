@@ -57,6 +57,8 @@ Human takeover prevents new conflicting browser mutations before confirming cont
 
 Locks cover the actual shared resource: a page, context-wide account change, clipboard, or other proven conflict. Do not hold a browser/profile lease simply because a task exists. Resource admission and control ownership are not the selected UI task.
 
+The implemented browser adapter preserves one task-scoped Runtime session and capability while allowing several such sessions to share one managed persistent browser host. Page ownership and logical active-page state are session-scoped; the profile lease is host-scoped; focus-sensitive operations and human takeover coordinate at the host. Takeover presents the requesting page, and return invalidates shared-context target authority before reopening mutation admission. Browser identity therefore remains a shared resource, not a task identifier. Unowned restored or late-attribution pages are quarantined rather than adopted from physical focus, and persistent-host ownership is retained across incomplete shutdown until process death is verified.
+
 ## Workflow edits and synchronization
 
 A local workflow edit validates an allowlisted configuration and commits a new local revision plus a pending configuration-sync record. The remote write uses an expected revision. A conflict preserves both versions for explicit resolution rather than overwriting silently. Applying downloaded configuration never dispatches a model turn or external action.

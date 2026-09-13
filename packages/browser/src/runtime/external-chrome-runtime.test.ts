@@ -3,12 +3,36 @@ import { createServer } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  attachExternalChrome,
   buildExternalChromeArguments,
   discoverExternalChromeExecutable,
   reserveLoopbackPort,
 } from "./external-chrome-runtime.js";
 
 describe("external Chrome runtime", () => {
+  it("reports an incomplete attached-host shutdown and permits a verified retry", async () => {
+    let alive = true;
+    const runtime = attachExternalChrome({
+      endpoint: "http://127.0.0.1:43123",
+      port: 43123,
+      processId: 4321,
+      userDataDir: "/tmp/rove-owned-profile",
+      processAlive: () => alive,
+      exitTimeoutMs: 0,
+    });
+
+    await expect(runtime.closeGracefully()).rejects.toMatchObject({
+      code: "RUNTIME_UNAVAILABLE",
+      retryable: true,
+      details: { state: "shutdown_incomplete", processId: 4321 },
+    });
+    expect(runtime.currentProcessId()).toBe(4321);
+
+    alive = false;
+    await expect(runtime.closeGracefully()).resolves.toBeUndefined();
+    expect(runtime.currentProcessId()).toBeUndefined();
+  });
+
   it("uses an explicit executable before system discovery", async () => {
     const pathExists = vi.fn(async () => true);
 

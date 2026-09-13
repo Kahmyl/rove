@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { browserHostIdentitySchema } from "@rove/protocol";
 
 import type { ExternalChromeRuntime } from "../runtime/external-chrome-runtime.js";
 import {
@@ -55,6 +56,71 @@ function dependencies(
 }
 
 describe("persistent browser host workspace", () => {
+  it("keeps host lease identifiers out of the task session identity field", async () => {
+    const userDataDir = await profileDirectory();
+    const alive = new Set([200, 100]);
+    const commands = new Map<number, string>();
+    const host = await acquirePersistentBrowserHost({
+      profileName: "default",
+      userDataDir,
+      runtimeInstanceId: "runtime_first",
+      runtimeProcessId: 100,
+      sessionId: "browser_host_managed",
+      dependencies: dependencies(alive, commands),
+      launch: async (args) => {
+        commands.set(
+          200,
+          `chrome --remote-debugging-port=43123 --user-data-dir=${userDataDir} ${args.join(" ")}`,
+        );
+        return fakeRuntime(userDataDir, 200, () => true);
+      },
+    });
+
+    expect(host.identity.sessionId).toBeUndefined();
+    expect(browserHostIdentitySchema.parse(host.identity)).toEqual(
+      host.identity,
+    );
+    alive.delete(200);
+    await host.release();
+  });
+
+  it("retains live-host metadata until shutdown is positively verified", async () => {
+    const userDataDir = await profileDirectory();
+    const alive = new Set([200, 100]);
+    const commands = new Map<number, string>();
+    const host = await acquirePersistentBrowserHost({
+      profileName: "default",
+      userDataDir,
+      runtimeInstanceId: "runtime_first",
+      runtimeProcessId: 100,
+      sessionId: "browser_host_managed",
+      dependencies: dependencies(alive, commands),
+      launch: async (args) => {
+        commands.set(
+          200,
+          `chrome --remote-debugging-port=43123 --user-data-dir=${userDataDir} ${args.join(" ")}`,
+        );
+        return fakeRuntime(userDataDir, 200, () => alive.has(200));
+      },
+    });
+    const metadataPath = join(userDataDir, "rove-browser-host.json");
+
+    await expect(host.release()).rejects.toMatchObject({
+      code: "PROFILE_LOCKED",
+      retryable: true,
+      details: { state: "shutdown_incomplete", processId: 200 },
+    });
+    await expect(readFile(metadataPath, "utf8")).resolves.toContain(
+      host.identity.browserHostId,
+    );
+
+    alive.delete(200);
+    await expect(host.release()).resolves.toBeUndefined();
+    await expect(readFile(metadataPath, "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
   it("records a strong owned-host tuple for the full browser lifetime", async () => {
     const userDataDir = await profileDirectory();
     const alive = new Set([200, 100]);
@@ -87,7 +153,9 @@ describe("persistent browser host workspace", () => {
       profileName: "default",
     });
     expect(
-      JSON.parse(await readFile(join(userDataDir, "rove-browser-host.json"), "utf8")),
+      JSON.parse(
+        await readFile(join(userDataDir, "rove-browser-host.json"), "utf8"),
+      ),
     ).toMatchObject({ processId: 200, runtimeProcessId: 100 });
 
     browserAlive = false;

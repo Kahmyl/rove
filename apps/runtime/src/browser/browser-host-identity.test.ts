@@ -15,6 +15,10 @@ describe("BrowserService live host identity", () => {
         kind: "owned_process",
         processId: 4321,
       }),
+      onActivity: () => () => undefined,
+      pages: async () => [
+        { id: "page_01", url: "about:blank", active: true, revision: 0 },
+      ],
       close,
     } as unknown as BrowserSession;
 
@@ -43,6 +47,10 @@ describe("BrowserService live host identity", () => {
       id: "browser_no_host_identity",
       capabilities: {},
       hostIdentity: () => null,
+      onActivity: () => () => undefined,
+      pages: async () => [
+        { id: "page_01", url: "about:blank", active: true, revision: 0 },
+      ],
       close: vi.fn(async () => undefined),
     } as unknown as BrowserSession;
 

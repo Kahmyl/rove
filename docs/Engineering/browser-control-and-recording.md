@@ -1,6 +1,6 @@
 # Browser Control and Recording
 
-**Status:** Target capability contract. Existing Playwright/Runtime behavior is a foundation; the complete task-owned-group and requested-video experience still requires implementation evidence.
+**Status:** Target capability contract. The bounded task-owned page-group behavior described as implemented below has executable evidence in the current Playwright/Runtime path. Requested video and the broader shared-state qualification matrix remain unfinished.
 
 ## Browser ownership
 
@@ -12,9 +12,21 @@ Associate newly created tabs and popups with the originating task. When ownershi
 
 Pages in one context share identity/state. [Playwright BrowserContext](https://playwright.dev/docs/api/class-browsercontext) documents context-level resources; page groups are not separate cookie jars. Separate browser identities are required when actual account isolation is needed. Never run multiple writable hosts against one profile merely to achieve task concurrency.
 
+### Implemented ownership boundary
+
+Runtime keeps the existing exact task-to-session capability association and attaches browser resources lazily. For a persistent workspace, BrowserService owns one physical browser host and profile lease, then returns a session-scoped page-group view to each browser-using task. Temporary browser sessions retain distinct hosts. The view filters page inventory, requires owned page identifiers for page-specific commands, rewrites physical host results to the owning Runtime session, and routes browser activity by the page ownership map. A popup inherits its opener's group; a newly requested page is assigned to the requesting group before it is exposed.
+
+The logical active page belongs to the task group and is independent of the physically focused browser tab. Physical focus changes therefore cannot redirect another task's command. Human takeover presents the requesting group's logical page before control is reported; presentation failure aborts takeover. Ending one Runtime session first closes attribution to that group, drains its owned pages, and removes only that group; late opener activity remains unowned rather than resurrecting released ownership. The shared browser and profile lease remain until the last group detaches. Existing nonblank pages whose ownership cannot be proven after host recovery remain unassigned, and a recovering task receives a fresh owned page instead of inheriting whichever page happens to be focused.
+
+Persistent host release is complete only after the owned browser process is positively observed dead. An incomplete CDP/termination attempt leaves the host closing and retains its persistent-host metadata and profile lease so cleanup can retry; it is not converted into successful release.
+
+This adapter boundary is deliberately smaller than either a context-per-task design or a host-wide task mutex. Separate contexts would turn the group into an authentication/isolation boundary and no longer model one shared browser identity; a task-lifetime mutex would discard safe page-level concurrency. Session-scoped views over one host retain the existing BrowserSession contract while allowing coordination to widen only for the operation that touches shared context or physical focus.
+
 ## Coordination scope
 
-Independent task-owned page operations may proceed concurrently when supported safely. Coordinate page mutations and broaden the lock only for genuinely shared state: account changes, browser settings, clipboard, focus-dependent native interactions, or a transaction spanning shared resources.
+Independent task-owned page operations may proceed concurrently when supported safely. The implemented host coordinator admits page-targeted work concurrently, serializes focus-dependent operations, and blocks conflicting mutations across the host during human takeover. Credential entry and consequential interaction dispatch use a browser-context admission boundary: they wait for admitted page mutations to drain, prevent another group's mutation from overlapping that one operation, and invalidate pre-change target authority on the context's other pages. Human return likewise invalidates target and in-flight grounding authority on every owned page before host mutation admission reopens. Observational reads of another owned group remain available during takeover and context-scoped dispatch and must still pass that task's freshness checks before later mutation.
+
+These implemented classifications do not claim exhaustive detection of every shared-state change. In particular, ordinary navigation that changes authentication through cookies and multi-step clipboard interference remain qualification scenarios unless source evidence assigns them a broader operation scope. Coordinate additional page mutations or broaden the boundary only for a proven shared resource such as browser settings, clipboard, or a transaction spanning shared resources.
 
 Admission waits identify the resource and preserve other task operations. Do not hold a global or host lock for an entire task lifetime. Bound queues and clean up ownership after verified process death. Unknown processes are not killed to free a profile.
 

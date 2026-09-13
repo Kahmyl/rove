@@ -317,6 +317,13 @@ describe("mode transitions and all-page invalidation", () => {
           revision: invalidated ? 1 : 0,
         },
       ],
+      show: async () => undefined,
+      switchPage: async () => ({
+        id: "page_01",
+        url: "about:blank",
+        active: true,
+        revision: invalidated ? 1 : 0,
+      }),
       navigate: async () => {
         order.push("slow:start");
         await gate;
@@ -435,6 +442,7 @@ describe("mode transitions and all-page invalidation", () => {
           "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       }),
       pages: async () => [summary("page_01"), summary("page_02")],
+      show: async () => undefined,
       switchPage: async (pageId) => {
         if (!revisions.has(pageId)) throw new Error(`Unknown page: ${pageId}`);
         activePageId = pageId;

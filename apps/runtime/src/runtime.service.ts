@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
 import type { RoveConfig } from "@rove/config";
 import {
@@ -210,7 +209,6 @@ export class RuntimeService implements RoveRuntime {
   private readonly humanActivityQueues = new Map<string, Promise<void>>();
   private readonly browserEvidenceQueues = new Map<string, Promise<void>>();
   private readonly lastAgentActionAt = new Map<string, number>();
-  private readonly profileLocks = new Map<string, RoveProfileLock>();
   private readonly bootstrapStarts = new Map<string, Promise<Session>>();
   private readonly downloadEffectWaiters = new Map<
     string,
@@ -304,11 +302,11 @@ export class RuntimeService implements RoveRuntime {
         session.status !== "completed" &&
         session.status !== "failed",
     );
-    if (inUse) {
+    if (inUse || this.browser.hasWorkspace(workspaceId)) {
       throw new RoveError({
         code: "PROFILE_LOCKED",
         message:
-          "Finish the task using this browser profile before deleting it.",
+          "Finish or reconcile the browser host using this profile before deleting it.",
       });
     }
     return this.browserWorkspaces.delete(workspaceId);
@@ -356,15 +354,7 @@ export class RuntimeService implements RoveRuntime {
       session.controller,
       session.ownershipGeneration ?? 1,
     );
-    let profileLock: RoveProfileLock | undefined;
     try {
-      if (workspace !== undefined) {
-        profileLock = await RoveProfileLock.acquire(workspace.userDataDir, {
-          runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
-          sessionId: session.id,
-        });
-      }
-
       const browser = await this.browser.start(session.id, {
         headless: this.config.browser.headless,
         browser: workspace?.browser ?? this.config.browser.preferredBrowser,
@@ -388,14 +378,13 @@ export class RuntimeService implements RoveRuntime {
           inspectMs: this.config.timeouts.inspectMs,
         },
       });
-      if (profileLock !== undefined) {
-        this.profileLocks.set(session.id, profileLock);
-        profileLock = undefined;
-      }
-
       browser.onActivity((activity) => {
         this.persistBrowserActivity(session.id, activity);
       });
+
+      if (session.controller === "human") {
+        await this.browser.beginHumanControl(session.id);
+      }
 
       if (input.startUrl !== undefined) await browser.navigate(input.startUrl);
       const activePageId = (await browser.pages()).find(
@@ -444,8 +433,6 @@ export class RuntimeService implements RoveRuntime {
     } catch (error) {
       this.ownershipFence.clear(session.id);
       await this.browser.close(session.id).catch(() => undefined);
-      await profileLock?.release().catch(() => undefined);
-      await this.releaseProfileLock(session.id);
       const now = new Date().toISOString();
       await this.sessions.update({
         ...session,
@@ -544,15 +531,7 @@ export class RuntimeService implements RoveRuntime {
         session.controller,
         session.ownershipGeneration ?? 1,
       );
-      let profileLock: RoveProfileLock | undefined;
       try {
-        profileLock = await RoveProfileLock.acquire(
-          session.workspace.userDataDir,
-          {
-            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
-            sessionId: session.id,
-          },
-        );
         const browser = await this.browser.start(session.id, {
           headless: this.config.browser.headless,
           browser: session.workspace.browser,
@@ -572,11 +551,12 @@ export class RuntimeService implements RoveRuntime {
             inspectMs: this.config.timeouts.inspectMs,
           },
         });
-        this.profileLocks.set(session.id, profileLock);
-        profileLock = undefined;
         browser.onActivity((activity) => {
           this.persistBrowserActivity(session.id, activity);
         });
+        if (session.controller === "human") {
+          await this.browser.beginHumanControl(session.id);
+        }
         const activePageId = (await browser.pages()).find(
           (page) => page.active,
         )?.id;
@@ -589,8 +569,6 @@ export class RuntimeService implements RoveRuntime {
       } catch (error) {
         this.ownershipFence.clear(session.id);
         await this.browser.close(session.id).catch(() => undefined);
-        await profileLock?.release().catch(() => undefined);
-        await this.releaseProfileLock(session.id);
         throw error;
       }
     });
@@ -608,28 +586,19 @@ export class RuntimeService implements RoveRuntime {
     let profileOwnership: RuntimeSessionInventory["profileOwnership"] =
       "released";
     if (session.workspace !== undefined) {
-      profileOwnership = this.profileLocks.has(session.id)
+      profileOwnership = this.browser.has(session.id)
         ? "owned"
-        : await RoveProfileLock.ownershipStatus(session.workspace.userDataDir, {
-            runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
-            sessionId: session.id,
-          });
+        : this.browser.hasWorkspace(session.workspace.id)
+          ? "claimable"
+          : await RoveProfileLock.ownershipStatus(
+              session.workspace.userDataDir,
+              {
+                runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+                sessionId: session.id,
+              },
+            );
       if (terminal && profileOwnership === "claimable")
         profileOwnership = "released";
-      if (terminal && profileOwnership === "conflicting") {
-        const workspaceLockPath = resolve(
-          session.workspace.userDataDir,
-          "profile.lock",
-        );
-        if (
-          [...this.profileLocks.entries()].some(
-            ([activeSessionId, lock]) =>
-              activeSessionId !== session.id &&
-              lock.lockPath === workspaceLockPath,
-          )
-        )
-          profileOwnership = "released";
-      }
     }
     let recovery: RuntimeSessionInventory["recovery"];
     const cutover = await this.effectJournal.cutover();
@@ -1133,13 +1102,9 @@ export class RuntimeService implements RoveRuntime {
           }
 
           const signature = interactionSignature(input.action);
+          const proposal = interactionActionProposal(input, predecessor);
 
-          await this.authorizeMutation(
-            sessionId,
-            signature,
-            lease,
-            interactionActionProposal(input, predecessor),
-          );
+          await this.authorizeMutation(sessionId, signature, lease, proposal);
 
           lease.assertCurrent();
 
@@ -1290,6 +1255,13 @@ export class RuntimeService implements RoveRuntime {
             journalExecution.state = "may_have_dispatched";
             result = await browser.interact(input.action, {
               observationId: input.observationId,
+              ...([
+                "credential_entry",
+                "external_commit",
+                "irreversible",
+              ].includes(proposal.effect)
+                ? { coordinationScope: "browser_context" as const }
+                : {}),
               ...(downloadBoundary === undefined
                 ? {}
                 : { activityBoundaryId: downloadBoundary.id }),
@@ -3005,18 +2977,19 @@ export class RuntimeService implements RoveRuntime {
   }
 
   private async releaseProfileLock(sessionId: string): Promise<void> {
-    const lock = this.profileLocks.get(sessionId);
-    if (lock === undefined) {
-      const session = await this.sessions.get(sessionId);
-      if (session.workspace !== undefined)
-        await RoveProfileLock.releaseClaimable(session.workspace.userDataDir, {
-          runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
-          sessionId,
-        });
-      return;
+    // BrowserService releases a live host lease only after its final page
+    // group detaches. Recovery still removes a verifiably stale lease when no
+    // in-process host owns the workspace.
+    const session = await this.sessions.get(sessionId);
+    if (
+      session.workspace !== undefined &&
+      !this.browser.hasWorkspace(session.workspace.id)
+    ) {
+      await RoveProfileLock.releaseClaimable(session.workspace.userDataDir, {
+        runtimeInstanceId: RUNTIME_PROVENANCE.runtimeInstanceId,
+        sessionId,
+      });
     }
-    await lock.release();
-    this.profileLocks.delete(sessionId);
   }
 
   private humanObservationType(type: BrowserActivity["type"]): string {

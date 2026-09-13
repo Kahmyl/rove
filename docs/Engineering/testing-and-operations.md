@@ -43,6 +43,8 @@ Retain existing negative cases and outcome assertions during naming cleanup. Do 
 | Interrupted side effect | Lost acknowledgement after dispatch does not lead to an automatic duplicate action.                          |
 | Profile/model switch    | Rove data ownership remains correct; credentials and engine associations do not leak between accounts.       |
 
+Current executable evidence for the browser-groups row covers one physical persistent host, distinct task page inventories and logical active pages, overlapping independent navigation, cross-task page denial, opener-derived popup ownership and event routing, release-time attribution races, manual-tab recovery, group-local release, verified final-host shutdown/retry, takeover presentation failure, sibling grounding invalidation on human return, and exclusive mutation admission for credential/consequential context operations. Page groups intentionally share cookies and authentication. Ordinary-navigation cookie changes, multi-step clipboard contention, broader account-change coverage, and requested recording still need their own qualification rather than being inferred from page ownership tests.
+
 ## Fault injection and budgets
 
 Inject interruption before acceptance, before dispatch, after possible external dispatch, before result persistence, during artifact finalization, and during control return. Verify recovery independently of the renderer. Duplicate/late events and stale approvals must not create new work.

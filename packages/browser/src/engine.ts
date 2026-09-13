@@ -25,6 +25,8 @@ export interface BrowserInteractionUpload {
 
 export interface BrowserInteractionContext {
   observationId: string;
+  /** Requests exclusive admission against mutations sharing this context. */
+  coordinationScope?: "browser_context";
   /** Correlates post-dispatch browser activity with one Runtime action. */
   activityBoundaryId?: string;
   /** Backward-compatible single artifact context. */
@@ -50,20 +52,25 @@ export interface BrowserSession {
     context: BrowserInteractionContext,
   ): Promise<ActionResult>;
   pageStateIdentity(pageId?: string): Promise<PageStateIdentity>;
-  navigate(url: string): Promise<ActionResult>;
+  navigate(url: string, pageId?: string): Promise<ActionResult>;
   openPage(url: string): Promise<PageSummary>;
   click(target: TargetReference): Promise<ActionResult>;
   type(target: TargetReference, value: string): Promise<ActionResult>;
-  press(target: TargetReference | null, key: string): Promise<ActionResult>;
-  scroll(options: ScrollOptions): Promise<ActionResult>;
-  back(): Promise<ActionResult>;
-  forward(): Promise<ActionResult>;
-  screenshot(options?: ScreenshotOptions): Promise<Artifact>;
+  press(
+    target: TargetReference | null,
+    key: string,
+    pageId?: string,
+  ): Promise<ActionResult>;
+  scroll(options: ScrollOptions, pageId?: string): Promise<ActionResult>;
+  back(pageId?: string): Promise<ActionResult>;
+  forward(pageId?: string): Promise<ActionResult>;
+  screenshot(options?: ScreenshotOptions, pageId?: string): Promise<Artifact>;
   pages(): Promise<PageSummary[]>;
   switchPage(pageId: string): Promise<PageSummary>;
   closePage(pageId: string): Promise<void>;
   invalidateTargets(): Promise<void>;
   invalidateAllTargets(): Promise<number>;
+  invalidatePages(pageIds: readonly string[]): Promise<number>;
   close(): Promise<void>;
 }
 

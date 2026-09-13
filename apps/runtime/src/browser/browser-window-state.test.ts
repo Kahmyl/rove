@@ -28,6 +28,10 @@ describe("BrowserService live window state", () => {
       capabilities: {},
       hostIdentity: () => null,
       browserWindowState,
+      onActivity: () => () => undefined,
+      pages: async () => [
+        { id: "page_01", url: "about:blank", active: true, revision: 0 },
+      ],
       close: vi.fn(async () => undefined),
     } as unknown as BrowserSession;
 
@@ -54,6 +58,10 @@ describe("BrowserService live window state", () => {
       capabilities: {},
       hostIdentity: () => null,
       browserWindowState: async () => null,
+      onActivity: () => () => undefined,
+      pages: async () => [
+        { id: "page_01", url: "about:blank", active: true, revision: 0 },
+      ],
       close: vi.fn(async () => undefined),
     } as unknown as BrowserSession;
 
@@ -79,7 +87,17 @@ describe("BrowserService live window state", () => {
       capabilities: {},
       hostIdentity: () => null,
       browserWindowState: async () => liveState,
+      onActivity: () => () => undefined,
       show,
+      pages: async () => [
+        { id: "page_01", url: "about:blank", active: true, revision: 0 },
+      ],
+      switchPage: async () => ({
+        id: "page_01",
+        url: "about:blank",
+        active: true,
+        revision: 0,
+      }),
       close: vi.fn(async () => undefined),
     } as unknown as BrowserSession;
     const service = new BrowserService({

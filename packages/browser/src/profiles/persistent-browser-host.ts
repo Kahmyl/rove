@@ -1,12 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import {
-  open,
-  readFile,
-  rename,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -52,9 +46,7 @@ export interface PersistentBrowserHostOptions {
   runtimeInstanceId: string;
   runtimeProcessId: number;
   sessionId: string;
-  launch(
-    ownershipArguments: string[],
-  ): Promise<ExternalChromeRuntime>;
+  launch(ownershipArguments: string[]): Promise<ExternalChromeRuntime>;
   dependencies?: Partial<PersistentBrowserHostDependencies>;
 }
 
@@ -121,7 +113,9 @@ const defaults: PersistentBrowserHostDependencies = {
   endpointWebSocket,
 };
 
-function parsedMetadata(value: string): PersistentBrowserHostMetadata | undefined {
+function parsedMetadata(
+  value: string,
+): PersistentBrowserHostMetadata | undefined {
   try {
     const item = JSON.parse(value) as Partial<PersistentBrowserHostMetadata>;
     if (
@@ -218,7 +212,8 @@ async function acquireClaim(path: string): Promise<() => Promise<void>> {
       }
       throw new RoveError({
         code: "PROFILE_LOCKED",
-        message: "The persistent browser workspace is being reconciled by another Rove Runtime.",
+        message:
+          "The persistent browser workspace is being reconciled by another Rove Runtime.",
         retryable: true,
         details: { state: "reconciliation_in_progress" },
       });
@@ -281,7 +276,9 @@ function identity(
     processId: metadata.processId,
     browserHostId: metadata.browserHostId,
     runtimeInstanceId: metadata.runtimeInstanceId,
-    sessionId: metadata.sessionId,
+    ...(metadata.sessionId.startsWith("ses_")
+      ? { sessionId: metadata.sessionId }
+      : {}),
     ownershipGeneration: metadata.ownershipGeneration,
     profileName: metadata.profileName,
     reused,
@@ -302,17 +299,22 @@ export async function acquirePersistentBrowserHost(
     if (existing === null) {
       throw new RoveError({
         code: "PROFILE_LOCKED",
-        message: "Rove browser-host ownership metadata is invalid; ownership cannot be proved.",
+        message:
+          "Rove browser-host ownership metadata is invalid; ownership cannot be proved.",
         retryable: false,
         details: { state: "ownership_unproven" },
       });
     }
 
-    if (existing !== undefined && dependencies.processAlive(existing.processId)) {
+    if (
+      existing !== undefined &&
+      dependencies.processAlive(existing.processId)
+    ) {
       if (!(await verifiedLiveHost(existing, options, dependencies))) {
         throw new RoveError({
           code: "PROFILE_LOCKED",
-          message: "A live browser process exists for this profile, but Rove ownership cannot be proved.",
+          message:
+            "A live browser process exists for this profile, but Rove ownership cannot be proved.",
           retryable: false,
           details: { state: "ownership_unproven" },
         });
@@ -321,13 +323,11 @@ export async function acquirePersistentBrowserHost(
       const sameOwner =
         existing.runtimeInstanceId === options.runtimeInstanceId &&
         existing.sessionId === options.sessionId;
-      if (
-        !sameOwner &&
-        dependencies.processAlive(existing.runtimeProcessId)
-      ) {
+      if (!sameOwner && dependencies.processAlive(existing.runtimeProcessId)) {
         throw new RoveError({
           code: "PROFILE_LOCKED",
-          message: "The persistent browser workspace is in use by an active Rove session.",
+          message:
+            "The persistent browser workspace is in use by an active Rove session.",
           retryable: true,
           details: {
             state: "active_session",
@@ -353,7 +353,13 @@ export async function acquirePersistentBrowserHost(
         processId: adopted.processId,
         userDataDir: adopted.userDataDir,
       });
-      return hostResult(runtime, adopted, metadataPath, true);
+      return hostResult(
+        runtime,
+        adopted,
+        metadataPath,
+        true,
+        dependencies.processAlive,
+      );
     }
 
     if (existing !== undefined) {
@@ -371,7 +377,8 @@ export async function acquirePersistentBrowserHost(
       await runtime.close();
       throw new RoveError({
         code: "BROWSER_LAUNCH_FAILED",
-        message: "The launched browser host did not expose a live process identity.",
+        message:
+          "The launched browser host did not expose a live process identity.",
       });
     }
     const processIdentity = await dependencies.processIdentity(processId);
@@ -409,7 +416,13 @@ export async function acquirePersistentBrowserHost(
       });
     }
     await writeMetadata(metadataPath, launched);
-    return hostResult(runtime, launched, metadataPath, false);
+    return hostResult(
+      runtime,
+      launched,
+      metadataPath,
+      false,
+      dependencies.processAlive,
+    );
   } finally {
     await releaseClaim();
   }
@@ -420,12 +433,26 @@ function hostResult(
   metadata: PersistentBrowserHostMetadata,
   metadataPath: string,
   reused: boolean,
+  isProcessAlive: (pid: number) => boolean,
 ): PersistentBrowserHost {
   return {
     runtime,
     identity: identity(metadata, reused),
     reused,
     release: async () => {
+      if (isProcessAlive(metadata.processId)) {
+        throw new RoveError({
+          code: "PROFILE_LOCKED",
+          message:
+            "The persistent browser host is still running; its ownership metadata cannot be released.",
+          retryable: true,
+          details: {
+            state: "shutdown_incomplete",
+            browserHostId: metadata.browserHostId,
+            processId: metadata.processId,
+          },
+        });
+      }
       const current = await readMetadata(metadataPath);
       if (
         current !== undefined &&

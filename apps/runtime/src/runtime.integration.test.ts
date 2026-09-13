@@ -151,7 +151,28 @@ function target(inspection: PageInspection, name: string): TargetReference {
   };
 }
 
+function physicalBrowser(
+  browser: BrowserService,
+  sessionId: string,
+): BrowserSession {
+  return (
+    browser.get(sessionId) as BrowserSession & {
+      host: { browser: BrowserSession };
+    }
+  ).host.browser;
+}
+
 function readyBrowserSession(id: string): BrowserSession {
+  const pages = [
+    {
+      id: "page_01",
+      url: "about:blank",
+      title: "",
+      active: true,
+      revision: 0,
+    },
+  ];
+  let nextPage = 2;
   return {
     id,
     capabilities: testCapabilities,
@@ -170,15 +191,28 @@ function readyBrowserSession(id: string): BrowserSession {
         },
       },
     }),
-    pages: async () => [
-      {
-        id: "page_01",
-        url: "about:blank",
+    pages: async () => pages.map((page) => ({ ...page })),
+    show: async () => undefined,
+    switchPage: async (pageId: string) =>
+      pages.find((page) => page.id === pageId)!,
+    openPage: async (url: string) => {
+      const page = {
+        id: `page_${String(nextPage++).padStart(2, "0")}`,
+        url,
         title: "",
         active: true,
         revision: 0,
-      },
-    ],
+      };
+      pages.push(page);
+      return page;
+    },
+    closePage: async (pageId: string) => {
+      const index = pages.findIndex((page) => page.id === pageId);
+      if (index >= 0) pages.splice(index, 1);
+    },
+    invalidatePages: async (pageIds: readonly string[]) =>
+      pages.filter((page) => pageIds.includes(page.id)).length,
+    invalidateAllTargets: async () => pages.length,
     close: async () => undefined,
   } as unknown as BrowserSession;
 }
@@ -203,6 +237,20 @@ async function waitForObservation(
   }
 
   throw new Error(`Timed out waiting for observation ${type}.`);
+}
+
+async function waitForRuntimePageCount(
+  runtime: RuntimeService,
+  sessionId: string,
+  count: number,
+) {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    const pages = await runtime.pages(sessionId);
+    if (pages.length === count) return pages;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`Timed out waiting for ${count} task-owned browser pages.`);
 }
 
 async function allFileText(directory: string): Promise<string> {
@@ -327,7 +375,7 @@ describe("runtime integration", () => {
   });
 
   it("retries a transient profile-lock release and confirms terminal released inventory", async () => {
-    const { runtime } = await harness({
+    const { runtime, browser } = await harness({
       start: async () => readyBrowserSession("browser_release_retry"),
     });
     const workspace = (await runtime.listBrowserWorkspaces()).workspaces[0]!;
@@ -335,10 +383,13 @@ describe("runtime integration", () => {
       mode: "agent",
       browser: { mode: "workspace", workspaceId: workspace.id },
     });
-    const locks = (
-      runtime as unknown as { profileLocks: Map<string, RoveProfileLock> }
-    ).profileLocks;
-    const lock = locks.get(session.id)!;
+    const hosts = (
+      browser as unknown as {
+        hosts: Map<string, { profileLock?: RoveProfileLock }>;
+      }
+    ).hosts;
+    const host = hosts.get(`workspace:${workspace.id}`)!;
+    const lock = host.profileLock!;
     const release = lock.release.bind(lock);
     let attempts = 0;
     lock.release = async () => {
@@ -350,13 +401,18 @@ describe("runtime integration", () => {
     await expect(runtime.endSession(session.id)).rejects.toThrow(
       /injected unlink failure/,
     );
-    expect(locks.has(session.id)).toBe(true);
+    expect(hosts.has(`workspace:${workspace.id}`)).toBe(true);
+    await expect(
+      runtime.deleteBrowserWorkspace(workspace.id),
+    ).rejects.toMatchObject({
+      code: "PROFILE_LOCKED",
+    });
     await expect(runtime.endSession(session.id)).resolves.toMatchObject({
       status: "completed",
       controller: null,
     });
     expect(attempts).toBe(2);
-    expect(locks.has(session.id)).toBe(false);
+    expect(hosts.has(`workspace:${workspace.id}`)).toBe(false);
     await expect(runtime.listSessionInventory()).resolves.toEqual([
       expect.objectContaining({
         session: expect.objectContaining({
@@ -633,7 +689,7 @@ describe("runtime integration", () => {
     });
   });
 
-  it("rejects a second active session using the same browser workspace", async () => {
+  it("attaches two active sessions to independent groups in one browser workspace", async () => {
     let starts = 0;
     const engine: BrowserEngine = {
       start: async () => {
@@ -646,14 +702,121 @@ describe("runtime integration", () => {
     const first = await runtime.startSession({ mode: "agent" });
     active.push({ runtime, id: first.id });
 
-    await expect(runtime.startSession({ mode: "agent" })).rejects.toMatchObject(
-      {
-        code: "PROFILE_LOCKED",
-      },
-    );
+    const second = await runtime.startSession({ mode: "agent" });
+    active.push({ runtime, id: second.id });
 
     expect(starts).toBe(1);
+    expect(first.activePageId).not.toBe(second.activePageId);
+    await expect(runtime.pages(first.id)).resolves.toHaveLength(1);
+    await expect(runtime.pages(second.id)).resolves.toHaveLength(1);
   });
+
+  it("routes real pages, popups, and release by task group on one browser workspace", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const first = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    const second = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: first.id }, { runtime, id: second.id });
+
+    const firstPage = (await runtime.pages(first.id))[0]!;
+    const secondPage = (await runtime.pages(second.id))[0]!;
+    const secondInspection = await runtime.inspectBrowser(second.id);
+    expect(firstPage.id).not.toBe(secondPage.id);
+    await expect(
+      runtime.switchPage(first.id, secondPage.id),
+    ).rejects.toMatchObject({
+      code: "PAGE_NOT_FOUND",
+    });
+
+    await runtime.navigate(first.id, {
+      url: `${server.url}/consequential-action`,
+    });
+    expect((await runtime.pages(first.id))[0]?.url).toBe(
+      `${server.url}/consequential-action`,
+    );
+    expect((await runtime.pages(second.id))[0]?.url).toBe(
+      `${server.url}/actions`,
+    );
+
+    const firstEvents: BrowserActivity[] = [];
+    const secondEvents: BrowserActivity[] = [];
+    browser.get(first.id).onActivity((activity) => firstEvents.push(activity));
+    browser
+      .get(second.id)
+      .onActivity((activity) => secondEvents.push(activity));
+    await runtime.navigate(first.id, { url: `${server.url}/actions` });
+    const inspection = await runtime.inspectBrowser(first.id);
+    await runtime.click(first.id, {
+      target: target(inspection, "Open popup"),
+    });
+    const firstPages = await waitForRuntimePageCount(runtime, first.id, 2);
+    expect(firstPages.some((page) => page.url.endsWith("/popup-target"))).toBe(
+      true,
+    );
+    await expect(runtime.pages(second.id)).resolves.toEqual([
+      expect.objectContaining({
+        id: secondPage.id,
+        url: `${server.url}/actions`,
+      }),
+    ]);
+    expect(
+      firstEvents.some((activity) => activity.type === "page_opened"),
+    ).toBe(true);
+    expect(
+      secondEvents.some((activity) => activity.type === "page_opened"),
+    ).toBe(false);
+    await expect(
+      runtime.click(second.id, {
+        target: target(secondInspection, "Change state"),
+      }),
+    ).resolves.toMatchObject({ pageId: secondPage.id });
+
+    await runtime.endSession(first.id);
+    await expect(
+      runtime.navigate(second.id, { url: `${server.url}/actions` }),
+    ).resolves.toMatchObject({ url: `${server.url}/actions` });
+    await expect(runtime.getSession(second.id)).resolves.toMatchObject({
+      status: "active",
+    });
+  }, 15_000);
+
+  it("stales sibling target authority when shared human control returns", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const first = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    const second = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: first.id }, { runtime, id: second.id });
+    const beforeTakeover = await runtime.inspectBrowser(second.id);
+    const staleTarget = target(beforeTakeover, "Change state");
+
+    await runtime.requestHuman(first.id, {
+      reason: "Model a shared authentication change",
+    });
+    await runtime.takeHumanControl(first.id);
+    await runtime.returnAgentControl(first.id);
+
+    await expect(
+      runtime.click(second.id, { target: staleTarget }),
+    ).rejects.toMatchObject({ code: "INSPECTION_REQUIRED" });
+    const refreshed = await runtime.inspectBrowser(second.id);
+    await expect(
+      runtime.click(second.id, {
+        target: target(refreshed, "Change state"),
+      }),
+    ).resolves.toMatchObject({ pageId: staleTarget.pageId });
+  }, 15_000);
 
   it("does not create a duplicate writable host when a session-start response is still uncertain", async () => {
     let releaseLaunch!: () => void;
@@ -678,15 +841,14 @@ describe("runtime integration", () => {
 
     const firstResponse = runtime.startSession(request);
     await started;
-    await expect(runtime.startSession(request)).rejects.toMatchObject({
-      code: "PROFILE_LOCKED",
-    });
+    const secondResponse = runtime.startSession(request);
     releaseLaunch();
-    const first = await firstResponse;
+    const [first, second] = await Promise.all([firstResponse, secondResponse]);
     active.push({ runtime, id: first.id });
+    active.push({ runtime, id: second.id });
 
     expect(starts).toBe(1);
-    await expect(runtime.listActiveSessions()).resolves.toHaveLength(1);
+    await expect(runtime.listActiveSessions()).resolves.toHaveLength(2);
   });
 
   it("serializes simultaneous first attachment for one bootstrap", async () => {
@@ -1381,7 +1543,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const inspection = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const internal = liveBrowser as unknown as {
       synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
     };
@@ -1424,7 +1586,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const inspection = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const inspect = liveBrowser.inspect.bind(liveBrowser);
     let rejectNextInspection = true;
 
@@ -1470,7 +1632,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const inspection = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const internal = liveBrowser as unknown as {
       synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
     };
@@ -1524,7 +1686,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const inspection = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const internal = liveBrowser as unknown as {
       applyCheckedState: (...args: unknown[]) => Promise<void>;
     };
@@ -1576,7 +1738,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const predecessor = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const inspect = liveBrowser.inspect.bind(liveBrowser);
     let successorInspectionCalls = 0;
 
@@ -1708,7 +1870,7 @@ describe("runtime integration", () => {
       "Issue A",
       "one",
     );
-    const liveBrowser = browser.get(sessionA.id);
+    const liveBrowser = physicalBrowser(browser, sessionA.id);
     const browserInternal = liveBrowser as unknown as {
       synchronizeAfterAction: (...args: unknown[]) => Promise<unknown>;
     };
@@ -2026,7 +2188,7 @@ describe("runtime integration", () => {
     });
     active.push({ runtime, id: session.id });
     const observation = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
     const interact = liveBrowser.interact.bind(liveBrowser);
     Object.defineProperty(liveBrowser, "interact", {
       configurable: true,
@@ -2621,11 +2783,12 @@ describe("runtime integration", () => {
     const inspection = await runtime.inspectBrowser(session.id);
     const liveBrowser = browser.get(session.id);
     const interact = liveBrowser.interact.bind(liveBrowser);
+    const physical = physicalBrowser(browser, session.id);
     const emitActivity = (
-      liveBrowser as unknown as {
+      physical as unknown as {
         emitActivity: (activity: unknown) => void;
       }
-    ).emitActivity.bind(liveBrowser);
+    ).emitActivity.bind(physical);
     Object.defineProperty(liveBrowser, "interact", {
       configurable: true,
       value: async (...args: Parameters<typeof interact>) => {
@@ -3033,7 +3196,7 @@ describe("runtime integration", () => {
     ).toBe(0);
     expect(
       (
-        liveBrowser as unknown as {
+        physicalBrowser(browser, session.id) as unknown as {
           downloadCorrelationWindows: Map<string, unknown>;
         }
       ).downloadCorrelationWindows.size,
@@ -4575,12 +4738,13 @@ describe("adversarial ownership races", () => {
 
     await runtime.takeHumanControl(session.id);
 
-    const liveBrowser = browser.get(session.id);
+    const groupBrowser = browser.get(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
 
     const originalInvalidateAllTargets =
       liveBrowser.invalidateAllTargets.bind(liveBrowser);
 
-    const originalInspect = liveBrowser.inspect.bind(liveBrowser);
+    const originalInspect = groupBrowser.inspect.bind(groupBrowser);
 
     const invalidationStarted = raceGate();
     const releaseInvalidation = raceGate();
@@ -4598,7 +4762,7 @@ describe("adversarial ownership races", () => {
       },
     });
 
-    Object.defineProperty(liveBrowser, "inspect", {
+    Object.defineProperty(groupBrowser, "inspect", {
       configurable: true,
       value: async (options?: Parameters<typeof originalInspect>[0]) => {
         inspectCalls += 1;

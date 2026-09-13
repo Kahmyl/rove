@@ -2,6 +2,7 @@ export type BrowserActivityType =
   | "navigation_completed"
   | "url_changed"
   | "page_opened"
+  | "page_closed"
   | "page_title_changed"
   | "page_switched"
   | "dialog_opened"

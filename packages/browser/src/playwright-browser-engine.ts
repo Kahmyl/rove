@@ -167,8 +167,7 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
 
     let external: Awaited<ReturnType<typeof launchExternalChrome>> | undefined;
     let persistentHost:
-      | Awaited<ReturnType<typeof acquirePersistentBrowserHost>>
-      | undefined;
+      Awaited<ReturnType<typeof acquirePersistentBrowserHost>> | undefined;
 
     let browser: Browser | undefined;
 
@@ -236,9 +235,20 @@ export class PlaywrightBrowserEngine implements BrowserEngine {
           ? externalRuntime.closeGracefully
           : async () => {
               await externalRuntime.closeGracefully();
-              if (externalRuntime.currentProcessId() === undefined) {
-                await persistentHost?.release();
+              const remainingProcessId = externalRuntime.currentProcessId();
+              if (remainingProcessId !== undefined) {
+                throw new RoveError({
+                  code: "RUNTIME_UNAVAILABLE",
+                  message:
+                    "The persistent browser process remains live after shutdown.",
+                  retryable: true,
+                  details: {
+                    state: "shutdown_incomplete",
+                    processId: remainingProcessId,
+                  },
+                });
               }
+              await persistentHost?.release();
             },
         () => {
           const processId = externalRuntime.currentProcessId();
