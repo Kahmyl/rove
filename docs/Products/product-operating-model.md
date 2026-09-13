@@ -14,7 +14,9 @@ A temporary workflow-sync outage does not disable already cached local tasks or 
 
 The user can find standalone tasks and tasks grouped by workflow, start new work, open results, and see which tasks need attention. Selecting a task changes the view only. Streaming output and requests continue to update the task that owns them, not the currently visible conversation.
 
-Each task presents a conversation, useful results, active work status, and controls appropriate to its state. The composer remains a conversation entry point rather than a form restricted to predetermined follow-ups. Result selections are optional input to the next request.
+Each task presents a conversation, useful results, active work status, and controls appropriate to its state. The composer remains a conversation entry point rather than a permanently expanded configuration form. Attachments and the send action remain close at hand; less frequent task, Workflow, participation, approval, browser, model, and recording choices use progressive command disclosure. Result selections are optional input to the next request.
+
+When the selected task cannot continue without conversational input, its exact request temporarily replaces the ordinary composer with one response surface. Bounded choices remain optional rather than automatic, and a freeform alternative is available where the request permits it. A successful response returns the ordinary composer through the existing attention-response contract. Browser handoff and consequential approval retain their distinct controls and full truthful scope. Attention owned by another task is only an indicator until the user opens that task.
 
 | User action or condition                           | Required response                                                                                          |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -38,7 +40,7 @@ Workflow Home is the everyday entrance. It makes the workflow identity clear, ke
 
 Outputs are a first-class workspace view of stable structured results produced by associated tasks. It shows useful kind, title, state, and source-task context and opens the existing result behavior. It is not a folder tree or generic file manager, and it does not infer outputs from rendered conversation text.
 
-Context and settings are secondary. They allow deliberate editing of purpose, background, priorities, exclusions, procedure, result presentation, descriptive resources, and explicitly approved reusable knowledge. Rove may later ask adaptive questions or propose context learned from work, but every durable proposal requires approval and no such assistance is implied before it functions.
+Context and settings are a full secondary workspace surface rather than a modal setup form. It is read-first: approved goal, preferred help, success expectations, knowledge, and resources are understandable before any field becomes editable. Editing focuses one section at a time and returns to the readable surface after save or cancel. Advanced configuration remains reachable through progressive disclosure. Rove may later ask adaptive questions or propose context learned from work, but every durable proposal requires approval and no such assistance is implied before it functions.
 
 A Job Search environment might begin with only its name, then immediately contain a task asking for today's opportunities. Later approved context can retain backend role preferences and outreach style without promising access to a particular website or the presence of a résumé on every device.
 

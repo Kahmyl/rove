@@ -44,6 +44,8 @@ Opaque identifiers are examples, not required regexes. The same accepted operati
 
 Reading tasks, results, and artifacts does not require model access. Query responses include enough revision and status information for coherent UI updates. List operations use bounded pagination and a stable cursor rather than assuming one complete in-memory list forever.
 
+The ordinary composer prioritizes task text and progressively discloses supported secondary commands. For an exact selected task with pending conversational input, the renderer replaces that composer with controls bound to the existing `attention.respond` identity and generation. Background-task attention cannot replace the selected task's composer. Browser control handoff stays on the Runtime control path, and approval presentation must retain the exact material being authorized.
+
 Creating a workflow returns its exact identity so the renderer can select Workflow Home immediately. Starting a task from that Home sends the exact workflow identity through the ordinary task command and uses the applicable approved configuration revision under the existing explicit disclosure rule. Standalone task commands omit workflow identity and retain their behavior.
 
 ## Engine adapter
