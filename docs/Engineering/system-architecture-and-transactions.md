@@ -22,6 +22,8 @@ The application service owns product commands and task state. The Codex adapter 
 
 A mandatory cloud task executor, device relay, hosted browser, or distributed workflow engine is unnecessary. The cloud-facing boundary is limited to account identity and approved workflow configuration. Existing control-plane experiments may remain available but are not a prerequisite for ordinary local tasks.
 
+Workflow Home, Outputs, and attention summaries are renderer/application projections over the existing local Workflow, task, Result, and attention authorities. They introduce no workspace-specific task copies, output records, or attention state machine. Exact workflow association filters membership; exact task/result/request identity routes selection and action.
+
 ## Authority and consistency
 
 Use one authoritative local task store through the application service, not independent lifecycle writers in renderer, App Server event handlers, and Runtime adapters. Reuse the existing ledger's useful atomicity and deduplication. Do not add another event-sourced engine merely to implement new entities.
@@ -62,6 +64,8 @@ The implemented browser adapter preserves one task-scoped Runtime session and ca
 ## Workflow edits and synchronization
 
 A local workflow edit validates an allowlisted configuration and commits a new local revision plus a pending configuration-sync record. The remote write uses an expected revision. A conflict preserves both versions for explicit resolution rather than overwriting silently. Applying downloaded configuration never dispatches a model turn or external action.
+
+Name-only creation commits a valid sparse initial configuration, then the renderer selects the new workflow. Advanced configuration uses the same immutable revision path later from secondary Context/settings. Starting from Workflow Home uses the ordinary task-acceptance transaction with the selected workflow identity and applicable approved revision; it does not create a special task lifecycle.
 
 Tasks use local approved snapshots. Deleting synchronized setup does not cascade into local task history. See [workflow portability](workflow-context-and-portability.md) for the complete narrow contract.
 

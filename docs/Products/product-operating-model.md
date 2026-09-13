@@ -30,11 +30,17 @@ Each task presents a conversation, useful results, active work status, and contr
 
 The implementation may bound simultaneous execution for memory or account limits. It must identify the affected resource and must not make all other tasks inaccessible. A user request rejected because of model unavailability is not a draft task queued for later dispatch.
 
-## Guided workflow setup
+## Workflow workspace and progressive context
 
-Start with the kind of work and desired outcomes, then ask relevant selectable questions about background, priorities, exclusions, procedure, result presentation, and resources. Include custom answers, not sure, and skip where meaningful. Show the resulting guidance in editable form.
+Creating a workflow asks only for a name, then immediately enters its Home. A sparse workflow is useful and valid: the user can start an ordinary associated task without first defining purpose, scope, preferences, criteria, procedures, resources, knowledge, or result presentation.
 
-A Job Search environment might retain backend role preferences and outreach style. A task can then ask for today's opportunities without repeating that setup. The environment does not automatically promise access to a particular website or the presence of a résumé on every device.
+Workflow Home is the everyday entrance. It makes the workflow identity clear, keeps the task composer visually primary, shows a bounded recent/continue list for exact associated tasks, surfaces a small set of structured results from those tasks, and shows unresolved attention only when it genuinely exists. Selecting a task, result, or attention item opens the exact owning task and record. Home is a projection of existing task, Result, and attention truth, not another project-management system or lifecycle authority.
+
+Outputs are a first-class workspace view of stable structured results produced by associated tasks. It shows useful kind, title, state, and source-task context and opens the existing result behavior. It is not a folder tree or generic file manager, and it does not infer outputs from rendered conversation text.
+
+Context and settings are secondary. They allow deliberate editing of purpose, background, priorities, exclusions, procedure, result presentation, descriptive resources, and explicitly approved reusable knowledge. Rove may later ask adaptive questions or propose context learned from work, but every durable proposal requires approval and no such assistance is implied before it functions.
+
+A Job Search environment might begin with only its name, then immediately contain a task asking for today's opportunities. Later approved context can retain backend role preferences and outreach style without promising access to a particular website or the presence of a résumé on every device.
 
 Workflow edits are deliberate. The user can approve a suggested improvement or use Save to workflow on selected reusable information. Current task instructions are not automatically promoted. An already running turn uses its recorded guidance snapshot; changes take effect at an explicit subsequent boundary.
 

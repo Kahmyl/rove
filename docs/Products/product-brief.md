@@ -87,9 +87,11 @@ A workflow can contain:
 - history and accumulated context where appropriate; and
 - multiple tasks performed within that environment.
 
-A workflow is therefore more than a folder of tasks. It is an **operating context for the assistant**.
+A workflow is therefore more than a folder of tasks. It is a **persistent working environment** the user can enter, work within, and return to. Its home brings together related independent tasks, useful structured outputs, and genuine task-owned attention while reusable context improves work in the background.
 
-The user should not need to be a prompt engineer to create this context. Rove should be able to guide workflow setup through structured, understandable questions and selectable options, while still allowing the user to add custom instructions where useful. The resulting configuration acts as context engineering for the agents performing work inside that workflow.
+Creating that place must not require the user to configure its operating context first. A name is enough to create and enter a sparse workflow, and the user can immediately start a normal task inside it. Purpose, scope, preferences, criteria, procedures, resources, result conventions, and reusable knowledge are optional context edited later from a secondary surface.
+
+The user should not need to be a prompt engineer to improve this context. Rove should eventually help by asking relevant questions, proposing configuration from the user's stated outcome or actual work, and presenting every durable suggestion for approval or editing. The resulting approved configuration acts as context engineering for the agents performing work inside that workflow; inference never silently becomes policy.
 
 A workflow may evolve as the user refines what they want and as repeated work reveals better ways to perform it.
 
@@ -235,11 +237,11 @@ This task does not require the user to create a GitHub workflow first. If the us
 
 This illustrates an important product principle: **workflows enhance repeated work; they are not a prerequisite for useful tasks**.
 
-## 10. Workflow Guidance and Context Engineering
+## 10. Workflow Workspaces, Guidance, and Context Engineering
 
 Repeated work becomes more useful when the assistant does not need to be re-taught the same operating context in every task.
 
-Rove should therefore provide a first-class way to construct and maintain workflow guidance.
+Rove should therefore provide a first-class place to do recurring work and a secondary way to construct and maintain workflow guidance. Workflow Home prioritizes starting and continuing tasks, rediscovering useful structured outputs, and locating real attention needs. Outputs answer what useful things the work produced; tasks answer what work or conversation occurred. Context and settings improve the environment without becoming an entrance requirement.
 
 The user experience should favor structured setup over requiring users to write elaborate system prompts. Depending on the workflow, Rove can ask questions such as:
 
@@ -251,7 +253,7 @@ The user experience should favor structured setup over requiring users to write 
 - How should results be organized?
 - Are there reusable resources or artifacts relevant to this work?
 
-Questions should be adapted to the kind of workflow being created rather than presented as one universal configuration form. Selectable answers should be used where they reduce unnecessary cognitive effort, with room for custom input where the user's situation requires it.
+Questions should be offered progressively after entry and adapted to the kind of work rather than presented as one mandatory universal creation form. Selectable answers should be used where they reduce unnecessary cognitive effort, with room for custom input, deferral, and indefinite use of a sparse workflow.
 
 The resulting context should guide tasks inside the workflow automatically. The user should be able to inspect and refine it over time.
 
@@ -280,7 +282,9 @@ The MVP direction includes:
 - workflow creation;
 - multiple tasks within a workflow;
 - workflow-specific context and guidance;
-- structured workflow setup that does not require prompt-engineering expertise;
+- name-only workflow creation with immediate entry and ordinary task creation;
+- progressive workflow context setup that does not require prompt-engineering expertise;
+- workflow-level rediscovery of related tasks, structured outputs, and genuine task-owned attention;
 - browser-backed execution for tasks that require web interaction;
 - Agent Mode;
 - Companion Mode;

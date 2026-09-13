@@ -6,8 +6,11 @@
 
 ```text
 Rove profile
-  |-- Workflow environment -- approved revisions and reusable guidance
-  |       `-- Local tasks on each device
+  |-- Workflow environment -- identity and approved configuration revisions
+  |       |-- Associated independent local tasks on each device
+  |       |       |-- Structured results and artifacts
+  |       |       `-- Task-owned attention
+  |       `-- Workspace projections: Home, Outputs, Context/settings
   `-- Standalone local tasks
           |-- Conversation entries and execution turns
           |-- Engine associations
@@ -16,14 +19,14 @@ Rove profile
           `-- Results, artifacts, and outcome evidence
 ```
 
-A workflow can exist without tasks on this device. A task can exist without a workflow. A task can continue after an execution turn ends or its browser closes. No association implies that task history is synchronized with the workflow.
+A workflow can exist without configuration beyond its name and without tasks on this device. A task can exist without a workflow. A task can continue after an execution turn ends or its browser closes. Workflow Home and Outputs query existing associated task, Result, and attention identities; they do not own duplicate copies. No association implies that task history is synchronized with the workflow.
 
 ## Concepts and ownership
 
 | Concept               | Identity and responsibility                                                               | Persistence                                                         |
 | --------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Rove profile          | Stable owner of portable setup and this device's local work; distinct from model account. | Account identity plus local profile partition.                      |
-| Workflow environment  | Purpose and approved operating context for recurring work.                                | Small portable configuration and local cache.                       |
+| Workflow environment  | Persistent named place for recurring work and its optional approved operating context.    | Small portable identity/configuration and local cache.              |
 | Workflow revision     | Immutable approved configuration used to identify what guidance applied.                  | Portable configuration metadata; not a product release version.     |
 | Task                  | Flexible conversation and related work; standalone or associated with a workflow.         | Local.                                                              |
 | Conversation entry    | User input, assistant output, or meaningful displayed tool/result item.                   | Local; raw model internals are not a product record.                |
@@ -48,6 +51,8 @@ An execution turn may complete while the task remains active. Stop interrupts th
 Control ownership belongs to the affected capability resource. Agent Mode, Companion Mode, and Capture Mode establish participation expectations but do not transfer authority merely because the selected view changes. Capture remains human-led; returning a browser resource to an agent requires an explicit compatible operation.
 
 The renderer's selected task, current tab, expanded result, and local unsent composer text are presentation state. They are not routing keys for background events or authorization evidence.
+
+The selected workflow and selected workspace section are also presentation state. Workflow task, output, and attention lists are derived by exact workflow association and source-task identity. Opening an item routes to its owning task/result/request rather than transferring authority to the workflow view.
 
 ## Invariants
 

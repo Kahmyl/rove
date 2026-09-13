@@ -23,7 +23,7 @@ Rove has standalone tasks and workflows containing related tasks. Creating a wor
 
 A **task** is a persistent conversation and working context. It can contain many requests, execution turns, results, and changes of direction. Its initial request is not a permanent restriction on the conversation.
 
-A **workflow** is a reusable operating environment for a recurring area of work. It supplies context, preferences, guidance, skills, resource requirements, and result conventions. It is more than a folder of conversations, but it is not a fixed automation graph.
+A **workflow** is a persistent working environment for a recurring area of work. It combines related independent tasks, reusable approved context, useful structured outputs produced by those tasks, and genuine task-owned attention. It is more than a folder, browser profile, configuration form, or fixed automation graph; it should feel like a place the user returns to.
 
 An **execution turn** is one interval of agent work within a task. Finishing or interrupting a turn does not finish the task's availability for further conversation.
 
@@ -65,11 +65,19 @@ A missing capability is scoped separately. An unavailable browser prevents brows
 
 A workflow holds the reusable context that makes repeated work easier. For example, Job Search can retain role preferences, relevant background, exclusions, search guidance, outreach style, and conventions for reviewing opportunities. GitHub Attention can retain repository scope and attention criteria.
 
-Workflow setup should use structured, understandable questions and selectable answers, with custom input where needed. Users should not need to write elaborate prompts or author skill files to configure useful behavior. Guidance should be visible, editable, and refinable as the user learns what works.
+Creating a workflow requires only its name. Creation immediately enters Workflow Home and permits a normal task associated with that exact workflow. A sparse workflow is valid indefinitely; purpose, scope, preferences, criteria, guidance, procedures, resource requirements, result conventions, and reusable knowledge do not gate entry or work.
+
+Workflow Home prioritizes work rather than administration: workflow identity, an ordinary task composer, a bounded view of recent associated tasks, a bounded view of structured outputs from those tasks, and genuine unresolved attention when present. Outputs are existing stable Result records projected through exact task membership, not scraped conversation text or a second result store. Attention remains owned and resolved by its exact task/request; the workflow is only an index into that truth.
+
+Outputs are a first-class workflow surface. They answer “What useful things do I now have?” while tasks answer “What work or conversation did I do?” Context and settings are secondary to Home and Outputs. They expose the existing approved configuration for deliberate editing without making the internal configuration schema part of ordinary onboarding.
+
+Progressive setup should use structured, understandable questions and selectable answers, with custom input and deferral where useful. Rove should later be able to propose context from stated goals or observed work, but a model inference must never silently become durable policy. Do not expose a setup control until that assistance works.
 
 Rove must distinguish approved guidance, task-specific requests, observations, and suggested improvements. A model inference must not silently become a permanent user preference. A change of direction inside one task must not automatically rewrite the workflow.
 
 Context assembly should combine Rove's operating rules, relevant approved workflow guidance, the current request, applicable resources, and useful prior task context. Long references and optional procedures should be included when relevant rather than copied indiscriminately into every turn.
+
+Starting from Workflow Home automatically associates the task with the exact workflow and applies the relevant approved configuration revision under the existing disclosure boundary. The task remains a normal persistent conversation with unchanged identity, lifecycle, browser ownership, result identity, and consequence safety. Standalone tasks remain unchanged.
 
 Workflow guidance supports the conversation; it does not confine it. A user can ask an unrelated question or change objectives within a workflow task. Procedural guidance should apply where relevant rather than distort every response into the original workflow's format.
 
@@ -83,13 +91,13 @@ The MVP should use explicit approved facts, guidance, and selected reusable know
 
 The MVP supports portability of the reusable workflow environment, not full synchronization of the application or its execution history.
 
-| Portable across devices | Remains local to each device |
-| --- | --- |
-| Workflow definitions and purpose | Task conversations and execution history |
-| Approved preferences, guidance, and skills | Task findings, drafts, reports, and action records |
-| Explicitly saved reusable knowledge | Screenshots, recordings, downloads, and task attachments |
-| Non-secret connection configuration and resource requirements | Tokens, passwords, browser cookies, and credential stores |
-| Workflow configuration revisions | Live browser processes, page references, local paths, and execution state |
+| Portable across devices                                       | Remains local to each device                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Workflow definitions and purpose                              | Task conversations and execution history                                  |
+| Approved preferences, guidance, and skills                    | Task findings, drafts, reports, and action records                        |
+| Explicitly saved reusable knowledge                           | Screenshots, recordings, downloads, and task attachments                  |
+| Non-secret connection configuration and resource requirements | Tokens, passwords, browser cookies, and credential stores                 |
+| Workflow configuration revisions                              | Live browser processes, page references, local paths, and execution state |
 
 On another device, the user restores the same workflow environment, reconnects required services, supplies any necessary local resources, and starts new local tasks. The previous device's conversations do not appear merely because the workflow has synchronized.
 
@@ -243,17 +251,17 @@ Pin a tested compatibility set across Rove, Codex, browser tooling, runtime, and
 
 Product acceptance must demonstrate the following outcomes:
 
-| Area | Required outcome |
-| --- | --- |
-| Task independence | Non-browser tasks start without a browser; switching views never reroutes another task's execution. |
+| Area                  | Required outcome                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Task independence     | Non-browser tasks start without a browser; switching views never reroutes another task's execution.                                       |
 | Access and continuity | Existing work remains usable without Codex; unavailable-model submissions are honest; stopping permits later continuation or redirection. |
-| Workflows | Guidance improves repeated work without confining conversation or leaking another workflow's context. |
-| Portability | The same workflow environment is reusable on another device, while tasks, files, artifacts, and secrets remain local. |
-| Browser collaboration | Separate task-owned groups work correctly; shared-resource conflicts and human takeover remain appropriately scoped. |
-| Browser competence | Representative general interaction families pass, including icon-only menus and recovery after state changes. |
-| Capture and recording | Task-scoped records and requested playable videos have clear scope, controls, and sensitive-data handling. |
-| Results and actions | Selected results support follow-up; approval and outcome evidence prevent misleading completion and unsafe replay. |
-| Recovery and updates | Application, model, and browser interruptions preserve work; the packaged compatibility set passes the required journeys. |
+| Workflows             | Guidance improves repeated work without confining conversation or leaking another workflow's context.                                     |
+| Portability           | The same workflow environment is reusable on another device, while tasks, files, artifacts, and secrets remain local.                     |
+| Browser collaboration | Separate task-owned groups work correctly; shared-resource conflicts and human takeover remain appropriately scoped.                      |
+| Browser competence    | Representative general interaction families pass, including icon-only menus and recovery after state changes.                             |
+| Capture and recording | Task-scoped records and requested playable videos have clear scope, controls, and sensitive-data handling.                                |
+| Results and actions   | Selected results support follow-up; approval and outcome evidence prevent misleading completion and unsafe replay.                        |
+| Recovery and updates  | Application, model, and browser interruptions preserve work; the packaged compatibility set passes the required journeys.                 |
 
 Implement and verify coherent end-to-end slices rather than adding disconnected abstractions. The exact sync provider, browser-adapter changes, recording mechanism, UI-library adoption, schemas, and migrations remain implementation decisions. Qualify them against these outcomes without reopening the settled product scope or promoting earlier research candidates into requirements.
 

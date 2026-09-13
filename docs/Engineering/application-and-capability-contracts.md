@@ -4,7 +4,7 @@
 
 ## Surfaces
 
-The renderer uses a narrow host-owned command/query bridge. The application service resolves task ownership, grants, engine associations, and browser resources. Codex communicates through a qualified App Server adapter. Browser/file/integration adapters expose bounded capability operations. Account/workflow synchronization has a separate small authenticated boundary.
+The renderer uses a narrow host-owned command/query bridge. The application service resolves task ownership, workflow association, stable Result identity, attention identity, grants, engine associations, and browser resources. Workflow Home and Outputs filter the existing local snapshot by exact associations; selecting an item routes to its owning task/result/request. Codex communicates through a qualified App Server adapter. Browser/file/integration adapters expose bounded capability operations. Account/workflow synchronization has a separate small authenticated boundary.
 
 External MCP support can expose authorized capabilities, but it must not bypass the same operation and permission checks used by the application. Human take/return controls are trusted user intents, not agent-granted authority. No general partner onboarding, billing API, public task REST platform, or remote browser service is implied.
 
@@ -28,21 +28,23 @@ Opaque identifiers are examples, not required regexes. The same accepted operati
 
 ## Product command families
 
-| Commands                                                                  | Required behavior                                                                                           |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `task.start`, `task.message`                                              | Validate model readiness for inference; resolve guidance and exact task; acquire no browser unless needed.  |
-| `task.stop`                                                               | Stop further dispatch for current work; preserve conversation and results; reconcile in-flight effects.     |
-| `task.archive`, `task.restore`, `task.delete`                             | Distinguish organization, restoration, and explicit destructive cleanup.                                    |
-| `workflow.create`, `workflow.edit`, `workflow.archive`, `workflow.delete` | Validate approved portable content and expected revision; never cascade deletion into local task history.   |
-| `workflow.promote`                                                        | Show and approve the exact selected reusable information; do not upload a task implicitly.                  |
-| `result.create`, `result.revise`, `result.select`, `result.authorize`     | Resolve exact task/source/revision; bind action authorization to reviewed material before Runtime dispatch. |
-| `browser.open`, `control.take`, `control.return`                          | Resolve task-owned resources and current control generation; do not use selected UI tab as authority.       |
-| `recording.start`, `recording.stop`                                       | Confirm scope and privacy/OS permissions; persist artifact availability separately from recording intent.   |
-| `attention.respond`                                                       | Match task, request, operation, generation, and scope; accept a live decision once.                         |
-| `resource.grant`, `resource.revoke`                                       | Select/resolve authorized resources; reject stale, out-of-scope, or revoked use.                            |
-| Model connect/disconnect                                                  | Change the model connection, not the Rove owner or local data.                                              |
+| Commands                                                                  | Required behavior                                                                                                                                                |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task.start`, `task.message`                                              | Validate model readiness for inference; resolve guidance and exact task; acquire no browser unless needed.                                                       |
+| `task.stop`                                                               | Stop further dispatch for current work; preserve conversation and results; reconcile in-flight effects.                                                          |
+| `task.archive`, `task.restore`, `task.delete`                             | Distinguish organization, restoration, and explicit destructive cleanup.                                                                                         |
+| `workflow.create`, `workflow.edit`, `workflow.archive`, `workflow.delete` | Permit a name-only sparse initial configuration; validate later approved portable content and expected revision; never cascade deletion into local task history. |
+| `workflow.promote`                                                        | Show and approve the exact selected reusable information; do not upload a task implicitly.                                                                       |
+| `result.create`, `result.revise`, `result.select`, `result.authorize`     | Resolve exact task/source/revision; bind action authorization to reviewed material before Runtime dispatch.                                                      |
+| `browser.open`, `control.take`, `control.return`                          | Resolve task-owned resources and current control generation; do not use selected UI tab as authority.                                                            |
+| `recording.start`, `recording.stop`                                       | Confirm scope and privacy/OS permissions; persist artifact availability separately from recording intent.                                                        |
+| `attention.respond`                                                       | Match task, request, operation, generation, and scope; accept a live decision once.                                                                              |
+| `resource.grant`, `resource.revoke`                                       | Select/resolve authorized resources; reject stale, out-of-scope, or revoked use.                                                                                 |
+| Model connect/disconnect                                                  | Change the model connection, not the Rove owner or local data.                                                                                                   |
 
 Reading tasks, results, and artifacts does not require model access. Query responses include enough revision and status information for coherent UI updates. List operations use bounded pagination and a stable cursor rather than assuming one complete in-memory list forever.
+
+Creating a workflow returns its exact identity so the renderer can select Workflow Home immediately. Starting a task from that Home sends the exact workflow identity through the ordinary task command and uses the applicable approved configuration revision under the existing explicit disclosure rule. Standalone task commands omit workflow identity and retain their behavior.
 
 ## Engine adapter
 

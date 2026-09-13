@@ -4,7 +4,7 @@
 
 ## Current local implementation
 
-The companion stores Workflow identities and immutable approved configuration revisions in the existing task-engine SQLite database. The renderer uses guided fields for purpose, preferences, criteria, guidance, procedures, descriptive resource requirements, result conventions, and approved knowledge. Local workflows and task history remain inspectable while Codex is signed out. Archive is reversible; it does not delete associated tasks.
+The companion stores Workflow identities and immutable approved configuration revisions in the existing task-engine SQLite database. The current local domain supports purpose, preferences, criteria, guidance, procedures, descriptive resource requirements, result conventions, and approved knowledge. These fields remain editable as optional Context/settings rather than prerequisites for creating the named workspace. Local workflows and task history remain inspectable while Codex is signed out. Archive is reversible; it does not delete associated tasks.
 
 Task association is separate from disclosure. When starting a Workflow task, the user must explicitly choose whether relevant approved Workflow text may be sent to Codex or whether the association stays local only. For shared tasks, launch and each later idle-turn request assemble only applicable topic-scoped entries and record the exact revision and digest in the durable task event/outbox command. Steering an already-active turn does not change its context mid-action. A later approved edit or promotion can therefore apply at the next turn boundary without rewriting historical task or approval truth.
 
@@ -12,9 +12,9 @@ Save to Workflow identifies one attachment-free task conversation item, shows ed
 
 ## Approved environment
 
-A workflow contains purpose, user-provided background relevant to the work, preferences, exclusions, reusable procedures/skills, result conventions, non-secret connection requirements, resource requirements, and explicitly approved reusable knowledge. It may contain many local tasks without uploading those tasks.
+A workflow is valid with only a name. It may additionally contain purpose, user-provided background relevant to the work, preferences, exclusions, reusable procedures/skills, result conventions, non-secret connection requirements, resource requirements, and explicitly approved reusable knowledge. It may contain many local tasks and project their stable Results and task-owned attention without uploading those local entities.
 
-Guided setup asks relevant selectable questions with custom input and skip/not-sure paths. Users can inspect and edit the resulting guidance. Structured fields store actual answers; a generated prose prompt is a derived view, not the only source of truth.
+Progressive setup occurs after entry from secondary Context/settings. Users can inspect and edit existing structured guidance, and future assistance may ask relevant questions or propose improvements with explicit approval. Structured fields store actual approved answers; a generated prose prompt is a derived view, not the only source of truth. Configuration never gates access to Home or ordinary task creation.
 
 Keep four sources distinguishable: approved workflow guidance, the current task request, observed evidence, and proposed learning. Model-generated improvements require approval before becoming permanent. A change of topic in one task does not modify the shared workflow.
 
