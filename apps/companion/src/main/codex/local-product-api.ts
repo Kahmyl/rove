@@ -26,8 +26,17 @@ import type {
   TaskFileAttention,
 } from "./task-attachments.js";
 import type { TaskAcceptance, TaskPortableValue } from "@rove/protocol";
+import {
+  assembleWorkflowContext,
+  textDigest,
+  validateWorkflowConfiguration,
+  type WorkflowConfiguration,
+  type WorkflowEnvironment,
+  type WorkflowPromotionCategory,
+  type WorkflowStore,
+} from "./workflows.js";
 
-export const LOCAL_PRODUCT_API_VERSION = 7 as const;
+export const LOCAL_PRODUCT_API_VERSION = 8 as const;
 export interface ProductTaskLaunchInput {
   outcome: string;
   executionMode: ExecutionMode;
@@ -36,6 +45,8 @@ export interface ProductTaskLaunchInput {
   model?: string;
   reasoningEffort?: string;
   attachmentIds?: readonly string[];
+  workflowId?: string;
+  shareWorkflowContext?: boolean;
 }
 export type LocalProductCommand =
   | { type: "account.refresh" }
@@ -44,6 +55,37 @@ export type LocalProductCommand =
   | { type: "account.login.cancel"; loginId: string }
   | { type: "account.logout" }
   | { type: "attachments.pick" }
+  | {
+      type: "workflow.create";
+      operationId: string;
+      name: string;
+      configuration: WorkflowConfiguration;
+    }
+  | {
+      type: "workflow.edit";
+      operationId: string;
+      workflowId: string;
+      expectedRevision: number;
+      name: string;
+      configuration: WorkflowConfiguration;
+    }
+  | {
+      type: "workflow.archive" | "workflow.unarchive";
+      operationId: string;
+      workflowId: string;
+      expectedRevision: number;
+    }
+  | {
+      type: "workflow.promote";
+      operationId: string;
+      workflowId: string;
+      expectedRevision: number;
+      category: WorkflowPromotionCategory;
+      text: string;
+      appliesTo: readonly string[];
+      sourceTaskId: string;
+      sourceItemId: string;
+    }
   | { type: "attachments.remove"; attachmentId: string }
   | { type: "attachments.replace"; attachmentId: string }
   | {
@@ -117,6 +159,17 @@ export type RendererProductIntent =
   | { type: "account.login.cancel"; loginId: string }
   | { type: "account.logout" }
   | { type: "attachments.pick" }
+  | Extract<
+      LocalProductCommand,
+      {
+        type:
+          | "workflow.create"
+          | "workflow.edit"
+          | "workflow.archive"
+          | "workflow.unarchive"
+          | "workflow.promote";
+      }
+    >
   | { type: "attachments.remove"; attachmentId: string }
   | { type: "attachments.replace"; attachmentId: string }
   | {
@@ -263,6 +316,12 @@ export interface ProductTaskProjection {
   availableActions: ProductTaskSnapshot["availableActions"];
   runtime?: ProductTaskSnapshot["runtime"];
   attachments?: readonly TaskAttachmentDescriptor[];
+  workflowContext?: NonNullable<
+    ProductTaskSnapshot["context"]["workflowContext"]
+  >;
+  workflowAssociation?: NonNullable<
+    ProductTaskSnapshot["context"]["workflowAssociation"]
+  >;
   operation?: {
     type: "finish";
     operationId: string;
@@ -284,6 +343,7 @@ export interface LocalProductSnapshot {
   catalog: CodexCatalogSnapshot;
   attention: readonly ProductAttentionProjection[];
   tasks: readonly ProductTaskProjection[];
+  workflows: readonly WorkflowEnvironment[];
   recoveryWarnings: readonly string[];
   draftAttachments: readonly TaskAttachmentDescriptor[];
   fileAttention: readonly TaskFileAttention[];
@@ -362,6 +422,33 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
   "account.login.cancel": ["type", "loginId"],
   "account.logout": ["type"],
   "attachments.pick": ["type"],
+  "workflow.create": ["type", "operationId", "name", "configuration"],
+  "workflow.edit": [
+    "type",
+    "operationId",
+    "workflowId",
+    "expectedRevision",
+    "name",
+    "configuration",
+  ],
+  "workflow.archive": ["type", "operationId", "workflowId", "expectedRevision"],
+  "workflow.unarchive": [
+    "type",
+    "operationId",
+    "workflowId",
+    "expectedRevision",
+  ],
+  "workflow.promote": [
+    "type",
+    "operationId",
+    "workflowId",
+    "expectedRevision",
+    "category",
+    "text",
+    "appliesTo",
+    "sourceTaskId",
+    "sourceItemId",
+  ],
   "attachments.remove": ["type", "attachmentId"],
   "attachments.replace": ["type", "attachmentId"],
   "task.attachment.reselect": ["type", "taskId", "attachmentId"],
@@ -1011,6 +1098,12 @@ function projectTask(
     selectionSource: context.selectionSource,
     selectedAt: context.selectedAt.slice(0, 40),
     bootstrapStage: context.bootstrap.stage,
+    ...(context.workflowContext
+      ? { workflowContext: structuredClone(context.workflowContext) }
+      : {}),
+    ...(context.workflowAssociation
+      ? { workflowAssociation: structuredClone(context.workflowAssociation) }
+      : {}),
     ...(context.initialLaunch === undefined
       ? {}
       : {
@@ -1227,6 +1320,7 @@ export class LocalProductApi {
   private readonly recoveryWarnings: () => readonly string[];
   private readonly attachments: TaskAttachmentAuthority | undefined;
   private readonly attachmentRuntime: AttachmentRuntimeMaterializer | undefined;
+  private readonly workflows: WorkflowStore | undefined;
   private readonly legacyEffects:
     | {
         acknowledgeLegacyEffectScope(sessionId: string): Promise<void>;
@@ -1253,6 +1347,7 @@ export class LocalProductApi {
         effectId: string,
       ): Promise<object>;
     },
+    workflows?: WorkflowStore,
   ) {
     this.health = health;
     this.account = account;
@@ -1263,6 +1358,7 @@ export class LocalProductApi {
     this.attachments = attachments;
     this.attachmentRuntime = attachmentRuntime;
     this.legacyEffects = legacyEffects;
+    this.workflows = workflows;
   }
   snapshot(): LocalProductSnapshot {
     return {
@@ -1271,6 +1367,7 @@ export class LocalProductApi {
       catalog: this.account.snapshot(),
       attention: this.attention.list().slice(-256).map(projectAttention),
       tasks: [],
+      workflows: this.workflows?.listWorkflows({ includeArchived: true }) ?? [],
       recoveryWarnings: [...this.recoveryWarnings()]
         .slice(-64)
         .map((value) => value.slice(0, 500)),
@@ -1304,6 +1401,7 @@ export class LocalProductApi {
     return {
       ...this.snapshot(),
       tasks,
+      workflows: this.workflows?.listWorkflows({ includeArchived: true }) ?? [],
       attention: projectedAttention,
       ...(this.currentTaskId === undefined
         ? {}
@@ -1387,6 +1485,76 @@ export class LocalProductApi {
         type: value.type,
         loginId: nonempty(value.loginId, "login id"),
       });
+    if (typeof value.type === "string" && value.type.startsWith("workflow.")) {
+      if (!this.workflows) throw new Error("Workflows are unavailable.");
+      const operationId = stableOperationId(
+        value.operationId,
+        "Workflow operation id",
+      );
+      if (value.type === "workflow.create")
+        return this.workflows.createWorkflow({
+          operationId,
+          name: nonempty(value.name, "Workflow name"),
+          configuration: validateWorkflowConfiguration(value.configuration),
+        });
+      const workflowId = nonempty(value.workflowId, "Workflow id");
+      if (
+        !Number.isSafeInteger(value.expectedRevision) ||
+        Number(value.expectedRevision) < 1
+      )
+        throw new Error("Workflow expected revision is invalid.");
+      const expectedRevision = Number(value.expectedRevision);
+      if (value.type === "workflow.edit")
+        return this.workflows.editWorkflow({
+          operationId,
+          workflowId,
+          expectedRevision,
+          name: nonempty(value.name, "Workflow name"),
+          configuration: validateWorkflowConfiguration(value.configuration),
+        });
+      if (
+        value.type === "workflow.archive" ||
+        value.type === "workflow.unarchive"
+      )
+        return this.workflows.setWorkflowArchived({
+          operationId,
+          workflowId,
+          expectedRevision,
+          archived: value.type === "workflow.archive",
+        });
+      if (value.type !== "workflow.promote")
+        throw new Error("Unsupported Workflow command.");
+      if (
+        !["preference", "guidance", "knowledge"].includes(
+          String(value.category),
+        )
+      )
+        throw new Error("Workflow promotion category is invalid.");
+      if (
+        !Array.isArray(value.appliesTo) ||
+        value.appliesTo.some((entry) => typeof entry !== "string")
+      )
+        throw new Error("Workflow promotion topics are invalid.");
+      const sourceTaskId = nonempty(value.sourceTaskId, "source task id");
+      const sourceItemId = nonempty(value.sourceItemId, "source item id");
+      const sourceTask = await this.tasks.readTask(sourceTaskId);
+      const sourceItem = sourceTask?.conversation?.items[sourceItemId];
+      if (!sourceItem?.text || sourceItem.attachments?.length)
+        throw new Error(
+          "Workflow promotion source is stale or includes attachments.",
+        );
+      return this.workflows.promoteToWorkflow({
+        operationId,
+        workflowId,
+        expectedRevision,
+        category: value.category as WorkflowPromotionCategory,
+        text: nonempty(value.text, "promoted Workflow text"),
+        appliesTo: value.appliesTo as readonly string[],
+        sourceTaskId,
+        sourceItemId,
+        sourceTextDigest: textDigest(sourceItem.text),
+      });
+    }
     if (value.type === "attachments.pick") {
       if (!this.attachments)
         throw new Error("File attachments are unavailable.");
@@ -1672,6 +1840,38 @@ export class LocalProductApi {
       "account.login": ["type", "loginType"],
       "account.login.cancel": ["type", "loginId"],
       "account.logout": ["type"],
+      "workflow.create": ["type", "operationId", "name", "configuration"],
+      "workflow.edit": [
+        "type",
+        "operationId",
+        "workflowId",
+        "expectedRevision",
+        "name",
+        "configuration",
+      ],
+      "workflow.archive": [
+        "type",
+        "operationId",
+        "workflowId",
+        "expectedRevision",
+      ],
+      "workflow.unarchive": [
+        "type",
+        "operationId",
+        "workflowId",
+        "expectedRevision",
+      ],
+      "workflow.promote": [
+        "type",
+        "operationId",
+        "workflowId",
+        "expectedRevision",
+        "category",
+        "text",
+        "appliesTo",
+        "sourceTaskId",
+        "sourceItemId",
+      ],
       "attachments.pick": ["type"],
       "attachments.remove": ["type", "attachmentId"],
       "attachments.replace": ["type", "attachmentId"],
@@ -1750,11 +1950,31 @@ export class LocalProductApi {
           "model",
           "reasoningEffort",
           "attachmentIds",
+          "workflowId",
+          "shareWorkflowContext",
         ]);
         const outcome = nonempty(input.outcome, "task outcome").slice(
           0,
           16_000,
         );
+        const workflow = input.workflowId
+          ? this.workflows?.workflow(
+              nonempty(input.workflowId, "Workflow identity"),
+            )
+          : undefined;
+        if (input.workflowId && !this.workflows)
+          throw new Error("Workflows are unavailable.");
+        if (input.workflowId && (!workflow || workflow.archived))
+          throw new Error("Selected Workflow is unavailable.");
+        if (
+          input.shareWorkflowContext !== undefined &&
+          typeof input.shareWorkflowContext !== "boolean"
+        )
+          throw new Error("Workflow context sharing choice is invalid.");
+        const workflowContext =
+          workflow && input.shareWorkflowContext === true
+            ? assembleWorkflowContext(workflow, outcome)
+            : undefined;
         if (!isApprovalsReviewer(input.approvalsReviewer))
           throw new Error("Invalid product approvals reviewer.");
         const attachmentIds = input.attachmentIds ?? [];
@@ -1784,6 +2004,15 @@ export class LocalProductApi {
             ? {}
             : { reasoningEffort: input.reasoningEffort }),
           attachmentIds: [...attachmentIds],
+          ...(workflowContext ? { workflowContext } : {}),
+          ...(workflow
+            ? {
+                workflowAssociation: {
+                  workflowId: workflow.workflowId,
+                  workflowName: workflow.name,
+                },
+              }
+            : {}),
         });
         this.currentTaskId = started.aggregate.taskId;
         return started;
@@ -1821,6 +2050,17 @@ export class LocalProductApi {
               entry.taskId === taskId &&
               entry.payload.policy === "explicit_user_response",
           );
+        const associatedWorkflow = existingTask?.context.workflowAssociation
+          ? this.workflows?.workflow(
+              existingTask.context.workflowAssociation.workflowId,
+            )
+          : null;
+        const workflowContext =
+          associatedWorkflow &&
+          existingTask?.context.workflowContext &&
+          existingTask.conversation?.turnStatus !== "in_progress"
+            ? assembleWorkflowContext(associatedWorkflow, outcome)
+            : undefined;
         return this.tasks.submit({
           type: explicitContinuation
             ? "explicit_continuation_response"
@@ -1828,6 +2068,7 @@ export class LocalProductApi {
           taskId,
           message: outcome,
           attachmentIds: [...attachmentIds],
+          ...(workflowContext ? { workflowContext } : {}),
           operationId: stableOperationId(
             command.operationId,
             "message operation id",

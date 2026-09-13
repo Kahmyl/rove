@@ -916,6 +916,7 @@ async function resumeBoundThread(
   session: CodexThreadSessionSupervisor,
   aggregate: BoundAggregate,
   excludeTurns: boolean,
+  workflowContext = aggregate.launch.workflowContext,
 ): Promise<CodexThread> {
   const threadId = aggregate.record?.identity.threadId;
   if (!threadId) throw new Error("Resume lacks a durable thread binding.");
@@ -927,7 +928,12 @@ async function resumeBoundThread(
     throw new Error("Persisted task capability cannot be reproduced.");
   const resumed = await session.resume({
     threadId,
-    ...threadLaunchParams(options, aggregate, capability.token),
+    ...threadLaunchParams(
+      options,
+      aggregate,
+      capability.token,
+      workflowContext,
+    ),
     excludeTurns,
   });
   assertBoundThreadIdentity(aggregate, resumed);
@@ -970,6 +976,7 @@ function threadLaunchParams(
   options: CodexRuntimeTaskAdapterOptions,
   aggregate: BoundAggregate,
   capability: string,
+  workflowContext = aggregate.launch.workflowContext,
 ) {
   const sessionId = aggregate.record?.identity.sessionId;
   const attachmentInstructions = sessionId
@@ -982,9 +989,16 @@ function threadLaunchParams(
     approvalsReviewer: aggregate.launch.approvalsReviewer,
     permissions: "rove_task",
     runtimeWorkspaceRoots: [aggregate.launch.cwd],
-    developerInstructions: `${browserRouteDeveloperInstructions(
-      aggregate.launch,
-    )}${attachmentInstructions ?? ""}`,
+    // workflowContext exists only after the user explicitly chose to share the
+    // approved Workflow guidance with Codex for this task. Mere Workflow
+    // association remains local and never enters this transport boundary.
+    developerInstructions: [
+      browserRouteDeveloperInstructions(aggregate.launch),
+      attachmentInstructions,
+      workflowContext?.developerInstructions,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join("\n\n"),
     config: {
       // App Server requires an explicit default whenever named permission
       // profiles are supplied. Keep this aligned with the top-level selector
@@ -1162,7 +1176,21 @@ function messageHandler(
                   } as const),
           )
         : [];
-    return { aggregate, threadId, message, operationId, attachments };
+    const workflowContext =
+      command.payload.workflowContext &&
+      typeof command.payload.workflowContext === "object"
+        ? (structuredClone(
+            command.payload.workflowContext,
+          ) as BoundAggregate["launch"]["workflowContext"])
+        : undefined;
+    return {
+      aggregate,
+      threadId,
+      message,
+      operationId,
+      attachments,
+      workflowContext,
+    };
   };
   const readLoadedThread = async (
     aggregate: BoundAggregate,
@@ -1188,15 +1216,30 @@ function messageHandler(
     return resumeBoundThread(options, session, aggregate, !includeTurns);
   };
   const dispatch = async (command: TaskCommand) => {
-    const { aggregate, threadId, message, operationId, attachments } =
-      await durableInput(command);
-    const thread = await readLoadedThread(aggregate, threadId, false);
+    const {
+      aggregate,
+      threadId,
+      message,
+      operationId,
+      attachments,
+      workflowContext,
+    } = await durableInput(command);
+    let thread = await readLoadedThread(aggregate, threadId, false);
     const activeTurnId =
       thread.status.type === "active" && aggregate.codex.turn === "active"
         ? aggregate.codex.turnId
         : undefined;
     if (thread.status.type === "active" && !activeTurnId)
       throw new Error("Active Codex thread lacks an exact bound turn.");
+    if (!activeTurnId && workflowContext) {
+      thread = await resumeBoundThread(
+        options,
+        session,
+        aggregate,
+        true,
+        workflowContext,
+      );
+    }
     const delivery = await session.dispatch({
       thread,
       operationId,

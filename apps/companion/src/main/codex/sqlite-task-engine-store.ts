@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 
 import Database from "better-sqlite3";
@@ -13,8 +14,20 @@ import type {
   TaskProjection,
 } from "@rove/protocol";
 import { emptyTaskAggregate, projectTaskAggregate } from "@rove/protocol";
+import {
+  newWorkflowEntry,
+  validateWorkflowConfiguration,
+  validateWorkflowName,
+  workflowConfigurationDigest,
+  type WorkflowConfiguration,
+  type WorkflowEnvironment,
+  type WorkflowPromotionCategory,
+  type WorkflowRevision,
+  type WorkflowStore,
+} from "./workflows.js";
 
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
+const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
 const PERSISTED_TASK_SCHEMA_VERSION = 2;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
 
@@ -74,7 +87,7 @@ export interface SqliteTaskEngineStoreOptions {
 
 /** The single production lifecycle ledger. Every accepted event, aggregate,
  * projection and next command is committed by one IMMEDIATE transaction. */
-export class SqliteTaskEngineStore implements TaskEngineStore {
+export class SqliteTaskEngineStore implements TaskEngineStore, WorkflowStore {
   private readonly db: Database.Database;
   private readonly now: () => string;
   private readonly leaseMilliseconds: number;
@@ -263,10 +276,380 @@ export class SqliteTaskEngineStore implements TaskEngineStore {
       );
       CREATE INDEX IF NOT EXISTS task_engine_outbox_due
         ON task_engine_outbox(status, aggregate_revision);
+      CREATE TABLE IF NOT EXISTS workflow_environment (
+        workflow_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        current_revision INTEGER NOT NULL CHECK (current_revision > 0),
+        archived INTEGER NOT NULL CHECK (archived IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS workflow_revision (
+        workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        configuration_json TEXT NOT NULL CHECK (json_valid(configuration_json)),
+        digest TEXT NOT NULL,
+        approved_at TEXT NOT NULL,
+        PRIMARY KEY(workflow_id, revision)
+      );
+      CREATE TABLE IF NOT EXISTS workflow_operation (
+        operation_id TEXT PRIMARY KEY,
+        request_digest TEXT NOT NULL,
+        workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
+        result_revision INTEGER NOT NULL,
+        accepted_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS workflow_promotion_provenance (
+        operation_id TEXT PRIMARY KEY REFERENCES workflow_operation(operation_id) ON DELETE RESTRICT,
+        workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
+        revision INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        source_task_id TEXT REFERENCES task_engine_aggregate(task_id) ON DELETE SET NULL,
+        source_item_id TEXT NOT NULL,
+        source_text_digest TEXT NOT NULL,
+        promoted_at TEXT NOT NULL,
+        FOREIGN KEY(workflow_id, revision) REFERENCES workflow_revision(workflow_id, revision) ON DELETE RESTRICT
+      );
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
+      INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
+      VALUES ('${WORKFLOW_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       COMMIT;
     `);
+  }
+
+  private workflowRequestDigest(value: unknown): string {
+    return createHash("sha256").update(json(value)).digest("hex");
+  }
+
+  private workflowFromRow(row: {
+    workflow_id: string;
+    name: string;
+    current_revision: number;
+    archived: number;
+    created_at: string;
+    updated_at: string;
+    configuration_json: string;
+    digest: string;
+    approved_at: string;
+  }): WorkflowEnvironment {
+    const configuration = validateWorkflowConfiguration(
+      parse(row.configuration_json),
+    );
+    if (workflowConfigurationDigest(configuration) !== row.digest)
+      throw new Error("Stored Workflow configuration digest is invalid.");
+    return {
+      workflowId: row.workflow_id,
+      name: row.name,
+      archived: row.archived === 1,
+      currentRevision: row.current_revision,
+      revision: {
+        workflowId: row.workflow_id,
+        revision: row.current_revision,
+        configuration,
+        digest: row.digest,
+        approvedAt: row.approved_at,
+      },
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  listWorkflows(
+    options: { includeArchived?: boolean } = {},
+  ): readonly WorkflowEnvironment[] {
+    const rows = this.db
+      .prepare(
+        `SELECT environment.*, revision.configuration_json, revision.digest, revision.approved_at
+         FROM workflow_environment environment
+         JOIN workflow_revision revision
+           ON revision.workflow_id = environment.workflow_id
+          AND revision.revision = environment.current_revision
+         ${options.includeArchived ? "" : "WHERE environment.archived = 0"}
+         ORDER BY environment.updated_at DESC, environment.workflow_id ASC`,
+      )
+      .all() as Parameters<SqliteTaskEngineStore["workflowFromRow"]>[0][];
+    return rows.map((row) => this.workflowFromRow(row));
+  }
+
+  workflow(workflowId: string): WorkflowEnvironment | null {
+    const row = this.db
+      .prepare(
+        `SELECT environment.*, revision.configuration_json, revision.digest, revision.approved_at
+         FROM workflow_environment environment
+         JOIN workflow_revision revision
+           ON revision.workflow_id = environment.workflow_id
+          AND revision.revision = environment.current_revision
+         WHERE environment.workflow_id = ?`,
+      )
+      .get(workflowId) as
+      Parameters<SqliteTaskEngineStore["workflowFromRow"]>[0] | undefined;
+    return row ? this.workflowFromRow(row) : null;
+  }
+
+  workflowRevisions(workflowId: string): readonly WorkflowRevision[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT revision, configuration_json, digest, approved_at
+           FROM workflow_revision WHERE workflow_id = ? ORDER BY revision DESC`,
+        )
+        .all(workflowId) as Array<{
+        revision: number;
+        configuration_json: string;
+        digest: string;
+        approved_at: string;
+      }>
+    ).map((row) => {
+      const configuration = validateWorkflowConfiguration(
+        parse(row.configuration_json),
+      );
+      if (workflowConfigurationDigest(configuration) !== row.digest)
+        throw new Error("Stored Workflow revision digest is invalid.");
+      return {
+        workflowId,
+        revision: row.revision,
+        configuration,
+        digest: row.digest,
+        approvedAt: row.approved_at,
+      };
+    });
+  }
+
+  private priorWorkflowOperation(
+    operationId: string,
+    requestDigest: string,
+  ): WorkflowEnvironment | null {
+    const row = this.db
+      .prepare(
+        "SELECT request_digest, workflow_id FROM workflow_operation WHERE operation_id = ?",
+      )
+      .get(operationId) as
+      { request_digest: string; workflow_id: string } | undefined;
+    if (!row) return null;
+    if (row.request_digest !== requestDigest)
+      throw new Error(
+        "Workflow operation identity was reused with different input.",
+      );
+    const workflow = this.workflow(row.workflow_id);
+    if (!workflow) throw new Error("Workflow operation result is unavailable.");
+    return workflow;
+  }
+
+  createWorkflow(input: {
+    operationId: string;
+    name: string;
+    configuration: WorkflowConfiguration;
+  }): WorkflowEnvironment {
+    const configuration = validateWorkflowConfiguration(input.configuration);
+    const name = validateWorkflowName(input.name);
+    const requestDigest = this.workflowRequestDigest({
+      type: "create",
+      name,
+      configuration,
+    });
+    const prior = this.priorWorkflowOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const workflowId = `workflow_${randomUUID()}`;
+    const digest = workflowConfigurationDigest(configuration);
+    const now = this.now();
+    const create = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workflow_environment(workflow_id, name, current_revision, archived, created_at, updated_at)
+           VALUES (?, ?, 1, 0, ?, ?)`,
+        )
+        .run(workflowId, name, now, now);
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id, revision, configuration_json, digest, approved_at)
+           VALUES (?, 1, ?, ?, ?)`,
+        )
+        .run(workflowId, json(configuration), digest, now);
+      this.db
+        .prepare(
+          `INSERT INTO workflow_operation(operation_id, request_digest, workflow_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, 1, ?)`,
+        )
+        .run(input.operationId, requestDigest, workflowId, now);
+    });
+    create.immediate();
+    return this.workflow(workflowId)!;
+  }
+
+  editWorkflow(input: {
+    operationId: string;
+    workflowId: string;
+    expectedRevision: number;
+    name: string;
+    configuration: WorkflowConfiguration;
+  }): WorkflowEnvironment {
+    const configuration = validateWorkflowConfiguration(input.configuration);
+    const name = validateWorkflowName(input.name);
+    const requestDigest = this.workflowRequestDigest({
+      ...input,
+      configuration,
+    });
+    const prior = this.priorWorkflowOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.workflow(input.workflowId);
+    if (!current) throw new Error("Workflow is unavailable.");
+    if (current.currentRevision !== input.expectedRevision)
+      throw new Error("Workflow revision conflict. Refresh before saving.");
+    const nextRevision = current.currentRevision + 1;
+    const digest = workflowConfigurationDigest(configuration);
+    const now = this.now();
+    const edit = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id, revision, configuration_json, digest, approved_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(input.workflowId, nextRevision, json(configuration), digest, now);
+      const changed = this.db
+        .prepare(
+          `UPDATE workflow_environment SET name = ?, current_revision = ?, updated_at = ?
+           WHERE workflow_id = ? AND current_revision = ?`,
+        )
+        .run(name, nextRevision, now, input.workflowId, input.expectedRevision);
+      if (changed.changes !== 1) throw new Error("Workflow revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO workflow_operation(operation_id, request_digest, workflow_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.workflowId,
+          nextRevision,
+          now,
+        );
+    });
+    edit.immediate();
+    return this.workflow(input.workflowId)!;
+  }
+
+  setWorkflowArchived(input: {
+    operationId: string;
+    workflowId: string;
+    expectedRevision: number;
+    archived: boolean;
+  }): WorkflowEnvironment {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorWorkflowOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.workflow(input.workflowId);
+    if (!current) throw new Error("Workflow is unavailable.");
+    if (current.currentRevision !== input.expectedRevision)
+      throw new Error("Workflow revision conflict. Refresh before saving.");
+    const now = this.now();
+    const archive = this.db.transaction(() => {
+      const changed = this.db
+        .prepare(
+          `UPDATE workflow_environment SET archived = ?, updated_at = ?
+           WHERE workflow_id = ? AND current_revision = ?`,
+        )
+        .run(
+          input.archived ? 1 : 0,
+          now,
+          input.workflowId,
+          input.expectedRevision,
+        );
+      if (changed.changes !== 1) throw new Error("Workflow revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO workflow_operation(operation_id, request_digest, workflow_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.workflowId,
+          input.expectedRevision,
+          now,
+        );
+    });
+    archive.immediate();
+    return this.workflow(input.workflowId)!;
+  }
+
+  promoteToWorkflow(input: {
+    operationId: string;
+    workflowId: string;
+    expectedRevision: number;
+    category: WorkflowPromotionCategory;
+    text: string;
+    appliesTo: readonly string[];
+    sourceTaskId: string;
+    sourceItemId: string;
+    sourceTextDigest: string;
+  }): WorkflowEnvironment {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorWorkflowOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.workflow(input.workflowId);
+    if (!current) throw new Error("Workflow is unavailable.");
+    if (current.currentRevision !== input.expectedRevision)
+      throw new Error("Workflow revision conflict. Refresh before saving.");
+    const entry = newWorkflowEntry(input.text, input.appliesTo);
+    const configuration = structuredClone(current.revision.configuration);
+    const target =
+      input.category === "preference"
+        ? "preferences"
+        : input.category === "guidance"
+          ? "guidance"
+          : "approvedKnowledge";
+    configuration[target] = [...configuration[target], entry];
+    const validated = validateWorkflowConfiguration(configuration);
+    const nextRevision = current.currentRevision + 1;
+    const digest = workflowConfigurationDigest(validated);
+    const now = this.now();
+    const promote = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id, revision, configuration_json, digest, approved_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(input.workflowId, nextRevision, json(validated), digest, now);
+      const changed = this.db
+        .prepare(
+          `UPDATE workflow_environment SET current_revision = ?, updated_at = ?
+           WHERE workflow_id = ? AND current_revision = ?`,
+        )
+        .run(nextRevision, now, input.workflowId, input.expectedRevision);
+      if (changed.changes !== 1) throw new Error("Workflow revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO workflow_operation(operation_id, request_digest, workflow_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.workflowId,
+          nextRevision,
+          now,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO workflow_promotion_provenance(operation_id, workflow_id, revision, category,
+           source_task_id, source_item_id, source_text_digest, promoted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          input.workflowId,
+          nextRevision,
+          input.category,
+          input.sourceTaskId,
+          input.sourceItemId,
+          input.sourceTextDigest,
+          now,
+        );
+    });
+    promote.immediate();
+    return this.workflow(input.workflowId)!;
   }
 
   nextHostGeneration(component: "codex" | "runtime"): number {

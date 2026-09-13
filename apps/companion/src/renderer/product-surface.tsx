@@ -18,6 +18,11 @@ import type { ProjectedConversationItem } from "../main/codex/conversations.js";
 import type { LoginProjection } from "../main/codex/account-catalog.js";
 import type { TaskAttachmentDescriptor } from "../main/codex/task-attachments.js";
 import type {
+  WorkflowConfiguration,
+  WorkflowEnvironment,
+  WorkflowPromotionCategory,
+} from "../main/codex/workflows.js";
+import type {
   ApprovalsReviewer,
   ExecutionMode,
 } from "../main/codex/task-coordinator.js";
@@ -43,6 +48,356 @@ export interface ProductSurfaceProps {
   connectionError: string | null;
   follower: boolean;
   refresh(): Promise<void>;
+}
+
+interface WorkflowEditorDraft {
+  workflowId?: string;
+  expectedRevision?: number;
+  name: string;
+  purpose: string;
+  focus: "research" | "review" | "outreach" | "custom";
+  preferences: WorkflowGuidanceDraft[];
+  criteria: WorkflowGuidanceDraft[];
+  guidance: WorkflowGuidanceDraft[];
+  procedures: WorkflowGuidanceDraft[];
+  resourceRequirements: WorkflowResourceDraft[];
+  resultStyle: "sources" | "concise" | "detailed";
+  approvedKnowledge: WorkflowGuidanceDraft[];
+  sourceConfiguration?: WorkflowConfiguration;
+  sourceFocus?: WorkflowEditorDraft["focus"];
+  sourceResultStyle?: WorkflowEditorDraft["resultStyle"];
+}
+
+interface WorkflowGuidanceDraft {
+  id: string;
+  text: string;
+  appliesTo: string;
+}
+
+interface WorkflowResourceDraft {
+  id: string;
+  kind: WorkflowConfiguration["resourceRequirements"][number]["kind"];
+  label: string;
+}
+
+interface WorkflowPromotionDraft {
+  workflowId: string;
+  expectedRevision: number;
+  category: WorkflowPromotionCategory;
+  text: string;
+  appliesTo: string;
+  sourceTaskId: string;
+  sourceItemId: string;
+}
+
+function workflowLines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function guidanceDrafts(
+  entries: WorkflowConfiguration["guidance"] | undefined,
+): WorkflowGuidanceDraft[] {
+  return (entries ?? []).map((entry) => ({
+    id: entry.id,
+    text: entry.text,
+    appliesTo: entry.appliesTo.join("\n"),
+  }));
+}
+
+export function removeWorkflowGuidanceEntry(
+  entries: WorkflowGuidanceDraft[],
+  id: string,
+): WorkflowGuidanceDraft[] {
+  return entries.filter((entry) => entry.id !== id);
+}
+
+export function removeWorkflowResourceEntry(
+  entries: WorkflowResourceDraft[],
+  id: string,
+): WorkflowResourceDraft[] {
+  return entries.filter((entry) => entry.id !== id);
+}
+
+function WorkflowGuidanceEditor({
+  label,
+  entries,
+  defaultTopic,
+  onChange,
+}: {
+  label: string;
+  entries: WorkflowGuidanceDraft[];
+  defaultTopic: WorkflowEditorDraft["focus"];
+  onChange(entries: WorkflowGuidanceDraft[]): void;
+}) {
+  return (
+    <fieldset className="workflow-entry-editor">
+      <legend>{label}</legend>
+      {entries.map((entry, index) => (
+        <div className="workflow-entry-row" key={entry.id}>
+          <label>
+            <span>Entry {index + 1}</span>
+            <textarea
+              aria-label={`${label} entry ${index + 1}`}
+              maxLength={2000}
+              value={entry.text}
+              onChange={(event) =>
+                onChange(
+                  entries.map((candidate) =>
+                    candidate.id === entry.id
+                      ? { ...candidate, text: event.target.value }
+                      : candidate,
+                  ),
+                )
+              }
+            />
+          </label>
+          <label>
+            <span>Relevant topics (one per line)</span>
+            <textarea
+              aria-label={`${label} topics ${index + 1}`}
+              maxLength={1295}
+              value={entry.appliesTo}
+              onChange={(event) =>
+                onChange(
+                  entries.map((candidate) =>
+                    candidate.id === entry.id
+                      ? { ...candidate, appliesTo: event.target.value }
+                      : candidate,
+                  ),
+                )
+              }
+            />
+          </label>
+          <button
+            type="button"
+            className="danger-text"
+            aria-label={`Remove ${label} entry ${index + 1}`}
+            onClick={() =>
+              onChange(removeWorkflowGuidanceEntry(entries, entry.id))
+            }
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() =>
+          onChange([
+            ...entries,
+            {
+              id: `entry_${crypto.randomUUID()}`,
+              text: "",
+              appliesTo: defaultTopic === "custom" ? "" : defaultTopic,
+            },
+          ])
+        }
+      >
+        Add entry
+      </button>
+    </fieldset>
+  );
+}
+
+function WorkflowResourceEditor({
+  entries,
+  onChange,
+}: {
+  entries: WorkflowResourceDraft[];
+  onChange(entries: WorkflowResourceDraft[]): void;
+}) {
+  return (
+    <fieldset className="workflow-entry-editor">
+      <legend>Required accounts, sites, or documents</legend>
+      {entries.map((entry, index) => (
+        <div className="workflow-entry-row" key={entry.id}>
+          <label>
+            <span>Resource type</span>
+            <select
+              aria-label={`Workflow resource type ${index + 1}`}
+              value={entry.kind}
+              onChange={(event) =>
+                onChange(
+                  entries.map((candidate) =>
+                    candidate.id === entry.id
+                      ? {
+                          ...candidate,
+                          kind: event.target
+                            .value as WorkflowResourceDraft["kind"],
+                        }
+                      : candidate,
+                  ),
+                )
+              }
+            >
+              <option value="account">Account</option>
+              <option value="website">Website</option>
+              <option value="document">Document</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Description only (no local paths or credentials)</span>
+            <input
+              aria-label={`Workflow resource description ${index + 1}`}
+              maxLength={240}
+              value={entry.label}
+              onChange={(event) =>
+                onChange(
+                  entries.map((candidate) =>
+                    candidate.id === entry.id
+                      ? { ...candidate, label: event.target.value }
+                      : candidate,
+                  ),
+                )
+              }
+            />
+          </label>
+          <button
+            type="button"
+            className="danger-text"
+            aria-label={`Remove Workflow resource ${index + 1}`}
+            onClick={() =>
+              onChange(removeWorkflowResourceEntry(entries, entry.id))
+            }
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() =>
+          onChange([
+            ...entries,
+            { id: `resource_${crypto.randomUUID()}`, kind: "other", label: "" },
+          ])
+        }
+      >
+        Add resource
+      </button>
+    </fieldset>
+  );
+}
+
+export function workflowDraft(
+  workflow?: WorkflowEnvironment,
+): WorkflowEditorDraft {
+  const configuration = workflow?.revision.configuration;
+  const configuredTopics = configuration
+    ? [
+        ...configuration.preferences,
+        ...configuration.criteria,
+        ...configuration.guidance,
+        ...configuration.procedures,
+        ...configuration.resultConventions,
+        ...configuration.approvedKnowledge,
+      ].flatMap((entry) => entry.appliesTo)
+    : [];
+  const focus = ["research", "review", "outreach"].find((candidate) =>
+    configuredTopics.includes(candidate),
+  ) as WorkflowEditorDraft["focus"] | undefined;
+  const resultStyle = configuration?.resultConventions.some((entry) =>
+    /source/i.test(entry.text),
+  )
+    ? "sources"
+    : configuration?.resultConventions.some((entry) =>
+          /detail/i.test(entry.text),
+        )
+      ? "detailed"
+      : "concise";
+  return {
+    ...(workflow
+      ? {
+          workflowId: workflow.workflowId,
+          expectedRevision: workflow.currentRevision,
+        }
+      : {}),
+    name: workflow?.name ?? "",
+    purpose: configuration?.purpose ?? "",
+    focus: focus ?? (workflow ? "custom" : "research"),
+    preferences: guidanceDrafts(configuration?.preferences),
+    criteria: guidanceDrafts(configuration?.criteria),
+    guidance: guidanceDrafts(configuration?.guidance),
+    procedures: guidanceDrafts(configuration?.procedures),
+    resourceRequirements: (configuration?.resourceRequirements ?? []).map(
+      (entry) => ({ ...entry }),
+    ),
+    resultStyle,
+    approvedKnowledge: guidanceDrafts(configuration?.approvedKnowledge),
+    ...(configuration
+      ? {
+          sourceConfiguration: configuration,
+          sourceFocus: focus ?? "custom",
+          sourceResultStyle: resultStyle,
+        }
+      : {}),
+  };
+}
+
+export function workflowConfigurationFromDraft(
+  draft: WorkflowEditorDraft,
+): WorkflowConfiguration {
+  const existing = draft.sourceConfiguration;
+  const resultText = {
+    sources: "Include sources and uncertainty with each result.",
+    concise: "Present concise, actionable results.",
+    detailed: "Present detailed results with reasoning.",
+  }[draft.resultStyle];
+  return {
+    purpose: draft.purpose.trim(),
+    preferences: draft.preferences
+      .filter((entry) => entry.text.trim())
+      .map((entry) => ({
+        id: entry.id,
+        text: entry.text.trim(),
+        appliesTo: workflowLines(entry.appliesTo),
+      })),
+    criteria: draft.criteria
+      .filter((entry) => entry.text.trim())
+      .map((entry) => ({
+        id: entry.id,
+        text: entry.text.trim(),
+        appliesTo: workflowLines(entry.appliesTo),
+      })),
+    guidance: draft.guidance
+      .filter((entry) => entry.text.trim())
+      .map((entry) => ({
+        id: entry.id,
+        text: entry.text.trim(),
+        appliesTo: workflowLines(entry.appliesTo),
+      })),
+    procedures: draft.procedures
+      .filter((entry) => entry.text.trim())
+      .map((entry) => ({
+        id: entry.id,
+        text: entry.text.trim(),
+        appliesTo: workflowLines(entry.appliesTo),
+      })),
+    resourceRequirements: draft.resourceRequirements
+      .filter((entry) => entry.label.trim())
+      .map((entry) => ({ ...entry, label: entry.label.trim() })),
+    resultConventions:
+      existing && draft.resultStyle === draft.sourceResultStyle
+        ? existing.resultConventions
+        : [
+            {
+              id: `result_${crypto.randomUUID()}`,
+              text: resultText,
+              appliesTo: draft.focus === "custom" ? [] : [draft.focus],
+            },
+          ],
+    approvedKnowledge: draft.approvedKnowledge
+      .filter((entry) => entry.text.trim())
+      .map((entry) => ({
+        id: entry.id,
+        text: entry.text.trim(),
+        appliesTo: workflowLines(entry.appliesTo),
+      })),
+  };
 }
 
 function workspaceChoice(desktop: DesktopSurfaceSnapshot | null): string {
@@ -535,6 +890,14 @@ export function ProductSurface({
   const [login, setLogin] = useState<LoginProjection | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [shareWorkflowContext, setShareWorkflowContext] = useState<
+    "" | "share" | "local"
+  >("");
+  const [workflowEditor, setWorkflowEditor] =
+    useState<WorkflowEditorDraft | null>(null);
+  const [workflowPromotion, setWorkflowPromotion] =
+    useState<WorkflowPromotionDraft | null>(null);
   const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
@@ -819,7 +1182,7 @@ export function ProductSurface({
   }, [login, product?.catalog.account, product?.catalog.login]);
 
   const launch = async () => {
-    if (!gate.ready) return;
+    if (!gate.ready || (selectedWorkflowId && !shareWorkflowContext)) return;
     const result = await run(() =>
       command({
         type: "task.launch",
@@ -840,13 +1203,90 @@ export function ProductSurface({
                 ),
               }
             : {}),
+          ...(selectedWorkflowId
+            ? {
+                workflowId: selectedWorkflowId,
+                shareWorkflowContext: shareWorkflowContext === "share",
+              }
+            : {}),
         },
       }),
     );
     if (result !== undefined) {
       setOutcome("");
+      setSelectedWorkflowId("");
+      setShareWorkflowContext("");
       setShowNewTask(false);
     }
+  };
+  const saveWorkflow = async () => {
+    if (!workflowEditor) return;
+    const configuration = workflowConfigurationFromDraft(workflowEditor);
+    const result = await run(() =>
+      command({
+        type: workflowEditor.workflowId ? "workflow.edit" : "workflow.create",
+        operationId: `intent_${crypto.randomUUID()}`,
+        ...(workflowEditor.workflowId
+          ? {
+              workflowId: workflowEditor.workflowId,
+              expectedRevision: workflowEditor.expectedRevision!,
+            }
+          : {}),
+        name: workflowEditor.name.trim(),
+        configuration,
+      } as RendererProductIntent),
+    );
+    if (result !== undefined) setWorkflowEditor(null);
+  };
+  const archiveWorkflow = async (workflow: WorkflowEnvironment) => {
+    const result = await run(() =>
+      command({
+        type: workflow.archived ? "workflow.unarchive" : "workflow.archive",
+        operationId: `intent_${crypto.randomUUID()}`,
+        workflowId: workflow.workflowId,
+        expectedRevision: workflow.currentRevision,
+      }),
+    );
+    if (result !== undefined) setWorkflowEditor(null);
+  };
+  const beginWorkflowPromotion = (
+    item: ProjectedConversationItem,
+    taskId: string,
+  ) => {
+    const destination =
+      product?.workflows.find(
+        (workflow) =>
+          !workflow.archived &&
+          workflow.workflowId === viewedTask?.workflowAssociation?.workflowId,
+      ) ?? product?.workflows.find((workflow) => !workflow.archived);
+    const text = messageText(item).trim();
+    if (!destination || !text) return;
+    setWorkflowPromotion({
+      workflowId: destination.workflowId,
+      expectedRevision: destination.currentRevision,
+      category: "knowledge",
+      text,
+      appliesTo: "",
+      sourceTaskId: taskId,
+      sourceItemId: item.id,
+    });
+  };
+  const saveWorkflowPromotion = async () => {
+    if (!workflowPromotion) return;
+    const result = await run(() =>
+      command({
+        type: "workflow.promote",
+        operationId: `intent_${crypto.randomUUID()}`,
+        workflowId: workflowPromotion.workflowId,
+        expectedRevision: workflowPromotion.expectedRevision,
+        category: workflowPromotion.category,
+        text: workflowPromotion.text.trim(),
+        appliesTo: workflowLines(workflowPromotion.appliesTo),
+        sourceTaskId: workflowPromotion.sourceTaskId,
+        sourceItemId: workflowPromotion.sourceItemId,
+      }),
+    );
+    if (result !== undefined) setWorkflowPromotion(null);
   };
   const startLogin = async (loginType: "chatgpt" | "deviceCode") => {
     setBusy(true);
@@ -1511,7 +1951,12 @@ export function ProductSurface({
     (task) => task.taskId === taskContextMenu?.taskId,
   );
   const account = product?.catalog.account;
-  const planLabel = accountPlanLabel(account?.planType);
+  const planLabel =
+    account?.status === "logged_in"
+      ? accountPlanLabel(account.planType)
+      : account?.status === "logged_out"
+        ? "Signed out"
+        : "Connecting…";
   const primaryRateLimit = product?.catalog.rateLimits?.[0];
   const usageRemaining =
     primaryRateLimit?.usedPercent === null ||
@@ -1519,112 +1964,407 @@ export function ProductSurface({
       ? "Unavailable"
       : `${Math.max(0, 100 - Math.round(primaryRateLimit.usedPercent))}% left`;
 
-  if (account?.status !== "logged_in") {
-    return (
-      <div className="product-app product-auth-app">
-        <header className="product-topbar">
-          <div className="product-health" aria-live="polite">
-            <span
-              className={`status-pip status-${product?.host.state ?? "offline"}`}
-            />
-            {recoveryLabel(desktop)}
-          </div>
-        </header>
-        <main className="auth-gate">
-          <section className="auth-panel">
-            <img src={roveMarkUrl} alt="" />
-            <div className="eyebrow">Welcome to Rove</div>
-            <h1>
-              {account?.status === "logged_out"
-                ? "Sign in to continue"
-                : "Getting Rove ready"}
-            </h1>
-            <p>
-              {account?.status === "logged_out"
-                ? "Use your ChatGPT account to start and continue browser tasks with Codex."
-                : "Rove is checking your local Codex session."}
-            </p>
-            {account?.error && <small role="alert">{account.error}</small>}
-            {account?.status === "logged_out" && !visibleLogin && (
-              <div className="auth-actions">
-                <button
-                  className="primary"
-                  onClick={() => void startLogin("chatgpt")}
-                  disabled={busy}
-                >
-                  Sign in with ChatGPT
-                </button>
-                <button
-                  onClick={() => void startLogin("deviceCode")}
-                  disabled={busy}
-                >
-                  Use device code
-                </button>
-              </div>
-            )}
-            {visibleLogin?.type === "chatgpt" && (
-              <div className="auth-actions">
-                <button
-                  className="primary"
-                  onClick={() => void openLogin(visibleLogin.loginId)}
-                  disabled={busy}
-                >
-                  Continue sign-in
-                </button>
-                <button
-                  onClick={() => void cancelLogin(visibleLogin.loginId)}
-                  disabled={busy}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-            {visibleLogin?.type === "chatgptDeviceCode" && (
-              <div className="auth-device-code">
-                <span>Enter this code on the verification page</span>
-                <code>{visibleLogin.userCode}</code>
-                <div className="auth-actions">
-                  <button
-                    className="primary"
-                    onClick={() => void openLogin(visibleLogin.loginId)}
-                    disabled={busy}
-                  >
-                    Open verification page
-                  </button>
-                  <button
-                    onClick={() => void cancelLogin(visibleLogin.loginId)}
-                    disabled={busy}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-            {error && (
-              <div className="product-error" role="alert">
-                <strong>Sign-in needs attention</strong>
-                <span>{error}</span>
-              </div>
-            )}
+  const accountGate =
+    account?.status === "logged_in" ? null : (
+      <section className="auth-panel local-auth-panel">
+        <img src={roveMarkUrl} alt="" />
+        <div className="eyebrow">Local work remains available</div>
+        <h1>
+          {account?.status === "logged_out"
+            ? "Sign in to run tasks"
+            : "Getting Codex ready"}
+        </h1>
+        <p>
+          You can inspect and edit local Workflows and return to task history
+          while Codex is disconnected.
+        </p>
+        {account?.error && <small role="alert">{account.error}</small>}
+        {account?.status === "logged_out" && !visibleLogin && (
+          <div className="auth-actions">
             <button
-              className="auth-refresh"
-              onClick={() =>
-                void run(() => command({ type: "account.refresh" }))
-              }
+              className="primary"
+              onClick={() => void startLogin("chatgpt")}
               disabled={busy}
             >
-              Refresh account status
+              Sign in with ChatGPT
             </button>
-          </section>
-        </main>
-      </div>
+            <button
+              onClick={() => void startLogin("deviceCode")}
+              disabled={busy}
+            >
+              Use device code
+            </button>
+          </div>
+        )}
+        {visibleLogin?.type === "chatgpt" && (
+          <div className="auth-actions">
+            <button
+              className="primary"
+              onClick={() => void openLogin(visibleLogin.loginId)}
+              disabled={busy}
+            >
+              Continue sign-in
+            </button>
+            <button
+              onClick={() => void cancelLogin(visibleLogin.loginId)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {visibleLogin?.type === "chatgptDeviceCode" && (
+          <div className="auth-device-code">
+            <span>Enter this code on the verification page</span>
+            <code>{visibleLogin.userCode}</code>
+            <div className="auth-actions">
+              <button
+                className="primary"
+                onClick={() => void openLogin(visibleLogin.loginId)}
+                disabled={busy}
+              >
+                Open verification page
+              </button>
+              <button
+                onClick={() => void cancelLogin(visibleLogin.loginId)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="product-error" role="alert">
+            <strong>Sign-in needs attention</strong>
+            <span>{error}</span>
+          </div>
+        )}
+        <button
+          className="auth-refresh"
+          onClick={() => void run(() => command({ type: "account.refresh" }))}
+          disabled={busy}
+        >
+          Refresh account status
+        </button>
+      </section>
     );
-  }
 
   return (
     <div
       className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
     >
+      {workflowEditor && (
+        <div className="profile-modal-backdrop" role="presentation">
+          <section
+            className="profile-modal workflow-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-editor-title"
+          >
+            <header>
+              <div>
+                <div className="eyebrow">Reusable operating environment</div>
+                <h2 id="workflow-editor-title">
+                  {workflowEditor.workflowId ? "Edit Workflow" : "New Workflow"}
+                </h2>
+                <p>
+                  Answer a few structured questions. You can refine the approved
+                  guidance later; each save creates a revision.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="profile-modal-close"
+                aria-label="Close Workflow editor"
+                onClick={() => setWorkflowEditor(null)}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              className="workflow-editor-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveWorkflow();
+              }}
+            >
+              <label>
+                <span>Name</span>
+                <input
+                  aria-label="Workflow name"
+                  maxLength={120}
+                  required
+                  value={workflowEditor.name}
+                  onChange={(event) =>
+                    setWorkflowEditor({
+                      ...workflowEditor,
+                      name: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                <span>What recurring work is this for?</span>
+                <textarea
+                  aria-label="Workflow purpose"
+                  maxLength={2000}
+                  required
+                  value={workflowEditor.purpose}
+                  onChange={(event) =>
+                    setWorkflowEditor({
+                      ...workflowEditor,
+                      purpose: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                <span>Primary kind of work</span>
+                <select
+                  aria-label="Workflow kind"
+                  value={workflowEditor.focus}
+                  onChange={(event) =>
+                    setWorkflowEditor({
+                      ...workflowEditor,
+                      focus: event.target.value as WorkflowEditorDraft["focus"],
+                    })
+                  }
+                >
+                  <option value="research">Research and discovery</option>
+                  <option value="review">Review and decisions</option>
+                  <option value="outreach">Drafting and outreach</option>
+                  <option value="custom">Custom / not sure</option>
+                </select>
+              </label>
+              <WorkflowGuidanceEditor
+                label="What should Rove prioritize?"
+                entries={workflowEditor.preferences}
+                defaultTopic={workflowEditor.focus}
+                onChange={(preferences) =>
+                  setWorkflowEditor({ ...workflowEditor, preferences })
+                }
+              />
+              <WorkflowGuidanceEditor
+                label="What criteria or exclusions matter?"
+                entries={workflowEditor.criteria}
+                defaultTopic={workflowEditor.focus}
+                onChange={(criteria) =>
+                  setWorkflowEditor({ ...workflowEditor, criteria })
+                }
+              />
+              <WorkflowGuidanceEditor
+                label="Additional reusable guidance"
+                entries={workflowEditor.guidance}
+                defaultTopic={workflowEditor.focus}
+                onChange={(guidance) =>
+                  setWorkflowEditor({ ...workflowEditor, guidance })
+                }
+              />
+              <WorkflowGuidanceEditor
+                label="Approved procedures or skill guidance"
+                entries={workflowEditor.procedures}
+                defaultTopic={workflowEditor.focus}
+                onChange={(procedures) =>
+                  setWorkflowEditor({ ...workflowEditor, procedures })
+                }
+              />
+              <WorkflowResourceEditor
+                entries={workflowEditor.resourceRequirements}
+                onChange={(resourceRequirements) =>
+                  setWorkflowEditor({ ...workflowEditor, resourceRequirements })
+                }
+              />
+              <WorkflowGuidanceEditor
+                label="Explicitly saved reusable knowledge"
+                entries={workflowEditor.approvedKnowledge}
+                defaultTopic={workflowEditor.focus}
+                onChange={(approvedKnowledge) =>
+                  setWorkflowEditor({ ...workflowEditor, approvedKnowledge })
+                }
+              />
+              <label>
+                <span>How should results be presented?</span>
+                <select
+                  aria-label="Workflow result style"
+                  value={workflowEditor.resultStyle}
+                  onChange={(event) =>
+                    setWorkflowEditor({
+                      ...workflowEditor,
+                      resultStyle: event.target
+                        .value as WorkflowEditorDraft["resultStyle"],
+                    })
+                  }
+                >
+                  <option value="sources">With sources and uncertainty</option>
+                  <option value="concise">Concise and actionable</option>
+                  <option value="detailed">Detailed with reasoning</option>
+                </select>
+              </label>
+              <p className="workflow-disclosure">
+                Workflow setup stays local unless a synchronization provider is
+                connected in the future. Secrets, credentials, local paths, task
+                history, attachments, and browser state are rejected.
+              </p>
+              <div className="auth-actions">
+                {workflowEditor.workflowId &&
+                  product?.workflows.find(
+                    (entry) => entry.workflowId === workflowEditor.workflowId,
+                  ) && (
+                    <button
+                      type="button"
+                      className="danger-text"
+                      disabled={busy}
+                      onClick={() =>
+                        void archiveWorkflow(
+                          product.workflows.find(
+                            (entry) =>
+                              entry.workflowId === workflowEditor.workflowId,
+                          )!,
+                        )
+                      }
+                    >
+                      {product.workflows.find(
+                        (entry) =>
+                          entry.workflowId === workflowEditor.workflowId,
+                      )?.archived
+                        ? "Restore"
+                        : "Archive"}
+                    </button>
+                  )}
+                <button type="button" onClick={() => setWorkflowEditor(null)}>
+                  Cancel
+                </button>
+                <button className="primary" type="submit" disabled={busy}>
+                  Save approved revision
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {workflowPromotion && (
+        <div className="profile-modal-backdrop" role="presentation">
+          <section
+            className="profile-modal workflow-promotion"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-promotion-title"
+          >
+            <header>
+              <div>
+                <div className="eyebrow">Explicit promotion</div>
+                <h2 id="workflow-promotion-title">Save to Workflow</h2>
+                <p>
+                  Review exactly what will become reusable. The conversation,
+                  files, approvals, and browser state are not included.
+                </p>
+              </div>
+              <button
+                className="profile-modal-close"
+                type="button"
+                aria-label="Cancel Save to Workflow"
+                onClick={() => setWorkflowPromotion(null)}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              className="workflow-editor-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveWorkflowPromotion();
+              }}
+            >
+              <label>
+                <span>Destination</span>
+                <select
+                  aria-label="Promotion destination Workflow"
+                  value={workflowPromotion.workflowId}
+                  onChange={(event) => {
+                    const workflow = product?.workflows.find(
+                      (entry) => entry.workflowId === event.target.value,
+                    );
+                    if (workflow)
+                      setWorkflowPromotion({
+                        ...workflowPromotion,
+                        workflowId: workflow.workflowId,
+                        expectedRevision: workflow.currentRevision,
+                      });
+                  }}
+                >
+                  {product?.workflows
+                    .filter((workflow) => !workflow.archived)
+                    .map((workflow) => (
+                      <option
+                        key={workflow.workflowId}
+                        value={workflow.workflowId}
+                      >
+                        {workflow.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                <span>Reusable information class</span>
+                <select
+                  aria-label="Promotion category"
+                  value={workflowPromotion.category}
+                  onChange={(event) =>
+                    setWorkflowPromotion({
+                      ...workflowPromotion,
+                      category: event.target.value as WorkflowPromotionCategory,
+                    })
+                  }
+                >
+                  <option value="knowledge">Approved knowledge</option>
+                  <option value="preference">Preference</option>
+                  <option value="guidance">Guidance</option>
+                </select>
+              </label>
+              <label>
+                <span>Exact reusable text</span>
+                <textarea
+                  aria-label="Promoted Workflow text"
+                  required
+                  maxLength={2000}
+                  value={workflowPromotion.text}
+                  onChange={(event) =>
+                    setWorkflowPromotion({
+                      ...workflowPromotion,
+                      text: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                <span>Apply only to these topics (optional, one per line)</span>
+                <textarea
+                  aria-label="Promotion topics"
+                  value={workflowPromotion.appliesTo}
+                  onChange={(event) =>
+                    setWorkflowPromotion({
+                      ...workflowPromotion,
+                      appliesTo: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <div className="auth-actions">
+                <button
+                  type="button"
+                  onClick={() => setWorkflowPromotion(null)}
+                >
+                  Cancel
+                </button>
+                <button className="primary" type="submit" disabled={busy}>
+                  Save approved information
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       <header className="product-topbar">
         <button
           className="sidebar-toggle"
@@ -2020,6 +2760,7 @@ export function ProductSurface({
           aria-label="Task workspace"
           tabIndex={0}
         >
+          {accountGate}
           {unmatchedSession !== null && (
             <section
               className="product-warning"
@@ -2179,7 +2920,12 @@ export function ProductSurface({
                     )
                       return;
                     event.preventDefault();
-                    if (gate.ready && !busy) void launch();
+                    if (
+                      gate.ready &&
+                      !busy &&
+                      (!selectedWorkflowId || shareWorkflowContext)
+                    )
+                      void launch();
                   }}
                 />
                 <div className="composer-action-row">
@@ -2190,6 +2936,29 @@ export function ProductSurface({
                     }
                   />
                   <div className="composer-control-rail">
+                    <label className="workflow-task-choice">
+                      <span>Workflow</span>
+                      <select
+                        aria-label="Workflow environment"
+                        value={selectedWorkflowId}
+                        onChange={(event) => {
+                          setSelectedWorkflowId(event.target.value);
+                          setShareWorkflowContext("");
+                        }}
+                      >
+                        <option value="">Standalone task</option>
+                        {product?.workflows
+                          .filter((workflow) => !workflow.archived)
+                          .map((workflow) => (
+                            <option
+                              key={workflow.workflowId}
+                              value={workflow.workflowId}
+                            >
+                              {workflow.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
                     <details className="composer-menu composer-setup-menu">
                       <summary aria-label="Task setup">Task setup</summary>
                       <div className="composer-popover">
@@ -2312,6 +3081,34 @@ export function ProductSurface({
                       </div>
                     </details>
                   </div>
+                  {selectedWorkflowId && (
+                    <label className="workflow-share-choice">
+                      <span>Workflow guidance</span>
+                      <select
+                        aria-label="Workflow guidance sharing"
+                        required
+                        value={shareWorkflowContext}
+                        onChange={(event) =>
+                          setShareWorkflowContext(
+                            event.target.value as "" | "share" | "local",
+                          )
+                        }
+                      >
+                        <option value="">Choose before starting…</option>
+                        <option value="share">
+                          Apply relevant guidance to Codex
+                        </option>
+                        <option value="local">
+                          Keep association local only
+                        </option>
+                      </select>
+                      <small>
+                        Applying guidance may send approved relevant text to the
+                        model service. Secrets, files, credentials, and browser
+                        state are excluded.
+                      </small>
+                    </label>
+                  )}
                   <div className="composer-footer">
                     <details className="composer-menu composer-model-menu">
                       <summary aria-label="Model and reasoning effort">
@@ -2370,8 +3167,19 @@ export function ProductSurface({
                       aria-label={
                         mode === "capture" ? "Start Capture" : "Start task"
                       }
-                      title={gate.ready ? "Start task" : gate.reason}
-                      disabled={!gate.ready || busy}
+                      title={
+                        gate.ready &&
+                        (!selectedWorkflowId || shareWorkflowContext)
+                          ? "Start task"
+                          : selectedWorkflowId && !shareWorkflowContext
+                            ? "Choose how Workflow guidance should be used"
+                            : gate.reason
+                      }
+                      disabled={
+                        !gate.ready ||
+                        busy ||
+                        Boolean(selectedWorkflowId && !shareWorkflowContext)
+                      }
                       onClick={() => void launch()}
                     >
                       <span aria-hidden="true">↑</span>
@@ -2446,6 +3254,25 @@ export function ProductSurface({
                               </svg>
                             )}
                           </button>
+                          {(product?.workflows.some(
+                            (workflow) => !workflow.archived,
+                          ) ??
+                            false) &&
+                            !segment.input.attachments?.length && (
+                              <button
+                                type="button"
+                                aria-label="Save message to Workflow"
+                                title="Save to Workflow"
+                                onClick={() =>
+                                  beginWorkflowPromotion(
+                                    segment.input!,
+                                    viewedTask.taskId,
+                                  )
+                                }
+                              >
+                                Save
+                              </button>
+                            )}
                         </footer>
                       </article>
                     )}
@@ -2557,6 +3384,21 @@ export function ProductSurface({
                               </svg>
                             )}
                           </button>
+                          {(product?.workflows.some(
+                            (workflow) => !workflow.archived,
+                          ) ??
+                            false) && (
+                            <button
+                              type="button"
+                              aria-label="Save response to Workflow"
+                              title="Save to Workflow"
+                              onClick={() =>
+                                beginWorkflowPromotion(item, viewedTask.taskId)
+                              }
+                            >
+                              Save
+                            </button>
+                          )}
                         </footer>
                       </article>
                     ))}
@@ -2818,6 +3660,50 @@ export function ProductSurface({
             <strong>New task</strong>
           </button>
 
+          <section className="side-card workflow-list">
+            <div className="side-heading">
+              <span>Workflows</span>
+              <button
+                type="button"
+                aria-label="Create Workflow"
+                onClick={() => setWorkflowEditor(workflowDraft())}
+              >
+                ＋
+              </button>
+            </div>
+            {product?.workflows.map((workflow) => (
+              <button
+                className="workflow-list-row"
+                type="button"
+                key={workflow.workflowId}
+                onClick={() => setWorkflowEditor(workflowDraft(workflow))}
+              >
+                <strong>{workflow.name}</strong>
+                <small>
+                  {workflow.archived ? "Archived · " : ""}Revision{" "}
+                  {workflow.currentRevision} ·{" "}
+                  {
+                    product.tasks.filter(
+                      (task) =>
+                        task.workflowAssociation?.workflowId ===
+                        workflow.workflowId,
+                    ).length
+                  }{" "}
+                  tasks
+                </small>
+              </button>
+            ))}
+            {(product?.workflows.length ?? 0) === 0 && (
+              <button
+                className="workflow-empty"
+                type="button"
+                onClick={() => setWorkflowEditor(workflowDraft())}
+              >
+                Create a reusable environment for recurring work
+              </button>
+            )}
+          </section>
+
           {(product?.tasks.length ?? 0) > 0 && (
             <section className="side-card task-history">
               <div className="side-heading">
@@ -2845,6 +3731,9 @@ export function ProductSurface({
                   >
                     <strong>{displayTaskTitle(entry)}</strong>
                     <span>
+                      {entry.workflowAssociation
+                        ? `${entry.workflowAssociation.workflowName} · `
+                        : "Standalone · "}
                       {entry.conversation?.turnStatus === "in_progress"
                         ? "Working"
                         : terminalProductTask(entry)
@@ -2959,14 +3848,16 @@ export function ProductSurface({
               </span>
             </summary>
             <div className="account-popover" role="menu">
-              <div className="account-popover-row" role="menuitem">
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M3.2 13.8a7 7 0 1 1 13.6 0M10 10l3.3-2.4" />
-                  <circle cx="10" cy="10" r="1" />
-                </svg>
-                <span>Usage</span>
-                <strong>{usageRemaining}</strong>
-              </div>
+              {account?.status === "logged_in" && (
+                <div className="account-popover-row" role="menuitem">
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M3.2 13.8a7 7 0 1 1 13.6 0M10 10l3.3-2.4" />
+                    <circle cx="10" cy="10" r="1" />
+                  </svg>
+                  <span>Usage</span>
+                  <strong>{usageRemaining}</strong>
+                </div>
+              )}
               <button
                 className="account-popover-row"
                 type="button"
@@ -2982,20 +3873,22 @@ export function ProductSurface({
                 </svg>
                 <span>Settings</span>
               </button>
-              <button
-                className="account-popover-row"
-                type="button"
-                role="menuitem"
-                onClick={() =>
-                  void run(() => command({ type: "account.logout" }))
-                }
-                disabled={busy}
-              >
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M8 3.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1H8M11.5 6.5 15 10l-3.5 3.5M7 10h8" />
-                </svg>
-                Sign out
-              </button>
+              {account?.status === "logged_in" && (
+                <button
+                  className="account-popover-row"
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    void run(() => command({ type: "account.logout" }))
+                  }
+                  disabled={busy}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M8 3.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1H8M11.5 6.5 15 10l-3.5 3.5M7 10h8" />
+                  </svg>
+                  Sign out
+                </button>
+              )}
             </div>
           </details>
         </aside>

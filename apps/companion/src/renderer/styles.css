@@ -2361,6 +2361,23 @@ select:focus-visible {
   text-align: center;
 }
 
+.local-auth-panel {
+  width: min(100%, 680px);
+  margin: 20px auto 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-subtle);
+}
+
+.local-auth-panel > img {
+  display: none;
+}
+
+.local-auth-panel h1 {
+  font-size: 22px;
+}
+
 .auth-panel > img {
   width: 46px;
   height: 46px;
@@ -5207,4 +5224,129 @@ html[data-rove-theme="dark"] .account-avatar {
     max-height: 44vh;
     flex-basis: auto !important;
   }
+}
+.workflow-list .side-heading button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.workflow-list-row,
+.workflow-empty {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.workflow-list-row:hover,
+.workflow-empty:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}
+
+.workflow-list-row small,
+.workflow-empty {
+  color: var(--text-muted, #737373);
+  font-size: 11px;
+}
+
+.workflow-task-choice {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.workflow-task-choice select,
+.workflow-editor-form select,
+.workflow-editor-form input,
+.workflow-editor-form textarea {
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+  border-radius: 8px;
+  background: var(--surface, transparent);
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.workflow-share-choice {
+  align-items: flex-start;
+  color: var(--text-muted, #737373);
+  display: flex;
+  font-size: 11px;
+  gap: 7px;
+  line-height: 1.4;
+  padding: 0 10px 8px;
+}
+
+.workflow-editor {
+  max-height: min(820px, calc(100vh - 40px));
+  overflow: auto;
+  width: min(680px, calc(100vw - 40px));
+}
+
+.workflow-editor-form {
+  display: grid;
+  gap: 14px;
+}
+
+.workflow-editor-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-editor-form label > span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.workflow-editor-form textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.workflow-entry-editor {
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+}
+
+.workflow-entry-editor legend {
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0 4px;
+}
+
+.workflow-entry-row {
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+  display: grid;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.workflow-entry-row:last-of-type {
+  border-bottom: 0;
+}
+
+.workflow-entry-row .danger-text {
+  justify-self: start;
+}
+
+.workflow-disclosure {
+  color: var(--text-muted, #737373);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
 }

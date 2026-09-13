@@ -5,6 +5,10 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   ProductSurface,
   permissionReviewDescription,
+  removeWorkflowGuidanceEntry,
+  removeWorkflowResourceEntry,
+  workflowConfigurationFromDraft,
+  workflowDraft,
 } from "./product-surface.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
@@ -38,7 +42,7 @@ function snapshot(
       ],
     },
     product: {
-      version: 7,
+      version: 8,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out" },
@@ -49,6 +53,7 @@ function snapshot(
       },
       attention: [],
       tasks: [],
+      workflows: [],
       recoveryWarnings: [],
       draftAttachments: [],
       fileAttention: [],
@@ -58,6 +63,190 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("round-trips every represented Workflow configuration class without a lossy edit", () => {
+    const workflow = {
+      workflowId: "workflow_roundtrip",
+      name: "Round trip",
+      archived: false,
+      currentRevision: 4,
+      revision: {
+        workflowId: "workflow_roundtrip",
+        revision: 4,
+        digest: "d".repeat(64),
+        approvedAt: "2026-09-13T00:00:00Z",
+        configuration: {
+          purpose: "Review launches",
+          preferences: [
+            { id: "pref", text: "Prefer evidence", appliesTo: ["review"] },
+            {
+              id: "pref_release",
+              text: "Prefer release notes",
+              appliesTo: ["release", "writing"],
+            },
+          ],
+          criteria: [
+            { id: "criterion", text: "Exclude guesses", appliesTo: [] },
+          ],
+          guidance: [
+            { id: "guide", text: "Be precise", appliesTo: ["release"] },
+          ],
+          procedures: [
+            {
+              id: "procedure",
+              text: "Run qualification",
+              appliesTo: ["review"],
+            },
+          ],
+          resourceRequirements: [
+            {
+              id: "resource",
+              kind: "account" as const,
+              label: "GitHub account",
+            },
+            {
+              id: "resource_site",
+              kind: "website" as const,
+              label: "Public release page",
+            },
+          ],
+          resultConventions: [
+            { id: "result", text: "Include sources", appliesTo: ["review"] },
+          ],
+          approvedKnowledge: [
+            {
+              id: "knowledge",
+              text: "Main is protected",
+              appliesTo: ["release"],
+            },
+          ],
+        },
+      },
+      createdAt: "2026-09-13T00:00:00Z",
+      updatedAt: "2026-09-13T00:00:00Z",
+    };
+    expect(workflowConfigurationFromDraft(workflowDraft(workflow))).toEqual(
+      workflow.revision.configuration,
+    );
+
+    const draft = workflowDraft(workflow);
+    draft.preferences = [draft.preferences[1]!, draft.preferences[0]!];
+    draft.resourceRequirements = [
+      draft.resourceRequirements[1]!,
+      draft.resourceRequirements[0]!,
+    ];
+    draft.focus = "outreach";
+    expect(workflowConfigurationFromDraft(draft)).toMatchObject({
+      preferences: [
+        {
+          id: "pref_release",
+          text: "Prefer release notes",
+          appliesTo: ["release", "writing"],
+        },
+        { id: "pref", text: "Prefer evidence", appliesTo: ["review"] },
+      ],
+      resourceRequirements: [
+        {
+          id: "resource_site",
+          kind: "website",
+          label: "Public release page",
+        },
+        { id: "resource", kind: "account", label: "GitHub account" },
+      ],
+    });
+    expect(
+      removeWorkflowGuidanceEntry(draft.preferences, "pref_release"),
+    ).toEqual([{ id: "pref", text: "Prefer evidence", appliesTo: "review" }]);
+    expect(
+      removeWorkflowResourceEntry(draft.resourceRequirements, "resource_site"),
+    ).toEqual([{ id: "resource", kind: "account", label: "GitHub account" }]);
+  });
+  it("shows durable Workflow environments, standalone choice, and task association", () => {
+    const value = snapshot();
+    value.product!.workflows = [
+      {
+        workflowId: "workflow_jobs",
+        name: "Job search",
+        archived: false,
+        currentRevision: 2,
+        revision: {
+          workflowId: "workflow_jobs",
+          revision: 2,
+          configuration: {
+            purpose: "Find suitable roles",
+            preferences: [],
+            criteria: [],
+            guidance: [],
+            procedures: [],
+            resourceRequirements: [],
+            resultConventions: [],
+            approvedKnowledge: [],
+          },
+          digest: "a".repeat(64),
+          approvedAt: "2026-09-13T10:00:00Z",
+        },
+        createdAt: "2026-09-13T09:00:00Z",
+        updatedAt: "2026-09-13T10:00:00Z",
+      },
+      {
+        workflowId: "workflow_archived",
+        name: "Past reviews",
+        archived: true,
+        currentRevision: 1,
+        revision: {
+          workflowId: "workflow_archived",
+          revision: 1,
+          configuration: {
+            purpose: "Review old work",
+            preferences: [],
+            criteria: [],
+            guidance: [],
+            procedures: [],
+            resourceRequirements: [],
+            resultConventions: [],
+            approvedKnowledge: [],
+          },
+          digest: "b".repeat(64),
+          approvedAt: "2026-09-13T10:00:00Z",
+        },
+        createdAt: "2026-09-13T09:00:00Z",
+        updatedAt: "2026-09-13T10:00:00Z",
+      },
+    ];
+    value.product!.tasks = [
+      {
+        taskId: "task_workflow",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-13T10:00:00Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        workflowAssociation: {
+          workflowId: "workflow_jobs",
+          workflowName: "Job search",
+        },
+        lifecycle: { phase: "closed", reason: "Closed." },
+        availableActions: ["archive"],
+      },
+    ];
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Create Workflow"');
+    expect(html).toContain("Local work remains available");
+    expect(html).toContain("Job search");
+    expect(html).toContain("Revision 2");
+    expect(html).toContain("Past reviews");
+    expect(html).toContain("Archived · Revision 1");
+    expect(html).toContain('aria-label="Workflow environment"');
+    expect(html).toContain("Standalone task");
+    expect(html).toContain("Job search · Completed");
+  });
+
   it("renders pre-launch attachment chips and distinct file-attention controls", () => {
     const value = snapshot();
     value.product!.catalog.account = {
@@ -153,9 +342,11 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(signedOut).toContain("Sign in to continue");
+    expect(signedOut).toContain("Sign in to run tasks");
     expect(signedOut).toContain("Sign in with ChatGPT");
-    expect(signedOut).not.toContain('aria-label="Desired outcome"');
+    expect(signedOut).toContain('aria-label="Desired outcome"');
+    expect(signedOut).toContain('aria-label="Create Workflow"');
+    expect(signedOut).toContain('aria-label="Start task" title="Sign in');
 
     value.product!.catalog.account = {
       status: "logged_in",

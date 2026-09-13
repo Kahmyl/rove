@@ -8,6 +8,7 @@ import {
   validateTrustedExternalUrl,
 } from "./local-product-api.js";
 import type { ProductTaskIntent } from "./product-task-port.js";
+import type { WorkflowEnvironment, WorkflowStore } from "./workflows.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
 
@@ -72,6 +73,7 @@ function fixture(
     ): Promise<unknown>;
   },
   accountState: unknown = account(),
+  workflows?: WorkflowStore,
 ) {
   const start = vi.fn(async (input) => ({
     context: { ...context(mode), ...input },
@@ -271,6 +273,7 @@ function fixture(
     attachments as never,
     {} as never,
     legacyEffects,
+    workflows,
   );
   return {
     api,
@@ -287,7 +290,273 @@ function fixture(
   };
 }
 
+function workflowEnvironment(): WorkflowEnvironment {
+  const configuration = {
+    purpose: "Find suitable roles",
+    preferences: [
+      {
+        id: "preference_1",
+        text: "Prefer remote roles.",
+        appliesTo: ["roles"],
+      },
+    ],
+    criteria: [],
+    guidance: [],
+    procedures: [],
+    resourceRequirements: [],
+    resultConventions: [],
+    approvedKnowledge: [],
+  };
+  return {
+    workflowId: "workflow_job_search",
+    name: "Job search",
+    archived: false,
+    currentRevision: 1,
+    revision: {
+      workflowId: "workflow_job_search",
+      revision: 1,
+      configuration,
+      digest: "a".repeat(64),
+      approvedAt: "2026-09-13T10:00:00.000Z",
+    },
+    createdAt: "2026-09-13T10:00:00.000Z",
+    updatedAt: "2026-09-13T10:00:00.000Z",
+  };
+}
+
+function workflowStore(environment = workflowEnvironment()): WorkflowStore & {
+  createWorkflow: ReturnType<typeof vi.fn>;
+  editWorkflow: ReturnType<typeof vi.fn>;
+  setWorkflowArchived: ReturnType<typeof vi.fn>;
+  promoteToWorkflow: ReturnType<typeof vi.fn>;
+} {
+  const workflow = environment;
+  return {
+    listWorkflows: () => [workflow],
+    workflow: (workflowId) =>
+      workflowId === workflow.workflowId ? workflow : null,
+    workflowRevisions: () => [workflow.revision],
+    createWorkflow: vi.fn(() => workflow),
+    editWorkflow: vi.fn(() => workflow),
+    setWorkflowArchived: vi.fn(() => workflow),
+    promoteToWorkflow: vi.fn(() => workflow),
+  };
+}
+
 describe("LocalProductApi native product seam", () => {
+  it("associates tasks locally and shares assembled guidance only after explicit choice", async () => {
+    const workflows = workflowStore();
+    const { api, tasks } = fixture("agent", undefined, account(), workflows);
+
+    const localOnly = (await api.executeRendererIntent({
+      type: "task.launch",
+      operationId: "intent_01111111-1111-4111-8111-111111111111",
+      input: {
+        outcome: "Find backend roles",
+        executionMode: "agent",
+        approvalsReviewer: "auto_review",
+        workflowId: "workflow_job_search",
+        shareWorkflowContext: false,
+      },
+    })) as { aggregate: { taskId: string } };
+    expect(tasks.submit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        workflowAssociation: {
+          workflowId: "workflow_job_search",
+          workflowName: "Job search",
+        },
+      }),
+    );
+    expect(tasks.submit.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      "workflowContext",
+    );
+
+    const shared = (await api.executeRendererIntent({
+      type: "task.launch",
+      operationId: "intent_02222222-2222-4222-8222-222222222222",
+      input: {
+        outcome: "Find backend roles",
+        executionMode: "agent",
+        approvalsReviewer: "auto_review",
+        workflowId: "workflow_job_search",
+        shareWorkflowContext: true,
+      },
+    })) as { aggregate: { taskId: string } };
+    expect(tasks.submit.mock.calls.at(-1)?.[0]).toMatchObject({
+      workflowContext: {
+        workflowId: "workflow_job_search",
+        workflowName: "Job search",
+        revision: 1,
+      },
+    });
+    expect(
+      (
+        tasks.submit.mock.calls.at(-1)?.[0] as Extract<
+          ProductTaskIntent,
+          { type: "launch" }
+        >
+      ).workflowContext?.developerInstructions,
+    ).toContain("Prefer remote roles");
+
+    const standalone = (await api.executeRendererIntent({
+      type: "task.launch",
+      operationId: "intent_07777777-7777-4777-8777-777777777777",
+      input: {
+        outcome: "Explain binary search",
+        executionMode: "agent",
+        approvalsReviewer: "auto_review",
+      },
+    })) as { aggregate: { taskId: string } };
+    expect(
+      new Set([
+        localOnly.aggregate.taskId,
+        shared.aggregate.taskId,
+        standalone.aggregate.taskId,
+      ]).size,
+    ).toBe(3);
+    expect(tasks.submit.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      "workflowAssociation",
+    );
+  });
+
+  it("applies the latest relevant Workflow revision at a later idle turn without leaking into standalone tasks", async () => {
+    const latest = workflowEnvironment();
+    latest.currentRevision = 2;
+    latest.revision = {
+      ...latest.revision,
+      revision: 2,
+      digest: "b".repeat(64),
+      configuration: {
+        ...latest.revision.configuration,
+        preferences: [
+          {
+            id: "preference_roles",
+            text: "Prefer remote roles.",
+            appliesTo: ["roles"],
+          },
+        ],
+        guidance: [
+          {
+            id: "guidance_outreach",
+            text: "Keep outreach warm and direct.",
+            appliesTo: ["outreach", "email"],
+          },
+        ],
+      },
+    };
+    const workflows = workflowStore(latest);
+    const { api, tasks } = fixture("agent", undefined, account(), workflows);
+    const [existing] = await tasks.productTasks();
+    const { activeTurnId: _activeTurnId, ...idleConversation } =
+      existing!.conversation!;
+    void _activeTurnId;
+    const workflowTask = {
+      ...existing!,
+      context: {
+        ...existing!.context,
+        workflowAssociation: {
+          workflowId: latest.workflowId,
+          workflowName: latest.name,
+        },
+        workflowContext: {
+          workflowId: latest.workflowId,
+          workflowName: latest.name,
+          revision: 1,
+          digest: "a".repeat(64),
+          developerInstructions: "Earlier approved context",
+        },
+      },
+      conversation: {
+        ...idleConversation,
+        turnStatus: "completed" as const,
+      },
+    };
+    tasks.productTasks.mockResolvedValue([workflowTask as never]);
+
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_05555555-5555-4555-8555-555555555555",
+      outcome: "Draft an outreach email",
+    });
+    const workflowMessage = tasks.submit.mock.calls.at(-1)?.[0] as Extract<
+      ProductTaskIntent,
+      { type: "message" }
+    >;
+    expect(workflowMessage.workflowContext).toMatchObject({ revision: 2 });
+    expect(workflowMessage.workflowContext?.developerInstructions).toContain(
+      "Keep outreach warm and direct",
+    );
+    expect(
+      workflowMessage.workflowContext?.developerInstructions,
+    ).not.toContain("Prefer remote roles");
+
+    tasks.productTasks.mockResolvedValue([
+      { ...workflowTask, context: context("agent") } as never,
+    ]);
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_06666666-6666-4666-8666-666666666666",
+      outcome: "Draft an outreach email",
+    });
+    expect(tasks.submit.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      "workflowContext",
+    );
+  });
+
+  it("promotes one exact attachment-free conversation item through an explicit revision", async () => {
+    const workflows = workflowStore();
+    const { api, tasks } = fixture("agent", undefined, account(), workflows);
+    const [existing] = await tasks.productTasks();
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...existing!,
+        conversation: {
+          ...existing!.conversation!,
+          items: {
+            ...existing!.conversation!.items,
+            item_1: {
+              ...existing!.conversation!.items.item_1,
+              text: `Reusable source ${"x".repeat(3_000)}`,
+            },
+          },
+        },
+      },
+    ]);
+    await api.executeRendererIntent({
+      type: "workflow.promote",
+      operationId: "intent_03333333-3333-4333-8333-333333333333",
+      workflowId: "workflow_job_search",
+      expectedRevision: 1,
+      category: "knowledge",
+      text: "Keep this reusable fact.",
+      appliesTo: ["roles"],
+      sourceTaskId: "task_existing",
+      sourceItemId: "item_1",
+    });
+    expect(workflows.promoteToWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "workflow_job_search",
+        sourceTaskId: "task_existing",
+        sourceItemId: "item_1",
+        text: "Keep this reusable fact.",
+      }),
+    );
+    await expect(
+      api.executeRendererIntent({
+        type: "workflow.promote",
+        operationId: "intent_04444444-4444-4444-8444-444444444444",
+        workflowId: "workflow_job_search",
+        expectedRevision: 1,
+        category: "knowledge",
+        text: "Changed",
+        appliesTo: [],
+        sourceTaskId: "task_existing",
+        sourceItemId: "missing_item",
+      }),
+    ).rejects.toThrow(/stale/i);
+  });
   it("preserves display phase and real item timing through the renderer projection", async () => {
     const { api } = fixture();
     const item = (await api.readSnapshot()).tasks[0]!.conversation!.items

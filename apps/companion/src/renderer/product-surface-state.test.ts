@@ -22,7 +22,7 @@ function product(
   account: "unavailable" | "logged_out" | "logged_in" = "logged_in",
 ): LocalProductSnapshot {
   return {
-    version: 7,
+    version: 8,
     host: { state: "ready", ready: true, restartAttempt: 0 },
     catalog: {
       account: { status: account },
@@ -46,6 +46,7 @@ function product(
     },
     attention: [],
     tasks: [],
+    workflows: [],
     recoveryWarnings: [],
     draftAttachments: [],
     fileAttention: [],

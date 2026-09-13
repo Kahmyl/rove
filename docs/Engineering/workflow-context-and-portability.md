@@ -1,6 +1,14 @@
 # Workflow Context and Portability
 
-**Status:** Target contract for reusable setup. This is deliberately not task, browser, or credential synchronization.
+**Status:** Local Workflow setup, revisioning, explicit promotion, and turn-boundary context assembly are implemented. Portable synchronization remains a target contract and is deliberately not task, browser, or credential synchronization.
+
+## Current local implementation
+
+The companion stores Workflow identities and immutable approved configuration revisions in the existing task-engine SQLite database. The renderer uses guided fields for purpose, preferences, criteria, guidance, procedures, descriptive resource requirements, result conventions, and approved knowledge. Local workflows and task history remain inspectable while Codex is signed out. Archive is reversible; it does not delete associated tasks.
+
+Task association is separate from disclosure. When starting a Workflow task, the user must explicitly choose whether relevant approved Workflow text may be sent to Codex or whether the association stays local only. For shared tasks, launch and each later idle-turn request assemble only applicable topic-scoped entries and record the exact revision and digest in the durable task event/outbox command. Steering an already-active turn does not change its context mid-action. A later approved edit or promotion can therefore apply at the next turn boundary without rewriting historical task or approval truth.
+
+Save to Workflow identifies one attachment-free task conversation item, shows editable proposed reusable text and a destination/category, and stores local source task/item/digest provenance. It does not copy the conversation, attachments, approvals, credentials, browser state, or execution state. Configuration synchronization, provider ownership, cross-device conflicts, tombstones, and remote recovery below are not implemented.
 
 ## Approved environment
 

@@ -243,6 +243,11 @@ export interface ResolvedTaskContext {
   codexSessionId?: string;
   capabilityFingerprint?: string;
   attachmentIds?: readonly string[];
+  workflowAssociation?: {
+    workflowId: string;
+    workflowName: string;
+  };
+  workflowContext?: import("@rove/protocol").TaskWorkflowContextSnapshot;
   initialLaunch?: InitialLaunchJournal;
   /** Optional only on the accepted v2 migration input; validation materializes it. */
   lifecycle?: TaskLifecycleState;

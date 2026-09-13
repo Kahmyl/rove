@@ -7,6 +7,7 @@ import type {
   TaskAcceptance,
   TaskEngineStore,
   TaskIntent,
+  TaskLaunchConfiguration,
   TaskPortableValue,
 } from "@rove/protocol";
 
@@ -37,6 +38,8 @@ export type ProductTaskIntent =
       model?: string;
       reasoningEffort?: string;
       attachmentIds: readonly string[];
+      workflowContext?: TaskLaunchConfiguration["workflowContext"];
+      workflowAssociation?: TaskLaunchConfiguration["workflowAssociation"];
     }
   | {
       type: "message";
@@ -45,6 +48,7 @@ export type ProductTaskIntent =
       message: string;
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
+      workflowContext?: TaskLaunchConfiguration["workflowContext"];
     }
   | { type: "interrupt"; taskId: string; operationId: string }
   | { type: "finish"; taskId: string; operationId: string }
@@ -65,6 +69,7 @@ export type ProductTaskIntent =
       operationId: string;
       message: string;
       attachmentIds?: readonly string[];
+      workflowContext?: TaskLaunchConfiguration["workflowContext"];
     };
 
 export interface ProductTaskPort {
@@ -176,6 +181,16 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               ? { reasoningEffort: intent.reasoningEffort }
               : {}),
             attachmentIds: [...intent.attachmentIds],
+            ...(intent.workflowContext
+              ? { workflowContext: structuredClone(intent.workflowContext) }
+              : {}),
+            ...(intent.workflowAssociation
+              ? {
+                  workflowAssociation: structuredClone(
+                    intent.workflowAssociation,
+                  ),
+                }
+              : {}),
           },
         };
         break;
@@ -190,6 +205,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             : {}),
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
+            : {}),
+          ...(intent.workflowContext
+            ? { workflowContext: structuredClone(intent.workflowContext) }
             : {}),
         };
         break;
@@ -253,6 +271,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           message: intent.message,
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
+            : {}),
+          ...(intent.workflowContext
+            ? { workflowContext: structuredClone(intent.workflowContext) }
             : {}),
         };
         break;
@@ -339,6 +360,20 @@ export class LedgerProductTaskPort implements ProductTaskPort {
                 : {}),
             },
             attachmentIds: [...aggregate.launch.attachmentIds],
+            ...(aggregate.launch.workflowContext
+              ? {
+                  workflowContext: structuredClone(
+                    aggregate.launch.workflowContext,
+                  ),
+                }
+              : {}),
+            ...(aggregate.launch.workflowAssociation
+              ? {
+                  workflowAssociation: structuredClone(
+                    aggregate.launch.workflowAssociation,
+                  ),
+                }
+              : {}),
             initialLaunch: {
               operationId: aggregate.launch.operationId,
               inputDigest: createHash("sha256")

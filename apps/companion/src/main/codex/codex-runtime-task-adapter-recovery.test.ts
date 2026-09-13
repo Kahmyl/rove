@@ -205,6 +205,102 @@ function fixture(options: {
 }
 
 describe("Codex/Runtime command reconciliation postconditions", () => {
+  it("applies the durable Workflow snapshot for a new idle turn without changing the user message", async () => {
+    const task = aggregate();
+    task.launch!.workflowContext = {
+      workflowId: "workflow_job_search",
+      workflowName: "Job search",
+      revision: 3,
+      digest: "a".repeat(64),
+      developerInstructions:
+        "Workflow environment: Job search\n\nApproved preferences:\n- Earlier guidance.",
+    };
+    const thread = codexThread({ type: "idle" });
+    const resumes: Record<string, unknown>[] = [];
+    const turnStarts: Record<string, unknown>[] = [];
+    const rpc = {
+      respond: vi.fn(),
+      request: vi.fn(
+        async (method: string, params: Record<string, unknown>) => {
+          if (method === "thread/read") return { thread };
+          if (method === "thread/resume") {
+            resumes.push(params);
+            return {
+              thread,
+              model: "m1",
+              modelProvider: "openai",
+              serviceTier: null,
+              cwd: "/tmp/rove",
+              runtimeWorkspaceRoots: [],
+              instructionSources: [],
+              approvalPolicy: "on-request",
+              approvalsReviewer: "auto_review",
+              sandbox: {},
+              activePermissionProfile: null,
+              reasoningEffort: "high",
+              multiAgentMode: "explicitRequestOnly",
+              initialTurnsPage: null,
+              turnsBackwardsCursor: null,
+              itemsBackwardsCursor: null,
+            };
+          }
+          if (method === "mcpServerStatus/list") return mcpStatus();
+          if (method === "turn/start") {
+            turnStarts.push(params);
+            return { turn: { id: "turn-workflow" } };
+          }
+          throw new Error(`Unexpected method ${method}`);
+        },
+      ),
+    };
+    const adapter = fixture({
+      aggregate: task,
+      runtime: {},
+      rpc,
+      attachments: {
+        authority: {
+          materializeCodexInputs: vi.fn(async () => []),
+          instructions: vi.fn(() => ""),
+        },
+        runtime: {},
+      },
+      capabilityIssuer: {
+        issue: vi.fn(() => ({
+          token: "capability-token",
+          fingerprint: capabilityFingerprint,
+        })),
+        verifier: vi.fn(() => "capability-verifier"),
+      },
+      expectedToolDefinitionDigest: toolDigest,
+    });
+    await adapter.execute(
+      command("start_or_steer_codex_turn", {
+        type: "start_or_steer_codex_turn",
+        taskId,
+        threadId,
+        operationId: "intent_later_workflow_turn",
+        message: "Draft outreach",
+        workflowContext: {
+          workflowId: "workflow_job_search",
+          workflowName: "Job search",
+          revision: 4,
+          digest: "b".repeat(64),
+          developerInstructions:
+            "Workflow environment: Job search\n\nReusable guidance:\n- Keep outreach warm and direct.",
+        },
+      }),
+    );
+    expect(resumes.at(-1)?.developerInstructions).toContain(
+      "Keep outreach warm and direct",
+    );
+    expect(resumes.at(-1)?.developerInstructions).not.toContain(
+      "Earlier guidance",
+    );
+    expect(turnStarts[0]?.input).toEqual([
+      { type: "text", text: "Draft outreach", text_elements: [] },
+    ]);
+  });
+
   it("projects every initial-launch attachment into the App Server user input", async () => {
     const thread = codexThread({ type: "idle" });
     const turnStarts: Record<string, unknown>[] = [];

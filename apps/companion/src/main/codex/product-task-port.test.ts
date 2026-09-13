@@ -125,6 +125,48 @@ async function seedReadyTask(
 }
 
 describe("LedgerProductTaskPort protected workspace boundary", () => {
+  it("persists the exact applied Workflow revision with a later turn across restart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-workflow-turn-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store);
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId: "intent_42345678-1234-4123-8123-123456789abc",
+      message: "Draft outreach",
+      workflowContext: {
+        workflowId: "workflow_jobs",
+        workflowName: "Job search",
+        revision: 4,
+        digest: "d".repeat(64),
+        developerInstructions: "Use approved outreach guidance.",
+      },
+    });
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    const [command] = await reopened.claimDueCommands(
+      "worker_workflow_test",
+      1,
+      1,
+    );
+    expect(command?.payload.workflowContext).toEqual({
+      workflowId: "workflow_jobs",
+      workflowName: "Job search",
+      revision: 4,
+      digest: "d".repeat(64),
+      developerInstructions: "Use approved outreach guidance.",
+    });
+    reopened.close();
+  });
+
   it("persists the accepted archive as a Rove history preference across restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-history-archive-"));
     roots.push(root);

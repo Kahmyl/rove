@@ -328,6 +328,7 @@ export class CodexExecutionCore {
               : {}),
           }
         : undefined,
+      store,
     );
     await this.options.onProductStateChanged?.();
     return this.apiValue;

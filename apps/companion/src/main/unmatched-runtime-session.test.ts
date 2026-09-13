@@ -27,7 +27,7 @@ function snapshot(matched: boolean): DesktopSurfaceSnapshot {
     notice: null,
     workspaces: { workspaces: [] },
     product: {
-      version: 7,
+      version: 8,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out", requiresOpenaiAuth: true },
@@ -53,6 +53,7 @@ function snapshot(matched: boolean): DesktopSurfaceSnapshot {
             },
           ]
         : [],
+      workflows: [],
       recoveryWarnings: [],
       draftAttachments: [],
       fileAttention: [],
