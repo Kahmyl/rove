@@ -1,5 +1,6 @@
 import type { ConversationAssociation } from "./conversations.js";
 import type { CodexThread } from "./protocol.js";
+import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
 
 interface ExpectedEmptyLegacyThread {
   taskId: string;
@@ -14,7 +15,7 @@ function isPinnedRpcShape(
 ): boolean {
   const keys = Object.keys(details).sort();
   const dataPresent = Object.hasOwn(details, "data");
-  // Pinned 0.153.4 has emitted the same JSON-RPC error both without `data`
+  // The approved App Server has emitted the same JSON-RPC error both without `data`
   // and with explicit `data: null`. Preserve that wire distinction, but treat
   // only those two exact shapes as semantically equivalent.
   return (
@@ -46,7 +47,7 @@ export function isPinnedEmptyLegacyThreadFailure(
   )
     return false;
   if (
-    thread.cliVersion !== "0.153.4" ||
+    thread.cliVersion !== APPROVED_CODEX_CLI_VERSION ||
     thread.id !== expected.threadId ||
     thread.sessionId !== expected.sessionId ||
     thread.threadSource !== expected.threadSource ||

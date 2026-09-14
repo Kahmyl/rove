@@ -2687,7 +2687,7 @@ describe("LocalProductApi native product seam", () => {
     }
   });
 
-  it("projects and submits every generated 0.153.4 elicitation field variant exactly", async () => {
+  it("projects and submits every approved generated elicitation field variant exactly", async () => {
     const { api, attention, broker } = fixture();
     const defaults = {
       flag: true,

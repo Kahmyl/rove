@@ -1,4 +1,4 @@
-import generatedSchemaCatalogJson from "./app-server-0.153.4.schemas.generated.json" with { type: "json" };
+import generatedSchemaCatalogJson from "./app-server-0.154.0-alpha.6.2.schemas.generated.json" with { type: "json" };
 import {
   assertGeneratedSchema,
   type GeneratedSchemaCatalog,
@@ -8,22 +8,22 @@ const generatedSchemaCatalog =
   generatedSchemaCatalogJson as unknown as GeneratedSchemaCatalog;
 
 /**
- * Checked-in reviewed subset mechanically derived from Codex App Server 0.153.4
+ * Checked-in reviewed subset mechanically derived from Codex App Server 0.154.0-alpha.6.2
  * `generate-ts --experimental`. Runtime validators below mirror these closed
  * generated unions and reject fields/types outside this locked version.
  */
 export const CODEX_SCHEMA_SHA256 =
-  "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5";
+  "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e";
 export const CODEX_GENERATED_SOURCE_DIGESTS = {
   clientRequestTs:
-    "83418e6f3f8100fa59b0324afaaf45c8d258db3dd42a10769d9c337c93b910f2",
+    "bebfc45d9c84db8036cbf410417f78aa6ab9df157d68edaed0ee5f7cd08a4a17",
   serverRequestTs:
     "1c5837adbfbdd005f387478ba87840808d1353b47b82dcf63739a78bb1c8d3be",
-  v2Json: "e5f798fd1343c539f01fedea0e8a84a43c080fcca4615c80eb04a5edab4f7d0a",
+  v2Json: "7b9e7d385fffef8d428cc5490b56ce9c393bd3ed7bc7ccd730956387e723ec05",
 } as const;
 export const CODEX_REVIEWED_GENERATED_FILE_DIGESTS = {
   "v2/Thread.ts":
-    "9a2a7ab942bbc6d2a8c0757e991ab81ed6d3e55d70439b228c1f202db42cd3dc",
+    "a90071210b958953a9dca7b3884c2ab788d29c3a2cb346f72327377456436d8e",
   "v2/Turn.ts":
     "5a0852e46a13446ccb3aa3f493c06a9151a43772d530521789ac741ed115da5f",
   "v2/ThreadItem.ts":
@@ -31,7 +31,7 @@ export const CODEX_REVIEWED_GENERATED_FILE_DIGESTS = {
   "v2/Model.ts":
     "ff56f09e9b9f301f1c6ecc565e2bcf6355c6ea66880f3ac963b7754e74cbe0a3",
   "v2/McpServerStatus.ts":
-    "9d6b57ee14d00eccae653509ead06b5b6d69995cbb2cde473ac62d4236d6f817",
+    "ce67de1c40f618d1c61ce147a2712a2af6f7a0dd7b48527f2bf777a10dacc593",
   "ServerRequest.ts":
     "1c5837adbfbdd005f387478ba87840808d1353b47b82dcf63739a78bb1c8d3be",
   "ServerNotification.ts":
@@ -91,6 +91,9 @@ export interface CodexThread {
   section: JsonValue | null;
   sectionEnteredAt: number | null;
   projectId: string | null;
+  daybreakEnabled: boolean | null;
+  environments: JsonValue[] | null;
+  originator: string | null;
   historyMode: "legacy" | "paginated";
   modelProvider: string;
   model: string | null;

@@ -24,6 +24,7 @@ import type {
 } from "./task-attachments.js";
 import type { PersistedTaskCapabilityIssuer } from "./task-launch-boundary.js";
 import type { CodexRpcPort, CodexThread } from "./protocol.js";
+import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
 import type { UserInput } from "./protocol.js";
 import {
   CodexThreadCompatibilityError,
@@ -893,7 +894,7 @@ function assertBoundThreadIdentity(
   if (!threadId) mismatches.push("missing durable thread ID");
   else if (thread.id !== threadId) mismatches.push("thread ID");
   if (!threadSource) mismatches.push("missing durable thread source");
-  // App Server 0.153.4 can temporarily omit threadSource from a direct
+  // The approved App Server can temporarily omit threadSource from a direct
   // thread/read while the exact loaded thread is active. The durable thread
   // ID plus App Server session ID remain authoritative in that state. A
   // present but different source is still a binding conflict.
@@ -904,7 +905,8 @@ function assertBoundThreadIdentity(
     thread.sessionId !== aggregate.codexSessionId
   )
     mismatches.push("session ID");
-  if (thread.cliVersion !== "0.153.4") mismatches.push("CLI version");
+  if (thread.cliVersion !== APPROVED_CODEX_CLI_VERSION)
+    mismatches.push("CLI version");
   if (thread.historyMode !== "legacy") mismatches.push("history profile");
   if (mismatches.length > 0)
     throw new Error(

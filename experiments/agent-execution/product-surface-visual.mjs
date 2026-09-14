@@ -88,7 +88,7 @@ function baseSnapshot(presentation, accountStatus) {
         ready: true,
         restartAttempt: 0,
         compatibility: {
-          version: "0.153.4",
+          version: "0.154.0-alpha.6.2",
           platform: "macos",
           architecture: "arm64",
           source: "packaged",

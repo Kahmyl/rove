@@ -17,7 +17,7 @@ node scripts/check-repository.mjs
 
 Browser tests require the matching Playwright browser installation. Headed checks require a real desktop or an appropriate virtual display in CI. Do not claim a sandbox/container limitation proves a product defect; record the environment and reproduce with equivalent capabilities.
 
-Meaningful existing command families include `agent:fixtures`, `agent:schema`, `test:recovery:contract`, `test:recovery:processes`, `test:attachments`, `browser:semantic-transactions`, `browser:capability-atlas`, and `browser:capabilities:integration`. Read script arguments before live use. Schema checks use the selected Codex binary; live model and external-service exercises require explicit authorization and may consume allowance or change real accounts.
+Meaningful existing command families include `agent:fixtures`, `agent:schema`, Codex component inspection/qualification/install/promotion, `test:recovery:contract`, `test:recovery:processes`, `test:attachments`, `browser:semantic-transactions`, `browser:capability-atlas`, and `browser:capabilities:integration`. Read script arguments before live use. Schema checks and candidate qualification require an explicitly selected Codex binary; live model and external-service exercises require explicit authorization and may consume allowance or change real accounts.
 
 ## Test layers
 
@@ -57,6 +57,8 @@ Use bounded synthetic journeys to measure correctness, unnecessary actions, mode
 
 `pnpm dev:desktop` is the existing source-built entry point. Other runtime/MCP/control-plane commands remain development tools; their presence does not make cloud relay infrastructure a product prerequisite. The current executable behavior may still diverge from the target documents. Show missing functionality as implementation work, not as completed by documentation.
 
+For an approved Codex component update, use `pnpm codex:component:inspect -- --source <absolute-codex-path>`, register the exact candidate identity without changing a selection, run `pnpm codex:component:qualify -- --source <absolute-codex-path> --component <id>`, install it with `pnpm codex:component:install -- --source <absolute-codex-path> --component <id>`, and explicitly select it with `pnpm codex:component:promote -- --component <id> --purpose development`, `packaging`, or `all`. Promotion refuses an unqualified or absent managed component. `pnpm codex:component:verify` proves the selected managed component is intact. The `--source` path is qualification/acquisition input only and is never read by normal desktop startup or package preparation.
+
 The application uses a stable per-user product home, not the repository working directory, for user data. Never run cleanup or tests against a user's real profile by default. Managed child processes require verified ownership before reconnect or termination. Use temporary homes, fixture accounts, and scoped grants for automated tests.
 
 ## Backup, retention, and support evidence
@@ -70,6 +72,8 @@ User-visible deletion distinguishes task history, recordings, browser identity, 
 ## Dependency and packaging changes
 
 Qualify dependency changes as a compatible set: Codex binary/schema, application, browser tooling/binary, runtime, and native modules. Use source and installed-package checks. A library update is not accepted simply because TypeScript compiles. Verify authentication, threads, tools, events, permissions, handoff, recording, recovery, and resource behavior.
+
+The Codex component lifecycle is discover, qualify, install, then promote. Discovery reports candidates without trusting them. Qualification runs with an isolated temporary Codex home, regenerates upstream schemas, verifies Rove's required method/type surface and safe App Server lifecycle probes, and emits immutable evidence without changing the approved selection. Installation re-verifies and copies a qualified executable/helper pair into Rove's managed component store. Promotion changes the repository-owned selection explicitly. Tests must cover a missing managed component, changed executable or helper, unapproved candidate, successful selected-component resolution, package staging from the managed source, and rollback to a retained qualified component. Neither development startup nor package preparation may fall through to ChatGPT, an editor extension, or `PATH`.
 
 Package metadata may require numeric versions, but Rove has no shipped product edition. Do not create versioned product documents or label pre-release work with milestone names. Git commits identify development changes; deployment/build identities and storage/protocol formats identify technical compatibility.
 

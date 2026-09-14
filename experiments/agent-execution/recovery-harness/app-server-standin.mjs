@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { URL } from "node:url";
 
 if (process.argv.includes("--version")) {
-  process.stdout.write("codex-cli 0.153.4\n");
+  process.stdout.write("codex-cli 0.154.0-alpha.6.2\n");
   process.exit(0);
 }
 
@@ -97,6 +97,9 @@ function createThread(params) {
     section: null,
     sectionEnteredAt: null,
     projectId: null,
+    daybreakEnabled: null,
+    environments: null,
+    originator: "Rove deterministic lifecycle fixture",
     historyMode: params.historyMode ?? "legacy",
     modelProvider: "openai",
     model: params.model ?? "l2-model",
@@ -105,7 +108,7 @@ function createThread(params) {
     updatedAt: Date.now(),
     recencyAt: Date.now(),
     cwd: params.cwd ?? codexHome,
-    cliVersion: "0.153.4",
+    cliVersion: "0.154.0-alpha.6.2",
     status: { type: "idle" },
     path: null,
     source: "appServer",
@@ -269,7 +272,7 @@ async function handle(method, params = {}) {
   commands.push({ method, params, at: Date.now() });
   if (method === "initialize")
     return {
-      userAgent: "codex-cli 0.153.4",
+      userAgent: "codex-cli 0.154.0-alpha.6.2",
       codexHome,
       platformFamily: "unix",
       platformOs: "macos",
@@ -316,6 +319,7 @@ async function handle(method, params = {}) {
       rateLimits: {
         limitId: null,
         limitName: null,
+        normalModelSlug: null,
         primary: null,
         secondary: null,
         planType: "pro",
@@ -326,6 +330,7 @@ async function handle(method, params = {}) {
       },
       rateLimitsByLimitId: null,
       accountId: null,
+      ordinaryUsageAllowed: null,
       rateLimitResetCredits: null,
       rateLimitUpsell: null,
     };
@@ -460,6 +465,7 @@ async function handle(method, params = {}) {
               tools: Object.fromEntries(
                 threadMcp.get(params.threadId).map((tool) => [tool.name, tool]),
               ),
+              toolsError: null,
               resources: [],
               resourceTemplates: [],
               authStatus: "unsupported",

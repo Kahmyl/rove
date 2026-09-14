@@ -18,11 +18,17 @@
 
 ## Reviewed dependency baseline
 
-The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository's Codex compatibility profile/generated schema is for `0.153.4`.
+The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository-owned Codex component manifest currently selects App Server `0.154.0-alpha.6.2` on macOS arm64 and records the exact executable, companion helper, generated schema, and qualification identity.
 
 These are observations of the reviewed repository, not claims that they are the newest releases or that every combination is already supported on every platform. Install with the lockfile frozen. Update the binary, generated contracts, lockfile, native-module packaging, and verification evidence as one compatible change. Do not infer installed versions from a package range alone.
 
 Required package `version` fields and generated upstream filenames remain technical metadata. Do not turn them into product branding, versioned design documents, or claims of a shipped Rove release.
+
+## Codex component ownership
+
+Rove development and packaged builds consume a Rove-managed Codex component selected by the repository-owned approved-component manifest. A mutable binary inside ChatGPT, an editor extension, or `PATH` is discovery evidence only; it is never the implicit runtime or packaging source. Normal development resolves the exact approved component from Rove's managed component store and fails with an actionable engineering error when it is absent or changed. A packaged application resolves only the exact component staged inside its application resources.
+
+Candidate inspection and qualification are separate from installation and promotion. Qualification uses an explicitly named external executable, generates schemas through the upstream App Server commands, compares the capabilities Rove actually consumes, and records exact executable/helper digests plus deterministic protocol evidence. Installation copies that already-qualified set into the managed store after re-verifying its identity. Promotion is an explicit repository change selecting a qualified component; discovering or qualifying a candidate cannot silently change the approved runtime. Retain a previous qualified set until the replacement has passed runtime and package preparation checks so rollback changes selection rather than compatibility policy.
 
 ## Small account and workflow-sync boundary
 

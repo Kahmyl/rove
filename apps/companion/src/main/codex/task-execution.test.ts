@@ -148,6 +148,9 @@ function thread(id = "thread_1", source = "rove:test"): CodexThread {
     section: null,
     sectionEnteredAt: null,
     projectId: null,
+    daybreakEnabled: null,
+    environments: null,
+    originator: null,
     historyMode: "legacy",
     modelProvider: "openai",
     model: "m1",
@@ -156,7 +159,7 @@ function thread(id = "thread_1", source = "rove:test"): CodexThread {
     updatedAt: 1,
     recencyAt: 1,
     cwd: "/work",
-    cliVersion: "0.153.4",
+    cliVersion: "0.154.0-alpha.6.2",
     status: { type: "idle" },
     path: null,
     source: "appServer",
@@ -304,7 +307,7 @@ function emptyAssociation(
 describe("generated boundary", () => {
   it("locks the exact reviewed methods/digest and rejects raw turn overrides", () => {
     expect(CODEX_SCHEMA_SHA256).toBe(
-      "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5",
+      "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e",
     );
     expect(CODEX_REVIEWED_METHODS).toContain("mcpServerStatus/list");
     expect(() =>
@@ -494,7 +497,7 @@ describe("generated boundary", () => {
     });
     const outbound = JSON.parse(stdin.read().toString()) as { id: string };
     stdout.write(
-      `${JSON.stringify({ id: outbound.id, result: { userAgent: "codex-cli 0.153.4", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
+      `${JSON.stringify({ id: outbound.id, result: { userAgent: "codex-cli 0.154.0-alpha.6.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
     );
     await expect(pending).resolves.toMatchObject({ platformOs: "macos" });
     stdout.write(`${JSON.stringify({ id: "orphan", result: {} })}\n`);
@@ -569,19 +572,24 @@ describe("generated boundary", () => {
       if (message.method === "initialize") {
         initializeParams = message.params;
         stdout.write(
-          `${JSON.stringify({ id: message.id, result: { userAgent: "codex-cli 0.153.4", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
+          `${JSON.stringify({ id: message.id, result: { userAgent: "codex-cli 0.154.0-alpha.6.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
         );
       }
     });
+    let hashProbeCount = 0;
     const host = new CodexAppServerHost({
       resolver: new CodexExecutableResolver({
         isPackaged: false,
         developmentExecutablePath: process.execPath,
+        developmentCodeModeHostPath: process.execPath,
         platform: "darwin",
         architecture: "arm64",
-        readVersion: async () => "0.153.4",
+        readVersion: async () => "0.154.0-alpha.6.2",
         hashFile: async () =>
-          "c147aa90d34139599711fb568102ceefc6319ca1ac5cb6f4056ca46a1834edd9",
+          ++hashProbeCount === 1
+            ? "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb"
+            : "fd36f7c8fc53de66008b9238b5ae24eec686edaf774083fa6e0158385a886626",
+        fileSize: async () => 62_787_200,
       }),
       clientVersion: "0.1.0",
       spawnProcess: () => fake as unknown as ChildProcessWithoutNullStreams,

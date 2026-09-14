@@ -22,7 +22,7 @@ const runtimeDirectory = join(root, "apps/runtime");
 const runtimeEntrypoint = join(runtimeDirectory, "dist/main.js");
 const mcpEntrypoint = join(root, "apps/mcp/dist/main.js");
 const expectedDigest =
-  "c147aa90d34139599711fb568102ceefc6319ca1ac5cb6f4056ca46a1834edd9";
+  "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb";
 const cutPoint = process.env.ROVE_TASK_ENGINE_CUT_POINT;
 const cutCommand = process.env.ROVE_TASK_ENGINE_CUT_COMMAND;
 const cutOccurrence = Number(process.env.ROVE_TASK_ENGINE_CUT_OCCURRENCE ?? 1);
@@ -58,10 +58,15 @@ function host() {
     resolver: new CodexExecutableResolver({
       isPackaged: false,
       developmentExecutablePath: standin,
+      developmentCodeModeHostPath: process.execPath,
       platform: "darwin",
       architecture: "arm64",
-      readVersion: async () => "0.153.4",
-      hashFile: async () => expectedDigest,
+      readVersion: async () => "0.154.0-alpha.6.2",
+      hashFile: async (path) =>
+        path === standin
+          ? expectedDigest
+          : "fd36f7c8fc53de66008b9238b5ae24eec686edaf774083fa6e0158385a886626",
+      fileSize: async () => 62_787_200,
     }),
     clientVersion: "0.1.0",
     environment: {
@@ -729,7 +734,7 @@ lines.on("line", (line) => {
     } catch (error) {
       send({
         id: message.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: `${error instanceof Error ? error.message : String(error)}\nApp Server health: ${JSON.stringify(core?.host.getHealth())}`,
       });
     }
   });

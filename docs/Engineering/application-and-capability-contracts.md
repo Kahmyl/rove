@@ -52,6 +52,8 @@ Creating a workflow returns its exact identity so the renderer can select Workfl
 
 The adapter owns initialize/ready negotiation, version compatibility, request correlation, thread attachment, turn submission/steering/interruption, attention translation, and supported history reads. Use [App Server's documented interface](https://developers.openai.com/codex/app-server/) for the selected binary; do not access undocumented internal history databases or copy login state across accounts.
 
+Before spawning App Server, the host resolves one repository-approved component identity. Development accepts only the exact selected component in Rove's managed component store; packaged execution accepts only the exact selected component in application resources. Resolution verifies platform, architecture, reported upstream version, executable digest, helper digest, and generated-schema digest. External installations may be passed explicitly to engineering qualification tooling, but are not fallback runtime authority. Candidate qualification, managed installation, and approved-selection promotion are distinct commands and state transitions.
+
 Every inbound event resolves to the exact engine association and task. A stale connection epoch cannot mutate a newer task association. An upstream acknowledgement lost after possible turn submission requires correlation before retry. Do not silently change from subscription authentication to API-key billing.
 
 ## Capability envelope and receipt

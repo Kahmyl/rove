@@ -10,17 +10,24 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import {
+  readComponentManifest,
+  selectedComponent,
+} from "./codex-component-lib.mjs";
+
 const execFile = promisify(execFileCallback);
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const artifactsRoot = join(repositoryRoot, "release", "artifacts");
 const runtimeToken = "rove-packaged-runtime-smoke-token";
 const mcpToken = "rove-packaged-mcp-smoke-token";
-const codexSha256 =
-  "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a";
-const codeModeHostSha256 =
-  "038b9c6b60baacbfacba1fe81cf603c22b73697810e013d4efda040f1a7294e7";
-const codeModeHostBytes = 62_768_576;
+const codexComponent = selectedComponent(
+  await readComponentManifest(),
+  "packaging",
+);
+const codexSha256 = codexComponent.executable.sha256;
+const codeModeHostSha256 = codexComponent.codeModeHost.sha256;
+const codeModeHostBytes = codexComponent.codeModeHost.bytes;
 
 async function firstExisting(paths) {
   for (const path of paths) {
@@ -225,7 +232,9 @@ try {
     .update(codeModeHostBytesOnDisk)
     .digest("hex");
   if (packagedCodexDigest !== codexSha256)
-    throw new Error("Packaged Codex digest does not match 0.153.4.");
+    throw new Error(
+      `Packaged Codex digest does not match ${codexComponent.id}.`,
+    );
   if (
     packagedCodeModeHostDigest !== codeModeHostSha256 ||
     codeModeHostBytesOnDisk.byteLength !== codeModeHostBytes ||
@@ -233,15 +242,18 @@ try {
   )
     throw new Error("Packaged Codex code-mode host identity is invalid.");
   if (
-    compatibility.version !== "0.153.4" ||
-    compatibility.platform !== "macos" ||
-    compatibility.architecture !== "arm64" ||
+    compatibility.componentId !== codexComponent.id ||
+    compatibility.version !== codexComponent.cliVersion ||
+    compatibility.platform !== codexComponent.platformOs ||
+    compatibility.architecture !== codexComponent.architecture ||
     compatibility.sha256 !== codexSha256 ||
-    compatibility.codeModeHost?.filename !== "codex-code-mode-host" ||
+    compatibility.codeModeHost?.filename !==
+      codexComponent.codeModeHost.filename ||
     compatibility.codeModeHost?.sha256 !== codeModeHostSha256 ||
     compatibility.codeModeHost?.bytes !== codeModeHostBytes ||
-    compatibility.codeModeHost?.platform !== "macos" ||
-    compatibility.codeModeHost?.architecture !== "arm64"
+    compatibility.codeModeHost?.platform !== codexComponent.platformOs ||
+    compatibility.codeModeHost?.architecture !== codexComponent.architecture ||
+    compatibility.schema?.sha256 !== codexComponent.schema.sha256
   )
     throw new Error("Packaged Codex compatibility manifest is invalid.");
 
@@ -326,8 +338,12 @@ try {
   await waitForHealth(`${mcpBaseUrl}/health`, "MCP", mcp.child);
 
   const version = await execFile(codexPath, ["--version"], { timeout: 5_000 });
-  if (!/0\.153\.4/.test(`${version.stdout}\n${version.stderr}`))
-    throw new Error("Packaged Codex version probe did not match 0.153.4.");
+  if (
+    !`${version.stdout}\n${version.stderr}`.includes(codexComponent.cliVersion)
+  )
+    throw new Error(
+      `Packaged Codex version probe did not match ${codexComponent.cliVersion}.`,
+    );
 
   desktop = launchDesktop(executable, {
     ROVE_HOME: join(temporaryHome, "desktop"),

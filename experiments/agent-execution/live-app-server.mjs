@@ -295,7 +295,7 @@ const preInitialize = await observePreInitializeRejection();
 progress("probing malformed JSON handling");
 const malformedInput = await observeMalformedInput();
 const evidence = {
-  date: "2026-09-07",
+  date: new Date().toISOString().slice(0, 10),
   executable: await resolveExecutable(),
   mode: lifecycle ? "lifecycle" : mcpBoundary ? "mcp-boundary" : "read-only",
   preInitialize,
@@ -431,6 +431,12 @@ try {
       arguments: { roveTaskId: "task_alpha" },
     });
     evidence.requiredMcp = {
+      threadIdentity: {
+        cliVersion: started.thread.cliVersion,
+        historyMode: started.thread.historyMode,
+        originator: started.thread.originator ?? null,
+        environmentsPresent: Array.isArray(started.thread.environments),
+      },
       name: rove?.name ?? null,
       serverInfoName: rove?.serverInfo?.name ?? null,
       runtimeStatus: rove?.runtimeStatus ?? null,

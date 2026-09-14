@@ -63,6 +63,7 @@ import {
 import { companionWindowOptions } from "./window-options.js";
 import { COMPANION_PROVENANCE } from "./component-provenance.js";
 import { CodexExecutionCore } from "./codex/execution-core.js";
+import { approvedCodexBaseline } from "./codex/compatibility.js";
 import {
   TaskAttachmentAuthority,
   type UserFilePicker,
@@ -1199,19 +1200,34 @@ async function startDesktop(): Promise<void> {
     };
   }
 
-  const configuredCodexExecutable =
-    process.env.ROVE_CODEX_EXECUTABLE ??
-    (app.isPackaged
-      ? join(process.resourcesPath, "services", "codex", "codex")
-      : process.platform === "darwin"
-        ? "/Applications/ChatGPT.app/Contents/Resources/codex"
-        : undefined);
-  if (configuredCodexExecutable !== undefined && codexMcpLaunch !== undefined) {
+  const codexSource = app.isPackaged ? "packaged" : "development";
+  const codexBaseline = approvedCodexBaseline(codexSource);
+  const codexComponentRoot = app.isPackaged
+    ? join(process.resourcesPath, "services", "codex")
+    : join(
+        app.getPath("appData"),
+        "Rove",
+        "components",
+        "codex",
+        codexBaseline.id,
+      );
+  const configuredCodexExecutable = join(codexComponentRoot, "codex");
+  const configuredCodeModeHost = join(
+    codexComponentRoot,
+    codexBaseline.codeModeHostFilename,
+  );
+  if (codexMcpLaunch !== undefined) {
+    console.info(
+      `[codex] Resolving ${codexSource} component ${codexBaseline.id} at ${configuredCodexExecutable}.`,
+    );
     codexExecutionCore = new CodexExecutionCore({
       isPackaged: app.isPackaged,
       ...(app.isPackaged
         ? { packagedExecutablePath: configuredCodexExecutable }
-        : { developmentExecutablePath: configuredCodexExecutable }),
+        : {
+            developmentExecutablePath: configuredCodexExecutable,
+            developmentCodeModeHostPath: configuredCodeModeHost,
+          }),
       clientVersion: COMPANION_PROVENANCE.version,
       stateDirectory: join(desktopHome, "codex-product"),
       taskWorkingDirectory: desktopHome,
@@ -1231,7 +1247,9 @@ async function startDesktop(): Promise<void> {
       codexExecutionCoreStarting = false;
       codexProductError = null;
       await refreshDesktopSurfaceSnapshot(runtime);
-      console.info("[codex] Trusted App Server execution core is ready.");
+      console.info(
+        `[codex] Trusted App Server execution core is ready (${codexBaseline.cliVersion}; ${codexBaseline.executableSha256}).`,
+      );
     } catch (error) {
       codexExecutionCoreStarting = false;
       codexProductError =
@@ -1239,7 +1257,7 @@ async function startDesktop(): Promise<void> {
       console.error(`[codex] ${codexProductError}`);
     }
   } else {
-    codexProductError = "No supported Codex executable is available.";
+    codexProductError = "Codex MCP launch configuration is unavailable.";
   }
 
   registerIpc(

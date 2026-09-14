@@ -80,3 +80,5 @@ The existing `product-task-port`, thread/session supervisor, and task-engine sto
 ## Dependency boundary
 
 Use the official [Codex App Server interface](https://developers.openai.com/codex/app-server/) through a pinned, qualified local adapter. Generate or check contracts against the selected binary, initialize correctly, and reject incompatible messages without corrupting task history. Upstream experimental features require explicit qualification. Upstream documentation describes capabilities; it does not establish Rove's end-to-end reliability.
+
+Component supply is outside task/domain state. A repository-owned manifest selects an immutable qualified Codex component; a per-user Rove-managed store supplies it during development, and packaged resources supply it after staging. The resolver verifies the complete component set before process launch. Candidate discovery and qualification cannot mutate the selected identity, installation cannot imply approval, and promotion cannot bypass recorded qualification evidence. This boundary keeps an unrelated ChatGPT or editor update from changing Rove startup behavior.

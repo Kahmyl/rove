@@ -53,6 +53,7 @@ export function createProductionLifecycleRepositories() {
 export interface CodexExecutionCoreOptions {
   isPackaged: boolean;
   developmentExecutablePath?: string;
+  developmentCodeModeHostPath?: string;
   packagedExecutablePath?: string;
   clientVersion: string;
   stateDirectory: string;
@@ -128,6 +129,12 @@ export class CodexExecutionCore {
           isPackaged: options.isPackaged,
           ...(options.developmentExecutablePath
             ? { developmentExecutablePath: options.developmentExecutablePath }
+            : {}),
+          ...(options.developmentCodeModeHostPath
+            ? {
+                developmentCodeModeHostPath:
+                  options.developmentCodeModeHostPath,
+              }
             : {}),
           ...(options.packagedExecutablePath
             ? { packagedExecutablePath: options.packagedExecutablePath }

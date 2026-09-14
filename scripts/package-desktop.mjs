@@ -14,6 +14,14 @@ import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import {
+  componentPaths,
+  defaultManagedCodexRoot,
+  readComponentManifest,
+  selectedComponent,
+  verifyComponentDirectory,
+} from "./codex-component-lib.mjs";
+
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const releaseRoot = join(repositoryRoot, "release");
 const stagingRoot = join(releaseRoot, "staging");
@@ -24,11 +32,11 @@ const mcpRoot = join(servicesRoot, "mcp");
 const browsersRoot = join(stagingRoot, "browsers");
 const codexRoot = join(servicesRoot, "codex");
 const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-export const PINNED_CODEX_SHA256 =
-  "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a";
-export const PINNED_CODE_MODE_HOST_SHA256 =
-  "038b9c6b60baacbfacba1fe81cf603c22b73697810e013d4efda040f1a7294e7";
-export const PINNED_CODE_MODE_HOST_BYTES = 62_768_576;
+const componentManifest = await readComponentManifest();
+export const PACKAGED_CODEX_COMPONENT = selectedComponent(
+  componentManifest,
+  "packaging",
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -82,36 +90,35 @@ async function pruneService(serviceRoot) {
   );
 }
 
-export async function verifyCodexCodeModeHost(source) {
+export async function verifyCodexCodeModeHost(
+  source,
+  expected = PACKAGED_CODEX_COMPONENT.codeModeHost,
+) {
   const bytes = await readFile(source).catch(() => {
     throw new Error(`Supported Codex code-mode host is unavailable: ${source}`);
   });
   const digest = createHash("sha256").update(bytes).digest("hex");
-  if (digest !== PINNED_CODE_MODE_HOST_SHA256) {
+  if (digest !== expected.sha256) {
     throw new Error(
-      "Codex code-mode host digest does not match packaged baseline 0.153.4.",
+      `Codex code-mode host digest does not match packaged component ${PACKAGED_CODEX_COMPONENT.id}.`,
     );
   }
-  if (bytes.byteLength !== PINNED_CODE_MODE_HOST_BYTES) {
+  if (bytes.byteLength !== expected.bytes) {
     throw new Error(
-      "Codex code-mode host size does not match packaged baseline 0.153.4.",
+      `Codex code-mode host size does not match packaged component ${PACKAGED_CODEX_COMPONENT.id}.`,
     );
   }
   return { source, bytes, digest, size: bytes.byteLength };
 }
 
-async function verifyCodexComponentSet() {
-  if (process.platform !== "darwin" || process.arch !== "arm64") {
-    throw new Error(
-      `No reviewed packaged Codex baseline exists for ${process.platform}/${process.arch}.`,
-    );
-  }
-  const executableSource =
-    process.env.ROVE_CODEX_EXECUTABLE ??
-    "/Applications/ChatGPT.app/Contents/Resources/codex";
-  const codeModeHostSource =
-    process.env.ROVE_CODEX_CODE_MODE_HOST ??
-    join(dirname(executableSource), "codex-code-mode-host");
+export async function verifyCodexComponentSet({
+  root = defaultManagedCodexRoot(),
+  component = PACKAGED_CODEX_COMPONENT,
+} = {}) {
+  const managed = componentPaths(root, component);
+  await verifyComponentDirectory(managed.directory, component);
+  const executableSource = managed.executable;
+  const codeModeHostSource = managed.codeModeHost;
   const executableBytes = await readFile(executableSource).catch(() => {
     throw new Error(
       `Supported Codex executable is unavailable: ${executableSource}`,
@@ -120,12 +127,15 @@ async function verifyCodexComponentSet() {
   const executableDigest = createHash("sha256")
     .update(executableBytes)
     .digest("hex");
-  if (executableDigest !== PINNED_CODEX_SHA256) {
+  if (executableDigest !== component.executable.sha256) {
     throw new Error(
-      "Codex executable digest does not match packaged baseline 0.153.4.",
+      `Codex executable digest does not match packaged component ${component.id}.`,
     );
   }
-  const codeModeHost = await verifyCodexCodeModeHost(codeModeHostSource);
+  const codeModeHost = await verifyCodexCodeModeHost(
+    codeModeHostSource,
+    component.codeModeHost,
+  );
   return {
     executable: {
       source: executableSource,
@@ -152,16 +162,18 @@ async function prepareCodexComponentSet({ executable, codeModeHost }) {
     join(codexRoot, "compatibility.json"),
     `${JSON.stringify(
       {
-        version: "0.153.4",
-        platform: "macos",
-        architecture: "arm64",
+        componentId: PACKAGED_CODEX_COMPONENT.id,
+        version: PACKAGED_CODEX_COMPONENT.cliVersion,
+        platform: PACKAGED_CODEX_COMPONENT.platformOs,
+        architecture: PACKAGED_CODEX_COMPONENT.architecture,
         sha256: executable.digest,
+        schema: PACKAGED_CODEX_COMPONENT.schema,
         codeModeHost: {
-          filename: "codex-code-mode-host",
+          filename: PACKAGED_CODEX_COMPONENT.codeModeHost.filename,
           sha256: codeModeHost.digest,
           bytes: codeModeHost.size,
-          platform: "macos",
-          architecture: "arm64",
+          platform: PACKAGED_CODEX_COMPONENT.platformOs,
+          architecture: PACKAGED_CODEX_COMPONENT.architecture,
         },
       },
       null,

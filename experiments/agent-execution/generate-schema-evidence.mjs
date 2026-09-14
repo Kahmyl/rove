@@ -20,7 +20,11 @@ const output = resolve(
   "experiments/agent-execution/fixtures/schema-manifest.json",
 );
 const update = process.argv.includes("--update");
-const executable = process.env.ROVE_CODEX_EXECUTABLE ?? "codex";
+const executable = process.env.ROVE_CODEX_EXECUTABLE;
+if (!executable)
+  throw new Error(
+    "Set ROVE_CODEX_EXECUTABLE to the explicit Codex qualification candidate.",
+  );
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -92,12 +96,14 @@ try {
     join(temporary, "ts"),
     "--output",
     runtimeValidatorCatalog,
+    "--codex-version",
+    versionMatch[1],
   ]);
   const generatedRuntimeValidators = await readFile(runtimeValidatorCatalog);
   const checkedInRuntimeValidators = await readFile(
     join(
       root,
-      "apps/companion/src/main/codex/app-server-0.153.4.schemas.generated.json",
+      `apps/companion/src/main/codex/app-server-${versionMatch[1]}.schemas.generated.json`,
     ),
   );
   if (
@@ -105,7 +111,7 @@ try {
     JSON.stringify(JSON.parse(checkedInRuntimeValidators))
   )
     throw new Error(
-      "Checked-in App Server runtime validator catalog has drifted from generate-ts 0.153.4.",
+      `Checked-in App Server runtime validator catalog has drifted from generate-ts ${versionMatch[1]}.`,
     );
   const entries = [];
   for (const path of paths) {
@@ -122,7 +128,7 @@ try {
   const pick = (path) => entries.find((entry) => entry.path === path);
   const manifest = {
     schemaVersion: 1,
-    generatedAt: "2026-09-07",
+    generatedAt: new Date().toISOString().slice(0, 10),
     command: [
       "codex app-server generate-ts --experimental --out <temporary>/ts",
       "codex app-server generate-json-schema --experimental --out <temporary>/json",

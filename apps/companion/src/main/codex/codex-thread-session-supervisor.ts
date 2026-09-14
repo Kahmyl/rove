@@ -6,9 +6,10 @@ import type {
   ThreadStartParams,
   UserInput,
 } from "./protocol.js";
+import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
 
 export const ROVE_CODEX_COMPATIBILITY_PROFILE = Object.freeze({
-  cliVersion: "0.153.4",
+  cliVersion: APPROVED_CODEX_CLI_VERSION,
   historyMode: "legacy" as const,
 });
 

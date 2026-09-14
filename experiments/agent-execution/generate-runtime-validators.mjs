@@ -8,14 +8,18 @@ import ts from "typescript";
 
 const sourceFlag = process.argv.indexOf("--source");
 const outputFlag = process.argv.indexOf("--output");
+const versionFlag = process.argv.indexOf("--codex-version");
 if (sourceFlag < 0 || outputFlag < 0) {
   throw new Error(
-    "Usage: generate-runtime-validators.mjs --source <generated-ts> --output <catalog.json>",
+    "Usage: generate-runtime-validators.mjs --source <generated-ts> --output <catalog.json> [--codex-version <version>]",
   );
 }
 
 const sourceDirectory = path.resolve(process.argv[sourceFlag + 1]);
 const outputPath = path.resolve(process.argv[outputFlag + 1]);
+const codexVersion =
+  versionFlag < 0 ? "unknown" : process.argv[versionFlag + 1]?.trim();
+if (!codexVersion) throw new Error("--codex-version requires a value.");
 
 async function filesBelow(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -459,7 +463,7 @@ for (const file of files) {
 }
 
 const catalog = {
-  generatedBy: "Codex App Server generate-ts 0.153.4 --experimental",
+  generatedBy: `Codex App Server generate-ts ${codexVersion} --experimental`,
   generatedTsAggregateSha256: digest.digest("hex"),
   roots,
   $defs: Object.fromEntries(

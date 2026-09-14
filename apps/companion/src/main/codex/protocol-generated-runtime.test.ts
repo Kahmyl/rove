@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import generatedCatalogJson from "./app-server-0.153.4.schemas.generated.json" with { type: "json" };
+import generatedCatalogJson from "./app-server-0.154.0-alpha.6.2.schemas.generated.json" with { type: "json" };
 import type {
   GeneratedSchema,
   GeneratedSchemaCatalog,
@@ -138,7 +138,7 @@ function invoke(family: Family, method: string, value: unknown): void {
   else validateServerRequestResponse(method as CodexServerRequestMethod, value);
 }
 
-describe("generated 0.153.4 runtime schema catalog", () => {
+describe("generated approved runtime schema catalog", () => {
   it("accepts developer instructions on thread start and resume", () => {
     expect(() =>
       validateCodexRequestParams("thread/start", {

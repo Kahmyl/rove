@@ -51,9 +51,7 @@ export async function readCodexVersion(
     timeout: 5_000,
     env: sanitizedEnvironment(),
   });
-  const match = `${stdout}\n${stderr}`.match(
-    /codex(?:-cli)?\s+(\d+\.\d+\.\d+)/i,
-  );
+  const match = `${stdout}\n${stderr}`.match(/codex(?:-cli)?\s+(\S+)/i);
   if (match?.[1] === undefined) {
     throw new Error("Codex version probe returned an unrecognized response.");
   }
@@ -363,7 +361,7 @@ export class CodexAppServerHost implements CodexRpcPort {
     signal: NodeJS.Signals | null,
   ): void {
     if (this.intentionalStop) return;
-    this.lastError = `Codex App Server exited (${code ?? signal ?? "unknown"}).`;
+    this.lastError ??= `Codex App Server exited (${code ?? signal ?? "unknown"}).`;
     this.setState("degraded");
     if (this.recovery !== undefined) return;
     this.recovery = this.recover().finally(() => {

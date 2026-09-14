@@ -31,6 +31,7 @@ import {
   type TaskWorkflowContextSnapshot,
   type TaskResultActionPlan,
 } from "@rove/protocol";
+import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
 
 export type ProductionLifecycleCommandClass =
   | "internal_durable_transition"
@@ -2177,7 +2178,7 @@ export class RoveTaskCoordinator {
       match.thread.id !== context.codexThreadId ||
       match.thread.sessionId !== context.codexSessionId ||
       match.thread.threadSource !== context.bootstrap.threadSource ||
-      match.thread.cliVersion !== "0.153.4" ||
+      match.thread.cliVersion !== APPROVED_CODEX_CLI_VERSION ||
       match.thread.historyMode !== "legacy"
     )
       throw new Error("Codex bound thread list identity changed.");
@@ -2221,7 +2222,7 @@ export class RoveTaskCoordinator {
       resumed.thread.id !== context.codexThreadId ||
       resumed.thread.sessionId !== context.codexSessionId ||
       resumed.thread.threadSource !== context.bootstrap.threadSource ||
-      resumed.thread.cliVersion !== "0.153.4" ||
+      resumed.thread.cliVersion !== APPROVED_CODEX_CLI_VERSION ||
       resumed.thread.historyMode !== "legacy"
     )
       throw new Error("Codex resumed conflicting thread identity.");

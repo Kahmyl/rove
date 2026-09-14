@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "component": "codex-app-server",
+  "selections": {
+    "development": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
+    "packaging": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a"
+  },
+  "components": [
+    {
+      "id": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
+      "status": "qualified",
+      "cliVersion": "0.154.0-alpha.6.2",
+      "platformOs": "macos",
+      "nodePlatform": "darwin",
+      "architecture": "arm64",
+      "executable": {
+        "filename": "codex",
+        "sha256": "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb",
+        "bytes": 222786528
+      },
+      "codeModeHost": {
+        "filename": "codex-code-mode-host",
+        "sha256": "fd36f7c8fc53de66008b9238b5ae24eec686edaf774083fa6e0158385a886626",
+        "bytes": 62787200
+      },
+      "schema": {
+        "filename": "app-server-0.154.0-alpha.6.2.schemas.generated.json",
+        "sha256": "61400fa7a6cd186c0189fc7f16644fa803c1ef60fc5c66a27e561ceadd1b7afd",
+        "aggregateSha256": "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e"
+      },
+      "qualification": {
+        "date": "2026-09-14",
+        "sourceKind": "explicit-external-candidate",
+        "sourceProduct": "ChatGPT",
+        "sourceProductVersion": "26.908.40834",
+        "isolatedAppServerLifecycle": true,
+        "liveModelTurn": false
+      }
+    },
+    {
+      "id": "codex-0.153.4-macos-arm64-87a08119b8ef",
+      "status": "retained-qualified",
+      "cliVersion": "0.153.4",
+      "platformOs": "macos",
+      "nodePlatform": "darwin",
+      "architecture": "arm64",
+      "executable": {
+        "filename": "codex",
+        "sha256": "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a"
+      },
+      "codeModeHost": {
+        "filename": "codex-code-mode-host",
+        "sha256": "038b9c6b60baacbfacba1fe81cf603c22b73697810e013d4efda040f1a7294e7",
+        "bytes": 62768576
+      },
+      "schema": {
+        "filename": "app-server-0.153.4.schemas.generated.json",
+        "sha256": "a03436395715878854863bf699c9a9fd73c50b7c1186ec5ceab3d7506f9c194f",
+        "aggregateSha256": "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5"
+      },
+      "qualification": {
+        "date": "2026-09-07",
+        "sourceKind": "historical-reviewed-baseline",
+        "isolatedAppServerLifecycle": true,
+        "liveModelTurn": false
+      }
+    }
+  ]
+}
