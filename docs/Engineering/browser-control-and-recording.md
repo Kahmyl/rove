@@ -68,7 +68,7 @@ Sensitive-data handling is independent of screenshot masking. Test pause/exclusi
 
 ### Implemented page-video boundary
 
-Runtime records an explicitly selected task-owned page through Playwright Screencast in Agent, Companion, and Capture modes. The immutable record binds the task, Runtime session, participation mode, original page, truthful coverage and exclusions, and the explicit `user_confirmed_visible_content` policy. The UI keeps task ownership and active/finalizing state visible, and stopping recording leaves the task, browser, and Runtime session active.
+Runtime records an explicitly selected task-owned page through Playwright Screencast in Agent, Companion, and Capture modes. The immutable record binds the task, Runtime session, participation mode, original page, truthful coverage and exclusions, and the explicit `user_confirmed_visible_content` policy. The UI renders requested as a disabled **Starting page recording…** state, exposes Stop only for recording, keeps task ownership and active/finalizing state visible, and leaves the task, browser, and Runtime session active when recording stops.
 
 The recording store persists requested, recording, finalizing, available, and failed transitions beneath the local session boundary. A video becomes available only after Screencast stops, the staging file has a WebM EBML signature and minimum size, SHA-256 and byte length are computed, and an atomic rename succeeds. Interrupted active records become failed during recovery; an unverified partial is never advertised as playable. Renderer playback supplies only task and recording identifiers, which the host revalidates before deriving and opening the local path.
 

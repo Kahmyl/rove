@@ -534,6 +534,7 @@ describe("native product composer state", () => {
     starting.productError =
       "Codex 0.154.0 is not reviewed baseline 0.153.4 (sha256 deadbeef).";
     expect(recoveryLabel(starting)).toBe("Codex couldn't start");
+    expect(codexCustomerStatus(starting).recovery).toBe("restart_rove");
     expect(recoveryLabel(starting)).not.toMatch(
       /0\.154|baseline|sha256|App Server/,
     );

@@ -2341,7 +2341,7 @@ select:focus-visible {
 
 @media (max-width: 940px) {
   .product-layout {
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: 190px minmax(0, 1fr);
   }
 
   .product-main {
@@ -2879,6 +2879,14 @@ select:focus-visible {
 .product-app .task-history-row[data-current="true"] {
   border: 0;
   background: var(--surface-subtle);
+}
+
+.product-app
+  .task-history-row[data-needs-input="true"]
+  .task-history-select
+  span {
+  color: var(--warning);
+  font-weight: 620;
 }
 
 .task-history-select strong,
@@ -4738,16 +4746,16 @@ span.composer-control-icon {
 
 @media (max-width: 940px) {
   .product-layout:has(.product-inspector) {
-    grid-template-columns: 210px minmax(0, 1fr) 226px;
+    grid-template-columns: 190px minmax(0, 1fr) 200px;
     grid-template-areas: "sidebar main inspector";
   }
 
   .product-app:not(.product-auth-app) > .product-topbar {
-    grid-template-columns: 210px minmax(0, 1fr) 226px;
+    grid-template-columns: 190px minmax(0, 1fr) 200px;
   }
 
   .product-app:not(.product-auth-app) > .product-topbar .product-brand {
-    width: 210px;
+    width: 190px;
   }
 
   .product-inspector {
@@ -4759,7 +4767,7 @@ span.composer-control-icon {
   }
 
   .composer-card .composer-footer {
-    min-width: 190px;
+    min-width: 150px;
   }
 }
 
@@ -5726,7 +5734,7 @@ html[data-rove-theme="dark"] .account-avatar {
   }
 
   .composer-permission-menu > summary {
-    max-width: 104px;
+    max-width: none;
   }
 
   .composer-card .composer-footer .composer-model-menu > summary,
@@ -5739,15 +5747,17 @@ html[data-rove-theme="dark"] .account-avatar {
   }
 
   .task-composer-shell .composer-permission-menu > summary {
-    max-width: 82px;
+    max-width: none;
   }
 
   .task-composer-shell .composer-model-menu > summary {
-    max-width: 90px;
+    max-width: 116px;
   }
 
   .task-composer-shell .composer-control-icon,
-  .task-composer-shell .composer-chevron {
+  .task-composer-shell .composer-chevron,
+  .composer-card .composer-control-icon,
+  .composer-card .composer-chevron {
     display: none;
   }
 }

@@ -155,6 +155,7 @@ describe("Companion preload API", () => {
       "openTrustedExternal",
       "pauseSession",
       "renameBrowserWorkspace",
+      "restartRove",
       "returnControl",
       "selectBrowserWorkspace",
       "setFollowerExpanded",
@@ -201,6 +202,7 @@ describe("Companion preload API", () => {
     await api.updateFollowerDrag();
     await api.endFollowerDrag();
     await api.openRove();
+    await api.restartRove();
     await api.showBrowser();
     await api.openTrustedExternal({
       purpose: "account_login",
@@ -239,6 +241,7 @@ describe("Companion preload API", () => {
       companionIpcChannels.followerDragUpdate,
       companionIpcChannels.followerDragEnd,
       companionIpcChannels.openRove,
+      companionIpcChannels.restartRove,
       companionIpcChannels.showBrowser,
       companionIpcChannels.openTrustedExternal,
       companionIpcChannels.openRecording,

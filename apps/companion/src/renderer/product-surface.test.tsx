@@ -7,18 +7,22 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   LocalBackupSettings,
   ProductSurface,
+  browserIdentityLabel,
   compatibleReasoningEffort,
   commandPaletteMatches,
   deriveOutputTitle,
   followupDraftForTask,
+  localBackupExportStatus,
   outputBodyForPresentation,
   outputKindForMessage,
   outputKindLabel,
   outputPreview,
   outputStatus,
   permissionReviewDescription,
+  recordingLifecyclePresentation,
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
+  taskNeedsCustomerInput,
   workflowConfigurationFromDraft,
   workflowDraft,
   workflowWorkspaceProjection,
@@ -236,6 +240,92 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain("credential stores");
     expect(html).toContain("not Workflow sync");
     expect(html).toContain("Restore is not available yet");
+  });
+
+  it("keeps local backup creation, cancellation, and failure presentation distinct", () => {
+    expect(
+      localBackupExportStatus({
+        status: "created",
+        name: "rove-backup",
+        fileCount: 8,
+        missingCount: 0,
+      }),
+    ).toBe("rove-backup created with 8 files.");
+    expect(localBackupExportStatus({ status: "cancelled" })).toBe(
+      "Backup export cancelled. No backup was created.",
+    );
+    expect(localBackupExportStatus({ status: "cancelled" })).not.toMatch(
+      /attention|retry|failed/i,
+    );
+  });
+
+  it("projects recording lifecycle into distinct customer states and actions", () => {
+    expect(recordingLifecyclePresentation("requested")).toEqual({
+      summary: "Starting page recording…",
+      stateLabel: "Starting…",
+      actionLabel: "Starting page recording…",
+      canStop: false,
+    });
+    expect(recordingLifecyclePresentation("recording")).toMatchObject({
+      summary: "Page recording active",
+      actionLabel: "Stop page recording",
+      canStop: true,
+    });
+    expect(recordingLifecyclePresentation("finalizing")).toMatchObject({
+      summary: "Finalizing recording",
+      actionLabel: "Finalizing recording…",
+      canStop: false,
+    });
+    expect(recordingLifecyclePresentation("available")).toMatchObject({
+      summary: "Recording available",
+      actionLabel: "Open recording",
+    });
+    expect(recordingLifecyclePresentation("failed")).toMatchObject({
+      summary: "Recording unavailable",
+      actionLabel: null,
+    });
+  });
+
+  it("shows browser identity only for the exact attached task", () => {
+    const value = snapshot();
+    const detached = {
+      browserIdentity: { mode: "workspace", workspaceId },
+    } as never;
+    const attached = {
+      browserIdentity: { mode: "workspace", workspaceId },
+      runtime: { attachment: "attached" },
+    } as never;
+    const anotherTaskAttached = {
+      browserIdentity: { mode: "temporary" },
+      runtime: { attachment: "missing" },
+    } as never;
+
+    expect(browserIdentityLabel(value, detached)).toBe("No browser attached");
+    expect(browserIdentityLabel(value, attached)).toBe("Personal");
+    expect(browserIdentityLabel(value, anotherTaskAttached)).toBe(
+      "No browser attached",
+    );
+  });
+
+  it("marks only pending task-scoped conversational attention as needing input", () => {
+    const value = snapshot();
+    const attention = {
+      authority: "codex",
+      kind: "user_input",
+      requestId: "question_a",
+      taskId: "task_a",
+      generation: 1,
+      status: "pending",
+      sequence: 1,
+      title: "Choose one",
+      questions: [],
+    } as const;
+    value.product!.attention = [attention];
+
+    expect(taskNeedsCustomerInput(value.product, "task_a")).toBe(true);
+    expect(taskNeedsCustomerInput(value.product, "task_b")).toBe(false);
+    value.product!.attention = [{ ...attention, status: "responding" }];
+    expect(taskNeedsCustomerInput(value.product, "task_a")).toBe(false);
   });
 
   it("shows truthful page-recording controls and ownership in every mode", () => {

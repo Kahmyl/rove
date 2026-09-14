@@ -141,6 +141,7 @@ export interface RoveDesktopApi {
   updateFollowerDrag(): Promise<void>;
   endFollowerDrag(): Promise<void>;
   openRove(): Promise<void>;
+  restartRove(): Promise<boolean>;
   showBrowser(taskId?: string): Promise<boolean>;
   openTrustedExternal(intent: TrustedExternalIntent): Promise<void>;
   openRecording(taskId: string, recordingId: string): Promise<void>;
@@ -195,6 +196,7 @@ export const companionIpcChannels = {
   followerDragUpdate: "rove:follower-drag-update",
   followerDragEnd: "rove:follower-drag-end",
   openRove: "rove:open",
+  restartRove: "rove:restart",
   showBrowser: "rove:show-browser",
   openTrustedExternal: "rove:open-trusted-external",
   openRecording: "rove:open-recording",

@@ -113,6 +113,9 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
 
     openRove: () => ipc.invoke(companionIpcChannels.openRove) as Promise<void>,
 
+    restartRove: () =>
+      ipc.invoke(companionIpcChannels.restartRove) as Promise<boolean>,
+
     showBrowser: (taskId) =>
       ipc.invoke(companionIpcChannels.showBrowser, taskId) as Promise<boolean>,
 

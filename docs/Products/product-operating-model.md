@@ -8,6 +8,8 @@ The user accesses a Rove profile independently of the connected ChatGPT/Codex ac
 
 Connecting Codex enables model-assisted work. Disconnecting it does not hide previous results. The application must identify unavailable model access at submission, preserve the user's text if submission fails, and never leave a known-impossible request spinning as though it were running. A connection error and an exhausted allowance are distinguishable messages, with existing work still accessible.
 
+If the local Codex host cannot start, Rove offers one application-level **Restart Rove** recovery through the trusted desktop boundary. Restart enters the normal managed shutdown path before Electron relaunches; the UI must not imply a task started or claim an in-memory draft will survive application restart unless that persistence is implemented.
+
 A temporary workflow-sync outage does not disable already cached local tasks or approved guidance. Explicit Rove sign-out locks the profile's cached data; it is not equivalent to an incidental loss of connectivity. Reauthentication must not execute old requests.
 
 ## Main work surface
@@ -16,13 +18,14 @@ The user can find standalone tasks and tasks grouped by workflow, start new work
 
 Each task presents a conversation, compact acknowledgements for useful work saved to Outputs, active work status, and controls appropriate to its state. The composer remains a conversation entry point rather than a permanently expanded configuration form. Attachments, Commands, participation mode, approval policy, combined model and reasoning effort, and the send action remain quietly glanceable; less frequent Workflow, browser, recording, and other implemented task choices use the same progressive command disclosure. Exact Output context is optional input to the next request and appears as a `Using:` chip rather than Result-selection terminology.
 
-When the selected task cannot continue without conversational input, its exact request temporarily replaces the ordinary composer with one response surface. Bounded choices remain optional rather than automatic, and a freeform alternative is available where the request permits it. A successful response returns the ordinary composer through the existing attention-response contract. Browser handoff and consequential approval retain their distinct controls and full truthful scope. Attention owned by another task is only an indicator until the user opens that task.
+When the selected task cannot continue without conversational input, its exact request temporarily replaces the ordinary composer with one response surface. Bounded choices remain optional rather than automatic, and a freeform alternative is available where the request permits it. A successful response returns the ordinary composer through the existing attention-response contract. Browser handoff and consequential approval retain their distinct controls and full truthful scope. Attention owned by another task is named **Needs input** on that exact task until the user opens and answers it; it cannot replace the selected task's composer.
 
 | User action or condition                           | Required response                                                                                          |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Send a model request with known unavailable access | Explain the missing connection/allowance before accepting execution.                                       |
 | Start non-browser work                             | Do not open or demand a browser.                                                                           |
 | Open Browser explicitly                            | Attach or reveal the task's browser resources, without restarting the conversation.                        |
+| No browser is attached                             | Say **No browser attached**; do not show a Guest or named profile identity until exact task attachment.    |
 | Switch tasks                                       | Preserve both tasks, drafts, results, and routing.                                                         |
 | Stop                                               | Prevent further dispatch; retain the conversation, partial work, and known/unknown action outcomes.        |
 | Send after stopping or completion                  | Continue the same task with the new request; do not demand a new task.                                     |
@@ -56,7 +59,7 @@ Capture Mode records meaningful human activity within the chosen task scope. The
 
 ## Requested video
 
-Recording is a separate control available in every mode. The user selects or confirms the recording scope, sees an active indicator, stops recording, and receives a local playable artifact. Explain page-versus-window coverage and any excluded windows or dialogs. Recording starts now, not retrospectively. Failure to finalize must be visible and must not be described as a saved video.
+Recording is a separate control available in every mode. The user selects or confirms the recording scope, sees a disabled **Starting page recording…** state while the request is pending, sees an active indicator only after recording begins, stops an active recording, and receives a local playable artifact. Explain page-versus-window coverage and any excluded windows or dialogs. Recording starts now, not retrospectively. Failure to finalize must be visible and must not be described as a saved video.
 
 ## Findings through follow-up
 

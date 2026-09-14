@@ -14,7 +14,9 @@ import type {
   LocalProductSnapshot,
   ProductAttentionProjection,
   ProductElicitationField,
+  ProductTaskProjection,
 } from "../main/codex/local-product-api.js";
+import type { RecordingState } from "@rove/protocol";
 import type { ProjectedConversationItem } from "../main/codex/conversations.js";
 import type {
   CodexModelProjection,
@@ -646,6 +648,89 @@ function workspaceName(
     desktop?.workspaces.workspaces.find((entry) => entry.id === workspaceId)
       ?.displayName ?? "Unavailable workspace"
   );
+}
+
+export function taskNeedsCustomerInput(
+  product: LocalProductSnapshot | null,
+  taskId: string,
+): boolean {
+  return (
+    product?.attention.some(
+      (entry) =>
+        entry.taskId === taskId &&
+        entry.status === "pending" &&
+        (entry.kind === "user_input" ||
+          entry.continuationPolicy === "explicit_user_response"),
+    ) ?? false
+  );
+}
+
+export function browserIdentityLabel(
+  desktop: DesktopSurfaceSnapshot | null,
+  task: ProductTaskProjection | undefined,
+): string {
+  if (task?.runtime?.attachment !== "attached") return "No browser attached";
+  if (task.browserIdentity?.mode === "workspace")
+    return workspaceName(desktop, task.browserIdentity.workspaceId);
+  if (task.browserIdentity?.mode === "temporary") return "Guest";
+  return "No browser attached";
+}
+
+export function recordingLifecyclePresentation(state: RecordingState): {
+  summary: string;
+  stateLabel: string;
+  actionLabel: string | null;
+  canStop: boolean;
+} {
+  switch (state) {
+    case "requested":
+      return {
+        summary: "Starting page recording…",
+        stateLabel: "Starting…",
+        actionLabel: "Starting page recording…",
+        canStop: false,
+      };
+    case "recording":
+      return {
+        summary: "Page recording active",
+        stateLabel: "Recording",
+        actionLabel: "Stop page recording",
+        canStop: true,
+      };
+    case "finalizing":
+      return {
+        summary: "Finalizing recording",
+        stateLabel: "Finalizing…",
+        actionLabel: "Finalizing recording…",
+        canStop: false,
+      };
+    case "available":
+      return {
+        summary: "Recording available",
+        stateLabel: "Available",
+        actionLabel: "Open recording",
+        canStop: false,
+      };
+    case "failed":
+      return {
+        summary: "Recording unavailable",
+        stateLabel: "Failed",
+        actionLabel: null,
+        canStop: false,
+      };
+  }
+}
+
+export function localBackupExportStatus(
+  result: Awaited<ReturnType<Window["rove"]["exportLocalBackup"]>>,
+): string {
+  if (result.status === "cancelled")
+    return "Backup export cancelled. No backup was created.";
+  return `${result.name} created with ${result.fileCount} files${
+    result.missingCount > 0
+      ? `; ${result.missingCount} missing or excluded entries are listed in its manifest`
+      : ""
+  }.`;
 }
 
 function attachmentTypeLabel(filename: string, mimeType: string): string {
@@ -1686,13 +1771,8 @@ export function ProductSurface({
       ),
     );
   }, [product?.attention]);
-  const selectedIdentity = viewedTask?.browserIdentity;
-  const identityLabel =
-    selectedIdentity?.mode === "workspace"
-      ? workspaceName(desktop, selectedIdentity.workspaceId)
-      : selectedIdentity?.mode === "temporary"
-        ? "Guest"
-        : "No browser profile";
+  const browserAttached = viewedTask?.runtime?.attachment === "attached";
+  const identityLabel = browserIdentityLabel(desktop, viewedTask);
 
   const run = async <T,>(
     operation: () => Promise<T>,
@@ -2906,7 +2986,7 @@ export function ProductSurface({
                   : customerCodexStatus.kind === "usage_limit_reached"
                     ? "Your draft is saved here. You can try again after your Codex usage limit resets."
                     : customerCodexStatus.kind === "startup_failed"
-                      ? "Restart Rove to try again. Your draft is saved here."
+                      ? "Rove couldn't start Codex. Restart Rove to try again."
                       : "Your draft is saved here. Retry when you are ready."}
             </p>
           </div>
@@ -2963,6 +3043,26 @@ export function ProductSurface({
               disabled={busy}
             >
               Retry
+            </button>
+          )}
+          {customerCodexStatus.recovery === "restart_rove" && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => {
+                setBusy(true);
+                void window.rove.restartRove().catch((cause: unknown) => {
+                  setBusy(false);
+                  setOperationError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Rove could not restart.",
+                  );
+                });
+              }}
+              disabled={busy}
+            >
+              Restart Rove
             </button>
           )}
           <button
@@ -3523,7 +3623,9 @@ export function ProductSurface({
               >
                 {customerCodexStatus.recovery === "sign_in"
                   ? "Sign in"
-                  : "Retry"}
+                  : customerCodexStatus.recovery === "restart_rove"
+                    ? "Restart Rove"
+                    : "Retry"}
               </button>
             )}
           </div>
@@ -3887,16 +3989,8 @@ export function ProductSurface({
                 void window.rove
                   .exportLocalBackup()
                   .then((result) => {
-                    if (result.status === "created") {
-                      setBackupStatus(
-                        `${result.name} created with ${result.fileCount} files${
-                          result.missingCount > 0
-                            ? `; ${result.missingCount} missing or excluded entries are listed in its manifest`
-                            : ""
-                        }.`,
-                      );
-                      setOperationError(null);
-                    }
+                    setBackupStatus(localBackupExportStatus(result));
+                    setOperationError(null);
                   })
                   .catch((cause: unknown) => {
                     setOperationError(
@@ -5169,9 +5263,12 @@ export function ProductSurface({
                 role="status"
                 key={`active-recording:${recording.id}`}
               >
-                <strong>Page recording active</strong>
+                <strong>
+                  {recordingLifecyclePresentation(recording.state).summary}
+                </strong>
                 <span>
-                  {displayTaskTitle(task)} · {recording.state}
+                  {displayTaskTitle(task)} ·{" "}
+                  {recordingLifecyclePresentation(recording.state).stateLabel}
                 </span>
               </div>
             ))}
@@ -5761,6 +5858,11 @@ export function ProductSurface({
                   data-current={
                     entry.taskId === viewedTask?.taskId ? "true" : undefined
                   }
+                  data-needs-input={
+                    taskNeedsCustomerInput(product, entry.taskId)
+                      ? "true"
+                      : undefined
+                  }
                 >
                   <button
                     className="task-history-select"
@@ -5780,11 +5882,13 @@ export function ProductSurface({
                       {entry.workflowAssociation
                         ? `${entry.workflowAssociation.workflowName} · `
                         : "Standalone · "}
-                      {entry.conversation?.turnStatus === "in_progress"
-                        ? "Working"
-                        : terminalProductTask(entry)
-                          ? "Completed"
-                          : entry.lifecycle.phase.replaceAll("_", " ")}
+                      {taskNeedsCustomerInput(product, entry.taskId)
+                        ? "Needs input"
+                        : entry.conversation?.turnStatus === "in_progress"
+                          ? "Working"
+                          : terminalProductTask(entry)
+                            ? "Completed"
+                            : entry.lifecycle.phase.replaceAll("_", " ")}
                       {` · ${entry.executionMode === "agent" ? "Agent" : entry.executionMode === "companion" ? "Companion" : "Capture"}`}
                     </span>
                   </button>
@@ -5898,7 +6002,9 @@ export function ProductSurface({
                 </span>
                 <span>
                   <strong>{identityLabel}</strong>
-                  <small>{viewedTaskControl.controllerLabel}</small>
+                  {browserAttached && (
+                    <small>{viewedTaskControl.controllerLabel}</small>
+                  )}
                 </span>
               </div>
               {browserHandoff && (
@@ -5976,15 +6082,19 @@ export function ProductSurface({
               </summary>
               <div className="recording-summary">
                 <strong>
-                  {(viewedTask.recordings ?? []).some((recording) =>
-                    ["requested", "recording"].includes(recording.state),
+                  {(viewedTask.recordings ?? []).find((recording) =>
+                    ["requested", "recording", "finalizing"].includes(
+                      recording.state,
+                    ),
                   )
-                    ? "Page recording active"
-                    : (viewedTask.recordings ?? []).some(
-                          (recording) => recording.state === "finalizing",
-                        )
-                      ? "Finalizing recording"
-                      : "Task-owned page evidence"}
+                    ? recordingLifecyclePresentation(
+                        (viewedTask.recordings ?? []).find((recording) =>
+                          ["requested", "recording", "finalizing"].includes(
+                            recording.state,
+                          ),
+                        )!.state,
+                      ).summary
+                    : "Task-owned page evidence"}
                 </strong>
                 <span>Selected page only · no audio</span>
               </div>
@@ -6005,17 +6115,27 @@ export function ProductSurface({
                   )
                   .map((recording) => (
                     <div className="recording-actions" key={recording.id}>
-                      <small>{recording.state.replaceAll("_", " ")}</small>
+                      <small>
+                        {
+                          recordingLifecyclePresentation(recording.state)
+                            .stateLabel
+                        }
+                      </small>
                       <button
                         type="button"
-                        disabled={busy || recording.state === "finalizing"}
+                        disabled={
+                          busy ||
+                          !recordingLifecyclePresentation(recording.state)
+                            .canStop
+                        }
                         onClick={() =>
                           void stopRecording(viewedTask.taskId, recording.id)
                         }
                       >
-                        {recording.state === "finalizing"
-                          ? "Finalizing recording…"
-                          : "Stop page recording"}
+                        {
+                          recordingLifecyclePresentation(recording.state)
+                            .actionLabel
+                        }
                       </button>
                     </div>
                   ))

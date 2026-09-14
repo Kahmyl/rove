@@ -28,6 +28,7 @@ import {
 } from "../shared/desktop-api.js";
 import { DesktopHost } from "./host/desktop-host.js";
 import { DesktopQuitBarrier } from "./host/desktop-quit-barrier.js";
+import { createDesktopRelaunchRequest } from "./host/desktop-relaunch.js";
 import { stopDesktopComponents } from "./host/desktop-shutdown.js";
 import { HubConnector } from "./host/hub-connector.js";
 import { createLocalFileGrantAuthority } from "./host/local-file-grant.js";
@@ -139,6 +140,11 @@ let followerDragTracker: NodeJS.Timeout | undefined;
 let allowQuit = false;
 
 const desktopQuitBarrier = new DesktopQuitBarrier();
+
+const requestDesktopRelaunch = createDesktopRelaunchRequest({
+  relaunch: () => app.relaunch(),
+  quit: () => app.quit(),
+});
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -378,6 +384,10 @@ function registerIpc(
   ipcMain.handle(companionIpcChannels.windowFullscreen, (event) => {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
+
+  ipcMain.handle(companionIpcChannels.restartRove, () =>
+    requestDesktopRelaunch(),
+  );
 
   ipcMain.handle(companionIpcChannels.surfaceSnapshot, () =>
     desktopSurfaceSnapshot === undefined

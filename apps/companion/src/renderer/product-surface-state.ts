@@ -46,7 +46,7 @@ export interface CodexCustomerStatus {
   kind: CodexCustomerStatusKind;
   label: string;
   ready: boolean;
-  recovery: "sign_in" | "retry" | null;
+  recovery: "sign_in" | "retry" | "restart_rove" | null;
 }
 
 /**
@@ -78,7 +78,7 @@ export function codexCustomerStatus(
       kind: "startup_failed",
       label: "Codex couldn't start",
       ready: false,
-      recovery: null,
+      recovery: "restart_rove",
     };
   const product = desktop.product;
   if (product === null || product.host.state === "failed")
@@ -86,7 +86,7 @@ export function codexCustomerStatus(
       kind: "startup_failed",
       label: "Codex couldn't start",
       ready: false,
-      recovery: null,
+      recovery: "restart_rove",
     };
   if (!product.host.ready)
     return {
