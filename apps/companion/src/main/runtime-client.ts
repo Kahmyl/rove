@@ -44,6 +44,12 @@ export interface RuntimeConsequentialEffect {
   taskResultPlan?: TaskResultActionPlan;
 }
 
+export interface ExactControlAuthority {
+  ownershipGeneration: number;
+  handoffId?: string;
+  handoffGeneration?: number;
+}
+
 export class CompanionRuntimeClient {
   private readonly baseUrl: string;
   private readonly token: string | undefined;
@@ -308,8 +314,7 @@ export class CompanionRuntimeClient {
     );
   }
 
-  async showBrowser(): Promise<boolean> {
-    const sessionId = await this.requireSessionId();
+  async showBrowserForSession(sessionId: string): Promise<boolean> {
     return this.request<boolean>(
       `/sessions/${encodeURIComponent(sessionId)}/browser/show`,
       { method: "POST" },
@@ -339,32 +344,27 @@ export class CompanionRuntimeClient {
     };
   }
 
-  async takeControl(): Promise<RuntimeCompanionSnapshot | null> {
-    const sessionId = await this.requireSessionId();
-
+  async takeControlForSession(
+    sessionId: string,
+    authority: ExactControlAuthority,
+  ): Promise<RuntimeCompanionSnapshot> {
     await this.request(`/sessions/${sessionId}/control/take`, {
       method: "POST",
+      body: JSON.stringify(authority),
     });
-
-    return this.getSnapshot();
-  }
-
-  async returnControl(): Promise<RuntimeCompanionSnapshot | null> {
-    const sessionId = await this.requireSessionId();
-
-    await this.request(`/sessions/${sessionId}/control/return`, {
-      method: "POST",
-    });
-
-    return this.getSnapshot();
+    return this.getSnapshotForSession(sessionId);
   }
 
   async returnControlForSession(
     sessionId: string,
+    authority: ExactControlAuthority,
   ): Promise<RuntimeCompanionSnapshot> {
     const returned = await this.request<ControlStatus>(
       `/sessions/${encodeURIComponent(sessionId)}/control/return`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify(authority),
+      },
     );
     if (returned.sessionId !== sessionId)
       throw new Error("Runtime returned a mismatched control session.");
@@ -386,24 +386,15 @@ export class CompanionRuntimeClient {
     };
   }
 
-  async pauseSession(): Promise<RuntimeCompanionSnapshot | null> {
-    const sessionId = await this.requireSessionId();
-
+  async pauseSessionForSession(
+    sessionId: string,
+    authority: ExactControlAuthority,
+  ): Promise<RuntimeCompanionSnapshot> {
     await this.request(`/sessions/${sessionId}/control/pause`, {
       method: "POST",
+      body: JSON.stringify(authority),
     });
-
-    return this.getSnapshot();
-  }
-
-  async finishSession(): Promise<RuntimeCompanionSnapshot | null> {
-    const sessionId = await this.requireSessionId();
-
-    await this.request(`/sessions/${sessionId}/end`, {
-      method: "POST",
-    });
-
-    return this.getSnapshot();
+    return this.getSnapshotForSession(sessionId);
   }
 
   private async resolveSession(): Promise<Session | null> {
@@ -430,21 +421,39 @@ export class CompanionRuntimeClient {
       return null;
     }
 
-    return [...sessions].sort(
-      (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
-    )[0]!;
+    return [...sessions].sort((left, right) => {
+      const leftHuman =
+        left.controller === "human" || left.status === "awaiting_human" ? 1 : 0;
+      const rightHuman =
+        right.controller === "human" || right.status === "awaiting_human"
+          ? 1
+          : 0;
+      return (
+        rightHuman - leftHuman ||
+        Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
+      );
+    })[0]!;
   }
 
-  private async requireSessionId(): Promise<string> {
-    const session = await this.resolveSession();
-
-    if (session === null) {
-      throw new Error(
-        "No active Companion or Capture Mode session is available.",
-      );
-    }
-
-    return session.id;
+  private async getSnapshotForSession(
+    sessionId: string,
+  ): Promise<RuntimeCompanionSnapshot> {
+    const session = await this.getSession(sessionId);
+    const [observationCount, evidence, browserWindow] = await Promise.all([
+      this.countObservations(sessionId),
+      this.request<Evidence[]>(
+        `/sessions/${encodeURIComponent(sessionId)}/evidence`,
+      ),
+      this.getBrowserWindowState(sessionId, AbortSignal.timeout(1_000)).catch(
+        () => null,
+      ),
+    ]);
+    return {
+      session,
+      observationCount,
+      evidenceCount: evidence.length,
+      browserOpen: browserWindow !== null,
+    };
   }
 
   private async countObservations(sessionId: string): Promise<number> {

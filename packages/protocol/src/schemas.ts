@@ -16,6 +16,23 @@ export const humanHandoffSchema = z.object({
   requestedAt: z.string().datetime(),
 });
 
+export const controlMutationAuthoritySchema = z
+  .object({
+    ownershipGeneration: z.number().int().positive(),
+    handoffId: z.string().startsWith("handoff_").optional(),
+    handoffGeneration: z.number().int().positive().optional(),
+  })
+  .superRefine((value, context) => {
+    if (
+      (value.handoffId === undefined) !==
+      (value.handoffGeneration === undefined)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Control authority requires both handoff identities.",
+      });
+  });
+
 export const temporaryProfileSchema = z.object({
   mode: z.literal("temporary"),
 });

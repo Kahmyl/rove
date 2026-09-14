@@ -13,6 +13,7 @@ import {
 import { loadConfig } from "@rove/config";
 import type { Session } from "@rove/protocol";
 import { FileRecordingStore } from "@rove/storage";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
@@ -587,12 +588,16 @@ function registerIpc(
   });
 
   ipcMain.handle(companionIpcChannels.showBrowser, async (_event, taskId) => {
-    if (typeof taskId === "string") {
-      if (codexExecutionCore === undefined || codexProductError !== null)
-        throw new Error("Codex product service is unavailable.");
-      await codexExecutionCore.attachBrowser(taskId);
-    }
-    const shown = await runtime.showBrowser();
+    if (typeof taskId !== "string" || taskId.length === 0)
+      throw new Error("Browser presentation requires an exact task.");
+    if (codexExecutionCore === undefined || codexProductError !== null)
+      throw new Error("Codex product service is unavailable.");
+    const sessionId = await codexExecutionCore.attachBrowser(taskId);
+    const authority =
+      await codexExecutionCore.resolveTaskRuntimeControl(taskId);
+    if (authority.sessionId !== sessionId)
+      throw new Error("Browser attachment returned mismatched task authority.");
+    const shown = await runtime.showBrowserForSession(sessionId);
     if (shown) {
       closeFullSurface();
       await browserFollowController?.reconcileNow();
@@ -600,24 +605,52 @@ function registerIpc(
     return shown;
   });
 
-  ipcMain.handle(companionIpcChannels.takeControl, () =>
-    refreshCompanion(() => runtime.takeControl()),
+  ipcMain.handle(
+    companionIpcChannels.takeControl,
+    async (_event, taskId, handoffGeneration) => {
+      if (typeof taskId !== "string" || taskId.length === 0)
+        throw new Error("Take Over requires an exact task.");
+      if (
+        handoffGeneration !== undefined &&
+        (!Number.isSafeInteger(handoffGeneration) || handoffGeneration <= 0)
+      )
+        throw new Error("Take Over handoff generation is invalid.");
+      if (codexExecutionCore === undefined || codexProductError !== null)
+        throw new Error("Codex product service is unavailable.");
+      const authority = await codexExecutionCore.resolveTaskRuntimeControl(
+        taskId,
+        handoffGeneration,
+      );
+      return refreshCompanion(() =>
+        runtime.takeControlForSession(authority.sessionId, authority),
+      );
+    },
   );
 
-  ipcMain.handle(companionIpcChannels.returnControl, async () => {
+  ipcMain.handle(companionIpcChannels.returnControl, async (_event, taskId) => {
+    if (typeof taskId !== "string" || taskId.length === 0)
+      throw new Error("Return Control requires an exact task.");
     if (codexExecutionCore === undefined || codexProductError !== null)
       throw new Error("Codex product service is unavailable.");
-    const active = await runtime.getActiveSession();
-    if (active === null) throw new Error("No active Runtime session.");
-    await codexExecutionCore.api().prepareReturnControl(active.id);
-    const companion = await runtime.returnControlForSession(active.id);
-    await codexExecutionCore.api().completeReturnControl(active.id);
-    return (await refreshDesktopSurfaceSnapshot(runtime, companion)).companion;
+    await codexExecutionCore.api().executeRendererIntent({
+      type: "task.return-control",
+      taskId,
+      operationId: `intent_${randomUUID()}`,
+    });
+    return (await refreshDesktopSurfaceSnapshot(runtime)).companion;
   });
 
-  ipcMain.handle(companionIpcChannels.pauseSession, () =>
-    refreshCompanion(() => runtime.pauseSession()),
-  );
+  ipcMain.handle(companionIpcChannels.pauseSession, async (_event, taskId) => {
+    if (typeof taskId !== "string" || taskId.length === 0)
+      throw new Error("Pause requires an exact task.");
+    if (codexExecutionCore === undefined || codexProductError !== null)
+      throw new Error("Codex product service is unavailable.");
+    const authority =
+      await codexExecutionCore.resolveTaskRuntimeControl(taskId);
+    return refreshCompanion(() =>
+      runtime.pauseSessionForSession(authority.sessionId, authority),
+    );
+  });
 
   ipcMain.handle(
     companionIpcChannels.followerPresentation,
@@ -659,21 +692,16 @@ function registerIpc(
   ipcMain.handle(
     companionIpcChannels.finishSession,
     async (_event, sessionId) => {
-      if (sessionId === undefined) {
-        await runtime.finishSession();
-      } else {
-        if (typeof sessionId !== "string" || sessionId.length === 0) {
-          throw new Error("Runtime session id must be a non-empty string.");
-        }
-        const current = await refreshDesktopSurfaceSnapshot(runtime);
-        await endUnmatchedRuntimeSession({
-          sessionId,
-          snapshot: current,
-          endSession: (exactSessionId) => runtime.endSession(exactSessionId),
-        });
-      }
+      if (typeof sessionId !== "string" || sessionId.length === 0)
+        throw new Error("Runtime cleanup requires an exact session id.");
+      const current = await refreshDesktopSurfaceSnapshot(runtime);
+      await endUnmatchedRuntimeSession({
+        sessionId,
+        snapshot: current,
+        endSession: (exactSessionId) => runtime.endSession(exactSessionId),
+      });
 
-      if (sessionId === undefined || lastLiveSession?.id === sessionId) {
+      if (lastLiveSession?.id === sessionId) {
         lastLiveSession = null;
       }
       desktopNotice = null;

@@ -11,6 +11,7 @@ import type {
   browserRuntimeCapabilitiesSchema,
   clickRequestSchema,
   controllerSchema,
+  controlMutationAuthoritySchema,
   evidenceReadResultSchema,
   humanHandoffSchema,
   evidenceSchema,
@@ -96,6 +97,10 @@ export interface ControlStatus {
   updatedAt: string;
   observationSeq?: number;
 }
+
+export type ControlMutationAuthority = z.infer<
+  typeof controlMutationAuthoritySchema
+>;
 
 export type RequestHumanRequest = z.infer<typeof requestHumanRequestSchema>;
 export type ControlWaitRequest = z.infer<typeof controlWaitRequestSchema>;

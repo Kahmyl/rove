@@ -2,6 +2,7 @@ import type {
   ActionResult,
   ClickRequest,
   ControlStatus,
+  ControlMutationAuthority,
   ControlWaitRequest,
   ControlWaitResult,
   RequestHumanRequest,
@@ -117,9 +118,18 @@ export interface RoveRuntime {
     sessionId: string,
     request: RequestHumanRequest,
   ): Promise<ControlStatus>;
-  takeHumanControl(sessionId: string): Promise<ControlStatus>;
-  pauseAgentControl(sessionId: string): Promise<ControlStatus>;
-  returnAgentControl(sessionId: string): Promise<ControlStatus>;
+  takeHumanControl(
+    sessionId: string,
+    authority: ControlMutationAuthority,
+  ): Promise<ControlStatus>;
+  pauseAgentControl(
+    sessionId: string,
+    authority: ControlMutationAuthority,
+  ): Promise<ControlStatus>;
+  returnAgentControl(
+    sessionId: string,
+    authority: ControlMutationAuthority,
+  ): Promise<ControlStatus>;
   waitForControl(
     sessionId: string,
     request?: ControlWaitRequest,

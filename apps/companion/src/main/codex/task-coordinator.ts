@@ -904,7 +904,14 @@ export interface TaskRuntimePort {
   endSession(sessionId: string): Promise<unknown>;
   inspect?(sessionId: string): Promise<unknown>;
   getControlStatus?(sessionId: string): Promise<ControlStatus>;
-  returnControlForSession?(sessionId: string): Promise<unknown>;
+  returnControlForSession?(
+    sessionId: string,
+    authority: {
+      ownershipGeneration: number;
+      handoffId?: string;
+      handoffGeneration?: number;
+    },
+  ): Promise<unknown>;
   acknowledgeLegacyEffectScope?(sessionId: string): Promise<void>;
   authorizeEffectRepetition?(
     sessionId: string,
@@ -2666,6 +2673,30 @@ export class RoveTaskCoordinator {
       throw new Error("Runtime control truth does not match this handoff.");
     return taskId;
   }
+  private async returnControlAuthority(taskId: string): Promise<{
+    ownershipGeneration: number;
+    handoffId: string;
+    handoffGeneration: number;
+  }> {
+    if (!this.continuations || !this.runtime.getControlStatus)
+      throw new Error("Durable continuation authority is unavailable.");
+    const context = this.requireCompleteTask(taskId);
+    const pending = await this.continuations.pendingForTask(taskId);
+    if (!pending?.handoffId || pending.roveSessionId !== context.roveSessionId)
+      throw new Error("Pending continuation has mismatched Runtime authority.");
+    const control = await this.runtime.getControlStatus(context.roveSessionId);
+    if (
+      control.controller !== "human" ||
+      control.activeHandoffId !== pending.handoffId ||
+      control.activeHandoffGeneration !== pending.handoffGeneration
+    )
+      throw new Error("Runtime control truth does not match this handoff.");
+    return {
+      ownershipGeneration: control.generation,
+      handoffId: pending.handoffId,
+      handoffGeneration: pending.handoffGeneration,
+    };
+  }
   async returnControlForTask(
     taskId: string,
     operationId: string,
@@ -2715,7 +2746,10 @@ export class RoveTaskCoordinator {
         );
         if (!this.runtime.returnControlForSession)
           throw new Error("Runtime Return Control command is unavailable.");
-        await this.runtime.returnControlForSession(context.roveSessionId);
+        await this.runtime.returnControlForSession(
+          context.roveSessionId,
+          await this.returnControlAuthority(taskId),
+        );
         await this.onLifecycleCommandStatus(decision.commandId, "succeeded", {
           observedAt: this.now(),
           sessionId: context.roveSessionId,
@@ -2740,7 +2774,10 @@ export class RoveTaskCoordinator {
     await this.continuations?.recordReturnControlIntent(pending, operationId);
     if (!this.runtime.returnControlForSession)
       throw new Error("Runtime Return Control command is unavailable.");
-    await this.runtime.returnControlForSession(context.roveSessionId);
+    await this.runtime.returnControlForSession(
+      context.roveSessionId,
+      await this.returnControlAuthority(taskId),
+    );
     return this.returnControlFromRuntime(taskId);
   }
   async resume(input: ResumeTaskInput): Promise<StartedTask> {
@@ -3724,7 +3761,10 @@ export class RoveTaskCoordinator {
         if (!this.runtime.returnControlForSession || !context.roveSessionId)
           throw new Error("Runtime Return Control command is unavailable.");
         if (!reconcile)
-          await this.runtime.returnControlForSession(context.roveSessionId);
+          await this.runtime.returnControlForSession(
+            context.roveSessionId,
+            await this.returnControlAuthority(context.roveTaskId),
+          );
         else if (this.runtime.getControlStatus)
           await this.runtime.getControlStatus(context.roveSessionId);
         return context;

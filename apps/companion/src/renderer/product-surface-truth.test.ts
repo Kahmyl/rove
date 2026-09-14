@@ -220,7 +220,8 @@ describe("UI Truth renderer projection table", () => {
     });
 
     const state = product([needsAttention, unrelated]);
-    state.currentTaskId = needsAttention.taskId;
+    // Task B is the current presentation while Task A owns the handoff.
+    state.currentTaskId = unrelated.taskId;
     state.attention = [
       {
         authority: "rove_control",
@@ -252,6 +253,7 @@ describe("UI Truth renderer projection table", () => {
 
     expect(state.attention).toHaveLength(1);
     expect(state.attention[0]?.taskId).toBe(needsAttention.taskId);
+    expect(state.currentTaskId).toBe(unrelated.taskId);
   });
 
   it("T07 — viewing task B while task A runs preserves A authority and does not leak A controls into B", () => {

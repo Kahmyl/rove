@@ -1,5 +1,6 @@
 import {
   RoveError,
+  type ControlMutationAuthority,
   type ControlStatus,
   type PagePerceptionAssessment,
   type Session,
@@ -94,9 +95,13 @@ export class OwnershipTransitionService {
     );
   }
 
-  async takeHuman(sessionId: string): Promise<ControlStatus> {
+  async takeHuman(
+    sessionId: string,
+    authority?: ControlMutationAuthority,
+  ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
+    this.assertExactAuthority(session, authority);
     this.control.assertCanTakeHuman(session);
 
     if (session.controller === "human") {
@@ -143,9 +148,11 @@ export class OwnershipTransitionService {
   async returnAgent(
     sessionId: string,
     flushHumanActivity: () => Promise<void>,
+    authority?: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
+    this.assertExactAuthority(session, authority);
     this.control.assertCanReturnAgent(session);
 
     if (session.controller === "agent" && session.handoff === undefined) {
@@ -228,9 +235,13 @@ export class OwnershipTransitionService {
     }
   }
 
-  async pauseAgent(sessionId: string): Promise<ControlStatus> {
+  async pauseAgent(
+    sessionId: string,
+    authority?: ControlMutationAuthority,
+  ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
+    this.assertExactAuthority(session, authority);
     this.control.assertCanPauseAgent(session);
 
     if (session.status === "paused") {
@@ -266,6 +277,22 @@ export class OwnershipTransitionService {
     });
 
     return this.toControlStatus(next, observation.seq);
+  }
+
+  private assertExactAuthority(
+    session: Session,
+    authority: ControlMutationAuthority | undefined,
+  ): void {
+    if (authority === undefined) return;
+    if (
+      session.ownershipGeneration !== authority.ownershipGeneration ||
+      session.activeHandoffId !== authority.handoffId ||
+      session.activeHandoffGeneration !== authority.handoffGeneration
+    )
+      throw new RoveError({
+        code: "CONTROL_NOT_OWNED",
+        message: "Runtime control authority is stale or mismatched.",
+      });
   }
 
   async endSession(

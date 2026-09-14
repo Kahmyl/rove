@@ -34,6 +34,7 @@ import type {
 } from "./task-attachments.js";
 import type { LocalFileGrantSelection } from "../host/hub-command-executor.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
+import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
 
 export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   task: "sqlite",
@@ -700,6 +701,26 @@ export class CodexExecutionCore {
   api(): LocalProductApi {
     if (!this.apiValue) throw new Error("Codex execution core is not started.");
     return this.apiValue;
+  }
+
+  async resolveTaskRuntimeControl(
+    taskId: string,
+    expectedHandoffGeneration?: number,
+  ): Promise<{
+    sessionId: string;
+    ownershipGeneration: number;
+    handoffId?: string;
+    handoffGeneration?: number;
+  }> {
+    if (!this.store) throw new Error("Codex execution core is not started.");
+    const aggregate = await this.store.aggregate(taskId);
+    const inventory = await this.options.runtime.listSessionInventory?.();
+    return resolveTaskRuntimeControlAuthority(
+      taskId,
+      aggregate,
+      inventory ?? [],
+      expectedHandoffGeneration,
+    );
   }
 
   async attachBrowser(taskId: string): Promise<string> {

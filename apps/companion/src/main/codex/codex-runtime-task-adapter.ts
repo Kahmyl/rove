@@ -428,20 +428,27 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
         throw new Error("Return Control lacks exact durable identities.");
       let observed = await observeRuntime(command);
       if (returnedOwnership(observed, handoffId)) return observed;
-      const pending = observed.facts.some(
+      const pending = observed.facts.find(
         (fact) =>
           fact.type === "runtime_inventory_observed" &&
           fact.runtime.controller === "human" &&
           fact.runtime.handoffId === handoffId &&
           fact.runtime.handoffGeneration === generation,
       );
-      if (!pending)
+      if (
+        pending?.type !== "runtime_inventory_observed" ||
+        pending.runtime.ownershipGeneration === undefined
+      )
         return {
           status: "unresolved",
           facts: observed.facts,
           detail: { reason: "Exact Runtime handoff outcome is unresolved." },
         };
-      await options.runtime.returnControlForSession(sessionId);
+      await options.runtime.returnControlForSession(sessionId, {
+        ownershipGeneration: pending.runtime.ownershipGeneration,
+        handoffId,
+        handoffGeneration: generation,
+      });
       observed = await observeRuntime(command);
       return returnedOwnership(observed, handoffId)
         ? observed

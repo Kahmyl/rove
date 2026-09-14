@@ -132,17 +132,20 @@ export interface RoveDesktopApi {
   getNotice(): Promise<DesktopNotice | null>;
   getLiveSession(): Promise<DesktopSession | null>;
   getFollowerPresentation(): Promise<FollowerPresentationMode>;
-  takeControl(): Promise<CompanionSnapshot | null>;
-  returnControl(): Promise<CompanionSnapshot | null>;
-  pauseSession(): Promise<CompanionSnapshot | null>;
-  finishSession(sessionId?: string): Promise<CompanionSnapshot | null>;
+  takeControl(
+    taskId: string,
+    handoffGeneration?: number,
+  ): Promise<CompanionSnapshot | null>;
+  returnControl(taskId: string): Promise<CompanionSnapshot | null>;
+  pauseSession(taskId: string): Promise<CompanionSnapshot | null>;
+  finishSession(sessionId: string): Promise<CompanionSnapshot | null>;
   setFollowerExpanded(expanded: boolean): Promise<FollowerPresentationMode>;
   beginFollowerDrag(): Promise<void>;
   updateFollowerDrag(): Promise<void>;
   endFollowerDrag(): Promise<void>;
   openRove(): Promise<void>;
   restartRove(): Promise<boolean>;
-  showBrowser(taskId?: string): Promise<boolean>;
+  showBrowser(taskId: string): Promise<boolean>;
   openTrustedExternal(intent: TrustedExternalIntent): Promise<void>;
   openRecording(taskId: string, recordingId: string): Promise<void>;
   exportLocalBackup(): Promise<

@@ -193,17 +193,17 @@ describe("Companion preload API", () => {
     await api.getNotice();
     await api.getLiveSession();
     await api.getFollowerPresentation();
-    await api.takeControl();
-    await api.returnControl();
-    await api.pauseSession();
-    await api.finishSession();
+    await api.takeControl("task_exact", 3);
+    await api.returnControl("task_exact");
+    await api.pauseSession("task_exact");
+    await api.finishSession("ses_unmatched");
     await api.setFollowerExpanded(true);
     await api.beginFollowerDrag();
     await api.updateFollowerDrag();
     await api.endFollowerDrag();
     await api.openRove();
     await api.restartRove();
-    await api.showBrowser();
+    await api.showBrowser("task_exact");
     await api.openTrustedExternal({
       purpose: "account_login",
       loginId: "login_current",
