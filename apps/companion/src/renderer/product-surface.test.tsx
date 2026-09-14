@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -7,7 +9,13 @@ import {
   ProductSurface,
   compatibleReasoningEffort,
   commandPaletteMatches,
+  deriveOutputTitle,
   followupDraftForTask,
+  outputBodyForPresentation,
+  outputKindForMessage,
+  outputKindLabel,
+  outputPreview,
+  outputStatus,
   permissionReviewDescription,
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
@@ -69,6 +77,124 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("derives the restrained renderer accent from the canonical Rove mark", () => {
+    const logo = readFileSync(
+      new URL("./assets/rove-mark.png", import.meta.url),
+    );
+    const surface = readFileSync(
+      new URL("./product-surface.tsx", import.meta.url),
+      "utf8",
+    );
+    const styles = readFileSync(
+      new URL("./styles.css", import.meta.url),
+      "utf8",
+    );
+    expect(logo.byteLength).toBeGreaterThan(1_000);
+    expect(surface).toContain('from "./assets/rove-mark.png"');
+    expect(surface).not.toContain('from "./assets/rove-mark.svg"');
+    expect(surface).toContain(
+      "aria-label={`Open Output: ${result.revision.title}`}",
+    );
+    expect(surface).not.toContain(
+      "aria-label={`Open Workflow output: ${result.resultId}`}",
+    );
+    expect(styles).toContain("--rove-accent: #c16137;");
+    expect(styles).toContain("--rove-accent-contrast: #faf5ee;");
+    expect(styles).not.toContain("--rove-accent: #245846;");
+    expect(styles).toContain("--success: #2f6f52;");
+    expect(styles).toContain("--warning: #a86d18;");
+    expect(styles).toContain("--danger: #a94848;");
+  });
+
+  it("derives safe Output presentation without exposing Action creation", () => {
+    expect(
+      deriveOutputTitle(
+        "## Weekly product update\n\nThe team completed the launch review.",
+      ),
+    ).toBe("Weekly product update");
+    expect(outputKindForMessage("## Findings\n\nThree useful patterns.")).toBe(
+      "finding_collection",
+    );
+    expect(outputKindForMessage("## Weekly product update\n\nReady.")).toBe(
+      "draft",
+    );
+    expect(outputKindLabel("finding_collection")).toBe("Findings");
+    expect(outputKindLabel("artifact")).toBe("File");
+    expect(outputPreview("Update", "## Update\n\n**Ready** for review.")).toBe(
+      "Ready for review.",
+    );
+  });
+
+  it("suppresses only a duplicate first Output heading in presentation", () => {
+    expect(
+      outputBodyForPresentation(
+        "Weekly product update",
+        "# Weekly product update\n\nReady for review.",
+      ),
+    ).toBe("Ready for review.");
+    expect(
+      outputBodyForPresentation(
+        "Weekly product update",
+        "\n  ##   WEEKLY   PRODUCT UPDATE  \n\nReady for review.",
+      ),
+    ).toBe("Ready for review.");
+    expect(
+      outputBodyForPresentation(
+        "Weekly product update",
+        "# Launch risks\n\nReady for review.",
+      ),
+    ).toBe("# Launch risks\n\nReady for review.");
+    expect(
+      outputBodyForPresentation(
+        "Weekly product update",
+        "Ready for review without a heading.",
+      ),
+    ).toBe("Ready for review without a heading.");
+  });
+
+  it("translates Action lifecycle truth without using brand semantics", () => {
+    const action = {
+      resultId: "result_action",
+      taskId: "task_action",
+      kind: "action" as const,
+      lifecycle: "prepared" as const,
+      selected: false,
+      currentRevision: 1,
+      revision: {
+        resultId: "result_action",
+        revision: 1,
+        title: "Send update",
+        body: "Prepared update",
+        artifactIds: [],
+        digest: "a".repeat(64),
+        createdAt: "2026-09-13T11:00:00Z",
+      },
+      source: { evidenceIds: [] },
+      actionMaterial: { content: "Update", attachmentIds: [] },
+      materialDigest: "b".repeat(64),
+      createdAt: "2026-09-13T11:00:00Z",
+      updatedAt: "2026-09-13T11:00:00Z",
+    };
+    expect(outputStatus(action)).toEqual({
+      label: "Ready for approval",
+      description: "Nothing has been sent yet.",
+      tone: "neutral",
+    });
+    expect(outputStatus({ ...action, lifecycle: "dispatched" })?.label).toBe(
+      "Checking outcome",
+    );
+    expect(outputStatus({ ...action, lifecycle: "confirmed" })?.label).toBe(
+      "Sent",
+    );
+    expect(outputStatus({ ...action, lifecycle: "unresolved" })).toEqual(
+      expect.objectContaining({
+        label: "Outcome unclear",
+        description: expect.stringMatching(/before trying again/i),
+        tone: "warning",
+      }),
+    );
+  });
+
   it("keeps ambient task controls visible and long-tail controls searchable", () => {
     expect(commandPaletteMatches("work", "Workflow", "Task mode")).toBe(true);
     expect(commandPaletteMatches("reason", "Model", "Reasoning effort")).toBe(
@@ -1143,6 +1269,10 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       {
         taskId: "task_timeline",
         executionMode: "agent",
+        workflowAssociation: {
+          workflowId: "workflow_updates",
+          workflowName: "Weekly updates",
+        },
         browserIdentity: { mode: "workspace", workspaceId },
         selectionSource: "user_selected",
         selectedAt: "2026-09-12T00:00:00Z",
@@ -1319,6 +1449,32 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         },
       },
     ];
+    value.product!.workflows = [
+      {
+        workflowId: "workflow_updates",
+        name: "Weekly updates",
+        archived: false,
+        currentRevision: 1,
+        revision: {
+          workflowId: "workflow_updates",
+          revision: 1,
+          configuration: {
+            purpose: "Prepare weekly updates",
+            preferences: [],
+            criteria: [],
+            guidance: [],
+            procedures: [],
+            resourceRequirements: [],
+            resultConventions: [],
+            approvedKnowledge: [],
+          },
+          digest: "9".repeat(64),
+          approvedAt: "2026-09-12T00:00:00Z",
+        },
+        createdAt: "2026-09-12T00:00:00Z",
+        updatedAt: "2026-09-12T00:00:00Z",
+      },
+    ];
     value.product!.currentTaskId = "task_timeline";
     value.product!.recoveryWarnings = [
       "Codex event recovery: Task event identity was reused with different content.",
@@ -1356,13 +1512,16 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(html.match(/aria-label="Copy message"/g)).toHaveLength(2);
     expect(html.match(/aria-label="Copy response"/g)).toHaveLength(1);
-    expect(html).toContain('aria-label="Task results"');
-    expect(html).toContain("Reviewed folder summary");
-    expect(html).toContain('aria-label="Selected results for follow-up"');
-    expect(html).toContain('aria-label="Save response as result"');
-    expect(html).toContain("Send folder summary");
-    expect(html).toContain("ops@example.test");
-    expect(html).toContain("Authorize exact action");
+    expect(html).not.toContain('aria-label="Task results"');
+    expect(html).not.toContain("Working material for follow-up");
+    expect(html).toContain('aria-label="Outputs used for this message"');
+    expect(html).toContain("Using: Reviewed folder summary ×");
+    expect(html).not.toContain('aria-label="Save response as result"');
+    expect(html).not.toContain("Authorize exact action");
+    expect(html).toContain(
+      'aria-label="Open saved Output: Reviewed folder summary"',
+    );
+    expect(html).toContain("Saved to Outputs");
     expect(html).toContain("Organize the Drive folder</strong>");
     expect(html).toContain('aria-label="Sent attachments"');
     expect(html).not.toContain('aria-label="Current task attachments"');

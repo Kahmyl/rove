@@ -88,6 +88,7 @@ interface WorkflowResourceDraft {
 interface WorkflowPromotionDraft {
   workflowId: string;
   expectedRevision: number;
+  destinationImplicit: boolean;
   category: WorkflowPromotionCategory;
   text: string;
   appliesTo: string;
@@ -99,21 +100,167 @@ interface WorkflowPromotionDraft {
 
 interface ResultEditorDraft {
   taskId: string;
-  sourceItemId?: string;
-  resultId?: string;
-  expectedRevision?: number;
-  kind: Exclude<TaskResultKind, "artifact">;
+  resultId: string;
+  expectedRevision: number;
   title: string;
   body: string;
-  actionRecipient: string;
-  actionRecipientControl: string;
-  actionContent: string;
-  actionContentControl: string;
-  actionTarget: string;
-  actionCommitControl: string;
-  actionScope: string;
-  actionAttachmentIds: string[];
-  actionAttachmentControl: string;
+  originalTitle: string;
+  originalBody: string;
+  presentationBody: string;
+  suppressedHeadingLine?: string | undefined;
+}
+
+export interface OutputStatusProjection {
+  label: string;
+  description: string;
+  tone: "neutral" | "success" | "warning" | "danger";
+}
+
+export function outputKindLabel(kind: TaskResultKind): string {
+  return kind === "finding_collection"
+    ? "Findings"
+    : kind === "artifact"
+      ? "File"
+      : `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+}
+
+export function outputKindForMessage(
+  text: string,
+): Exclude<TaskResultKind, "action" | "artifact"> {
+  const heading = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+/.test(line))
+    ?.replace(/^#{1,6}\s+/, "")
+    .toLowerCase();
+  if (heading?.match(/finding|research|observation|shortlist/))
+    return "finding_collection";
+  if (heading?.includes("report")) return "report";
+  if (heading?.match(/journey|walkthrough/)) return "journey";
+  return "draft";
+}
+
+function cleanOutputText(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/[`*_~>|]/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function boundedOutputText(text: string, maximum: number): string {
+  if (text.length <= maximum) return text;
+  const candidate = text.slice(0, maximum - 1).trimEnd();
+  const lastSpace = candidate.lastIndexOf(" ");
+  return `${candidate.slice(0, lastSpace > maximum * 0.6 ? lastSpace : undefined)}…`;
+}
+
+export function deriveOutputTitle(text: string): string {
+  const heading = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+\S/.test(line))
+    ?.replace(/^#{1,6}\s+/, "")
+    .trim();
+  if (heading) return boundedOutputText(cleanOutputText(heading), 80);
+  const clean = cleanOutputText(text);
+  const sentence = clean.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? clean;
+  return boundedOutputText(sentence || "Saved Output", 80);
+}
+
+function outputHeadingText(line: string): string | null {
+  return (
+    line
+      .trim()
+      .match(/^#{1,6}[\t ]+(.+?)(?:[\t ]+#+)?[\t ]*$/)?.[1]
+      ?.trim() ?? null
+  );
+}
+
+function normalizedOutputIdentity(text: string): string {
+  return text.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function outputHeadingMatchesTitle(title: string, line: string): boolean {
+  const heading = outputHeadingText(line);
+  return (
+    heading !== null &&
+    normalizedOutputIdentity(heading) === normalizedOutputIdentity(title)
+  );
+}
+
+function duplicateOutputHeadingLine(
+  title: string,
+  body: string,
+): string | null {
+  const firstMeaningful = body.split(/\r?\n/).find((line) => line.trim());
+  return firstMeaningful && outputHeadingMatchesTitle(title, firstMeaningful)
+    ? firstMeaningful
+    : null;
+}
+
+export function outputBodyForPresentation(title: string, body: string): string {
+  const lines = body.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => line.trim());
+  if (
+    headingIndex < 0 ||
+    !outputHeadingMatchesTitle(title, lines[headingIndex] ?? "")
+  )
+    return body;
+  let contentIndex = headingIndex + 1;
+  while (contentIndex < lines.length && !lines[contentIndex]?.trim())
+    contentIndex += 1;
+  return lines.slice(contentIndex).join("\n");
+}
+
+export function outputPreview(title: string, text: string): string {
+  return boundedOutputText(
+    cleanOutputText(outputBodyForPresentation(title, text)),
+    180,
+  );
+}
+
+export function outputStatus(
+  result: TaskResult,
+): OutputStatusProjection | null {
+  if (result.kind !== "action") return null;
+  const statuses: Record<TaskResult["lifecycle"], OutputStatusProjection> = {
+    prepared: {
+      label: "Ready for approval",
+      description: "Nothing has been sent yet.",
+      tone: "neutral",
+    },
+    authorized: {
+      label: "Approved",
+      description: "Rove has permission. Completion is not yet confirmed.",
+      tone: "neutral",
+    },
+    dispatched: {
+      label: "Checking outcome",
+      description: "Rove initiated the action and is confirming what happened.",
+      tone: "warning",
+    },
+    confirmed: {
+      label: "Sent",
+      description: "Rove confirmed success.",
+      tone: "success",
+    },
+    failed: {
+      label: "Couldn't complete",
+      description: "Rove confirmed that the action did not complete.",
+      tone: "danger",
+    },
+    unresolved: {
+      label: "Outcome unclear",
+      description:
+        "Rove cannot confirm whether the action happened. Check the destination before trying again.",
+      tone: "warning",
+    },
+  };
+  return statuses[result.lifecycle];
 }
 
 export function followupDraftForTask(
@@ -429,9 +576,9 @@ export function workflowConfigurationFromDraft(
 ): WorkflowConfiguration {
   const existing = draft.sourceConfiguration;
   const resultText = {
-    sources: "Include sources and uncertainty with each result.",
-    concise: "Present concise, actionable results.",
-    detailed: "Present detailed results with reasoning.",
+    sources: "Include sources and uncertainty with each Output.",
+    concise: "Present concise, actionable Outputs.",
+    detailed: "Present detailed Outputs with reasoning.",
   }[draft.resultStyle];
   return {
     purpose: draft.purpose.trim(),
@@ -1244,6 +1391,9 @@ export function ProductSurface({
   const [workflowWorkspaceSection, setWorkflowWorkspaceSection] = useState<
     "home" | "outputs" | "context"
   >("home");
+  const [selectedWorkflowOutputId, setSelectedWorkflowOutputId] = useState<
+    string | null
+  >(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [shareWorkflowContext, setShareWorkflowContext] = useState<
     "" | "share" | "local"
@@ -1283,7 +1433,6 @@ export function ProductSurface({
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
-  const [openedResultId, setOpenedResultId] = useState<string | null>(null);
   const [timelineNow, setTimelineNow] = useState(() => Date.now());
   const [openWorkTurnIds, setOpenWorkTurnIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1293,6 +1442,7 @@ export function ProductSurface({
   const dragPointer = useRef<number | null>(null);
   const outcomeComposer = useRef<HTMLTextAreaElement | null>(null);
   const followupComposer = useRef<HTMLTextAreaElement | null>(null);
+  const savingOutputItemIds = useRef(new Set<string>());
 
   useEffect(() => {
     if (activeModal !== null) setOperationError(null);
@@ -1412,6 +1562,9 @@ export function ProductSurface({
     selectedWorkflowWorkspaceId ?? "",
   );
   const selectedWorkflow = workflowWorkspace.workflow;
+  const selectedWorkflowOutput = workflowWorkspace.outputs.find(
+    ({ result }) => result.resultId === selectedWorkflowOutputId,
+  );
   const followup = followupDraftForTask(followupDrafts, viewedTask?.taskId);
   const setFollowup = (value: string) => {
     if (!viewedTask) return;
@@ -1476,14 +1629,6 @@ export function ProductSurface({
     viewedTask?.conversation?.activeTurnId,
     viewedTask?.conversation?.turnStatus,
   ]);
-  useEffect(() => {
-    if (!openedResultId || !viewedTask) return;
-    const result = document.getElementById(`result-card-${openedResultId}`);
-    if (!result) return;
-    result.scrollIntoView({ block: "center" });
-    result.focus({ preventScroll: true });
-  }, [openedResultId, viewedTask]);
-
   const gate = composerGate(desktop, {
     outcome,
     mode,
@@ -1732,6 +1877,8 @@ export function ProductSurface({
     setWorkflowPromotion({
       workflowId: destination.workflowId,
       expectedRevision: destination.currentRevision,
+      destinationImplicit:
+        destination.workflowId === viewedTask?.workflowAssociation?.workflowId,
       category: "knowledge",
       text,
       appliesTo: "",
@@ -1740,18 +1887,28 @@ export function ProductSurface({
     });
   };
   const beginResultPromotion = (result: TaskResult) => {
+    const sourceWorkflowId = product?.tasks.find(
+      (task) => task.taskId === result.taskId,
+    )?.workflowAssociation?.workflowId;
     const destination =
+      selectedWorkflow ??
       product?.workflows.find(
         (workflow) =>
-          !workflow.archived &&
-          workflow.workflowId === viewedTask?.workflowAssociation?.workflowId,
-      ) ?? product?.workflows.find((workflow) => !workflow.archived);
+          !workflow.archived && workflow.workflowId === sourceWorkflowId,
+      ) ??
+      product?.workflows.find((workflow) => !workflow.archived);
     if (!destination) return;
     setWorkflowPromotion({
       workflowId: destination.workflowId,
       expectedRevision: destination.currentRevision,
+      destinationImplicit:
+        destination.workflowId ===
+        (selectedWorkflow?.workflowId ?? sourceWorkflowId),
       category: "knowledge",
-      text: result.revision.body,
+      text: outputBodyForPresentation(
+        result.revision.title,
+        result.revision.body,
+      ),
       appliesTo: "",
       sourceTaskId: result.taskId,
       sourceResultId: result.resultId,
@@ -1783,109 +1940,81 @@ export function ProductSurface({
     );
     if (result !== undefined) setWorkflowPromotion(null);
   };
-  const beginResultCreate = (
-    item: ProjectedConversationItem,
-    taskId: string,
-  ) => {
-    const body = messageText(item).trim();
-    if (!body) return;
-    setResultEditor({
-      taskId,
-      sourceItemId: item.id,
-      kind: "finding_collection",
-      title: "Saved result",
-      body,
-      actionRecipient: "",
-      actionRecipientControl: "",
-      actionContent: body,
-      actionContentControl: "",
-      actionTarget: "",
-      actionCommitControl: "",
-      actionScope: "",
-      actionAttachmentIds: [],
-      actionAttachmentControl: "",
-    });
-  };
   const beginResultRevision = (result: TaskResult) => {
     if (result.kind !== "draft") return;
+    const presentationBody = outputBodyForPresentation(
+      result.revision.title,
+      result.revision.body,
+    );
     setResultEditor({
       taskId: result.taskId,
       resultId: result.resultId,
       expectedRevision: result.currentRevision,
-      kind: "draft",
       title: result.revision.title,
-      body: result.revision.body,
-      actionRecipient: "",
-      actionRecipientControl: "",
-      actionContent: "",
-      actionContentControl: "",
-      actionTarget: "",
-      actionCommitControl: "",
-      actionScope: "",
-      actionAttachmentIds: [],
-      actionAttachmentControl: "",
+      body: presentationBody.trim() ? presentationBody : result.revision.body,
+      originalTitle: result.revision.title,
+      originalBody: result.revision.body,
+      presentationBody,
+      ...(presentationBody !== result.revision.body && presentationBody.trim()
+        ? {
+            suppressedHeadingLine:
+              duplicateOutputHeadingLine(
+                result.revision.title,
+                result.revision.body,
+              ) ?? undefined,
+          }
+        : {}),
     });
   };
+  const saveResponseToOutputs = async (
+    item: ProjectedConversationItem,
+    taskId: string,
+  ) => {
+    const body = messageText(item).trim();
+    if (!body || savingOutputItemIds.current.has(item.id)) return;
+    const existing = viewedTask?.results.find(
+      (result) =>
+        result.kind !== "action" &&
+        result.source.conversationItemId === item.id,
+    );
+    if (existing) return;
+    savingOutputItemIds.current.add(item.id);
+    try {
+      await run(() =>
+        command({
+          type: "result.create",
+          operationId: `intent_${crypto.randomUUID()}`,
+          taskId,
+          sourceItemId: item.id,
+          kind: outputKindForMessage(body),
+          title: deriveOutputTitle(body),
+          body,
+        }),
+      );
+    } finally {
+      savingOutputItemIds.current.delete(item.id);
+    }
+  };
   const saveResult = async () => {
-    if (!resultEditor) return;
+    if (!resultEditor?.resultId || resultEditor.expectedRevision === undefined)
+      return;
+    const title = resultEditor.title.trim();
+    const body = resultEditor.suppressedHeadingLine
+      ? title === resultEditor.originalTitle &&
+        resultEditor.body === resultEditor.presentationBody
+        ? resultEditor.originalBody
+        : `${resultEditor.suppressedHeadingLine}\n\n${resultEditor.body.trimStart()}`
+      : resultEditor.body.trim();
     const result = await run(() =>
       command({
-        type: resultEditor.resultId ? "result.revise" : "result.create",
+        type: "result.revise",
         operationId: `intent_${crypto.randomUUID()}`,
         taskId: resultEditor.taskId,
-        ...(resultEditor.resultId
-          ? {
-              resultId: resultEditor.resultId,
-              expectedRevision: resultEditor.expectedRevision!,
-            }
-          : {
-              sourceItemId: resultEditor.sourceItemId!,
-              kind: resultEditor.kind,
-              ...(resultEditor.kind === "action"
-                ? {
-                    actionMaterial: {
-                      ...(resultEditor.actionRecipient.trim()
-                        ? { recipient: resultEditor.actionRecipient.trim() }
-                        : {}),
-                      ...(resultEditor.actionRecipientControl.trim()
-                        ? {
-                            recipientControl:
-                              resultEditor.actionRecipientControl.trim(),
-                          }
-                        : {}),
-                      content: resultEditor.actionContent.trim(),
-                      ...(resultEditor.actionContentControl.trim()
-                        ? {
-                            contentControl:
-                              resultEditor.actionContentControl.trim(),
-                          }
-                        : {}),
-                      ...(resultEditor.actionTarget.trim()
-                        ? { target: resultEditor.actionTarget.trim() }
-                        : {}),
-                      ...(resultEditor.actionCommitControl.trim()
-                        ? {
-                            commitControl:
-                              resultEditor.actionCommitControl.trim(),
-                          }
-                        : {}),
-                      attachmentIds: resultEditor.actionAttachmentIds,
-                      ...(resultEditor.actionAttachmentControl.trim()
-                        ? {
-                            attachmentControl:
-                              resultEditor.actionAttachmentControl.trim(),
-                          }
-                        : {}),
-                      ...(resultEditor.actionScope.trim()
-                        ? { scope: resultEditor.actionScope.trim() }
-                        : {}),
-                    },
-                  }
-                : {}),
-            }),
-        title: resultEditor.title.trim(),
-        body: resultEditor.body.trim(),
-      } as RendererProductIntent),
+        resultId: resultEditor.resultId,
+        expectedRevision: resultEditor.expectedRevision,
+        title,
+        body,
+      }),
     );
     if (result !== undefined) setResultEditor(null);
   };
@@ -1900,6 +2029,32 @@ export function ProductSurface({
         selected: !result.selected,
       }),
     );
+  };
+  const continueFromOutput = async (result: TaskResult) => {
+    if (!result.selected) {
+      const selected = await run(() =>
+        command<TaskResult>({
+          type: "result.select",
+          operationId: `intent_${crypto.randomUUID()}`,
+          taskId: result.taskId,
+          resultId: result.resultId,
+          expectedRevision: result.currentRevision,
+          selected: true,
+        }),
+      );
+      if (selected === undefined) return;
+    }
+    setSelectedTaskId(result.taskId);
+    setSelectedWorkflowWorkspaceId(null);
+    setSelectedWorkflowOutputId(null);
+    setShowNewTask(false);
+  };
+  const openWorkflowOutput = (workflowId: string, resultId: string) => {
+    setSelectedWorkflowWorkspaceId(workflowId);
+    setWorkflowWorkspaceSection("outputs");
+    setSelectedWorkflowOutputId(resultId);
+    setSelectedTaskId(null);
+    setShowNewTask(false);
   };
   const authorizeResult = async (result: TaskResult) => {
     if (result.kind !== "action" || !result.materialDigest) return;
@@ -3032,9 +3187,9 @@ export function ProductSurface({
                 }
               />
               <label>
-                <span>How should results be presented?</span>
+                <span>How should Outputs be presented?</span>
                 <select
-                  aria-label="Workflow result style"
+                  aria-label="Workflow Output style"
                   value={workflowEditor.resultStyle}
                   onChange={(event) =>
                     setWorkflowEditor({
@@ -3102,19 +3257,14 @@ export function ProductSurface({
           >
             <header>
               <div>
-                <div className="eyebrow">Stable task result</div>
-                <h2 id="result-editor-title">
-                  {resultEditor.resultId ? "Revise draft" : "Save result"}
-                </h2>
-                <p>
-                  Review the exact local material. Saving does not authorize or
-                  prove an external action.
-                </p>
+                <div className="eyebrow">Output</div>
+                <h2 id="result-editor-title">Edit Output</h2>
+                <p>Update the saved work directly.</p>
               </div>
               <button
                 type="button"
                 className="profile-modal-close"
-                aria-label="Close result editor"
+                aria-label="Close Output editor"
                 onClick={() => setResultEditor(null)}
               >
                 ×
@@ -3127,202 +3277,38 @@ export function ProductSurface({
                 void saveResult();
               }}
             >
-              {!resultEditor.resultId && (
-                <label>
-                  <span>Result type</span>
-                  <select
-                    aria-label="Result type"
-                    value={resultEditor.kind}
-                    onChange={(event) =>
-                      setResultEditor({
-                        ...resultEditor,
-                        kind: event.target.value as ResultEditorDraft["kind"],
-                      })
-                    }
-                  >
-                    <option value="finding_collection">Findings</option>
-                    <option value="draft">Draft</option>
-                    <option value="report">Report</option>
-                    <option value="journey">Journey</option>
-                    <option value="action">Action</option>
-                  </select>
-                </label>
-              )}
               <label>
                 <span>Title</span>
                 <input
-                  aria-label="Result title"
+                  aria-label="Output title"
                   required
                   maxLength={240}
                   value={resultEditor.title}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const title = event.target.value;
+                    const revealHeading =
+                      resultEditor.suppressedHeadingLine !== undefined &&
+                      !outputHeadingMatchesTitle(
+                        title,
+                        resultEditor.suppressedHeadingLine,
+                      );
                     setResultEditor({
                       ...resultEditor,
-                      title: event.target.value,
-                    })
-                  }
+                      title,
+                      ...(revealHeading
+                        ? {
+                            body: `${resultEditor.suppressedHeadingLine}\n\n${resultEditor.body}`,
+                            suppressedHeadingLine: undefined,
+                          }
+                        : {}),
+                    });
+                  }}
                 />
               </label>
-              {resultEditor.kind === "action" && (
-                <fieldset className="result-action-editor">
-                  <legend>Exact action material</legend>
-                  <p>
-                    Rove will bind these values and files to a concrete, freshly
-                    grounded browser plan before any external disclosure. Enter
-                    the exact accessible names shown for each browser control.
-                  </p>
-                  <label>
-                    <span>Recipient</span>
-                    <input
-                      aria-label="Action recipient"
-                      maxLength={1000}
-                      value={resultEditor.actionRecipient}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionRecipient: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Recipient control name</span>
-                    <input
-                      aria-label="Action recipient control"
-                      required={Boolean(resultEditor.actionRecipient.trim())}
-                      maxLength={500}
-                      value={resultEditor.actionRecipientControl}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionRecipientControl: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Content</span>
-                    <textarea
-                      aria-label="Action content"
-                      required
-                      maxLength={16000}
-                      value={resultEditor.actionContent}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionContent: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Content control name</span>
-                    <input
-                      aria-label="Action content control"
-                      required
-                      maxLength={500}
-                      value={resultEditor.actionContentControl}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionContentControl: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Target or resource</span>
-                    <input
-                      aria-label="Action target"
-                      maxLength={2000}
-                      value={resultEditor.actionTarget}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionTarget: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Commit control name</span>
-                    <input
-                      aria-label="Action commit control"
-                      required
-                      maxLength={500}
-                      value={resultEditor.actionCommitControl}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionCommitControl: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Scope</span>
-                    <input
-                      aria-label="Action scope"
-                      maxLength={1000}
-                      value={resultEditor.actionScope}
-                      onChange={(event) =>
-                        setResultEditor({
-                          ...resultEditor,
-                          actionScope: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                  {(viewedTask?.attachments?.length ?? 0) > 0 && (
-                    <div className="result-action-attachments">
-                      <span>Attachments included in authorization</span>
-                      <label>
-                        <span>Attachment control name</span>
-                        <input
-                          aria-label="Action attachment control"
-                          required={resultEditor.actionAttachmentIds.length > 0}
-                          maxLength={500}
-                          value={resultEditor.actionAttachmentControl}
-                          onChange={(event) =>
-                            setResultEditor({
-                              ...resultEditor,
-                              actionAttachmentControl: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      {(viewedTask?.attachments ?? []).map((attachment) => (
-                        <label key={attachment.id}>
-                          <input
-                            type="checkbox"
-                            checked={resultEditor.actionAttachmentIds.includes(
-                              attachment.id,
-                            )}
-                            onChange={(event) =>
-                              setResultEditor({
-                                ...resultEditor,
-                                actionAttachmentIds: event.target.checked
-                                  ? [
-                                      ...resultEditor.actionAttachmentIds,
-                                      attachment.id,
-                                    ]
-                                  : resultEditor.actionAttachmentIds.filter(
-                                      (id) => id !== attachment.id,
-                                    ),
-                              })
-                            }
-                          />
-                          <span>{attachment.filename}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </fieldset>
-              )}
               <label>
-                <span>Result material</span>
+                <span>Content</span>
                 <textarea
-                  aria-label="Result material"
+                  aria-label="Output content"
                   required
                   maxLength={32000}
                   value={resultEditor.body}
@@ -3345,18 +3331,10 @@ export function ProductSurface({
                   disabled={
                     busy ||
                     !resultEditor.title.trim() ||
-                    !resultEditor.body.trim() ||
-                    (resultEditor.kind === "action" &&
-                      (!resultEditor.actionContent.trim() ||
-                        !resultEditor.actionContentControl.trim() ||
-                        !resultEditor.actionCommitControl.trim() ||
-                        (Boolean(resultEditor.actionRecipient.trim()) &&
-                          !resultEditor.actionRecipientControl.trim()) ||
-                        (resultEditor.actionAttachmentIds.length > 0 &&
-                          !resultEditor.actionAttachmentControl.trim())))
+                    !resultEditor.body.trim()
                   }
                 >
-                  {resultEditor.resultId ? "Save revision" : "Save result"}
+                  Save changes
                 </button>
               </div>
             </form>
@@ -3373,17 +3351,14 @@ export function ProductSurface({
           >
             <header>
               <div>
-                <div className="eyebrow">Explicit promotion</div>
-                <h2 id="workflow-promotion-title">Save to Workflow</h2>
-                <p>
-                  Review exactly what will become reusable. The conversation,
-                  files, approvals, and browser state are not included.
-                </p>
+                <div className="eyebrow">Workflow Context</div>
+                <h2 id="workflow-promotion-title">Add to Context</h2>
+                <p>Rove can use this in future tasks in this Workflow.</p>
               </div>
               <button
                 className="profile-modal-close"
                 type="button"
-                aria-label="Cancel Save to Workflow"
+                aria-label="Cancel Add to Context"
                 onClick={() => setWorkflowPromotion(null)}
               >
                 ×
@@ -3396,56 +3371,41 @@ export function ProductSurface({
                 void saveWorkflowPromotion();
               }}
             >
+              {!workflowPromotion.destinationImplicit && (
+                <label>
+                  <span>Workflow</span>
+                  <select
+                    aria-label="Workflow"
+                    value={workflowPromotion.workflowId}
+                    onChange={(event) => {
+                      const workflow = product?.workflows.find(
+                        (entry) => entry.workflowId === event.target.value,
+                      );
+                      if (workflow)
+                        setWorkflowPromotion({
+                          ...workflowPromotion,
+                          workflowId: workflow.workflowId,
+                          expectedRevision: workflow.currentRevision,
+                        });
+                    }}
+                  >
+                    {product?.workflows
+                      .filter((workflow) => !workflow.archived)
+                      .map((workflow) => (
+                        <option
+                          key={workflow.workflowId}
+                          value={workflow.workflowId}
+                        >
+                          {workflow.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
               <label>
-                <span>Destination</span>
-                <select
-                  aria-label="Promotion destination Workflow"
-                  value={workflowPromotion.workflowId}
-                  onChange={(event) => {
-                    const workflow = product?.workflows.find(
-                      (entry) => entry.workflowId === event.target.value,
-                    );
-                    if (workflow)
-                      setWorkflowPromotion({
-                        ...workflowPromotion,
-                        workflowId: workflow.workflowId,
-                        expectedRevision: workflow.currentRevision,
-                      });
-                  }}
-                >
-                  {product?.workflows
-                    .filter((workflow) => !workflow.archived)
-                    .map((workflow) => (
-                      <option
-                        key={workflow.workflowId}
-                        value={workflow.workflowId}
-                      >
-                        {workflow.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                <span>Reusable information class</span>
-                <select
-                  aria-label="Promotion category"
-                  value={workflowPromotion.category}
-                  onChange={(event) =>
-                    setWorkflowPromotion({
-                      ...workflowPromotion,
-                      category: event.target.value as WorkflowPromotionCategory,
-                    })
-                  }
-                >
-                  <option value="knowledge">Approved knowledge</option>
-                  <option value="preference">Preference</option>
-                  <option value="guidance">Guidance</option>
-                </select>
-              </label>
-              <label>
-                <span>Exact reusable text</span>
+                <span>What Rove should remember</span>
                 <textarea
-                  aria-label="Promoted Workflow text"
+                  aria-label="What Rove should remember"
                   required
                   maxLength={2000}
                   value={workflowPromotion.text}
@@ -3457,19 +3417,23 @@ export function ProductSurface({
                   }
                 />
               </label>
-              <label>
-                <span>Apply only to these topics (optional, one per line)</span>
-                <textarea
-                  aria-label="Promotion topics"
-                  value={workflowPromotion.appliesTo}
-                  onChange={(event) =>
-                    setWorkflowPromotion({
-                      ...workflowPromotion,
-                      appliesTo: event.target.value,
-                    })
-                  }
-                />
-              </label>
+              <details className="workflow-promotion-advanced">
+                <summary>Advanced</summary>
+                <label>
+                  <span>Use only for these topics (optional)</span>
+                  <textarea
+                    aria-label="Relevant topics"
+                    placeholder="One topic per line"
+                    value={workflowPromotion.appliesTo}
+                    onChange={(event) =>
+                      setWorkflowPromotion({
+                        ...workflowPromotion,
+                        appliesTo: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+              </details>
               {renderModalError()}
               <div className="modal-actions">
                 <button
@@ -3479,7 +3443,7 @@ export function ProductSurface({
                   Cancel
                 </button>
                 <button className="primary" type="submit" disabled={busy}>
-                  Save approved information
+                  Add to Context
                 </button>
               </div>
             </form>
@@ -4089,7 +4053,10 @@ export function ProductSurface({
                     aria-current={
                       workflowWorkspaceSection === "home" ? "page" : undefined
                     }
-                    onClick={() => setWorkflowWorkspaceSection("home")}
+                    onClick={() => {
+                      setWorkflowWorkspaceSection("home");
+                      setSelectedWorkflowOutputId(null);
+                    }}
                   >
                     Home
                   </button>
@@ -4100,7 +4067,10 @@ export function ProductSurface({
                         ? "page"
                         : undefined
                     }
-                    onClick={() => setWorkflowWorkspaceSection("outputs")}
+                    onClick={() => {
+                      setWorkflowWorkspaceSection("outputs");
+                      setSelectedWorkflowOutputId(null);
+                    }}
                   >
                     Outputs
                   </button>
@@ -4114,6 +4084,7 @@ export function ProductSurface({
                     className="workflow-context-button"
                     onClick={() => {
                       setWorkflowWorkspaceSection("context");
+                      setSelectedWorkflowOutputId(null);
                       setWorkflowEditor(null);
                       setWorkflowContextEditSection(null);
                     }}
@@ -4210,9 +4181,10 @@ export function ProductSurface({
                         {workflowWorkspace.outputs.length > 0 && (
                           <button
                             type="button"
-                            onClick={() =>
-                              setWorkflowWorkspaceSection("outputs")
-                            }
+                            onClick={() => {
+                              setWorkflowWorkspaceSection("outputs");
+                              setSelectedWorkflowOutputId(null);
+                            }}
                           >
                             View all
                           </button>
@@ -4221,30 +4193,40 @@ export function ProductSurface({
                       {workflowWorkspace.outputs.length === 0 ? (
                         <div className="workflow-empty-state">
                           <strong>No outputs yet</strong>
-                          <p>Saved results from tasks will appear here.</p>
+                          <p>Useful work you save will appear here.</p>
                         </div>
                       ) : (
                         <div className="workflow-item-list">
                           {workflowWorkspace.outputs
                             .slice(0, 3)
-                            .map(({ task, result }) => (
+                            .map(({ result }) => (
                               <button
                                 type="button"
                                 key={result.resultId}
-                                aria-label={`Open Workflow output: ${result.resultId}`}
-                                onClick={() => {
-                                  setOpenedResultId(result.resultId);
-                                  setSelectedTaskId(task.taskId);
-                                  setSelectedWorkflowWorkspaceId(null);
-                                  setShowNewTask(false);
-                                }}
+                                aria-label={`Open Output: ${result.revision.title}`}
+                                onClick={() =>
+                                  openWorkflowOutput(
+                                    selectedWorkflow.workflowId,
+                                    result.resultId,
+                                  )
+                                }
                               >
-                                <span>
-                                  <strong>{result.revision.title}</strong>
-                                  <small>
-                                    {result.kind.replaceAll("_", " ")} ·{" "}
-                                    {displayTaskTitle(task)}
-                                  </small>
+                                <span className="workflow-output-summary">
+                                  <span
+                                    className="output-kind-icon"
+                                    aria-hidden="true"
+                                  >
+                                    {outputKindLabel(result.kind).charAt(0)}
+                                  </span>
+                                  <span>
+                                    <strong>{result.revision.title}</strong>
+                                    <small>
+                                      {outputPreview(
+                                        result.revision.title,
+                                        result.revision.body,
+                                      )}
+                                    </small>
+                                  </span>
                                 </span>
                                 <span aria-hidden="true">›</span>
                               </button>
@@ -4300,51 +4282,262 @@ export function ProductSurface({
                   className="workflow-outputs"
                   aria-labelledby="workflow-outputs-title"
                 >
-                  <header>
-                    <div>
-                      <span className="eyebrow">Outputs</span>
-                      <h2 id="workflow-outputs-title">
-                        Useful work to return to
-                      </h2>
-                      <p>Saved results from tasks in this Workflow.</p>
-                    </div>
-                  </header>
-                  {workflowWorkspace.outputs.length === 0 ? (
-                    <div className="workflow-empty-state workflow-empty-state-large">
-                      <strong>No outputs yet</strong>
-                      <p>
-                        When a task produces a saved result, it will appear
-                        here.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="workflow-output-list">
-                      {workflowWorkspace.outputs.map(({ task, result }) => (
+                  {selectedWorkflowOutput ? (
+                    <article className="output-detail">
+                      <button
+                        type="button"
+                        className="output-detail-back"
+                        onClick={() => setSelectedWorkflowOutputId(null)}
+                      >
+                        <span aria-hidden="true">←</span> Outputs
+                      </button>
+                      <header>
+                        <div className="output-detail-identity">
+                          <span className="output-kind-icon" aria-hidden="true">
+                            {outputKindLabel(
+                              selectedWorkflowOutput.result.kind,
+                            ).charAt(0)}
+                          </span>
+                          <span className="workflow-output-kind">
+                            {outputKindLabel(
+                              selectedWorkflowOutput.result.kind,
+                            )}
+                          </span>
+                        </div>
+                        <h2 id="workflow-outputs-title">
+                          {selectedWorkflowOutput.result.revision.title}
+                        </h2>
                         <button
                           type="button"
-                          key={result.resultId}
-                          aria-label={`Open Workflow output: ${result.resultId}`}
+                          className="output-provenance"
                           onClick={() => {
-                            setOpenedResultId(result.resultId);
-                            setSelectedTaskId(task.taskId);
+                            setSelectedTaskId(
+                              selectedWorkflowOutput.task.taskId,
+                            );
                             setSelectedWorkflowWorkspaceId(null);
+                            setSelectedWorkflowOutputId(null);
                             setShowNewTask(false);
                           }}
                         >
-                          <span className="workflow-output-kind">
-                            {result.kind.replaceAll("_", " ")}
-                          </span>
-                          <span>
-                            <strong>{result.revision.title}</strong>
-                            <small>
-                              {result.lifecycle.replaceAll("_", " ")} · From{" "}
-                              {displayTaskTitle(task)}
-                            </small>
-                          </span>
-                          <span aria-hidden="true">›</span>
+                          From “{displayTaskTitle(selectedWorkflowOutput.task)}”
                         </button>
-                      ))}
-                    </div>
+                      </header>
+                      {outputStatus(selectedWorkflowOutput.result) && (
+                        <section
+                          className="output-action-status"
+                          data-tone={
+                            outputStatus(selectedWorkflowOutput.result)!.tone
+                          }
+                          aria-label="Action status"
+                        >
+                          <strong>
+                            {outputStatus(selectedWorkflowOutput.result)!.label}
+                          </strong>
+                          <p>
+                            {
+                              outputStatus(selectedWorkflowOutput.result)!
+                                .description
+                            }
+                          </p>
+                        </section>
+                      )}
+                      {selectedWorkflowOutput.result.kind === "action" &&
+                      selectedWorkflowOutput.result.actionMaterial ? (
+                        <dl className="output-action-review">
+                          {selectedWorkflowOutput.result.actionMaterial
+                            .recipient && (
+                            <>
+                              <dt>To</dt>
+                              <dd>
+                                {
+                                  selectedWorkflowOutput.result.actionMaterial
+                                    .recipient
+                                }
+                              </dd>
+                            </>
+                          )}
+                          <dt>Message</dt>
+                          <dd>
+                            {
+                              selectedWorkflowOutput.result.actionMaterial
+                                .content
+                            }
+                          </dd>
+                          {selectedWorkflowOutput.result.actionMaterial
+                            .attachmentIds.length > 0 && (
+                            <>
+                              <dt>Attachments</dt>
+                              <dd>
+                                {selectedWorkflowOutput.result.actionMaterial.attachmentIds
+                                  .map(
+                                    (attachmentId) =>
+                                      selectedWorkflowOutput.task.attachments?.find(
+                                        (attachment) =>
+                                          attachment.id === attachmentId,
+                                      )?.filename ?? "Attached file",
+                                  )
+                                  .join(", ")}
+                              </dd>
+                            </>
+                          )}
+                          {selectedWorkflowOutput.result.actionMaterial
+                            .target && (
+                            <>
+                              <dt>Destination</dt>
+                              <dd>
+                                {
+                                  selectedWorkflowOutput.result.actionMaterial
+                                    .target
+                                }
+                              </dd>
+                            </>
+                          )}
+                          {selectedWorkflowOutput.result.actionMaterial
+                            .scope && (
+                            <>
+                              <dt>Scope</dt>
+                              <dd>
+                                {
+                                  selectedWorkflowOutput.result.actionMaterial
+                                    .scope
+                                }
+                              </dd>
+                            </>
+                          )}
+                        </dl>
+                      ) : (
+                        <div className="output-detail-content">
+                          <MessageBody
+                            text={outputBodyForPresentation(
+                              selectedWorkflowOutput.result.revision.title,
+                              selectedWorkflowOutput.result.revision.body,
+                            )}
+                          />
+                        </div>
+                      )}
+                      <footer className="output-detail-actions">
+                        {selectedWorkflowOutput.result.kind === "draft" && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              beginResultRevision(selectedWorkflowOutput.result)
+                            }
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {selectedWorkflowOutput.result.kind !== "action" &&
+                          selectedWorkflowOutput.result.kind !== "artifact" && (
+                            <button
+                              type="button"
+                              className="output-context-action"
+                              disabled={busy}
+                              onClick={() =>
+                                beginResultPromotion(
+                                  selectedWorkflowOutput.result,
+                                )
+                              }
+                            >
+                              Add to Context
+                            </button>
+                          )}
+                        {selectedWorkflowOutput.result.kind !== "action" && (
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={busy}
+                            onClick={() =>
+                              void continueFromOutput(
+                                selectedWorkflowOutput.result,
+                              )
+                            }
+                          >
+                            Continue in task
+                          </button>
+                        )}
+                        {selectedWorkflowOutput.result.kind === "action" &&
+                          selectedWorkflowOutput.result.lifecycle ===
+                            "prepared" && (
+                            <button
+                              type="button"
+                              className="primary"
+                              disabled={busy}
+                              onClick={() =>
+                                void authorizeResult(
+                                  selectedWorkflowOutput.result,
+                                )
+                              }
+                            >
+                              Approve and send
+                            </button>
+                          )}
+                      </footer>
+                    </article>
+                  ) : (
+                    <>
+                      <header>
+                        <div>
+                          <span className="eyebrow">Outputs</span>
+                          <h2 id="workflow-outputs-title">
+                            Useful work to return to
+                          </h2>
+                          <p>Things you saved from this Workflow’s tasks.</p>
+                        </div>
+                      </header>
+                      {workflowWorkspace.outputs.length === 0 ? (
+                        <div className="workflow-empty-state workflow-empty-state-large">
+                          <strong>No outputs yet</strong>
+                          <p>
+                            Save useful work from a task and it will appear
+                            here.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="workflow-output-list">
+                          {workflowWorkspace.outputs.map(({ task, result }) => {
+                            const status = outputStatus(result);
+                            return (
+                              <button
+                                type="button"
+                                key={result.resultId}
+                                aria-label={`Open Output: ${result.revision.title}`}
+                                onClick={() =>
+                                  openWorkflowOutput(
+                                    selectedWorkflow.workflowId,
+                                    result.resultId,
+                                  )
+                                }
+                              >
+                                <span
+                                  className="output-kind-icon"
+                                  aria-hidden="true"
+                                >
+                                  {outputKindLabel(result.kind).charAt(0)}
+                                </span>
+                                <span>
+                                  <span className="workflow-output-kind">
+                                    {outputKindLabel(result.kind)}
+                                  </span>
+                                  <strong>{result.revision.title}</strong>
+                                  <small>
+                                    {outputPreview(
+                                      result.revision.title,
+                                      result.revision.body,
+                                    )}
+                                  </small>
+                                  <span className="output-source">
+                                    From {displayTaskTitle(task)}
+                                    {status ? ` · ${status.label}` : ""}
+                                  </span>
+                                </span>
+                                <span aria-hidden="true">›</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
                 </section>
               ) : (
@@ -4585,7 +4778,7 @@ export function ProductSurface({
                         <label>
                           <span>Output preference</span>
                           <select
-                            aria-label="Workflow result style"
+                            aria-label="Workflow Output style"
                             value={workflowEditor.resultStyle}
                             onChange={(event) =>
                               setWorkflowEditor({
@@ -4985,141 +5178,6 @@ export function ProductSurface({
 
           {viewedTask && !selectedWorkflow && (
             <div className="task-detail">
-              {viewedTask.results.length > 0 && (
-                <section className="result-shelf" aria-label="Task results">
-                  <header>
-                    <div>
-                      <div className="eyebrow">Saved results</div>
-                      <strong>Working material for follow-up</strong>
-                    </div>
-                    <small>
-                      {
-                        viewedTask.results.filter((result) => result.selected)
-                          .length
-                      }{" "}
-                      selected
-                    </small>
-                  </header>
-                  <div className="result-card-list">
-                    {viewedTask.results.map((result) => (
-                      <article
-                        className="result-card"
-                        id={`result-card-${result.resultId}`}
-                        key={result.resultId}
-                        tabIndex={-1}
-                        data-opened={
-                          openedResultId === result.resultId
-                            ? "true"
-                            : undefined
-                        }
-                      >
-                        <label className="result-select">
-                          <input
-                            type="checkbox"
-                            checked={result.selected}
-                            disabled={busy}
-                            onChange={() => void toggleResultSelection(result)}
-                          />
-                          <span>Select for follow-up</span>
-                        </label>
-                        <div className="result-card-heading">
-                          <strong>{result.revision.title}</strong>
-                          <span data-result-state={result.lifecycle}>
-                            {result.lifecycle.replaceAll("_", " ")}
-                          </span>
-                        </div>
-                        <small>
-                          {result.kind.replaceAll("_", " ")} · Revision{" "}
-                          {result.currentRevision}
-                        </small>
-                        <MessageBody text={result.revision.body} />
-                        {result.kind === "action" && result.actionMaterial && (
-                          <dl className="result-action-material">
-                            {result.actionMaterial.recipient && (
-                              <>
-                                <dt>Recipient</dt>
-                                <dd>{result.actionMaterial.recipient}</dd>
-                                <dt>Recipient control</dt>
-                                <dd>
-                                  {result.actionMaterial.recipientControl}
-                                </dd>
-                              </>
-                            )}
-                            <dt>Content</dt>
-                            <dd>{result.actionMaterial.content}</dd>
-                            <dt>Content control</dt>
-                            <dd>{result.actionMaterial.contentControl}</dd>
-                            {result.actionMaterial.target && (
-                              <>
-                                <dt>Target</dt>
-                                <dd>{result.actionMaterial.target}</dd>
-                              </>
-                            )}
-                            {result.actionMaterial.attachmentIds.length > 0 && (
-                              <>
-                                <dt>Attachments</dt>
-                                <dd>
-                                  {result.actionMaterial.attachmentIds.join(
-                                    ", ",
-                                  )}
-                                </dd>
-                                <dt>Attachment control</dt>
-                                <dd>
-                                  {result.actionMaterial.attachmentControl}
-                                </dd>
-                              </>
-                            )}
-                            <dt>Commit control</dt>
-                            <dd>{result.actionMaterial.commitControl}</dd>
-                            {result.actionMaterial.scope && (
-                              <>
-                                <dt>Scope</dt>
-                                <dd>{result.actionMaterial.scope}</dd>
-                              </>
-                            )}
-                          </dl>
-                        )}
-                        <footer>
-                          {result.kind === "draft" && (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => beginResultRevision(result)}
-                            >
-                              Revise draft
-                            </button>
-                          )}
-                          {result.kind === "action" &&
-                            result.lifecycle === "prepared" && (
-                              <button
-                                type="button"
-                                className="primary"
-                                disabled={busy}
-                                onClick={() => void authorizeResult(result)}
-                              >
-                                Authorize exact action
-                              </button>
-                            )}
-                          {result.kind !== "action" &&
-                            result.kind !== "artifact" &&
-                            (product?.workflows.some(
-                              (workflow) => !workflow.archived,
-                            ) ??
-                              false) && (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => beginResultPromotion(result)}
-                              >
-                                Save to Workflow
-                              </button>
-                            )}
-                        </footer>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
               <section
                 className="task-timeline"
                 aria-label="Conversation and activity"
@@ -5183,8 +5241,8 @@ export function ProductSurface({
                             !segment.input.attachments?.length && (
                               <button
                                 type="button"
-                                aria-label="Save message to Workflow"
-                                title="Save to Workflow"
+                                aria-label="Add message to Context"
+                                title="Add to Context"
                                 onClick={() =>
                                   beginWorkflowPromotion(
                                     segment.input!,
@@ -5192,7 +5250,7 @@ export function ProductSurface({
                                   )
                                 }
                               >
-                                Save
+                                Add to Context
                               </button>
                             )}
                         </footer>
@@ -5306,31 +5364,49 @@ export function ProductSurface({
                               </svg>
                             )}
                           </button>
-                          {(product?.workflows.some(
-                            (workflow) => !workflow.archived,
-                          ) ??
-                            false) && (
-                            <button
-                              type="button"
-                              aria-label="Save response to Workflow"
-                              title="Save to Workflow"
-                              onClick={() =>
-                                beginWorkflowPromotion(item, viewedTask.taskId)
-                              }
-                            >
-                              Save
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            aria-label="Save response as result"
-                            title="Save result"
-                            onClick={() =>
-                              beginResultCreate(item, viewedTask.taskId)
-                            }
-                          >
-                            Result
-                          </button>
+                          {viewedTask.workflowAssociation &&
+                            (() => {
+                              const savedOutput = viewedTask.results.find(
+                                (result) =>
+                                  result.kind !== "action" &&
+                                  result.source.conversationItemId === item.id,
+                              );
+                              return savedOutput ? (
+                                <button
+                                  type="button"
+                                  className="output-saved-marker"
+                                  aria-label={`Open saved Output: ${savedOutput.revision.title}`}
+                                  title="Open Output"
+                                  onClick={() =>
+                                    openWorkflowOutput(
+                                      viewedTask.workflowAssociation!
+                                        .workflowId,
+                                      savedOutput.resultId,
+                                    )
+                                  }
+                                >
+                                  <span aria-hidden="true">✓</span>
+                                  {savedOutput.revision.title} · Saved to
+                                  Outputs
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="save-output-action"
+                                  aria-label="Save response to Outputs"
+                                  title="Save to Outputs"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void saveResponseToOutputs(
+                                      item,
+                                      viewedTask.taskId,
+                                    )
+                                  }
+                                >
+                                  Save to Outputs
+                                </button>
+                              );
+                            })()}
                         </footer>
                       </article>
                     ))}
@@ -5381,8 +5457,8 @@ export function ProductSurface({
                     >
                       {viewedTask.results.some((result) => result.selected) && (
                         <div
-                          className="selected-result-rail"
-                          aria-label="Selected results for follow-up"
+                          className="output-context-rail"
+                          aria-label="Outputs used for this message"
                         >
                           {viewedTask.results
                             .filter((result) => result.selected)
@@ -5395,7 +5471,7 @@ export function ProductSurface({
                                   void toggleResultSelection(result)
                                 }
                               >
-                                {result.revision.title} ×
+                                Using: {result.revision.title} ×
                               </button>
                             ))}
                         </div>
@@ -5610,6 +5686,7 @@ export function ProductSurface({
             type="button"
             onClick={() => {
               setSelectedWorkflowWorkspaceId(null);
+              setSelectedWorkflowOutputId(null);
               setSelectedWorkflowId("");
               setShareWorkflowContext("");
               setSelectedTaskId(null);
@@ -5644,6 +5721,7 @@ export function ProductSurface({
                 onClick={() => {
                   setSelectedWorkflowWorkspaceId(workflow.workflowId);
                   setWorkflowWorkspaceSection("home");
+                  setSelectedWorkflowOutputId(null);
                   setSelectedTaskId(null);
                   setShowNewTask(false);
                 }}
@@ -5692,6 +5770,7 @@ export function ProductSurface({
                     }
                     onClick={() => {
                       setSelectedWorkflowWorkspaceId(null);
+                      setSelectedWorkflowOutputId(null);
                       setSelectedTaskId(entry.taskId);
                       setShowNewTask(false);
                     }}
@@ -5983,7 +6062,7 @@ export function ProductSurface({
                     )
                     .map((recording) => (
                       <article key={recording.id}>
-                        <div className="result-card-heading">
+                        <div className="recording-history-heading">
                           <strong>Page recording</strong>
                           <span data-result-state={recording.state}>
                             {recording.state}

@@ -69,7 +69,9 @@ Creating a workflow requires only its name. Creation immediately enters Workflow
 
 Workflow Home prioritizes work rather than administration: workflow identity, an ordinary task composer, a bounded view of recent associated tasks, a bounded view of structured outputs from those tasks, and genuine unresolved attention when present. Outputs are existing stable Result records projected through exact task membership, not scraped conversation text or a second result store. Attention remains owned and resolved by its exact task/request; the workflow is only an index into that truth.
 
-Outputs are a first-class workflow surface. They answer “What useful things do I now have?” while tasks answer “What work or conversation did I do?” Context and settings are secondary to Home and Outputs. They expose the existing approved configuration for deliberate editing without making the internal configuration schema part of ordinary onboarding.
+Outputs are a first-class workflow surface. They answer “What useful things do I now have?” while tasks answer “What work or conversation did I do?” Result is an internal persistence concept, not normal customer vocabulary. Saving useful assistant work to Outputs is one action; Rove derives safe default metadata without asking the user to classify, title, or re-enter the work. Outputs open in a durable-work detail surface inside the Workflow, with natural provenance back to the source task. Context and settings are secondary to Home and Outputs. They expose the existing approved configuration for deliberate editing without making the internal configuration schema part of ordinary onboarding.
+
+The visual foundation stays clean, restrained, and mostly monochrome. Small Rove-owned identity and selection moments may use the terracotta hue from the current rendered Rove mark, including saved Output acknowledgement, active Output navigation, selected Output/context, and the composer context chip. Brand color does not replace semantic success, warning, uncertainty, error, or destructive colors. The older green SVG is not the current brand-color authority.
 
 Progressive setup should use structured, understandable questions and selectable answers, with custom input and deferral where useful. Rove should later be able to propose context from stated goals or observed work, but a model inference must never silently become durable policy. Do not expose a setup control until that assistance works.
 
@@ -101,7 +103,7 @@ The MVP supports portability of the reusable workflow environment, not full sync
 
 On another device, the user restores the same workflow environment, reconnects required services, supplies any necessary local resources, and starts new local tasks. The previous device's conversations do not appear merely because the workflow has synchronized.
 
-**Save to workflow** deliberately promotes approved reusable information from a task into the portable environment. It must not silently upload the whole conversation, its evidence, or its attachments. The user should be able to see what will be retained.
+**Add to Context** deliberately promotes approved reusable information from an Output or task into the portable environment. In a Workflow workspace, the destination is already understood; ordinary approval focuses on editable retained material, with optional topic scope progressively disclosed rather than exposing internal classification. It must not silently upload the whole conversation, its evidence, or its attachments. The user should be able to see and edit what will be retained.
 
 Connection configuration describes what a workflow needs; it does not include secret credentials. Each device establishes its own authorized connections. A resource reference also does not imply that a local file's bytes are available elsewhere. Missing files must be identified and reselected rather than represented as usable resources.
 
@@ -209,11 +211,11 @@ Recordings remain device-local under the persistence boundary. Requested video d
 
 ## 12. Results, Files, and Follow-Up
 
-Results should match the work: findings, reviewable collections, drafts, reports, journey records, artifacts, and confirmed action outcomes. Structured presentation complements an unrestricted conversation; it must not turn a task into a form that only accepts predetermined follow-ups.
+Outputs should match the work: findings, reviewable collections, drafts, reports, journey records, artifacts, and confirmed action outcomes. Internal Result records retain stable identity, exact revisions, task association, context selection, and action safety without requiring customers to learn that model. Structured presentation complements an unrestricted conversation; it must not turn a task into a form that only accepts predetermined follow-ups.
 
 Retain sources and relevant evidence where available. Follow-up actions should use saved, selected results and applicable guidance rather than reconstructing targets from rendered chat text.
 
-For example, the user can find opportunities, select some, request outreach drafts, revise the drafts, choose a CV, authorize sending, and later discuss something else in the same task.
+For example, the user can find opportunities, save useful findings to Outputs, continue in the source task with exact Output context, edit a durable draft, add approved knowledge to Workflow Context, choose a CV, authorize sending, and later discuss something else in the same task.
 
 Distinguish preparation, authorization, dispatch, confirmation, failure, and uncertainty. A draft is not a sent message. An agent's completion statement is not independent proof that an external action succeeded.
 
