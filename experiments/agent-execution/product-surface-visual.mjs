@@ -825,11 +825,23 @@ function uiTruthWorkflowSnapshot({ revision = 1, promote = false } = {}) {
 
 function uiTruthResultSnapshot(options = {}) {
   const taskId = "task_truth_result";
+  const workflow = uiTruthWorkflow();
   return uiTruthTaskSnapshot({
     taskId,
     request: "Prepare a structured research result",
     results: [uiTruthResult({ taskId, ...options })],
-    workflows: options.workflows ?? [],
+    workflows: options.workflows ?? [workflow],
+    workflowAssociation: {
+      workflowId: workflow.workflowId,
+      workflowName: workflow.name,
+    },
+    workflowContext: {
+      workflowId: workflow.workflowId,
+      workflowName: workflow.name,
+      revision: workflow.currentRevision,
+      digest: workflow.revision.digest,
+      developerInstructions: "Current approved Workflow context.",
+    },
   });
 }
 
@@ -993,10 +1005,11 @@ async function captureVisualMetrics(page) {
       ".task-timeline",
       ".timeline-message .message-body",
       ".attention-card",
-      ".result-shelf",
-      ".result-card",
-      ".result-card-heading strong",
-      ".result-action-material",
+      ".workflow-output-list > button",
+      ".output-detail",
+      ".output-detail-content",
+      ".output-action-status",
+      ".output-action-review",
       ".recording-panel",
       ".product-inspector",
       ".inspector-panel",
@@ -1011,7 +1024,7 @@ async function captureVisualMetrics(page) {
       ".theme-options",
       ".theme-options button",
       ".control-actions button",
-      ".selected-result-rail button",
+      ".output-context-rail button",
     ];
     const properties = [
       "display",
@@ -1301,9 +1314,19 @@ async function assertUiTruthCase(page, item) {
     }
 
     case "W04": {
-      await page.getByRole("button", { name: "Save to Workflow" }).click();
+      await page
+        .getByRole("button", { name: /Research review/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Outputs", exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: "Open Output: Reusable source assessment",
+        })
+        .click();
+      await page.getByRole("button", { name: "Add to Context" }).click();
       await requireVisible(
-        page.getByRole("dialog", { name: "Save to Workflow" }),
+        page.getByRole("dialog", { name: "Add to Context" }),
         "W04 explicit promotion review",
       );
       await requireInputValue(
@@ -1312,50 +1335,87 @@ async function assertUiTruthCase(page, item) {
         "W04 exact reusable material",
       );
       await requireVisible(
-        page.getByLabel("Promotion category"),
-        "W04 reusable information category",
+        page.getByLabel("What Rove should remember"),
+        "W04 editable reusable material",
       );
-      await requireVisible(
-        page.getByText(
-          /conversation, files, approvals, and browser state are not included/i,
-        ),
-        "W04 excluded non-portable material",
+      await requireAbsent(
+        page.getByLabel("Workflow", { exact: true }),
+        "W04 current Workflow destination stays implicit",
+      );
+      await requireAbsent(
+        page.getByLabel("Promotion category"),
+        "W04 internal reusable-information class stays hidden",
+      );
+      await requireAbsent(
+        page.getByLabel("Relevant topics"),
+        "W04 advanced topic scope starts collapsed",
       );
       break;
     }
 
     case "R01": {
+      await page
+        .getByRole("button", { name: /Research review/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Outputs", exact: true }).click();
       await requireVisible(
-        page.getByRole("region", { name: "Task results" }),
-        "R01 structured result region",
+        page.getByRole("heading", { name: "Useful work to return to" }),
+        "R01 Workflow Outputs region",
+      );
+      await page
+        .getByRole("button", {
+          name: "Open Output: Research brief",
+        })
+        .click();
+      await requireVisible(
+        page.getByText("Report", { exact: true }),
+        "R01 customer-facing Output kind",
       );
       await requireVisible(
-        page.getByText("report · Revision 1", { exact: true }),
-        "R01 result kind and revision identity",
+        page.getByText("Current reviewed research brief.", { exact: true }),
+        "R01 current Output content",
       );
       await requireAbsent(
-        page.getByText(/assistant prose only/i),
-        "R01 structured result must not collapse to prose",
+        page.getByText(/Revision 1/i),
+        "R01 internal revision mechanics stay hidden",
       );
       break;
     }
 
     case "R02": {
+      await page
+        .getByRole("button", { name: /Research review/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Outputs", exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: "Open Output: Revised research brief",
+        })
+        .click();
       await requireVisible(
         page.getByText("Revised research brief", { exact: true }),
-        "R02 current revised result",
+        "R02 current revised Output",
       );
       await requireVisible(
-        page.getByText("draft · Revision 2", { exact: true }),
-        "R02 current result revision",
+        page.getByText("Current selected revision.", { exact: true }),
+        "R02 current Output content",
       );
-      const selected = page.getByLabel("Select for follow-up");
-      await requireVisible(selected, "R02 selected follow-up state");
-      if (!(await selected.isChecked()))
-        throw new Error("[UI Truth] R02 current result is not selected.");
+      await page.getByRole("button", { name: "Continue in task" }).click();
+      await requireVisible(
+        page.getByRole("button", {
+          name: "Using: Revised research brief ×",
+        }),
+        "R02 selected Output follow-up state",
+      );
       await requireAbsent(
         page.getByText("Obsolete first revision", { exact: true }),
         "R02 obsolete revision must not be current",
+      );
+      await requireAbsent(
+        page.getByText(/Revision 2/i),
+        "R02 internal revision mechanics stay hidden",
       );
       break;
     }
@@ -1372,24 +1432,45 @@ async function assertUiTruthCase(page, item) {
         A04: "confirmed",
         A05: "unresolved",
       }[scenario.id];
+      const customerStatus = {
+        A01: "Ready for approval",
+        A02: "Approved",
+        A03: "Checking outcome",
+        A04: "Sent",
+        A05: "Outcome unclear",
+      }[scenario.id];
+      await page
+        .getByRole("button", { name: /Research review/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Outputs", exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: "Open Output: Send approved research summary",
+        })
+        .click();
       await requireVisible(
-        page.getByText(lifecycle, { exact: true }),
-        `${scenario.id} authoritative action lifecycle`,
+        page.getByText(customerStatus, { exact: true }),
+        `${scenario.id} customer-facing action lifecycle for ${lifecycle}`,
       );
       await requireVisible(
+        page.getByText("Send the approved research summary.", { exact: true }),
+        `${scenario.id} exact action material`,
+      );
+      await requireAbsent(
         page.getByText("Dispatch requires explicit authorization", {
           exact: true,
         }),
-        `${scenario.id} exact commit control`,
+        `${scenario.id} internal commit control stays hidden`,
       );
       if (scenario.id === "A01")
         await requireVisible(
-          page.getByRole("button", { name: "Authorize exact action" }),
+          page.getByRole("button", { name: "Approve and send" }),
           "A01 explicit authorization boundary",
         );
       else
         await requireAbsent(
-          page.getByRole("button", { name: "Authorize exact action" }),
+          page.getByRole("button", { name: "Approve and send" }),
           `${scenario.id} must not repeat prepared authorization UI`,
         );
       if (scenario.id === "A05") {
@@ -1642,7 +1723,7 @@ async function captureDesignStateEvidence(page, item) {
   }
 
   if (item.truthScenarioId === "R02") {
-    const chip = page.locator(".selected-result-rail button");
+    const chip = page.locator(".output-context-rail button");
     const layout = await chip.evaluate((element) => ({
       width: element.getBoundingClientRect().width,
       clientWidth: element.clientWidth,
@@ -1651,10 +1732,10 @@ async function captureDesignStateEvidence(page, item) {
     }));
     if (layout.width <= 42 || layout.scrollWidth > layout.clientWidth)
       throw new Error(
-        `Selected-result chip is unreadable: ${JSON.stringify(layout)}`,
+        `Selected Output chip is unreadable: ${JSON.stringify(layout)}`,
       );
-    assertions.selectedResultChipReadable = true;
-    assertions.selectedResultChipWidth = layout.width;
+    assertions.selectedOutputChipReadable = true;
+    assertions.selectedOutputChipWidth = layout.width;
   }
 
   const statePath = (suffix) => join(outputRoot, `${item.id}-${suffix}.png`);
@@ -1683,7 +1764,8 @@ async function captureDesignStateEvidence(page, item) {
   }
   if (item.truthScenarioId === "W04") {
     await page
-      .getByRole("button", { name: "Save approved information" })
+      .getByRole("dialog", { name: "Add to Context" })
+      .getByRole("button", { name: "Add to Context", exact: true })
       .focus();
     const path = statePath("focus");
     await page.screenshot({ path, fullPage: true });
@@ -1702,8 +1784,8 @@ async function captureDesignStateEvidence(page, item) {
 
   const transitionLabels = {
     W03: "Workflow list to current revision editor",
-    W04: "task conversation to Save to Workflow review",
-    R02: "structured result to selected follow-up context",
+    W04: "Workflow Output detail to Add to Context review",
+    R02: "Workflow Output detail to selected follow-up context",
     C02: "human browser control to explicit return-control action",
     C04: "task setup to human-led Capture task",
     V01: "task to active recording controls",
@@ -2398,15 +2480,23 @@ try {
       const visibleConfiguration = page.getByLabel("Task configuration");
       await page.getByLabel("Desired outcome").fill("");
       await page.getByLabel("Desired outcome").press("/");
-      const typedSlashOpenedSamePalette =
-        (await commandPalette.evaluate((menu) => menu.open)) &&
-        (await commandPalette
-          .getByLabel("Search commands")
-          .evaluate((input) => document.activeElement === input));
-      if (!typedSlashOpenedSamePalette)
+      try {
+        await page.waitForFunction(() => {
+          const menu = document.querySelector("#task-command-palette");
+          const input = menu?.querySelector("input[type='search']");
+          return (
+            menu instanceof HTMLDetailsElement &&
+            menu.open &&
+            input instanceof HTMLElement &&
+            document.activeElement === input
+          );
+        });
+      } catch {
         throw new Error(
           "Typed slash did not open and focus the command palette.",
         );
+      }
+      const typedSlashOpenedSamePalette = true;
       await commandPalette.getByLabel("Search commands").fill("workflow");
       const commandSearchFiltered =
         (await commandPalette.getByLabel("Workflow environment").count()) ===

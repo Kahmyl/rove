@@ -280,7 +280,7 @@ export const UI_TRUTH_SCENARIOS = Object.freeze([
       "Promotion identifies the selected reusable material and destination Workflow.",
     ],
     semanticAssertions: [
-      "A Save/promote-to-Workflow action is available for qualifying material.",
+      "An Add-to-Context action is available for qualifying material.",
       "The promotion UI identifies what will be saved.",
     ],
     negativeAssertions: [
@@ -299,10 +299,10 @@ export const UI_TRUTH_SCENARIOS = Object.freeze([
       "The task owns structured results using domain kinds: finding_collection, draft, report, journey, artifact, or action.",
     ],
     rendererTruth: [
-      "The result kind and current revision are represented from authoritative result state.",
+      "The current result is represented as a customer-facing Output from authoritative result state.",
     ],
     semanticAssertions: [
-      "The produced result is visible and inspectable from its task.",
+      "The produced Output is visible and inspectable from its Workflow.",
     ],
     negativeAssertions: [
       "Structured result truth must not be replaced solely by free-form assistant prose.",
@@ -319,11 +319,11 @@ export const UI_TRUTH_SCENARIOS = Object.freeze([
       "Its selected flag reflects current task follow-up context.",
     ],
     rendererTruth: [
-      "The current revision is shown.",
-      "Selection state matches the domain flag.",
+      "The current Output content is shown without exposing revision mechanics.",
+      "Selection state matches the domain flag in follow-up context.",
     ],
     semanticAssertions: [
-      "The revised result content is visible.",
+      "The revised Output content is visible.",
       "Selection state is visibly distinguishable.",
     ],
     negativeAssertions: [
@@ -344,7 +344,7 @@ export const UI_TRUTH_SCENARIOS = Object.freeze([
           `The authoritative consequential action lifecycle is ${lifecycle}.`,
         ],
         rendererTruth: [
-          `The renderer preserves the ${lifecycle} lifecycle without collapsing it into a generic sent/done state.`,
+          `The renderer translates the ${lifecycle} lifecycle into its distinct customer-facing status without collapsing it into a generic sent/done state.`,
         ],
         semanticAssertions: [
           `The UI communicates consequential-action state ${lifecycle}.`,
