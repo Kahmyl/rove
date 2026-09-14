@@ -6,11 +6,14 @@ import type {
   ThreadStartParams,
   UserInput,
 } from "./protocol.js";
-import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
+import {
+  APPROVED_CODEX_CLI_VERSION,
+  approvedCodexBaseline,
+} from "./compatibility.js";
 
 export const ROVE_CODEX_COMPATIBILITY_PROFILE = Object.freeze({
   cliVersion: APPROVED_CODEX_CLI_VERSION,
-  historyMode: "legacy" as const,
+  historyMode: approvedCodexBaseline("development").historyMode,
 });
 
 export type CodexMessageDeliveryState =

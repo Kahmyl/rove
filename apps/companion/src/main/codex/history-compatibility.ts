@@ -1,6 +1,11 @@
 import type { ConversationAssociation } from "./conversations.js";
 import type { CodexThread } from "./protocol.js";
-import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
+import {
+  APPROVED_CODEX_CLI_VERSION,
+  approvedCodexBaseline,
+} from "./compatibility.js";
+
+const APPROVED_HISTORY_MODE = approvedCodexBaseline("development").historyMode;
 
 interface ExpectedEmptyLegacyThread {
   taskId: string;
@@ -51,7 +56,7 @@ export function isPinnedEmptyLegacyThreadFailure(
     thread.id !== expected.threadId ||
     thread.sessionId !== expected.sessionId ||
     thread.threadSource !== expected.threadSource ||
-    thread.historyMode !== "legacy" ||
+    thread.historyMode !== APPROVED_HISTORY_MODE ||
     !["idle", "notLoaded"].includes(thread.status.type) ||
     thread.turns.length !== 0
   )

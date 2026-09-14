@@ -4,8 +4,10 @@ import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import { arch, platform } from "node:process";
 
-import approvedComponentsJson from "./approved-components.json" with { type: "json" };
-import { CODEX_SCHEMA_SHA256 } from "./protocol.js";
+import {
+  APPROVED_CODEX_COMPONENT_SET,
+  type ApprovedCodexComponentSet,
+} from "./component-set.js";
 
 export interface CodexCompatibilityBaseline {
   id: string;
@@ -18,21 +20,19 @@ export interface CodexCompatibilityBaseline {
   codeModeHostSha256: string;
   codeModeHostBytes: number;
   generatedSchemaSha256: string;
+  historyMode: "legacy" | "paginated";
 }
 
-type ApprovedManifest = typeof approvedComponentsJson;
-const approvedManifest: ApprovedManifest = approvedComponentsJson;
-
 export function approvedCodexBaseline(
-  source: "development" | "packaged",
+  _source: "development" | "packaged",
 ): CodexCompatibilityBaseline {
-  const purpose = source === "development" ? "development" : "packaging";
-  const id = approvedManifest.selections[purpose];
-  const component = approvedManifest.components.find(
-    (entry) => entry.id === id,
-  );
-  if (!component)
-    throw new Error(`Approved Codex ${purpose} selection ${id} is missing.`);
+  return compatibilityBaseline(APPROVED_CODEX_COMPONENT_SET);
+}
+
+export function compatibilityBaseline(
+  componentSet: ApprovedCodexComponentSet,
+): CodexCompatibilityBaseline {
+  const { component, binding } = componentSet;
   return {
     id: component.id,
     cliVersion: component.cliVersion,
@@ -45,7 +45,8 @@ export function approvedCodexBaseline(
     codeModeHostFilename: component.codeModeHost.filename,
     codeModeHostSha256: component.codeModeHost.sha256,
     codeModeHostBytes: component.codeModeHost.bytes,
-    generatedSchemaSha256: component.schema.aggregateSha256,
+    generatedSchemaSha256: binding.aggregateSha256,
+    historyMode: binding.historyMode,
   };
 }
 
@@ -109,7 +110,10 @@ async function sha256(path: string): Promise<string> {
 }
 
 export class CodexExecutableResolver {
-  constructor(private readonly options: CodexExecutableResolverOptions) {}
+  constructor(
+    private readonly options: CodexExecutableResolverOptions,
+    private readonly componentSet: ApprovedCodexComponentSet = APPROVED_CODEX_COMPONENT_SET,
+  ) {}
 
   async resolve(): Promise<ResolvedCodexExecutable> {
     const source = this.options.isPackaged ? "packaged" : "development";
@@ -134,8 +138,9 @@ export class CodexExecutableResolver {
     });
     const targetOs = osName(this.options.platform ?? platform);
     const targetArch = this.options.architecture ?? arch;
-    const schemaSha256 = this.options.schemaSha256 ?? CODEX_SCHEMA_SHA256;
-    const baseline = approvedCodexBaseline(source);
+    const schemaSha256 =
+      this.options.schemaSha256 ?? this.componentSet.binding.aggregateSha256;
+    const baseline = compatibilityBaseline(this.componentSet);
     if (
       baseline.platformOs !== targetOs ||
       baseline.architecture !== targetArch

@@ -67,6 +67,7 @@ import {
   type CodexServerEvent,
   type CodexThread,
 } from "./protocol.js";
+import { APPROVED_CODEX_COMPONENT_SET } from "./component-set.js";
 import {
   CodexProtocolError,
   CodexRpcConnection,
@@ -307,7 +308,7 @@ function emptyAssociation(
 describe("generated boundary", () => {
   it("locks the exact reviewed methods/digest and rejects raw turn overrides", () => {
     expect(CODEX_SCHEMA_SHA256).toBe(
-      "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e",
+      APPROVED_CODEX_COMPONENT_SET.component.schema.aggregateSha256,
     );
     expect(CODEX_REVIEWED_METHODS).toContain("mcpServerStatus/list");
     expect(() =>

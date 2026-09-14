@@ -11,8 +11,10 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
+  readCompiledSchemaBindings,
   readComponentManifest,
   selectedComponent,
+  verifyCompiledSchemaBinding,
 } from "./codex-component-lib.mjs";
 
 const execFile = promisify(execFileCallback);
@@ -21,9 +23,10 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const artifactsRoot = join(repositoryRoot, "release", "artifacts");
 const runtimeToken = "rove-packaged-runtime-smoke-token";
 const mcpToken = "rove-packaged-mcp-smoke-token";
-const codexComponent = selectedComponent(
-  await readComponentManifest(),
-  "packaging",
+const codexComponent = selectedComponent(await readComponentManifest());
+await verifyCompiledSchemaBinding(
+  codexComponent,
+  await readCompiledSchemaBindings(),
 );
 const codexSha256 = codexComponent.executable.sha256;
 const codeModeHostSha256 = codexComponent.codeModeHost.sha256;
@@ -246,6 +249,7 @@ try {
     compatibility.version !== codexComponent.cliVersion ||
     compatibility.platform !== codexComponent.platformOs ||
     compatibility.architecture !== codexComponent.architecture ||
+    compatibility.historyMode !== codexComponent.historyMode ||
     compatibility.sha256 !== codexSha256 ||
     compatibility.codeModeHost?.filename !==
       codexComponent.codeModeHost.filename ||
@@ -253,7 +257,10 @@ try {
     compatibility.codeModeHost?.bytes !== codeModeHostBytes ||
     compatibility.codeModeHost?.platform !== codexComponent.platformOs ||
     compatibility.codeModeHost?.architecture !== codexComponent.architecture ||
-    compatibility.schema?.sha256 !== codexComponent.schema.sha256
+    compatibility.schema?.filename !== codexComponent.schema.filename ||
+    compatibility.schema?.sha256 !== codexComponent.schema.sha256 ||
+    compatibility.schema?.aggregateSha256 !==
+      codexComponent.schema.aggregateSha256
   )
     throw new Error("Packaged Codex compatibility manifest is invalid.");
 

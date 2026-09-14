@@ -17,8 +17,10 @@ import { fileURLToPath } from "node:url";
 import {
   componentPaths,
   defaultManagedCodexRoot,
+  readCompiledSchemaBindings,
   readComponentManifest,
   selectedComponent,
+  verifyCompiledSchemaBinding,
   verifyComponentDirectory,
 } from "./codex-component-lib.mjs";
 
@@ -33,10 +35,8 @@ const browsersRoot = join(stagingRoot, "browsers");
 const codexRoot = join(servicesRoot, "codex");
 const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const componentManifest = await readComponentManifest();
-export const PACKAGED_CODEX_COMPONENT = selectedComponent(
-  componentManifest,
-  "packaging",
-);
+const compiledSchemaBindings = await readCompiledSchemaBindings();
+export const PACKAGED_CODEX_COMPONENT = selectedComponent(componentManifest);
 
 function run(command, args, options = {}) {
   return new Promise((resolveRun, reject) => {
@@ -93,6 +93,7 @@ async function pruneService(serviceRoot) {
 export async function verifyCodexCodeModeHost(
   source,
   expected = PACKAGED_CODEX_COMPONENT.codeModeHost,
+  componentId = PACKAGED_CODEX_COMPONENT.id,
 ) {
   const bytes = await readFile(source).catch(() => {
     throw new Error(`Supported Codex code-mode host is unavailable: ${source}`);
@@ -100,12 +101,12 @@ export async function verifyCodexCodeModeHost(
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== expected.sha256) {
     throw new Error(
-      `Codex code-mode host digest does not match packaged component ${PACKAGED_CODEX_COMPONENT.id}.`,
+      `Codex code-mode host digest does not match packaged component ${componentId}.`,
     );
   }
   if (bytes.byteLength !== expected.bytes) {
     throw new Error(
-      `Codex code-mode host size does not match packaged component ${PACKAGED_CODEX_COMPONENT.id}.`,
+      `Codex code-mode host size does not match packaged component ${componentId}.`,
     );
   }
   return { source, bytes, digest, size: bytes.byteLength };
@@ -114,7 +115,10 @@ export async function verifyCodexCodeModeHost(
 export async function verifyCodexComponentSet({
   root = defaultManagedCodexRoot(),
   component = PACKAGED_CODEX_COMPONENT,
+  schemaBindings = compiledSchemaBindings,
+  schemaRoot,
 } = {}) {
+  await verifyCompiledSchemaBinding(component, schemaBindings, schemaRoot);
   const managed = componentPaths(root, component);
   await verifyComponentDirectory(managed.directory, component);
   const executableSource = managed.executable;
@@ -135,6 +139,7 @@ export async function verifyCodexComponentSet({
   const codeModeHost = await verifyCodexCodeModeHost(
     codeModeHostSource,
     component.codeModeHost,
+    component.id,
   );
   return {
     executable: {
@@ -146,10 +151,16 @@ export async function verifyCodexComponentSet({
   };
 }
 
-async function prepareCodexComponentSet({ executable, codeModeHost }) {
-  await mkdir(codexRoot, { recursive: true });
-  const executableDestination = join(codexRoot, "codex");
-  const codeModeHostDestination = join(codexRoot, "codex-code-mode-host");
+export async function stageCodexComponentSet(
+  { executable, codeModeHost },
+  { component = PACKAGED_CODEX_COMPONENT, destinationRoot = codexRoot } = {},
+) {
+  await mkdir(destinationRoot, { recursive: true });
+  const executableDestination = join(destinationRoot, "codex");
+  const codeModeHostDestination = join(
+    destinationRoot,
+    component.codeModeHost.filename,
+  );
   await Promise.all([
     writeFile(executableDestination, executable.bytes),
     writeFile(codeModeHostDestination, codeModeHost.bytes),
@@ -159,21 +170,22 @@ async function prepareCodexComponentSet({ executable, codeModeHost }) {
     chmod(codeModeHostDestination, 0o755),
   ]);
   await writeFile(
-    join(codexRoot, "compatibility.json"),
+    join(destinationRoot, "compatibility.json"),
     `${JSON.stringify(
       {
-        componentId: PACKAGED_CODEX_COMPONENT.id,
-        version: PACKAGED_CODEX_COMPONENT.cliVersion,
-        platform: PACKAGED_CODEX_COMPONENT.platformOs,
-        architecture: PACKAGED_CODEX_COMPONENT.architecture,
+        componentId: component.id,
+        version: component.cliVersion,
+        platform: component.platformOs,
+        architecture: component.architecture,
+        historyMode: component.historyMode,
         sha256: executable.digest,
-        schema: PACKAGED_CODEX_COMPONENT.schema,
+        schema: component.schema,
         codeModeHost: {
-          filename: PACKAGED_CODEX_COMPONENT.codeModeHost.filename,
+          filename: component.codeModeHost.filename,
           sha256: codeModeHost.digest,
           bytes: codeModeHost.size,
-          platform: PACKAGED_CODEX_COMPONENT.platformOs,
-          architecture: PACKAGED_CODEX_COMPONENT.architecture,
+          platform: component.platformOs,
+          architecture: component.architecture,
         },
       },
       null,
@@ -230,7 +242,7 @@ async function prepare(verifiedCodex) {
 
   await Promise.all([pruneService(runtimeRoot), pruneService(mcpRoot)]);
 
-  await prepareCodexComponentSet(verifiedCodex);
+  await stageCodexComponentSet(verifiedCodex);
 
   await run(
     pnpmExecutable,

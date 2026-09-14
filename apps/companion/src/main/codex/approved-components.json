@@ -1,10 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "component": "codex-app-server",
-  "selections": {
-    "development": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
-    "packaging": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a"
-  },
+  "selection": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
   "components": [
     {
       "id": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
@@ -13,6 +10,7 @@
       "platformOs": "macos",
       "nodePlatform": "darwin",
       "architecture": "arm64",
+      "historyMode": "legacy",
       "executable": {
         "filename": "codex",
         "sha256": "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb",
@@ -44,6 +42,7 @@
       "platformOs": "macos",
       "nodePlatform": "darwin",
       "architecture": "arm64",
+      "historyMode": "legacy",
       "executable": {
         "filename": "codex",
         "sha256": "87a08119b8effa519f0ecb552dc98043f58a8200bf2ec5da60f76890c33e9c3a"
