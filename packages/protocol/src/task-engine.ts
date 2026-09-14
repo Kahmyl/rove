@@ -154,10 +154,6 @@ export type TaskEvent =
       operationId: string;
     })
   | (TaskEventBase & {
-      type: "task_archive_requested" | "task_unarchive_requested";
-      operationId: string;
-    })
-  | (TaskEventBase & {
       type: "attention_response_requested";
       operationId: string;
       requestId: string;
@@ -265,8 +261,6 @@ export type TaskIntent = Extract<
       | "task_interrupt_requested"
       | "task_finish_requested"
       | "task_cleanup_retry_requested"
-      | "task_archive_requested"
-      | "task_unarchive_requested"
       | "attention_response_requested"
       | "explicit_continuation_response_requested";
   }
@@ -823,18 +817,6 @@ function operation(event: TaskEvent): NativeRequestedOperation | null {
     case "task_cleanup_retry_requested":
       return {
         type: "retry_cleanup",
-        taskId: event.taskId,
-        operationId: event.operationId,
-      };
-    case "task_archive_requested":
-      return {
-        type: "archive",
-        taskId: event.taskId,
-        operationId: event.operationId,
-      };
-    case "task_unarchive_requested":
-      return {
-        type: "resume",
         taskId: event.taskId,
         operationId: event.operationId,
       };

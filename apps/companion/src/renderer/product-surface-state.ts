@@ -216,15 +216,24 @@ export function selectableProductTasks(
   closedHistoryLimit = 8,
 ): ProductTaskProjection[] {
   if (!product) return [];
-  const recent = [...product.tasks].reverse();
+  const recent = [...product.tasks]
+    .reverse()
+    .filter((task) => task.conversation?.archived !== true);
   const blockers = recent.filter((task) => !terminalProductTask(task));
   const closedHistory = recent
-    .filter(
-      (task) =>
-        terminalProductTask(task) && task.conversation?.archived !== true,
-    )
+    .filter((task) => terminalProductTask(task))
     .slice(0, closedHistoryLimit);
   return [...blockers, ...closedHistory];
+}
+
+export function archivedProductTasks(
+  product: LocalProductSnapshot | null,
+): ProductTaskProjection[] {
+  return product
+    ? [...product.tasks]
+        .reverse()
+        .filter((task) => task.conversation?.archived === true)
+    : [];
 }
 
 export function taskHistoryTitle(task: ProductTaskProjection): string {

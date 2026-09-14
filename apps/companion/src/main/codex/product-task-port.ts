@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { projectTaskAggregate } from "@rove/protocol";
 import type {
   TaskEngine,
   TaskAcceptance,
@@ -152,6 +153,34 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       if (current?.codex.turn === "active")
         throw new Error("Stop the current work before archiving this task.");
     }
+    if (intent.type === "archive" || intent.type === "unarchive") {
+      const aggregate = await this.options.store.aggregate(intent.taskId);
+      if (!aggregate)
+        throw new Error("Task history preference targets an unknown task.");
+      if (!this.options.store.setTaskHistoryArchived)
+        throw new Error("Task history preference storage is unavailable.");
+      await this.options.onCut?.("before_event_commit", intent);
+      const archived = intent.type === "archive";
+      const duplicate =
+        this.options.store.taskHistoryArchived?.(intent.taskId) === archived;
+      this.options.store.setTaskHistoryArchived(intent.taskId, archived);
+      await this.options.onCut?.("after_commit_before_claim", intent);
+      const projection = {
+        ...projectTaskAggregate(aggregate),
+        operationDisposition: {
+          type: archived ? ("archive" as const) : ("resume" as const),
+          operationId: intent.operationId,
+          status: "accepted" as const,
+          reason: archived
+            ? "Task was archived in local history."
+            : "Task was restored to local history.",
+        },
+      };
+      this.revision += 1;
+      for (const listener of this.listeners) listener(this.revision);
+      await this.options.onPublished?.();
+      return { duplicate, aggregate, projection, command: null };
+    }
     if (launchWorkspace)
       await mkdir(launchWorkspace, { recursive: true, mode: 0o700 });
     const base = {
@@ -254,20 +283,6 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           operationId: intent.operationId,
         };
         break;
-      case "archive":
-        event = {
-          ...base,
-          type: "task_archive_requested",
-          operationId: intent.operationId,
-        };
-        break;
-      case "unarchive":
-        event = {
-          ...base,
-          type: "task_unarchive_requested",
-          operationId: intent.operationId,
-        };
-        break;
       case "attention_response":
         event = {
           ...base,
@@ -309,14 +324,6 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       this.options.store.taskHistoryArchived?.(taskId) === undefined
     )
       this.options.store.setTaskHistoryArchived?.(taskId, false);
-    if (
-      (intent.type === "archive" || intent.type === "unarchive") &&
-      accepted.projection.operationDisposition?.status !== "rejected"
-    )
-      this.options.store.setTaskHistoryArchived?.(
-        intent.taskId,
-        intent.type === "archive",
-      );
     if (
       accepted.command === null &&
       !accepted.duplicate &&

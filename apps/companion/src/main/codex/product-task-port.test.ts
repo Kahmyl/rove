@@ -211,16 +211,11 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const path = join(root, "task-engine.sqlite3");
     const store = new SqliteTaskEngineStore({ path });
     await seedReadyTask(store);
-    const accept = vi.fn(async () => ({
-      duplicate: false,
-      aggregate: (await store.aggregate(seededTaskId))!,
-      projection: {
-        operationDisposition: { status: "accepted", reason: "Accepted." },
-      },
-      command: null,
-    }));
+    const aggregateBefore = await store.aggregate(seededTaskId);
+    const engine = new TaskEngine(store);
+    const accept = vi.spyOn(engine, "accept");
     const port = new LedgerProductTaskPort({
-      engine: { accept } as never,
+      engine,
       store,
       worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
     });
@@ -230,6 +225,8 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       taskId: seededTaskId,
       operationId: "intent_32345678-1234-4123-8123-123456789abc",
     });
+    expect(accept).not.toHaveBeenCalled();
+    expect(await store.aggregate(seededTaskId)).toEqual(aggregateBefore);
     store.close();
 
     const reopened = new SqliteTaskEngineStore({ path });
@@ -241,6 +238,100 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const [task] = await restartedPort.productTasks();
     expect(task?.conversation?.archived).toBe(true);
     reopened.close();
+  });
+
+  it("changes local organization without replacing an uncertain execution fence", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-history-fence-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    await store.markRecoveryRequired(
+      seededTaskId,
+      "The exact prior message may have been submitted.",
+    );
+    const fenced = await store.aggregate(seededTaskId);
+    const engine = new TaskEngine(store);
+    const accept = vi.spyOn(engine, "accept");
+    const signal = vi.fn();
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal, cancelTask: vi.fn() } as never,
+    });
+
+    const archived = await port.submit({
+      type: "archive",
+      taskId: seededTaskId,
+      operationId: "intent_72345678-1234-4123-8123-123456789abc",
+    });
+    expect(archived.projection.operationDisposition).toMatchObject({
+      type: "archive",
+      status: "accepted",
+    });
+    expect(await store.aggregate(seededTaskId)).toEqual(fenced);
+    expect(store.taskHistoryArchived(seededTaskId)).toBe(true);
+
+    const restored = await port.submit({
+      type: "unarchive",
+      taskId: seededTaskId,
+      operationId: "intent_82345678-1234-4123-8123-123456789abc",
+    });
+    expect(restored.projection.operationDisposition).toMatchObject({
+      type: "resume",
+      status: "accepted",
+    });
+    expect(await store.aggregate(seededTaskId)).toEqual(fenced);
+    expect(store.taskHistoryArchived(seededTaskId)).toBe(false);
+    expect(accept).not.toHaveBeenCalled();
+    expect(signal).not.toHaveBeenCalled();
+    store.close();
+  });
+
+  it("archives locally while resource cleanup is still converging", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-history-cleanup-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const engine = new TaskEngine(store);
+    const cleanup = await engine.accept({
+      schemaVersion: 1,
+      type: "task_finish_requested",
+      eventId: "internal:cleanup:requested",
+      taskId: seededTaskId,
+      source: {
+        kind: "product",
+        id: "internal:cleanup:requested",
+        generation: 1,
+        position: 1,
+      },
+      observedAt: "2026-09-09T12:00:02.000Z",
+      operationId: "intent_92345678-1234-4123-8123-123456789abc",
+    });
+    expect(cleanup.command).not.toBeNull();
+    const cleanupAggregate = await store.aggregate(seededTaskId);
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+
+    const archived = await port.submit({
+      type: "archive",
+      taskId: seededTaskId,
+      operationId: "intent_a2345678-1234-4123-8123-123456789abc",
+    });
+
+    expect(archived.projection.operationDisposition).toMatchObject({
+      type: "archive",
+      status: "accepted",
+    });
+    expect(await store.aggregate(seededTaskId)).toEqual(cleanupAggregate);
+    expect(store.taskHistoryArchived(seededTaskId)).toBe(true);
+    store.close();
   });
 
   it("keeps local history visible and restore/message usable without a provider thread", async () => {
@@ -639,18 +730,19 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     expect(cancelTask).toHaveBeenCalledTimes(2);
   });
 
-  it("does not cancel a lifecycle command that the same intent just queued", async () => {
-    const accept = vi.fn(async (event) => ({
-      duplicate: false,
-      aggregate: { taskId: event.taskId },
-      projection: {},
-      command: { commandId: "command:new-lifecycle-work" },
-    }));
+  it("does not signal execution when restoring local history", async () => {
+    const aggregate = emptyTaskAggregate(
+      "task_12345678-1234-4123-8123-123456789abc",
+    );
     const cancelTask = vi.fn();
     const signal = vi.fn();
     const port = new LedgerProductTaskPort({
-      engine: { accept } as never,
-      store: {} as never,
+      engine: { accept: vi.fn() } as never,
+      store: {
+        aggregate: vi.fn(async () => aggregate),
+        taskHistoryArchived: vi.fn(() => true),
+        setTaskHistoryArchived: vi.fn(),
+      } as never,
       worker: { signal, cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
     });
@@ -662,24 +754,27 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
 
     expect(cancelTask).not.toHaveBeenCalled();
-    expect(signal).toHaveBeenCalledOnce();
+    expect(signal).not.toHaveBeenCalled();
   });
 
-  it("lets archive state changes follow the command already completing", async () => {
-    const accept = vi.fn(async (event) => ({
-      duplicate: false,
-      aggregate: { taskId: event.taskId },
-      projection: {},
-      command: null,
-    }));
+  it("lets archive state changes proceed independently of execution acceptance", async () => {
+    const taskId = "task_12345678-1234-4123-8123-123456789abc";
+    const aggregate = emptyTaskAggregate(taskId);
+    const accept = vi.fn(() => {
+      throw new Error("execution acceptance must not be consulted");
+    });
     const cancelTask = vi.fn();
+    const setTaskHistoryArchived = vi.fn();
     const port = new LedgerProductTaskPort({
       engine: { accept } as never,
-      store: { aggregate: vi.fn(async () => null) } as never,
+      store: {
+        aggregate: vi.fn(async () => aggregate),
+        taskHistoryArchived: vi.fn(() => false),
+        setTaskHistoryArchived,
+      } as never,
       worker: { signal: vi.fn(), cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
     });
-    const taskId = "task_12345678-1234-4123-8123-123456789abc";
 
     await port.submit({
       type: "unarchive",
@@ -693,6 +788,9 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
 
     expect(cancelTask).not.toHaveBeenCalled();
+    expect(accept).not.toHaveBeenCalled();
+    expect(setTaskHistoryArchived).toHaveBeenNthCalledWith(1, taskId, false);
+    expect(setTaskHistoryArchived).toHaveBeenNthCalledWith(2, taskId, true);
   });
 
   it("freezes a host-owned per-task cwd and ignores the caller cwd", async () => {

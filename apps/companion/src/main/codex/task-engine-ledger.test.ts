@@ -575,7 +575,7 @@ describe("SQLite task engine ledger", () => {
     store.close();
   });
 
-  it("rejects non-interrupting replacement of an outstanding product intent", async () => {
+  it("rejects replacement of an outstanding product intent", async () => {
     const { store, engine } = await fixture();
     const launched = launch();
     await engine.accept(launched);
@@ -583,7 +583,7 @@ describe("SQLite task engine ledger", () => {
     await expect(
       engine.accept({
         schemaVersion: 1,
-        type: "task_archive_requested",
+        type: "explicit_continuation_response_requested",
         eventId: `product:${operationId}`,
         taskId: launched.taskId,
         source: {
@@ -594,6 +594,8 @@ describe("SQLite task engine ledger", () => {
         },
         observedAt: "2026-09-09T12:01:00.000Z",
         operationId,
+        message: "A different operation cannot replace the launch.",
+        attachmentIds: [],
       }),
     ).rejects.toThrow(/outstanding product intent/);
     store.close();

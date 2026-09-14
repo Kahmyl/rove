@@ -39,6 +39,7 @@ import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
 import {
   activeProductTask,
+  archivedProductTasks,
   codexCustomerStatus,
   composerGate,
   modeLabel,
@@ -2309,12 +2310,12 @@ export function ProductSurface({
       }),
     );
   };
-  const resumeTask = async () => {
-    if (!viewedTask?.availableActions.includes("resume")) return;
+  const restoreTask = async (task = viewedTask) => {
+    if (!task?.availableActions.includes("resume")) return;
     await run(() =>
       command({
         type: "task.restore",
-        taskId: viewedTask.taskId,
+        taskId: task.taskId,
         operationId: `intent_${crypto.randomUUID()}`,
       }),
     );
@@ -5823,7 +5824,7 @@ export function ProductSurface({
                               aria-label="Resume task"
                               title="Resume task"
                               disabled={busy}
-                              onClick={() => void resumeTask()}
+                              onClick={() => void restoreTask()}
                             >
                               <span aria-hidden="true">▶</span>
                             </button>
@@ -5937,7 +5938,7 @@ export function ProductSurface({
             ))}
           </section>
 
-          {(product?.tasks.length ?? 0) > 0 && (
+          {selectableProductTasks(product).length > 0 && (
             <section className="side-card task-history">
               <div className="side-heading">
                 <span>Task history</span>
@@ -5998,6 +5999,30 @@ export function ProductSurface({
                       </svg>
                     </button>
                   )}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {archivedProductTasks(product).length > 0 && (
+            <section className="side-card task-history archived-task-history">
+              <div className="side-heading">
+                <span>Archived tasks</span>
+              </div>
+              {archivedProductTasks(product).map((entry) => (
+                <div className="task-history-row" key={entry.taskId}>
+                  <div className="task-history-select">
+                    <strong>{displayTaskTitle(entry)}</strong>
+                    <span>Preserved locally</span>
+                  </div>
+                  <button
+                    className="task-history-restore"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void restoreTask(entry)}
+                  >
+                    Restore
+                  </button>
                 </div>
               ))}
             </section>

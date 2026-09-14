@@ -101,6 +101,46 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Delete");
   });
 
+  it("removes archived ready work from normal history and offers a separate restore action", () => {
+    const value = snapshot();
+    value.product!.tasks = [
+      {
+        taskId: "task_archived_ready",
+        executionMode: "agent",
+        browserIdentity: { mode: "temporary" },
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-13T12:00:00.000Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [],
+        conversation: {
+          turnStatus: "completed",
+          archived: true,
+          items: {},
+          turnOrder: [],
+        },
+        lifecycle: { phase: "ready", reason: "Ready for a follow-up." },
+        availableActions: ["message", "resume"],
+      },
+    ];
+    delete value.product!.currentTaskId;
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+
+    expect(html).toContain("Archived tasks");
+    expect(html).toContain(">Restore</button>");
+    expect(html).not.toContain(
+      'aria-label="Task history: task_archived_ready"',
+    );
+  });
+
   it("derives the restrained renderer accent from the canonical Rove mark", () => {
     const logo = readFileSync(
       new URL("./assets/rove-mark.png", import.meta.url),

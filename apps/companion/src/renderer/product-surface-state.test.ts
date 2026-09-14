@@ -7,6 +7,7 @@ import type {
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   activeProductTask,
+  archivedProductTasks,
   codexCustomerStatus,
   composerGate,
   newestDesktopSnapshot,
@@ -517,6 +518,35 @@ describe("native product composer state", () => {
     expect(reconcileSelectedTaskId("task_terminal", null, state)).toBe(
       "task_recent",
     );
+
+    const archivedReady = {
+      ...archived,
+      taskId: "task_archived_ready",
+      lifecycle: { phase: "ready" as const, reason: "Ready." },
+      availableActions: ["resume" as const],
+    };
+    const archivedCleanup = {
+      ...archived,
+      taskId: "task_archived_cleanup",
+      lifecycle: {
+        phase: "cleanup_required" as const,
+        reason: "Cleanup remains.",
+      },
+      availableActions: [
+        "message" as const,
+        "retry_cleanup" as const,
+        "resume" as const,
+      ],
+    };
+    state.tasks = [archivedReady, archivedCleanup];
+    expect(selectableProductTasks(state)).toEqual([]);
+    expect(archivedProductTasks(state).map((task) => task.taskId)).toEqual([
+      "task_archived_cleanup",
+      "task_archived_ready",
+    ]);
+    expect(
+      reconcileSelectedTaskId("task_archived_ready", null, state),
+    ).toBeNull();
 
     const blocker = {
       ...terminal,

@@ -2958,6 +2958,29 @@ select:focus-visible {
   stroke-width: 1.5;
 }
 
+.product-app .archived-task-history .task-history-select {
+  padding-right: 72px;
+}
+
+.product-app .task-history-restore {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.product-app .task-history-restore:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
 .task-context-menu {
   position: fixed;
   z-index: 80;
