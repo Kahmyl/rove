@@ -2352,7 +2352,6 @@ export class LocalProductApi {
         ),
       });
     if (value.type === "task.restore") {
-      await this.requireTaskAction(taskId, "resume");
       return this.tasks.submit({
         type: "unarchive",
         taskId,
@@ -2363,7 +2362,6 @@ export class LocalProductApi {
       });
     }
     if (value.type === "task.archive") {
-      await this.requireTaskAction(taskId, "archive");
       const operationId = stableOperationId(
         value.operationId,
         "archive operation id",

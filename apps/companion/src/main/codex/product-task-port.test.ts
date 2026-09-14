@@ -317,10 +317,30 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     store.close();
 
     const reopened = new SqliteTaskEngineStore({ path });
+    const restartedEngine = new TaskEngine(reopened);
     const restartedPort = new LedgerProductTaskPort({
-      engine: new TaskEngine(reopened),
+      engine: restartedEngine,
       store: reopened,
       worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await restartedEngine.accept({
+      schemaVersion: 1,
+      type: "codex_turn_observed",
+      eventId: "codex:active-after-local-restore",
+      taskId: seededTaskId,
+      source: {
+        kind: "codex",
+        id: "codex:active-after-local-restore",
+        generation: 3,
+        position: 1,
+      },
+      observedAt: "2026-09-09T12:00:03.000Z",
+      threadId: "thread_seeded",
+      turn: {
+        turnId: "turn_after_restore",
+        turn: "active",
+        runtimeStatus: "active",
+      },
     });
     expect(
       await restartedPort.submit({

@@ -153,11 +153,6 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       intent.type === "launch" && this.options.taskWorkspaceRoot
         ? join(this.options.taskWorkspaceRoot, taskId)
         : undefined;
-    if (intent.type === "archive") {
-      const current = await this.options.store.aggregate(intent.taskId);
-      if (current?.codex.turn === "active")
-        throw new Error("Stop the current work before archiving this task.");
-    }
     if (intent.type === "archive" || intent.type === "unarchive") {
       const aggregate = await this.options.store.aggregate(intent.taskId);
       if (!aggregate)

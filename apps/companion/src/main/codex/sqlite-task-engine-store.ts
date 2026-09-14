@@ -1210,6 +1210,18 @@ export class SqliteTaskEngineStore
           );
         return { duplicate: true, archived: prior.archived === 1 };
       }
+      const task = this.db
+        .prepare(
+          "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+        )
+        .get(input.taskId) as { payload_json: string } | undefined;
+      if (!task)
+        throw new Error("Task history preference targets an unknown task.");
+      if (
+        input.archived &&
+        normalizeAggregate(task.payload_json).codex.turn === "active"
+      )
+        throw new Error("Stop the current work before archiving this task.");
       const acceptedAt = this.now();
       this.db
         .prepare(

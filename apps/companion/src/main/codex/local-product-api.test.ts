@@ -1617,6 +1617,49 @@ describe("LocalProductApi native product seam", () => {
     });
   });
 
+  it("passes exact archive and restore retries through despite the current organization action", async () => {
+    const { api, tasks } = fixture();
+    const task = (await tasks.productTasks())[0]!;
+    const archiveOperationId = "intent_44222222-2222-4222-8222-222222222222";
+    tasks.productTasks.mockResolvedValueOnce([
+      {
+        ...task,
+        availableActions: ["resume"] as const,
+        conversation: { ...task.conversation, archived: true },
+      },
+    ] as never);
+
+    await api.executeRendererIntent({
+      type: "task.archive",
+      taskId: "task_existing",
+      operationId: archiveOperationId,
+    });
+    expect(tasks.submit).toHaveBeenLastCalledWith({
+      type: "archive",
+      taskId: "task_existing",
+      operationId: archiveOperationId,
+    });
+
+    const restoreOperationId = "intent_45222222-2222-4222-8222-222222222222";
+    tasks.productTasks.mockResolvedValueOnce([
+      {
+        ...task,
+        availableActions: ["archive"] as const,
+        conversation: { ...task.conversation, archived: false },
+      },
+    ] as never);
+    await api.executeRendererIntent({
+      type: "task.restore",
+      taskId: "task_existing",
+      operationId: restoreOperationId,
+    });
+    expect(tasks.submit).toHaveBeenLastCalledWith({
+      type: "unarchive",
+      taskId: "task_existing",
+      operationId: restoreOperationId,
+    });
+  });
+
   it("forwards Always ask and rejects omitted or unsupported review choices", async () => {
     const { api, start, tasks } = fixture();
     tasks.productTasks.mockResolvedValue([]);
