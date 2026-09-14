@@ -8,6 +8,13 @@ import {
   CodexExecutableResolver,
   approvedCodexBaseline,
 } from "./compatibility.js";
+import approvedComponentsJson from "./approved-components.json" with { type: "json" };
+import compiledSchemaBindingsJson from "./compiled-schema-bindings.json" with { type: "json" };
+import {
+  resolveApprovedCodexComponentSet,
+  type ApprovedCodexComponent,
+  type CompiledCodexSchemaBinding,
+} from "./component-set.js";
 
 describe("approved Codex component resolution", () => {
   let root: string;
@@ -53,6 +60,45 @@ describe("approved Codex component resolution", () => {
       codeModeHostPath: helper,
       baseline: { id: baseline.id },
       source: "development",
+    });
+  });
+
+  it("uses the retained component's executable and schema identity after rollback", async () => {
+    const manifest = approvedComponentsJson as unknown as {
+      selection: string;
+      components: ApprovedCodexComponent[];
+    };
+    const retained = manifest.components.find(
+      (component) => component.status === "retained-qualified",
+    )!;
+    const rolledBack = resolveApprovedCodexComponentSet(
+      { ...manifest, selection: retained.id },
+      compiledSchemaBindingsJson.bindings as CompiledCodexSchemaBinding[],
+    );
+    const rolledBackBaseline = rolledBack.component;
+
+    await expect(
+      new CodexExecutableResolver(
+        {
+          isPackaged: false,
+          developmentExecutablePath: executable,
+          developmentCodeModeHostPath: helper,
+          platform: "darwin",
+          architecture: "arm64",
+          readVersion: async () => rolledBackBaseline.cliVersion,
+          hashFile: async (path) =>
+            path === executable
+              ? rolledBackBaseline.executable.sha256
+              : rolledBackBaseline.codeModeHost.sha256,
+          fileSize: async () => rolledBackBaseline.codeModeHost.bytes,
+        },
+        rolledBack,
+      ).resolve(),
+    ).resolves.toMatchObject({
+      baseline: {
+        id: retained.id,
+        generatedSchemaSha256: retained.schema.aggregateSha256,
+      },
     });
   });
 

@@ -15,7 +15,10 @@ import {
   repositoryRoot,
   selectedComponent,
   promoteComponentSelection,
+  readCompiledSchemaBindings,
   verifyComponentDirectory,
+  verifyCompiledSchemaBinding,
+  writeComponentManifestAtomically,
 } from "./codex-component-lib.mjs";
 
 function argument(name) {
@@ -40,11 +43,15 @@ function run(command, args, environment = {}) {
 }
 
 const command = process.argv[2];
+if (command === "promote" && process.argv.includes("--purpose"))
+  throw new Error(
+    "Codex promotion selects one coherent development and packaging component set; --purpose is not supported.",
+  );
 const manifest = await readComponentManifest();
-const purpose = argument("--purpose") ?? "development";
+const schemaBindings = await readCompiledSchemaBindings();
 const component = argument("--component")
   ? manifest.components.find((entry) => entry.id === argument("--component"))
-  : selectedComponent(manifest, purpose);
+  : selectedComponent(manifest);
 if (!component)
   throw new Error("Requested qualified Codex component is not registered.");
 
@@ -68,6 +75,7 @@ if (command === "inspect") {
   await run("pnpm", ["agent:schema"], {
     ROVE_CODEX_EXECUTABLE: resolve(source),
   });
+  await verifyCompiledSchemaBinding(component, schemaBindings);
   await run(
     process.execPath,
     ["experiments/agent-execution/live-app-server.mjs", "--mcp-boundary"],
@@ -112,8 +120,7 @@ if (command === "inspect") {
     throw new Error(
       `Qualified Codex component ${componentId} is not registered.`,
     );
-  const selectedPurposes =
-    purpose === "all" ? ["development", "packaging"] : [purpose];
+  await verifyCompiledSchemaBinding(promotionComponent, schemaBindings);
   await verifyComponentDirectory(
     componentPaths(defaultManagedCodexRoot(), promotionComponent).directory,
     promotionComponent,
@@ -121,17 +128,12 @@ if (command === "inspect") {
   const promoted = promoteComponentSelection(
     manifest,
     componentId,
-    selectedPurposes,
+    schemaBindings,
   );
-  await writeFile(
-    componentManifestPath,
-    `${JSON.stringify(promoted, null, 2)}\n`,
-  );
-  process.stdout.write(
-    `Promoted ${componentId} for ${selectedPurposes.join(", ")}.\n`,
-  );
+  await writeComponentManifestAtomically(componentManifestPath, promoted);
+  process.stdout.write(`Promoted coherent component set ${componentId}.\n`);
 } else {
   throw new Error(
-    "Usage: codex-component-manager.mjs <inspect|qualify|install|verify|promote> [--source <path>] [--component <id>] [--purpose development|packaging]",
+    "Usage: codex-component-manager.mjs <inspect|qualify|install|verify|promote> [--source <path>] [--component <id>]",
   );
 }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import generatedCatalogJson from "./app-server-0.154.0-alpha.6.2.schemas.generated.json" with { type: "json" };
 import type {
   GeneratedSchema,
   GeneratedSchemaCatalog,
 } from "./generated-schema-validator.js";
+import { APPROVED_CODEX_COMPONENT_SET } from "./component-set.js";
 import {
   parseCodexServerEvent,
   validateCodexRequestParams,
@@ -15,7 +15,8 @@ import {
   type CodexServerRequestMethod,
 } from "./protocol.js";
 
-const catalog = generatedCatalogJson as unknown as GeneratedSchemaCatalog;
+const catalog =
+  APPROVED_CODEX_COMPONENT_SET.schemaCatalog as GeneratedSchemaCatalog;
 
 function dereference(schema: GeneratedSchema): GeneratedSchema {
   let current = schema;
