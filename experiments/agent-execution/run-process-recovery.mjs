@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global AbortSignal, fetch, setTimeout, window */
+/* global AbortSignal, document, fetch, setTimeout, window */
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -123,38 +123,67 @@ async function materializedLaunch(driver, acceptance, operationId) {
   });
 }
 
-async function finishAndWait(driver, taskId, operationId) {
-  const before = await driver.request({ type: "snapshot" });
-  const task = before.tasks.find((entry) => entry.taskId === taskId);
-  const expectedOperation = task?.availableActions.includes("finish")
-    ? "finish"
-    : task?.availableActions.includes("retry_cleanup")
-      ? "retry_cleanup"
-      : null;
-  check(
-    expectedOperation !== null,
-    `Task does not currently expose a supported close operation: ${JSON.stringify(task)}`,
-  );
-  const acceptance = await driver.request({
-    type: "task.finish",
-    taskId,
-    operationId,
+async function cleanupResourcesAndWait(driver, taskId, operationId) {
+  const task = await waitFor(async () => {
+    const snapshot = await driver.request({ type: "snapshot" });
+    const current = snapshot.tasks.find((entry) => entry.taskId === taskId);
+    return current?.availableActions.includes("retry_cleanup") ||
+      (current?.lifecycle?.phase === "ready" &&
+        current.availableActions.includes("message"))
+      ? current
+      : undefined;
   });
-  check(
-    acceptance?.aggregate?.taskId === taskId &&
-      acceptance.aggregate.requestedOperation?.type === expectedOperation &&
-      acceptance.aggregate.requestedOperation.operationId === operationId &&
-      acceptance.projection?.operationDisposition?.type === expectedOperation &&
-      acceptance.projection.operationDisposition.operationId === operationId &&
-      acceptance.projection.operationDisposition.status === "accepted" &&
-      acceptance.projection.phase === "closing",
-    `Task Finish did not return the current accepted-close state: ${JSON.stringify(acceptance)}`,
-  );
-  return waitFor(async () => {
+  if (task.availableActions.includes("retry_cleanup")) {
+    const acceptance = await driver.request({
+      type: "task.cleanup.retry",
+      taskId,
+      operationId,
+    });
+    check(
+      acceptance?.aggregate?.taskId === taskId &&
+        acceptance.aggregate.requestedOperation?.type === "retry_cleanup" &&
+        acceptance.aggregate.requestedOperation.operationId === operationId &&
+        acceptance.projection?.operationDisposition?.type === "retry_cleanup" &&
+        acceptance.projection.operationDisposition.operationId === operationId &&
+        acceptance.projection.operationDisposition.status === "accepted",
+      `Retry Cleanup did not preserve its exact operation identity: ${JSON.stringify(acceptance)}`,
+    );
+  } else {
+    const acceptance = await driver.request({
+      type: "task.close.raw",
+      taskId,
+      operationId,
+    });
+    check(
+      acceptance?.aggregate?.taskId === taskId &&
+        acceptance.aggregate.requestedOperation?.type === "finish" &&
+        acceptance.aggregate.requestedOperation.operationId === operationId,
+      `Internal resource cleanup did not preserve its operation identity: ${JSON.stringify(acceptance)}`,
+    );
+  }
+  const ready = await waitFor(async () => {
     const snapshot = await driver.request({ type: "snapshot" });
     const task = snapshot.tasks.find((entry) => entry.taskId === taskId);
-    return task?.lifecycle?.phase === "closed" ? task : undefined;
+    return task?.lifecycle?.phase === "ready" &&
+      task.availableActions.includes("message")
+      ? task
+      : undefined;
   });
+  const archiveOperationId = `${operationId.slice(0, -1)}f`;
+  await driver.request({
+    type: "task.archive",
+    taskId,
+    operationId: archiveOperationId,
+  });
+  await waitFor(async () => {
+    const snapshot = await driver.request({ type: "snapshot" });
+    const archived = snapshot.tasks.find((entry) => entry.taskId === taskId);
+    return archived?.conversation?.archived === true &&
+      archived.availableActions.includes("resume")
+      ? archived
+      : undefined;
+  });
+  return ready;
 }
 
 class Driver {
@@ -375,7 +404,7 @@ function counts(entries) {
 
 async function runCoreScenarios() {
   progress("named Desktop restart");
-  const home = join(temporaryRoot, "core");
+  let home = join(temporaryRoot, "core-desktop");
   let driver = new Driver(home);
   await driver.start();
   check(
@@ -456,7 +485,6 @@ async function runCoreScenarios() {
       counts(beforeCommands)["turn/start"],
     "Desktop restart replayed the user turn.",
   );
-  await finishAndWait(driver, namedTask, operation("2"));
   results.push({
     id: "named-desktop-restart",
     status: "passed",
@@ -473,28 +501,59 @@ async function runCoreScenarios() {
   });
 
   progress("named Runtime restart");
-  const runtimeOperation = operation("3");
-  const runtimeAcceptance = await driver.request({
-    type: "task.launch",
-    operationId: runtimeOperation,
-    input: {
-      outcome: "Survive a Runtime process restart",
-      executionMode: "agent",
-      approvalsReviewer: "auto_review",
-      browserIdentity: { mode: "workspace", workspaceId: workspace.id },
-      model: "l2-model",
-      reasoningEffort: "low",
-    },
+  await driver.request({ type: "browser.attach", taskId: named.taskId });
+  const runtimeTask = await waitFor(async () => {
+    const snapshot = await driver.request({ type: "snapshot" });
+    const task = snapshot.tasks.find((entry) => entry.taskId === named.taskId);
+    return typeof task?.roveSessionId === "string" ? task : undefined;
   });
-  const runtimeTask = await materializedLaunch(
-    driver,
-    runtimeAcceptance,
-    runtimeOperation,
-  );
-  progress("named Runtime task launched");
-  const beforeRuntimeInventory = await driver.request({ type: "inventory" });
+  let lastRuntimePrecondition;
+  const beforeRuntimeInventory = await waitFor(async () => {
+    const [inventory, snapshot] = await Promise.all([
+      driver.request({ type: "inventory" }),
+      driver.request({ type: "snapshot" }),
+    ]);
+    lastRuntimePrecondition = {
+      inventory,
+      task: snapshot.tasks.find((entry) => entry.taskId === runtimeTask.taskId),
+    };
+    return inventory.some(
+      (entry) =>
+        entry.session.id === runtimeTask.roveSessionId &&
+        entry.session.status === "active" &&
+        entry.attachment === "attached" &&
+        entry.recovery === "not_needed",
+    )
+      ? inventory
+      : undefined;
+  }).catch((error) => {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} Last Runtime precondition: ${JSON.stringify(lastRuntimePrecondition)}`,
+    );
+  });
   const runtimeRestart = await driver.request({ type: "runtime.kill" });
   progress("managed Runtime restarted");
+  await waitFor(async () => {
+    const [snapshot, inventory] = await Promise.all([
+      driver.request({ type: "snapshot" }),
+      driver.request({ type: "inventory" }),
+    ]);
+    const task = snapshot.tasks.find(
+      (entry) => entry.taskId === runtimeTask.taskId,
+    );
+    const session = inventory.find(
+      (entry) => entry.session.id === runtimeTask.roveSessionId,
+    );
+    return task?.lifecycle?.phase === "ready" &&
+      task.availableActions.includes("message") &&
+      session?.attachment === "missing" &&
+      session.recovery === "relaunchable"
+      ? { task, session }
+      : undefined;
+  });
+  await driver.request({ type: "browser.attach", taskId: runtimeTask.taskId });
+  await driver.request({ type: "recover", source: "Runtime attachment" });
+  let lastRuntimeConvergence;
   const runtimeConvergence = await waitFor(async () => {
     const [snapshot, inventory] = await Promise.all([
       driver.request({ type: "snapshot" }),
@@ -506,6 +565,11 @@ async function runCoreScenarios() {
     const matches = inventory.filter(
       (entry) => entry.session.id === runtimeTask.roveSessionId,
     );
+    lastRuntimeConvergence = {
+      task,
+      inventory,
+      recoveryWarnings: snapshot.recoveryWarnings,
+    };
     return matches.length === 1 &&
       inventory.length === beforeRuntimeInventory.length &&
       matches[0].attachment === "attached" &&
@@ -516,6 +580,10 @@ async function runCoreScenarios() {
       task.runtime?.recovery === "not_needed"
       ? { snapshot, inventory }
       : undefined;
+  }).catch((error) => {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} Last Runtime recovery observation: ${JSON.stringify(lastRuntimeConvergence)}`,
+    );
   });
   const runtimeSnapshot = runtimeConvergence.snapshot;
   const runtimeRecovered = runtimeSnapshot.tasks.find(
@@ -548,8 +616,8 @@ async function runCoreScenarios() {
     ).length === 1,
     "Runtime restart did not restore exactly one attachment for the task.",
   );
-  await finishAndWait(driver, runtimeTask.taskId, operation("4"));
-  progress("named Runtime task finished");
+  await cleanupResourcesAndWait(driver, runtimeTask.taskId, operation("4"));
+  progress("named Runtime task settled and remains messageable");
   results.push({
     id: "named-runtime-restart",
     status: "passed",
@@ -560,6 +628,12 @@ async function runCoreScenarios() {
     inventoryCountAfterRestart: runtimeInventory.length,
     restoredAttachmentsForTask: 1,
   });
+  await recordTerminalState(driver, "named Runtime restart");
+  await driver.stop();
+
+  home = join(temporaryRoot, "core-temporary");
+  driver = new Driver(home);
+  await driver.start();
 
   progress("Temporary process loss");
   const temporaryOperation = operation("5");
@@ -575,12 +649,24 @@ async function runCoreScenarios() {
       reasoningEffort: "low",
     },
   });
-  const temporary = await materializedLaunch(
+  const temporaryLaunch = await materializedLaunch(
     driver,
     temporaryAcceptance,
     temporaryOperation,
   );
+  await driver.request({
+    type: "browser.attach",
+    taskId: temporaryLaunch.taskId,
+  });
+  const temporary = await waitFor(async () => {
+    const snapshot = await driver.request({ type: "snapshot" });
+    const task = snapshot.tasks.find(
+      (entry) => entry.taskId === temporaryLaunch.taskId,
+    );
+    return typeof task?.roveSessionId === "string" ? task : undefined;
+  });
   await driver.request({ type: "runtime.kill" });
+  let lastTemporaryConvergence;
   const temporaryConvergence = await waitFor(async () => {
     const [snapshot, inventory] = await Promise.all([
       driver.request({ type: "snapshot" }),
@@ -592,6 +678,7 @@ async function runCoreScenarios() {
     const matches = inventory.filter(
       (entry) => entry.session.id === temporary.roveSessionId,
     );
+    lastTemporaryConvergence = { task, inventory };
     return matches.length === 1 &&
       matches[0].session.status === "active" &&
       matches[0].attachment === "missing" &&
@@ -602,6 +689,10 @@ async function runCoreScenarios() {
       task.runtime?.recovery === "unrecoverable"
       ? { snapshot, inventory }
       : undefined;
+  }).catch((error) => {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} Last Temporary recovery observation: ${JSON.stringify(lastTemporaryConvergence)}`,
+    );
   });
   const temporarySnapshot = temporaryConvergence.snapshot;
   const temporaryTask = temporarySnapshot.tasks.find(
@@ -618,7 +709,7 @@ async function runCoreScenarios() {
     temporaryTask?.availableActions.includes("retry_cleanup"),
     "Lost Temporary task did not expose cleanup.",
   );
-  await finishAndWait(driver, temporary.taskId, operation("6"));
+  await cleanupResourcesAndWait(driver, temporary.taskId, operation("6"));
   results.push({
     id: "temporary-process-loss",
     status: "passed",
@@ -626,8 +717,18 @@ async function runCoreScenarios() {
     identity: "temporary",
     cleanupConverged: true,
   });
+  await recordTerminalState(driver, "Temporary process loss");
+  await driver.stop();
+
+  home = join(temporaryRoot, "core-app-server");
+  driver = new Driver(home);
+  await driver.start();
 
   progress("App Server process restart");
+  const appServerWorkspace = await driver.request({
+    type: "workspace.create",
+    displayName: "App Server restart workspace",
+  });
   const appOperation = operation("7");
   const appAcceptance = await driver.request({
     type: "task.launch",
@@ -636,7 +737,10 @@ async function runCoreScenarios() {
       outcome: "Recover fresh App Server truth",
       executionMode: "agent",
       approvalsReviewer: "auto_review",
-      browserIdentity: { mode: "workspace", workspaceId: workspace.id },
+      browserIdentity: {
+        mode: "workspace",
+        workspaceId: appServerWorkspace.id,
+      },
       model: "l2-model",
       reasoningEffort: "low",
     },
@@ -699,7 +803,7 @@ async function runCoreScenarios() {
       counts(beforeAppCommands)["turn/start"],
     "App Server reconnect replayed a user turn.",
   );
-  await finishAndWait(driver, appTask.taskId, operation("8"));
+  await cleanupResourcesAndWait(driver, appTask.taskId, operation("8"));
   results.push({
     id: "app-server-process-restart",
     status: "passed",
@@ -805,11 +909,25 @@ async function runCloseMatrix() {
         reasoningEffort: "low",
       },
     });
-    const launched = await materializedLaunch(
+    const launchedTask = await materializedLaunch(
       driver,
       launchAcceptance,
       launchOperation,
     );
+    await driver.request({
+      type: "browser.attach",
+      taskId: launchedTask.taskId,
+    });
+    const launched = await waitFor(async () => {
+      const snapshot = await driver.request({ type: "snapshot" });
+      const task = snapshot.tasks.find(
+        (entry) => entry.taskId === launchedTask.taskId,
+      );
+      return typeof task?.roveSessionId === "string" &&
+        task.runtime?.attachment === "attached"
+        ? task
+        : undefined;
+    });
     const taskId = launched.taskId;
     const closeOperation = operation(String(index + 5));
     driver.send({ type: "task.finish", taskId, operationId: closeOperation });
@@ -831,10 +949,14 @@ async function runCloseMatrix() {
     const task = await waitFor(async () => {
       const snapshot = await driver.request({ type: "snapshot" });
       const current = snapshot.tasks.find((item) => item.taskId === taskId);
-      return current?.lifecycle.phase === "closed" ? current : undefined;
+      return current?.lifecycle.phase === "ready" &&
+        current.availableActions.includes("message")
+        ? current
+        : undefined;
     });
     check(
-      task?.lifecycle.phase === "closed",
+      task?.lifecycle.phase === "ready" &&
+        task.availableActions.includes("message"),
       `Close cut ${cut.stage} did not converge.`,
     );
     await driver.request({
@@ -882,7 +1004,7 @@ async function runCloseMatrix() {
       markerProcessId: marker.desktopPid,
       terminalStatus: session.session.status,
       attachment: session.attachment,
-      repeatedFinishSafe: true,
+      repeatedInternalCleanupSafe: true,
       runtimeSessionCount: inventory.length,
       commandCounts: counts(log),
     });
@@ -927,6 +1049,7 @@ async function runHumanReturn() {
       launchOperation,
     );
     const taskId = launched.taskId;
+    await driver.request({ type: "browser.attach", taskId });
     const handoffPrecondition = await waitFor(async () => {
       const state = await driver.request({
         type: "handoff.status",
@@ -950,12 +1073,16 @@ async function runHumanReturn() {
     progress(`human return starting replacement Desktop ${cut}`);
     driver = new Driver(home);
     await driver.start();
+    await driver.request({ type: "browser.attach", taskId });
+    await driver.request({ type: "recover", source: "restored handoff" });
     progress(`human return reading restored control ${cut}`);
+    let lastRestoredHandoff;
     const restoredHandoff = await waitFor(async () => {
       const state = await driver.request({
         type: "handoff.status",
         taskId,
       });
+      lastRestoredHandoff = state;
       const expectedController = returnBeforeRestart ? "agent" : "human";
       const runtimeRestored =
         state.control?.status === "active" &&
@@ -968,6 +1095,10 @@ async function runHumanReturn() {
       return runtimeRestored && (returnBeforeRestart || productRestored)
         ? state
         : undefined;
+    }).catch((error) => {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} Last restored handoff: ${JSON.stringify(lastRestoredHandoff)}`,
+      );
     });
     progress(
       `human return restored truth ${JSON.stringify({ cut, control: restoredHandoff.control, continuation: restoredHandoff.continuation })}`,
@@ -994,7 +1125,7 @@ async function runHumanReturn() {
         : undefined;
     });
     await driver.request({ type: "recover", source: "App Server duplicate" });
-    await finishAndWait(driver, taskId, operation(String(index + 5)));
+    await cleanupResourcesAndWait(driver, taskId, operation(String(index + 5)));
     const [snapshot, log] = await Promise.all([
       driver.request({ type: "snapshot" }),
       commands(home),
@@ -1005,8 +1136,9 @@ async function runHumanReturn() {
       `${cut} did not dispatch exactly one continuation.`,
     );
     check(
-      task?.lifecycle.phase === "closed",
-      `${cut} did not remain closed after duplicate recovery.`,
+      task?.lifecycle.phase === "ready" &&
+        task.availableActions.includes("message"),
+      `${cut} did not remain messageable after duplicate recovery.`,
     );
     await recordTerminalState(driver, `human return ${cut}`);
     await driver.stop();
@@ -1026,7 +1158,7 @@ async function runHumanReturn() {
 }
 
 async function screenshotRenderer(realSnapshot) {
-  progress("retained blocker renderer");
+  progress("persistent cleanup-task renderer");
   const mime = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -1084,7 +1216,7 @@ async function screenshotRenderer(realSnapshot) {
         phase: "cleanup_required",
         reason: `Cleanup remains for ${id}.`,
       },
-      ["retry_cleanup", "finish"],
+      ["message", "retry_cleanup", "archive"],
     );
   const persistedTaskFile = join(
     temporaryRoot,
@@ -1094,10 +1226,10 @@ async function screenshotRenderer(realSnapshot) {
     blocker("task_l2_blocker_old", "2026-09-01T00:00:00Z"),
     ...Array.from({ length: 12 }, (_, index) =>
       productTask(
-        `task_l2_closed_${index}`,
+        `task_l2_ready_${index}`,
         `2026-09-02T00:00:${String(index).padStart(2, "0")}Z`,
-        { phase: "closed", reason: "Closed." },
-        [],
+        { phase: "ready", reason: "Ready for a follow-up." },
+        ["message", "archive"],
       ),
     ),
     blocker("task_l2_blocker_new", "2026-09-03T00:00:00Z"),
@@ -1109,9 +1241,7 @@ async function screenshotRenderer(realSnapshot) {
   const tasks = {
     productTasks: async () =>
       JSON.parse(await readFile(persistedTaskFile, "utf8")),
-    start: async () => {
-      throw new Error("Launch crossed the blocker gate.");
-    },
+    submit: async () => ({ aggregate: { taskId: "task_l2_new" } }),
   };
   const productApi = new LocalProductApi(
     () => ({
@@ -1127,22 +1257,22 @@ async function screenshotRenderer(realSnapshot) {
     temporaryRoot,
   );
   const productSnapshot = await productApi.readSnapshot();
-  const launchRejected = await productApi
+  const launchAccepted = await productApi
     .executeRendererIntent({
       type: "task.launch",
       operationId: operation("9"),
       input: {
-        outcome: "Must remain blocked",
+        outcome: "Start independently of cleanup",
         executionMode: "agent",
         approvalsReviewer: "auto_review",
         browserIdentity: { mode: "temporary" },
       },
     })
-    .then(() => false)
-    .catch((error) => /Multiple tasks must converge/.test(String(error)));
+    .then(() => true)
+    .catch(() => false);
   check(
-    launchRejected,
-    "Production API did not reject launch across blockers.",
+    launchAccepted,
+    "Production API blocked an unrelated launch on resource cleanup.",
   );
   const snapshot = {
     surface: {
@@ -1164,6 +1294,8 @@ async function screenshotRenderer(realSnapshot) {
     const page = await browser.newPage({
       viewport: { width: 1180, height: 820 },
     });
+    const rendererErrors = [];
+    page.on("pageerror", (error) => rendererErrors.push(String(error)));
     await page.addInitScript((value) => {
       window.rove = {
         getSurfaceSnapshot: async () => value,
@@ -1174,6 +1306,8 @@ async function screenshotRenderer(realSnapshot) {
         getNotice: async () => null,
         getLiveSession: async () => null,
         getFollowerPresentation: async () => "windowed_compact",
+        getWindowFullscreen: async () => false,
+        subscribeWindowFullscreen: () => () => undefined,
         takeControl: async () => null,
         returnControl: async () => null,
         pauseSession: async () => null,
@@ -1190,43 +1324,74 @@ async function screenshotRenderer(realSnapshot) {
       };
     }, snapshot);
     await page.goto(serverUrl);
-    await page.waitForSelector(".product-app");
-    const buttons = page.locator(".task-history > button");
+    await page.waitForSelector(".product-app").catch((error) => {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} Renderer errors: ${JSON.stringify(rendererErrors)}`,
+      );
+    });
+    const buttons = page.locator(".task-history-select");
+    const taskButtonCount = await buttons.count();
     check(
-      (await buttons.count()) === 10,
-      "Renderer did not keep two blockers plus eight terminal histories.",
+      taskButtonCount === 14,
+      `Renderer did not keep cleanup-required and ready Task histories: ${taskButtonCount}.`,
     );
     check(
-      (await page.getByText(/2 tasks must finish or converge/).count()) === 1,
-      "Composer did not visibly block launch.",
+      (await page.getByText(/tasks must finish or converge/).count()) === 0,
+      "Composer still exposed obsolete global cleanup blocking.",
     );
-    await buttons.nth(0).click();
+    const newestCleanupTask = page.getByRole("button", {
+      name: "Task history: task_l2_blocker_new",
+    });
+    await newestCleanupTask.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(
+            '[aria-label="Task history: task_l2_blocker_new"]',
+          )
+          ?.getAttribute("aria-current") === "true",
+    );
+    const newestReasonCount = await page
+      .getByText("Cleanup remains for task_l2_blocker_new.")
+      .count();
     check(
-      (await page
-        .getByText("Cleanup remains for task_l2_blocker_new.")
-        .count()) === 1,
-      "Newest blocker was not selectable.",
+      (await newestCleanupTask.getAttribute("aria-current")) === "true" &&
+        newestReasonCount === 2,
+      `Newest blocker was not selectable with exact reason: ${newestReasonCount}.`,
     );
-    await buttons.nth(1).click();
+    const oldestCleanupTask = page.getByRole("button", {
+      name: "Task history: task_l2_blocker_old",
+    });
+    await oldestCleanupTask.click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(
+            '[aria-label="Task history: task_l2_blocker_old"]',
+          )
+          ?.getAttribute("aria-current") === "true",
+    );
+    const oldestReasonCount = await page
+      .getByText("Cleanup remains for task_l2_blocker_old.")
+      .count();
     check(
-      (await page
-        .getByText("Cleanup remains for task_l2_blocker_old.")
-        .count()) === 1,
-      "Oldest blocker was not selectable.",
+      (await oldestCleanupTask.getAttribute("aria-current")) === "true" &&
+        oldestReasonCount === 2,
+      `Oldest blocker was not selectable with exact reason: ${oldestReasonCount}.`,
     );
-    const screenshot = join(artifactRoot, "retained-blockers.png");
+    const screenshot = join(artifactRoot, "persistent-cleanup-tasks.png");
     await page.screenshot({ path: screenshot, fullPage: true });
     results.push({
-      id: "retained-blocker-renderer",
+      id: "persistent-cleanup-task-renderer",
       status: "passed",
-      selectableTasks: 10,
+      selectableTasks: 14,
       cleanupBlockers: 2,
-      terminalHistoriesShown: 8,
-      launchVisiblyBlocked: true,
-      launchRejectedByProductionApi: launchRejected,
+      readyHistoriesShown: 12,
+      launchVisiblyBlocked: false,
+      launchAcceptedByProductionApi: launchAccepted,
       snapshotSource:
         "LocalProductApi.readSnapshot over persisted task fixture",
-      screenshot: "retained-blockers.png",
+      screenshot: "persistent-cleanup-tasks.png",
     });
     unregisterBrowser();
   } finally {

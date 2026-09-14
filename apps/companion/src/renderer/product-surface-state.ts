@@ -189,6 +189,7 @@ export function activeProductTask(
   return product?.tasks.find(
     (task) =>
       task.taskId === product.currentTaskId &&
+      task.conversation?.archived !== true &&
       !["closed", "failed"].includes(task.lifecycle.phase),
   );
 }
@@ -203,8 +204,9 @@ export function reconcileSelectedTaskId(
   product: LocalProductSnapshot | null,
 ): string | null {
   if (selectedTaskId === null) return null;
-  if (!product?.tasks.some((task) => task.taskId === selectedTaskId))
-    return null;
+  const selectable = selectableProductTasks(product);
+  if (!selectable.some((task) => task.taskId === selectedTaskId))
+    return selectable[0]?.taskId ?? null;
   const currentTaskId = activeProductTask(product)?.taskId ?? null;
   return currentTaskId === previousCurrentTaskId ? selectedTaskId : null;
 }

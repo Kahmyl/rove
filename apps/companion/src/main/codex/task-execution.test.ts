@@ -4182,13 +4182,12 @@ describe("capability and bootstrap", () => {
     const [task] = await recovered.productTasks();
     expect(task?.context.lifecycle).toMatchObject({
       desiredState: "closed",
-      closeOperation: {
-        stage: "complete",
-      },
+      closeOperation: { stage: "complete" },
     });
     expect(runtime.endSession).toHaveBeenCalledWith("ses_1");
     expect(requests.some((entry) => entry.method === "turn/start")).toBe(false);
-    expect(task?.lifecycle.phase).toBe("closed");
+    expect(task?.lifecycle.phase).toBe("ready");
+    expect(task?.availableActions).toContain("message");
     expect(task?.availableActions).not.toContain("retry_cleanup");
 
     const restarted = harness(
@@ -4200,7 +4199,8 @@ describe("capability and bootstrap", () => {
     );
     await restarted.restore();
     const [afterRestart] = await restarted.productTasks();
-    expect(afterRestart?.lifecycle.phase).toBe("closed");
+    expect(afterRestart?.lifecycle.phase).toBe("ready");
+    expect(afterRestart?.availableActions).toContain("message");
     expect(afterRestart?.availableActions).not.toContain("retry_cleanup");
   });
 
@@ -4442,7 +4442,10 @@ describe("capability and bootstrap", () => {
       false,
     );
     expect(requests.some((entry) => entry.method === "turn/start")).toBe(false);
-    expect((await restarted.productTasks())[0]?.lifecycle.phase).toBe("closed");
+    expect((await restarted.productTasks())[0]?.lifecycle.phase).toBe("ready");
+    expect((await restarted.productTasks())[0]?.availableActions).toContain(
+      "message",
+    );
   });
 
   it("durably resumes known-safe attachment rollback after a process cut", async () => {

@@ -130,9 +130,9 @@
       "name": "app-server-unavailable-open",
       "patch": { "codex": { "availability": "unavailable" } },
       "expected": {
-        "phase": "recovering",
-        "commandType": "read_codex_thread",
-        "confirmationType": "codex_thread_truth"
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
       }
     },
     {
@@ -186,7 +186,7 @@
       "name": "runtime-attachment-conflict",
       "patch": { "runtime": { "attachment": "conflicting" } },
       "expected": {
-        "phase": "ready",
+        "phase": "cleanup_required",
         "commandType": null,
         "confirmationType": null
       }
@@ -347,7 +347,7 @@
         }
       },
       "expected": {
-        "phase": "closed",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null
       }
@@ -393,7 +393,7 @@
         }
       },
       "expected": {
-        "phase": "cleanup_required",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null
       }
@@ -608,9 +608,9 @@
       "name": "app-server-archived-unarchives",
       "patch": { "codex": { "archived": true } },
       "expected": {
-        "phase": "recovering",
-        "commandType": "unarchive_codex_thread",
-        "confirmationType": "codex_thread_unarchived"
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
       }
     },
     {
@@ -670,7 +670,7 @@
         "phase": "ready",
         "commandType": null,
         "confirmationType": null,
-        "operationDisposition": "rejected"
+        "operationDisposition": "accepted"
       }
     },
     {
@@ -695,7 +695,7 @@
         }
       },
       "expected": {
-        "phase": "closed",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null,
         "operationDisposition": "accepted"

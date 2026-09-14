@@ -4,7 +4,7 @@
 
 ## Three kinds of state
 
-Durable product facts include accepted task requests, confirmed message items, attention transitions, operation outcomes, result references, artifact availability, and approved workflow changes. They must survive the interruption scenarios they claim to cover.
+Durable product facts include accepted task requests, confirmed message items, local Task-history archive preferences, attention transitions, operation outcomes, result references, artifact availability, and approved workflow changes. They must survive the interruption scenarios they claim to cover. Codex thread archival and absence are external observations, not local Task-organization facts.
 
 Ephemeral presentation includes token deltas, temporary progress text, cursor position, selected task, visible page, and component connectivity. Persist only what is needed for useful history and recovery. Do not write every streaming token as a separate full task snapshot.
 
@@ -69,6 +69,8 @@ Transient sync failure produces an explicit pending/conflict state while local a
 Coalesce expendable progress updates while retaining final message items, errors, attention changes, and operation outcomes. Bound subscriptions and event buffers. When a consumer falls behind, require a resnapshot rather than growing memory without limit.
 
 After restart, recover unfinished operation facts before presenting running states. Replay of persisted facts rebuilds projections only. External effects require a separate dispatch decision with current authority. This distinction must be tested with duplicate, late, missing, and reordered events.
+
+An unresolved command retains its exact operation identity until matching delivery or non-submission evidence resolves it. Unrelated observations cannot erase that fence. This operation-level recovery state does not delete or hide the durable conversation, and completed cleanup reopens normal message flow rather than producing a terminal Task.
 
 ## Acceptance
 

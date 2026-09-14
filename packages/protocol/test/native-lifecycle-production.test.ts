@@ -69,6 +69,25 @@ describe("production lifecycle authority", () => {
     });
     expect(lockedOracle(input)).toEqual(productionReducer(input));
 
+    const detachedTemporary = structuredClone(input);
+    detachedTemporary.runtime.attachment = "missing";
+    detachedTemporary.runtime.recovery = "unrecoverable";
+    expect(productionReducer(detachedTemporary)).toMatchObject({
+      phase: "cleanup_required",
+      allowedActions: ["message", "retry_cleanup"],
+      nextCommand: null,
+    });
+    detachedTemporary.requestedOperation = {
+      type: "retry_cleanup",
+      taskId,
+      operationId: "intent_99999999-9999-4999-8999-999999999999",
+    };
+    expect(productionReducer(detachedTemporary)).toMatchObject({
+      phase: "closing",
+      allowedActions: ["message", "retry_cleanup"],
+      nextCommand: { type: "persist_close_intent" },
+    });
+
     const startingRuntime = structuredClone(input);
     startingRuntime.runtime.status = "starting";
     startingRuntime.requestedOperation = {
@@ -249,7 +268,7 @@ describe("production lifecycle authority", () => {
     );
   });
 
-  it("exposes explicit unarchive for a completely closed task", () => {
+  it("projects a legacy completed close as a conversation-ready durable task", () => {
     const taskId = "task_11111111-1111-4111-8111-111111111111";
     const sessionId = `ses_${"2".repeat(32)}`;
     const threadId = "01a0819a-dfa5-78e0-b725-371572a99787";
@@ -309,15 +328,10 @@ describe("production lifecycle authority", () => {
       },
     };
     expect(productionReducer(input)).toMatchObject({
-      phase: "closed",
-      allowedActions: ["resume"],
+      phase: "ready",
+      allowedActions: ["message"],
       operationDisposition: { status: "accepted", operationId },
-      nextCommand: {
-        type: "unarchive_codex_thread",
-        taskId,
-        threadId,
-        operationId,
-      },
+      nextCommand: null,
     });
   });
 
@@ -394,6 +408,61 @@ describe("production lifecycle authority", () => {
         taskId,
         threadId,
       },
+    });
+
+    for (const turn of ["interrupted", "failed"] as const) {
+      const afterTurn = structuredClone(ready);
+      afterTurn.codex.turn = turn;
+      afterTurn.requestedOperation = { type: "observe", taskId };
+      expect(productionReducer(afterTurn)).toMatchObject({
+        phase: "ready",
+        allowedActions: expect.arrayContaining(["message"]),
+      });
+    }
+
+    const providerMissing = structuredClone(ready);
+    providerMissing.codex = {
+      availability: "available",
+      threadExists: false,
+      sourceLookup: "none",
+      runtimeStatus: "notLoaded",
+      archived: null,
+      turn: "none",
+    };
+    providerMissing.requestedOperation = { type: "observe", taskId };
+    expect(productionReducer(providerMissing)).toMatchObject({
+      phase: "ready",
+      allowedActions: ["message"],
+      nextCommand: null,
+    });
+    providerMissing.requestedOperation = {
+      type: "message",
+      taskId,
+      operationId: "intent_93911111-1111-4111-8111-111111111111",
+      message: "Continue using a recovered provider association.",
+    };
+    expect(productionReducer(providerMissing)).toMatchObject({
+      phase: "recovering",
+      nextCommand: { type: "prepare_codex_reassociation", taskId },
+    });
+
+    const providerArchived = structuredClone(ready);
+    providerArchived.codex.archived = true;
+    providerArchived.requestedOperation = { type: "observe", taskId };
+    expect(productionReducer(providerArchived)).toMatchObject({
+      phase: "ready",
+      allowedActions: ["message"],
+      nextCommand: null,
+    });
+    providerArchived.requestedOperation = {
+      type: "message",
+      taskId,
+      operationId: "intent_94911111-1111-4111-8111-111111111111",
+      message: "Continue after restoring provider access.",
+    };
+    expect(productionReducer(providerArchived)).toMatchObject({
+      phase: "recovering",
+      nextCommand: { type: "unarchive_codex_thread", taskId, threadId },
     });
 
     const afterBrowserClosure = structuredClone(ready);

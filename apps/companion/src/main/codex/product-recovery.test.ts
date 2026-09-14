@@ -163,7 +163,7 @@ describe("truth-based recovery", () => {
     ).toHaveLength(4);
   });
 
-  it("projects cached conversation truth as unavailable while App Server is disconnected and refreshes it after reconnect without replay", async () => {
+  it("keeps cached conversation readable while App Server is disconnected and refreshes it without replay", async () => {
     const authority = new ContextAuthority();
     const issuer = new TaskCapabilityIssuer(Buffer.alloc(32, 7));
     authority.restore({
@@ -270,7 +270,7 @@ describe("truth-based recovery", () => {
       expect.objectContaining({
         conversation: expect.objectContaining({ turnStatus: "completed" }),
         lifecycle: expect.objectContaining({
-          phase: "recovering",
+          phase: "ready",
         }),
       }),
     ]);

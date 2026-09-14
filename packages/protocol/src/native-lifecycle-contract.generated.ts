@@ -64,6 +64,7 @@ const COMMANDS = [
   "lookup_or_start_runtime",
   "bind_runtime_identity",
   "lookup_or_start_codex_thread",
+  "prepare_codex_reassociation",
   "bind_codex_identity",
   "advance_bootstrap_stage",
   "read_codex_thread",
@@ -1345,6 +1346,17 @@ function retryableCleanup(input, reason) {
     requested ?? {},
   );
 }
+function retryableOpenCleanup(input, reason) {
+  const actions = ["message", "retry_cleanup"];
+  const requested = requestedCommand(input, actions);
+  return output(
+    input.record.identity.taskId,
+    requested ? "closing" : "cleanup_required",
+    actions,
+    reason,
+    requested ?? {},
+  );
+}
 
 function reduceBootstrap(input) {
   const { record, runtime, codex } = input;
@@ -1752,35 +1764,10 @@ function reduceClose(input) {
       ),
     );
   if (close.stage === "complete") {
-    const actions = codex.threadExists
-      ? codex.archived
-        ? ["resume"]
-        : ["archive"]
-      : [];
-    const requested =
-      input.requestedOperation.type === "resume" && codex.archived
-        ? transition(
-            "unarchive_codex_thread",
-            {
-              taskId: identity.taskId,
-              threadId: identity.threadId,
-              operationId: input.requestedOperation.operationId,
-            },
-            {
-              type: "codex_thread_unarchived",
-              taskId: identity.taskId,
-              threadId: identity.threadId,
-              operationId: input.requestedOperation.operationId,
-            },
-          )
-        : requestedCommand(input, actions);
-    return output(
-      identity.taskId,
-      "closed",
-      actions,
-      "All close postconditions are confirmed.",
-      requested ?? {},
-    );
+    const reopened = structuredClone(input);
+    reopened.record.desiredState = "open";
+    delete reopened.record.closeOperation;
+    return reduceOpen(reopened);
   }
   return output(identity.taskId, "failed", [], "Unknown close stage.");
 }
@@ -1788,11 +1775,21 @@ function reduceClose(input) {
 function reduceOpen(input) {
   const { record, codex, runtime, continuation } = input;
   const identity = record.identity;
+  if (
+    codex.availability === "unavailable" &&
+    input.requestedOperation.type !== "message"
+  )
+    return output(
+      identity.taskId,
+      "ready",
+      ["message"],
+      "The local task is ready; Codex is unavailable.",
+    );
   if (codex.availability === "unavailable")
     return output(
       identity.taskId,
       "recovering",
-      ["finish", "retry_cleanup"],
+      ["message"],
       "Codex lifecycle truth is unavailable.",
       transition(
         "read_codex_thread",
@@ -1800,16 +1797,37 @@ function reduceOpen(input) {
         { type: "codex_thread_truth", taskId: identity.taskId },
       ),
     );
+  if (!codex.threadExists && input.requestedOperation.type !== "message")
+    return output(
+      identity.taskId,
+      "ready",
+      ["message"],
+      "The local task is ready for a new Codex association.",
+    );
   if (!codex.threadExists)
-    return retryableCleanup(
-      input,
-      "Durable task has no matching Codex thread.",
+    return output(
+      identity.taskId,
+      "recovering",
+      ["message"],
+      "A new Codex association is required for this message.",
+      transition(
+        "prepare_codex_reassociation",
+        { taskId: identity.taskId },
+        { type: "codex_reassociation_prepared", taskId: identity.taskId },
+      ),
+    );
+  if (codex.archived && input.requestedOperation.type !== "message")
+    return output(
+      identity.taskId,
+      "ready",
+      ["message"],
+      "The local task is ready; its prior Codex thread is archived.",
     );
   if (codex.archived)
     return output(
       identity.taskId,
       "recovering",
-      ["finish", "retry_cleanup"],
+      ["message"],
       "Bound Codex thread is archived.",
       transition(
         "unarchive_codex_thread",
@@ -1878,11 +1896,21 @@ function reduceOpen(input) {
         },
       ),
     );
-  const runtimeAttached =
+  const runtimeBound =
     runtime.sessionExists &&
     runtime.sessionId === identity.sessionId &&
-    !TERMINAL_RUNTIME.has(runtime.status) &&
-    runtime.attachment === "attached";
+    !TERMINAL_RUNTIME.has(runtime.status);
+  if (
+    runtimeBound &&
+    (runtime.attachment === "conflicting" ||
+      runtime.profileLock === "conflicting" ||
+      ["cleanup_required", "unrecoverable"].includes(runtime.recovery))
+  )
+    return retryableOpenCleanup(
+      input,
+      "Bound Runtime resources require cleanup reconciliation.",
+    );
+  const runtimeAttached = runtimeBound && runtime.attachment === "attached";
   if (runtimeAttached && runtime.status === "starting")
     return output(
       identity.taskId,
@@ -1899,17 +1927,8 @@ function reduceOpen(input) {
         },
       ),
     );
-  if (
-    runtimeAttached &&
-    (runtime.attachment === "conflicting" ||
-      runtime.profileLock === "conflicting")
-  )
-    return retryableCleanup(
-      input,
-      "Runtime attachment or profile ownership conflicts.",
-    );
   if (runtimeAttached && runtime.recovery !== "not_needed")
-    return retryableCleanup(
+    return retryableOpenCleanup(
       input,
       "Attached Runtime session has contradictory recovery classification.",
     );
@@ -2205,7 +2224,13 @@ const OPERATION_COMMANDS = Object.freeze({
     "read_codex_thread",
     "read_runtime_inventory",
   ],
-  message: ["start_or_steer_codex_turn", "respond_continuation_explicit"],
+  message: [
+    "prepare_codex_reassociation",
+    "read_codex_thread",
+    "unarchive_codex_thread",
+    "start_or_steer_codex_turn",
+    "respond_continuation_explicit",
+  ],
   interrupt: ["interrupt_codex_turn"],
   return_control: ["return_runtime_ownership"],
   respond_attention: ["respond_codex_attention"],
@@ -2259,6 +2284,21 @@ export function reduceTaskLifecycle(input): NativeLifecycleOutput {
       "accepted",
       "Observation reduced from authoritative facts.",
     );
+  const neutral = structuredClone(input);
+  neutral.requestedOperation = {
+    type: "observe",
+    ...(operation.taskId === undefined ? {} : { taskId: operation.taskId }),
+  };
+  if (
+    (operation.type === "archive" || operation.type === "resume") &&
+    input.record !== null
+  )
+    return withDisposition(
+      { ...reduceCore(neutral), nextCommand: null, confirmation: null },
+      operation,
+      "accepted",
+      "Local task organization is handled by the Product store.",
+    );
   if (operation.type === "finish" && input.record !== null)
     return withDisposition(
       reduceCore(input),
@@ -2266,11 +2306,6 @@ export function reduceTaskLifecycle(input): NativeLifecycleOutput {
       "accepted",
       "Finish is accepted for the existing durable task.",
     );
-  const neutral = structuredClone(input);
-  neutral.requestedOperation = {
-    type: "observe",
-    ...(operation.taskId === undefined ? {} : { taskId: operation.taskId }),
-  };
   const observed = reduceCore(neutral);
   if (
     operation.type === "archive" &&

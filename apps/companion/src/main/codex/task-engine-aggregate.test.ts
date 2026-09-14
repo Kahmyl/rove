@@ -122,7 +122,7 @@ describe("TaskAggregate exact event fold", () => {
     );
   });
 
-  it("keeps a command-failed task cleanable and clears the marker only for explicit cleanup", () => {
+  it("keeps a failed operation fenced until exact delivery truth resolves it", () => {
     const failed = aggregate();
     failed.recoveryRequired = "The prior command needs recovery.";
     failed.requestedOperation = {
@@ -132,55 +132,41 @@ describe("TaskAggregate exact event fold", () => {
       message: "Run the task",
     };
     expect(projectTaskAggregate(failed)).toMatchObject({
-      phase: "failed",
-      allowedActions: ["finish"],
+      phase: "recovering",
+      allowedActions: [],
       recoveryRequired: "The prior command needs recovery.",
     });
-    const finishing = foldTaskEvent(
+    const unrelated = foldTaskEvent(
       failed,
       event(1, {
-        type: "task_finish_requested",
-        eventId: "product:finish-recovery",
-        source: {
-          kind: "product",
-          id: "operation:finish-recovery",
-          generation: 1,
-          position: 1,
-        },
-        operationId: "intent_22345678-1234-4123-8123-123456789abc",
+        type: "runtime_inventory_observed",
+        runtime: failed.runtime,
       }),
     );
-    expect(finishing.recoveryRequired).toBeNull();
-    expect(finishing.requestedOperation.type).toBe("finish");
+    expect(unrelated.recoveryRequired).toBe(
+      "The prior command needs recovery.",
+    );
+    expect(unrelated.requestedOperation).toEqual(failed.requestedOperation);
 
-    const archiveFailed = aggregate();
-    archiveFailed.desiredState = "closed";
-    archiveFailed.record!.desiredState = "closed";
-    archiveFailed.record!.closeOperation = {
-      operationId: "intent_32345678-1234-4123-8123-123456789abc",
-      requestedAt: "2026-09-09T12:00:00.000Z",
-      stage: "complete",
-    };
-    archiveFailed.recoveryRequired = "Archival needs explicit recovery.";
-    expect(projectTaskAggregate(archiveFailed).allowedActions).toEqual([
-      "archive",
-    ]);
-    const archiving = foldTaskEvent(
-      archiveFailed,
+    const reconciled = foldTaskEvent(
+      unrelated,
       event(2, {
-        type: "task_archive_requested",
-        eventId: "product:archive-recovery",
-        source: {
-          kind: "product",
-          id: "operation:archive-recovery",
-          generation: 1,
-          position: 1,
+        type: "codex_message_delivery_observed",
+        delivery: {
+          operationId: failed.requestedOperation.operationId!,
+          threadId,
+          turnId: "turn_recovered",
+          state: "acceptance_observed",
+          connectionGeneration: 2,
+          observedAt: "2026-09-09T12:00:02.000Z",
         },
-        operationId: "intent_42345678-1234-4123-8123-123456789abc",
       }),
     );
-    expect(archiving.recoveryRequired).toBeNull();
-    expect(archiving.requestedOperation.type).toBe("archive");
+    expect(reconciled.recoveryRequired).toBeNull();
+    expect(reconciled.requestedOperation).toEqual({ type: "observe", taskId });
+    expect(projectTaskAggregate(reconciled).allowedActions).toContain(
+      "message",
+    );
   });
 
   it("upserts independent Codex requests and treats an empty observation as a no-op", () => {
@@ -848,7 +834,7 @@ describe("TaskAggregate exact event fold", () => {
     ).toEqual({ type: "observe", taskId });
   });
 
-  it("does not resurrect an explicitly rejected operation from later facts", () => {
+  it("retains an exact rejected operation fence across unrelated later facts", () => {
     const before = aggregate();
     before.requestedOperation = {
       type: "archive",
@@ -862,7 +848,7 @@ describe("TaskAggregate exact event fold", () => {
         runtime: before.runtime,
       }),
     );
-    expect(after.requestedOperation).toEqual({ type: "observe", taskId });
+    expect(after.requestedOperation).toEqual(before.requestedOperation);
   });
 
   it("accepts an overtaking terminal attention fact without downgrading it later", () => {

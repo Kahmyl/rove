@@ -476,7 +476,7 @@ describe("native product composer state", () => {
     });
   });
 
-  it("reconciles historical selection across archive, replacement, and removal", () => {
+  it("reconciles selection against actual unarchived navigation history", () => {
     const state = product();
     const terminal: ProductTaskProjection = {
       taskId: "task_terminal",
@@ -496,7 +496,27 @@ describe("native product composer state", () => {
     expect(reconcileSelectedTaskId("task_terminal", null, state)).toBe(
       "task_terminal",
     );
-    expect(reconcileSelectedTaskId("task_missing", null, state)).toBeNull();
+    expect(reconcileSelectedTaskId("task_missing", null, state)).toBe(
+      "task_terminal",
+    );
+
+    const archived = {
+      ...terminal,
+      conversation: {
+        turnStatus: "completed" as const,
+        archived: true,
+        items: {},
+        turnOrder: [],
+      },
+    } satisfies ProductTaskProjection;
+    state.tasks = [archived];
+    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBeNull();
+
+    const recent = { ...terminal, taskId: "task_recent" };
+    state.tasks = [recent, archived];
+    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBe(
+      "task_recent",
+    );
 
     const blocker = {
       ...terminal,

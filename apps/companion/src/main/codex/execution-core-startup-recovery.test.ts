@@ -4,17 +4,19 @@ import { join } from "node:path";
 
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TaskProcessManager } from "@rove/protocol";
+import { TaskEngine, TaskProcessManager } from "@rove/protocol";
 
 import { DurableContinuationStore } from "./continuations.js";
 import { CodexExecutionCore } from "./execution-core.js";
 import { FileStateRepository } from "./persistence.js";
 import { SqliteTaskStore } from "./sqlite-task-store.js";
+import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 import type { CodexRpcPort, CodexThread } from "./protocol.js";
 import {
   TaskCapabilityIssuer,
   type ResolvedTaskContext,
 } from "./task-coordinator.js";
+import { emptyWorkflowConfiguration } from "./workflows.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -27,6 +29,106 @@ afterEach(async () => {
 });
 
 describe("CodexExecutionCore cold-start recovery", () => {
+  it("keeps local tasks, Workflows, and Outputs readable when Codex cannot start", async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), "rove-core-offline-"));
+    temporaryDirectories.push(stateDirectory);
+    const databasePath = join(stateDirectory, "task-process.v1.sqlite3");
+    const taskId = "task_12345678-1234-4123-8123-123456789abc";
+    const operationId = "intent_12345678-1234-4123-8123-123456789abc";
+    const store = new SqliteTaskEngineStore({
+      path: databasePath,
+      now: () => "2026-09-14T10:00:00.000Z",
+    });
+    await new TaskEngine(store).accept({
+      schemaVersion: 1,
+      type: "task_launch_requested",
+      eventId: `product:${operationId}`,
+      taskId,
+      source: {
+        kind: "product",
+        id: "offline-test",
+        generation: 1,
+        position: 1,
+      },
+      observedAt: "2026-09-14T10:00:00.000Z",
+      operationId,
+      launch: {
+        operationId,
+        bootstrapId: `boot_${"1".repeat(32)}`,
+        requestedAt: "2026-09-14T10:00:00.000Z",
+        outcome: "Preserve this local work",
+        executionMode: "agent",
+        approvalsReviewer: "auto_review",
+        cwd: "/host/work",
+        attachmentIds: [],
+      },
+    });
+    const workflow = store.createWorkflow({
+      operationId: "intent_22345678-1234-4123-8123-123456789abc",
+      name: "Offline review",
+      configuration: emptyWorkflowConfiguration(),
+    });
+    const result = store.createResult({
+      operationId: "intent_32345678-1234-4123-8123-123456789abc",
+      taskId,
+      kind: "finding_collection",
+      title: "Durable local finding",
+      body: "This Output remains readable without Codex.",
+      source: {
+        conversationItemId: "item_local",
+        conversationTextDigest: "a".repeat(64),
+        evidenceIds: [],
+      },
+    });
+    store.close();
+
+    const core = new CodexExecutionCore({
+      isPackaged: false,
+      developmentExecutablePath: "/unused/codex",
+      clientVersion: "test",
+      stateDirectory,
+      runtime: {} as never,
+      mcpLaunch: { command: "unused", args: [], environment: {} },
+    });
+    vi.spyOn(core.host, "start").mockRejectedValue(
+      new Error("Codex startup unavailable"),
+    );
+    vi.spyOn(core.host, "stop").mockResolvedValue(undefined);
+    vi.spyOn(core.host, "getHealth").mockReturnValue({
+      state: "failed",
+      ready: false,
+      restartAttempt: 1,
+      stderrTail: ["private diagnostic"],
+    });
+
+    await expect(core.start()).rejects.toThrow("Codex startup unavailable");
+    await expect(core.api().readSnapshot()).resolves.toMatchObject({
+      host: { ready: false },
+      catalog: { account: { status: "unavailable" } },
+      tasks: [
+        expect.objectContaining({
+          taskId,
+          results: [expect.objectContaining({ resultId: result.resultId })],
+        }),
+      ],
+      workflows: [expect.objectContaining({ workflowId: workflow.workflowId })],
+    });
+    await expect(
+      core.api().executeRendererIntent({
+        type: "task.launch",
+        operationId: "intent_42345678-1234-4123-8123-123456789abc",
+        input: {
+          outcome: "This must remain gated",
+          executionMode: "agent",
+          approvalsReviewer: "auto_review",
+          attachmentIds: [],
+          selectedResultIds: [],
+        },
+      }),
+    ).rejects.toThrow("Codex App Server is not ready");
+    await core.stop();
+  });
+
   it("quarantines a legacy active handoff without replaying Return Control", async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "rove-core-start-"));
     temporaryDirectories.push(stateDirectory);
@@ -456,7 +558,7 @@ describe("CodexExecutionCore cold-start recovery", () => {
     });
     expect(returnResult).toMatchObject({
       projection: {
-        phase: "failed",
+        phase: "recovering",
         recoveryRequired: expect.stringContaining("Legacy active task"),
         operationDisposition: { status: "rejected" },
       },

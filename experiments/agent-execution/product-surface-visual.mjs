@@ -2893,6 +2893,46 @@ try {
       if ((await page.getByText("File change approval").count()) !== 1)
         throw new Error("Active attention did not return with active scope.");
       await directArchive.click();
+      const archiveDialog = page.getByRole("dialog", {
+        name: "Archive this task?",
+      });
+      await archiveDialog.waitFor();
+      if (
+        (await archiveDialog
+          .getByText(
+            "It will be removed from Task History. You can restore it later.",
+          )
+          .count()) !== 1
+      )
+        throw new Error("Archive confirmation did not explain local restore.");
+      if (
+        (
+          await page.evaluate(() =>
+            window.__roveCalls.filter(
+              (call) =>
+                call.type === "product" && call.command.type === "task.archive",
+            ),
+          )
+        ).length !== 0
+      )
+        throw new Error("Opening Archive confirmation mutated the task.");
+      await archiveDialog.getByRole("button", { name: "Cancel" }).click();
+      if (
+        (
+          await page.evaluate(() =>
+            window.__roveCalls.filter(
+              (call) =>
+                call.type === "product" && call.command.type === "task.archive",
+            ),
+          )
+        ).length !== 0
+      )
+        throw new Error("Cancelling Archive mutated the task.");
+      await directArchive.click();
+      await page
+        .getByRole("dialog", { name: "Archive this task?" })
+        .getByRole("button", { name: "Archive", exact: true })
+        .click();
       const archiveCalls = await page.evaluate(() =>
         window.__roveCalls.filter(
           (call) =>
@@ -2923,6 +2963,7 @@ try {
         pendingRequestReplacesRichComposer: true,
         newTaskSwitchesToLaunchComposer: true,
         directArchiveControlRetained: true,
+        archiveConfirmationIsNonMutatingUntilConfirmed: true,
         rightClickRenameAndArchive: true,
         outsideClickDismissedTaskMenu: true,
         directArchiveCommandCount: archiveCalls.length,

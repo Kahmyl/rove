@@ -1535,35 +1535,20 @@ describe("LocalProductApi native product seam", () => {
     expect(attachments.cleanupTask).not.toHaveBeenCalled();
   });
 
-  it("treats Archive on an open task as a durable finish-and-archive request", async () => {
+  it("routes Archive directly to local task organization without Finish", async () => {
     const { api, tasks } = fixture();
     const operationId = "intent_42222222-2222-4222-8222-222222222222";
-
-    await api.executeRendererIntent({
-      type: "task.archive",
-      taskId: "task_existing",
-      operationId,
-    });
-
-    expect(tasks.submit).toHaveBeenLastCalledWith({
-      type: "finish",
-      taskId: "task_existing",
-      operationId,
-    });
-  });
-
-  it("lets Archive recover and close a cleanup-only task", async () => {
-    const { api, tasks } = fixture();
-    const operationId = "intent_43222222-2222-4222-8222-222222222222";
     const task = (await tasks.productTasks())[0]!;
     tasks.productTasks.mockResolvedValueOnce([
       {
         ...task,
-        lifecycle: {
-          phase: "cleanup_required" as const,
-          reason: "Interrupted cleanup is pending.",
+        lifecycle: { phase: "ready" as const, reason: "Ready." },
+        availableActions: ["message", "archive"] as const,
+        conversation: {
+          ...task.conversation,
+          activeTurnId: undefined,
+          turnStatus: "completed" as const,
         },
-        availableActions: ["retry_cleanup"] as const,
       },
     ] as never);
 
@@ -1574,9 +1559,61 @@ describe("LocalProductApi native product seam", () => {
     });
 
     expect(tasks.submit).toHaveBeenLastCalledWith({
-      type: "retry_cleanup",
+      type: "archive",
       taskId: "task_existing",
       operationId,
+    });
+    expect(tasks.submit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "finish" }),
+    );
+  });
+
+  it("keeps cleanup retry exact and does not substitute it for Archive", async () => {
+    const { api, tasks } = fixture();
+    const operationId = "intent_43222222-2222-4222-8222-222222222222";
+    const task = (await tasks.productTasks())[0]!;
+    tasks.productTasks.mockResolvedValueOnce([
+      {
+        ...task,
+        lifecycle: {
+          phase: "cleanup_required" as const,
+          reason: "Interrupted cleanup is pending.",
+        },
+        availableActions: ["retry_cleanup", "archive"] as const,
+      },
+    ] as never);
+
+    await api.executeRendererIntent({
+      type: "task.archive",
+      taskId: "task_existing",
+      operationId,
+    });
+
+    expect(tasks.submit).toHaveBeenLastCalledWith({
+      type: "archive",
+      taskId: "task_existing",
+      operationId,
+    });
+
+    tasks.productTasks.mockResolvedValueOnce([
+      {
+        ...task,
+        lifecycle: {
+          phase: "cleanup_required" as const,
+          reason: "Interrupted cleanup is pending.",
+        },
+        availableActions: ["retry_cleanup", "archive"] as const,
+      },
+    ] as never);
+    await api.executeRendererIntent({
+      type: "task.cleanup.retry",
+      taskId: "task_existing",
+      operationId: "intent_44222222-2222-4222-8222-222222222222",
+    });
+    expect(tasks.submit).toHaveBeenLastCalledWith({
+      type: "retry_cleanup",
+      taskId: "task_existing",
+      operationId: "intent_44222222-2222-4222-8222-222222222222",
     });
   });
 

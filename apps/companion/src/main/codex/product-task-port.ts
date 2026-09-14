@@ -92,7 +92,7 @@ export interface LedgerProductTaskPortOptions {
     setTaskHistoryArchived?(taskId: string, archived: boolean): void;
     taskHistoryArchived?(taskId: string): boolean | undefined;
   };
-  worker: TaskEngineWorker;
+  worker: Pick<TaskEngineWorker, "signal" | "cancelTask">;
   taskWorkspaceRoot?: string;
   now?: () => string;
   onPublished?: () => Promise<void> | void;
@@ -110,7 +110,7 @@ function productLifecycleReason(
 ): string {
   if (codexTurn === "active") return "Codex is working on this task.";
   if (phase === "cleanup_required")
-    return "This interrupted task needs cleanup. Archive it to finish cleanup, or retry from the task controls.";
+    return "Resource cleanup is still pending. Retry cleanup from the task controls.";
   if (codexTurn === "interrupted")
     return "The last Codex turn was interrupted. Send a follow-up to continue.";
   if (codexTurn === "failed")
@@ -147,6 +147,11 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       intent.type === "launch" && this.options.taskWorkspaceRoot
         ? join(this.options.taskWorkspaceRoot, taskId)
         : undefined;
+    if (intent.type === "archive") {
+      const current = await this.options.store.aggregate(intent.taskId);
+      if (current?.codex.turn === "active")
+        throw new Error("Stop the current work before archiving this task.");
+    }
     if (launchWorkspace)
       await mkdir(launchWorkspace, { recursive: true, mode: 0o700 });
     const base = {
@@ -299,6 +304,12 @@ export class LedgerProductTaskPort implements ProductTaskPort {
     const accepted = await this.engine.accept(event);
     await this.options.onCut?.("after_commit_before_claim", intent);
     if (
+      intent.type === "launch" &&
+      accepted.projection.operationDisposition?.status !== "rejected" &&
+      this.options.store.taskHistoryArchived?.(taskId) === undefined
+    )
+      this.options.store.setTaskHistoryArchived?.(taskId, false);
+    if (
       (intent.type === "archive" || intent.type === "unarchive") &&
       accepted.projection.operationDisposition?.status !== "rejected"
     )
@@ -335,6 +346,22 @@ export class LedgerProductTaskPort implements ProductTaskPort {
         if (!aggregate?.launch)
           throw new Error("Task projection lacks frozen launch configuration.");
         const record = aggregate.record;
+        const archived =
+          this.options.store.taskHistoryArchived?.(aggregate.taskId) ?? false;
+        const lifecyclePhase =
+          projection.phase === "closed"
+            ? "ready"
+            : projection.phase === "failed"
+              ? "recovering"
+              : projection.phase;
+        const executionActions = projection.allowedActions.filter(
+          (action) => !["finish", "archive", "resume"].includes(action),
+        );
+        const organizationActions = archived
+          ? (["resume"] as const)
+          : aggregate.codex.turn === "active"
+            ? ([] as const)
+            : (["archive"] as const);
         const initialDelivery =
           aggregate.messageDeliveries[aggregate.launch.operationId];
         return {
@@ -408,17 +435,18 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             },
           },
           lifecycle: {
-            phase: projection.phase,
+            phase: lifecyclePhase,
             reason:
               projection.recoveryRequired ??
               productLifecycleReason(
-                projection.phase,
+                lifecyclePhase,
                 aggregate.codex.turn,
                 projection.operationDisposition.reason,
               ),
           },
           availableActions: [
-            ...projection.allowedActions,
+            ...executionActions,
+            ...organizationActions,
             ...(aggregate.runtime.legacyEffects === "acknowledgement_required"
               ? (["acknowledge_legacy_effects"] as const)
               : []),
@@ -433,40 +461,35 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               ? {}
               : { legacyEffects: aggregate.runtime.legacyEffects }),
           },
-          ...(record?.identity.threadId && aggregate.codexSessionId
-            ? {
-                conversation: {
-                  roveTaskId: aggregate.taskId,
-                  codexThreadId: record.identity.threadId,
-                  codexSessionId: aggregate.codexSessionId,
-                  ...(record.identity.sessionId
-                    ? { roveSessionId: record.identity.sessionId }
-                    : {}),
-                  ...(aggregate.codex.turnId
-                    ? { activeTurnId: aggregate.codex.turnId }
-                    : {}),
-                  turnStatus:
-                    aggregate.codex.turn === "active"
-                      ? "in_progress"
-                      : aggregate.codex.turn === "completed"
-                        ? "completed"
-                        : aggregate.codex.turn === "interrupted"
-                          ? "interrupted"
-                          : aggregate.codex.turn === "failed"
-                            ? "failed"
-                            : "unknown",
-                  archived:
-                    this.options.store.taskHistoryArchived?.(
-                      aggregate.taskId,
-                    ) ??
-                    (aggregate.codex.archived === true ||
-                      aggregate.codex.threadExists === false),
-                  lastEventSequence: aggregate.revision,
-                  items: structuredClone(aggregate.conversation.items),
-                  turnOrder: [...aggregate.conversation.turnOrder],
-                },
-              }
-            : {}),
+          conversation: {
+            roveTaskId: aggregate.taskId,
+            ...(record?.identity.threadId
+              ? { codexThreadId: record.identity.threadId }
+              : {}),
+            ...(aggregate.codexSessionId
+              ? { codexSessionId: aggregate.codexSessionId }
+              : {}),
+            ...(record?.identity.sessionId
+              ? { roveSessionId: record.identity.sessionId }
+              : {}),
+            ...(aggregate.codex.turnId
+              ? { activeTurnId: aggregate.codex.turnId }
+              : {}),
+            turnStatus:
+              aggregate.codex.turn === "active"
+                ? "in_progress"
+                : aggregate.codex.turn === "completed"
+                  ? "completed"
+                  : aggregate.codex.turn === "interrupted"
+                    ? "interrupted"
+                    : aggregate.codex.turn === "failed"
+                      ? "failed"
+                      : "unknown",
+            archived,
+            lastEventSequence: aggregate.revision,
+            items: structuredClone(aggregate.conversation.items),
+            turnOrder: [...aggregate.conversation.turnOrder],
+          },
         } as ProductTaskSnapshot;
       }),
     );

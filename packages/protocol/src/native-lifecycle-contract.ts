@@ -30,6 +30,7 @@ export type NativeLifecycleCommandType =
   | "lookup_or_start_runtime"
   | "bind_runtime_identity"
   | "lookup_or_start_codex_thread"
+  | "prepare_codex_reassociation"
   | "bind_codex_identity"
   | "advance_bootstrap_stage"
   | "read_codex_thread"
@@ -62,6 +63,7 @@ export const NATIVE_LIFECYCLE_COMMAND_TYPES = [
   "lookup_or_start_runtime",
   "bind_runtime_identity",
   "lookup_or_start_codex_thread",
+  "prepare_codex_reassociation",
   "bind_codex_identity",
   "advance_bootstrap_stage",
   "read_codex_thread",

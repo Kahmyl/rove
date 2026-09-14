@@ -258,34 +258,34 @@ describe("21 real process stop/restart interruption cases", () => {
           });
           await current.until(
             (snapshot) =>
-              lifecycle(task(snapshot, expectedTaskId)).phase === "closed",
+              lifecycle(task(snapshot, expectedTaskId)).phase === "ready",
           );
-          const beforeClosedRestart = consequentialCounts(
-            await current.untilResult(
-              { type: "external.actions" },
-              (actions) =>
-                (actions.appServer as ProductValue[]).some(
-                  (action) => action.method === "thread/archive",
-                ) &&
-                (actions.runtime as ProductValue[]).some(
-                  (action) => action.method === "endSession",
-                ),
+          const beforeReadyRestart = consequentialCounts(
+            await current.untilResult({ type: "external.actions" }, (actions) =>
+              (actions.runtime as ProductValue[]).some(
+                (action) => action.method === "endSession",
+              ),
             ),
           );
+          expect(
+            Object.keys(beforeReadyRestart.appServer).some((key) =>
+              key.startsWith("thread/archive:"),
+            ),
+          ).toBe(false);
           await current.stopAllHard();
           current = new ProcessProductHarness(home);
           await current.start();
-          const closed = await current.until(
+          const ready = await current.until(
             (snapshot) =>
-              lifecycle(task(snapshot, expectedTaskId)).phase === "closed",
+              lifecycle(task(snapshot, expectedTaskId)).phase === "ready",
           );
-          expect(task(closed, expectedTaskId).availableActions).not.toContain(
+          expect(task(ready, expectedTaskId).availableActions).toContain(
             "message",
           );
-          const afterClosedRestart = consequentialCounts(
+          const afterReadyRestart = consequentialCounts(
             await current.request({ type: "external.actions" }),
           );
-          expect(afterClosedRestart).toEqual(beforeClosedRestart);
+          expect(afterReadyRestart).toEqual(beforeReadyRestart);
         } finally {
           await current.stop().catch(() => undefined);
           await rm(home, { recursive: true, force: true });

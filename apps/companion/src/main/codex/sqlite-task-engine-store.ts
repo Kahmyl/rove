@@ -41,7 +41,7 @@ import {
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
 const RESULT_MIGRATION_ID = "0004_add_task_results";
-const PERSISTED_TASK_SCHEMA_VERSION = 2;
+const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
 
 function json(value: unknown): string {
@@ -148,17 +148,27 @@ export class SqliteTaskEngineStore
     const migrate = this.db.transaction(() => {
       const aggregates = this.db
         .prepare(
-          "SELECT task_id, schema_version, payload_json FROM task_engine_aggregate",
+          "SELECT task_id, schema_version, payload_json, updated_at FROM task_engine_aggregate",
         )
         .all() as Array<{
         task_id: string;
         schema_version: number;
         payload_json: string;
+        updated_at: string;
       }>;
       for (const row of aggregates) {
-        if (![1, PERSISTED_TASK_SCHEMA_VERSION].includes(row.schema_version))
+        if (![1, 2, PERSISTED_TASK_SCHEMA_VERSION].includes(row.schema_version))
           throw new Error("Unsupported persisted task aggregate version.");
         const aggregate = normalizeAggregate(row.payload_json);
+        if (
+          aggregate.desiredState === "closed" &&
+          aggregate.record?.desiredState === "closed" &&
+          aggregate.record.closeOperation?.stage === "complete"
+        ) {
+          aggregate.desiredState = "open";
+          aggregate.record.desiredState = "open";
+          delete aggregate.record.closeOperation;
+        }
         const itemEvents = this.db
           .prepare(
             `SELECT payload_json FROM task_engine_event
@@ -192,6 +202,12 @@ export class SqliteTaskEngineStore
             "UPDATE task_engine_aggregate SET schema_version = ?, payload_json = ? WHERE task_id = ?",
           )
           .run(PERSISTED_TASK_SCHEMA_VERSION, json(aggregate), row.task_id);
+        this.db
+          .prepare(
+            `INSERT OR IGNORE INTO task_history_preference(task_id, archived, updated_at)
+             VALUES (?, 0, ?)`,
+          )
+          .run(row.task_id, row.updated_at);
       }
       const projections = this.db
         .prepare(
@@ -203,7 +219,7 @@ export class SqliteTaskEngineStore
         payload_json: string;
       }>;
       for (const row of projections) {
-        if (![1, PERSISTED_TASK_SCHEMA_VERSION].includes(row.schema_version))
+        if (![1, 2, PERSISTED_TASK_SCHEMA_VERSION].includes(row.schema_version))
           throw new Error("Unsupported persisted task projection version.");
         const aggregateRow = this.db
           .prepare(

@@ -73,9 +73,9 @@ Tasks use local approved snapshots. Deleting synchronized setup does not cascade
 
 On startup, recover local records, verify process identities, reconnect only to owned resources, and query supported engine/browser state. Unknown processes are not attached to or killed. A stored PID, browser URL, or page reference alone is insufficient authority after restart.
 
-Rebuild display projections from authoritative local data. A renderer reconnection must not repeat accepted commands. Reconcile unsettled operations individually and allow unrelated tasks to remain usable. Old browser references expire; an engine thread identifier is not proof of current attachment.
+Initialize the local SQLite task/Workflow/Result authority before starting Codex. Publish those local read projections even when App Server startup fails; Codex health gates model submission and provider-dependent recovery, not reading local work. Rebuild display projections from authoritative local data. A renderer reconnection must not repeat accepted commands. Reconcile unsettled operations individually and allow unrelated tasks to remain usable. Old browser references expire; an engine thread identifier is not proof of current attachment.
 
-The existing `product-task-port`, thread/session supervisor, and task-engine stores are starting seams. Their current browser-first launch assumptions and any competing lifecycle paths require implementation reconciliation. This documentation change does not perform that behavioral migration.
+The production `product-task-port` projects a persistent Task independently of Codex thread presence, provider archival, Runtime cleanup, and local history organization. A missing provider thread remains a readable local conversation; a later model message prepares a new supported Codex association without discarding local entries. Completed legacy close records migrate to open Task semantics. Close commands remain internal cleanup compatibility and are not exposed as Product completion or Archive.
 
 ## Dependency boundary
 

@@ -751,6 +751,7 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
           ]);
         },
       },
+      prepare_codex_reassociation: pure,
       read_codex_thread: { execute: observeCodex, reconcile: observeCodex },
       read_runtime_inventory: {
         execute: observeRuntime,

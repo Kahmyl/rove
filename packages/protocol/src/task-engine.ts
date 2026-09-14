@@ -340,6 +340,10 @@ export const TASK_COMMAND_MANIFEST = {
     execute: "uncertain_write",
     reconcile: "correlate_receipt",
   },
+  prepare_codex_reassociation: {
+    execute: "pure_ledger",
+    reconcile: "not_required",
+  },
   bind_codex_identity: { execute: "pure_ledger", reconcile: "not_required" },
   advance_bootstrap_stage: {
     execute: "pure_ledger",
@@ -944,12 +948,7 @@ export function foldTaskEvent(
       requestedOperation.type === "archive"
     )
       aggregate.recoveryRequired = null;
-  } else if (
-    aggregate.requestedOperation.type !== "observe" &&
-    !["finish", "retry_cleanup"].includes(aggregate.requestedOperation.type) &&
-    outputFor(aggregate).operationDisposition.status === "rejected"
-  )
-    aggregate.requestedOperation = { type: "observe", taskId: event.taskId };
+  }
   switch (event.type) {
     case "task_launch_requested": {
       if (
@@ -1083,6 +1082,23 @@ export function foldTaskEvent(
       break;
     case "codex_message_delivery_observed": {
       recordMessageDelivery(aggregate, event.delivery);
+      if (
+        aggregate.requestedOperation.type === "message" &&
+        aggregate.requestedOperation.operationId ===
+          event.delivery.operationId &&
+        [
+          "dispatch_not_started",
+          "acceptance_observed",
+          "message_materialized",
+          "non_submission_established",
+        ].includes(event.delivery.state)
+      ) {
+        aggregate.recoveryRequired = null;
+        aggregate.requestedOperation = {
+          type: "observe",
+          taskId: aggregate.taskId,
+        };
+      }
       break;
     }
     case "runtime_inventory_observed":
@@ -1218,18 +1234,10 @@ export function aggregateLifecycleInput(
 
 function outputFor(aggregate: TaskAggregate): NativeLifecycleOutput {
   if (aggregate.recoveryRequired) {
-    const cleanupAction =
-      aggregate.record?.closeOperation?.stage === "complete" &&
-      aggregate.codex.threadExists &&
-      !aggregate.codex.archived
-        ? "archive"
-        : aggregate.record?.closeOperation
-          ? "retry_cleanup"
-          : "finish";
     return {
       taskId: aggregate.taskId,
-      phase: "failed",
-      allowedActions: [cleanupAction],
+      phase: "recovering",
+      allowedActions: [],
       nextCommand: null,
       confirmation: null,
       attention: {
@@ -1240,7 +1248,7 @@ function outputFor(aggregate: TaskAggregate): NativeLifecycleOutput {
         type: aggregate.requestedOperation.type,
         operationId: aggregate.requestedOperation.operationId ?? null,
         status: "rejected",
-        reason: "Task requires explicit recovery.",
+        reason: "The affected operation requires truth-based recovery.",
       },
     };
   }
@@ -1342,6 +1350,22 @@ export function applySuccessfulTaskCommand(
                 message: next.launch.outcome,
               };
       break;
+    case "prepare_codex_reassociation":
+      if (!next.record)
+        throw new Error("Codex reassociation requires a durable task record.");
+      delete next.record.identity.threadId;
+      next.record.bootstrap.stage = "thread_dispatching";
+      next.codex = {
+        availability: next.codex.availability,
+        threadExists: false,
+        threadSource: next.record.bootstrap.threadSource,
+        sourceLookup: "none",
+        runtimeStatus: "unknown",
+        archived: null,
+        turn: "none",
+      };
+      next.codexSessionId = null;
+      break;
     case "persist_close_intent":
       if (!next.record || typeof payload.operationId !== "string")
         throw new Error("Close transition lacks an operation identity.");
@@ -1361,16 +1385,11 @@ export function applySuccessfulTaskCommand(
         NativeTaskRecord["closeOperation"]
       >["stage"];
       next.record.closeOperation.lastAttemptAt = command.createdAt;
-      if (
-        payload.stage === "complete" &&
-        next.codex.threadExists &&
-        !next.codex.archived
-      )
-        next.requestedOperation = {
-          type: "archive",
-          taskId: next.taskId,
-          operationId: next.record.closeOperation.operationId,
-        };
+      if (payload.stage === "complete") {
+        next.desiredState = "open";
+        next.record.desiredState = "open";
+        delete next.record.closeOperation;
+      }
       break;
     case "settle_continuation_attention":
       // A prepared command that never crossed the dispatch boundary is safe to

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runtimeInventoryEventId } from "./execution-core.js";
 
 describe("Runtime inventory event identity", () => {
-  it("separates restart-generated inventory while preserving control-backed legacy identity", () => {
+  it("separates observations by generation, position, and state", () => {
     const first = runtimeInventoryEventId("task_1", 7, 1, "same-state");
 
     expect(runtimeInventoryEventId("task_1", 7, 1, "same-state")).toBe(first);
@@ -13,11 +13,8 @@ describe("Runtime inventory event identity", () => {
     expect(runtimeInventoryEventId("task_1", 7, 2, "same-state")).not.toBe(
       first,
     );
-    expect(runtimeInventoryEventId("task_1", 7, 1, "same-state", true)).toBe(
-      "runtime:task_1:same-state",
-    );
-    expect(runtimeInventoryEventId("task_1", 8, 2, "same-state", true)).toBe(
-      "runtime:task_1:same-state",
+    expect(runtimeInventoryEventId("task_1", 7, 1, "other-state")).not.toBe(
+      first,
     );
   });
 });

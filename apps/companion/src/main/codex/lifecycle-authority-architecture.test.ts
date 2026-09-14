@@ -7,6 +7,7 @@ import { NATIVE_LIFECYCLE_COMMAND_TYPES } from "@rove/protocol";
 import {
   PRODUCTION_LIFECYCLE_AUTHORITY,
   createProductionLifecycleRepositories,
+  requiresRuntimeGenerationReconciliation,
 } from "./execution-core.js";
 import { MemoryStateRepository } from "./persistence.js";
 import { PRODUCTION_LIFECYCLE_COMMAND_CLASS } from "./task-coordinator.js";
@@ -43,6 +44,40 @@ describe("production lifecycle authority architecture", () => {
     expect(Object.keys(PRODUCTION_LIFECYCLE_COMMAND_CLASS).sort()).toEqual(
       [...NATIVE_LIFECYCLE_COMMAND_TYPES].sort(),
     );
-    expect(NATIVE_LIFECYCLE_COMMAND_TYPES).toHaveLength(30);
+    expect(NATIVE_LIFECYCLE_COMMAND_TYPES).toHaveLength(31);
+  });
+
+  it("reconciles Runtime generations from resource truth rather than Task termination", () => {
+    expect(
+      requiresRuntimeGenerationReconciliation({
+        sessionId: "ses_active",
+        status: "active",
+        attachment: "attached",
+        recovery: "not_needed",
+      }),
+    ).toBe(true);
+    expect(
+      requiresRuntimeGenerationReconciliation({
+        sessionId: "ses_cleanup",
+        status: "failed",
+        attachment: "missing",
+        recovery: "cleanup_required",
+      }),
+    ).toBe(true);
+    expect(
+      requiresRuntimeGenerationReconciliation({
+        sessionId: "ses_settled",
+        status: "completed",
+        attachment: "missing",
+        recovery: "not_needed",
+      }),
+    ).toBe(false);
+    expect(
+      requiresRuntimeGenerationReconciliation({
+        status: "missing",
+        attachment: "missing",
+        recovery: "not_needed",
+      }),
+    ).toBe(false);
   });
 });

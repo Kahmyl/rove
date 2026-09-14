@@ -1,5 +1,5 @@
 import type {
-  CodexAccountCatalogService,
+  CodexAccountCatalogPort,
   CodexCatalogSnapshot,
 } from "./account-catalog.js";
 import type { CodexHostHealth } from "./app-server-host.js";
@@ -273,6 +273,7 @@ export type RendererProductIntent =
       selectedResultIds?: readonly string[];
     }
   | { type: "task.stop"; taskId: string; operationId: string }
+  | { type: "task.cleanup.retry"; taskId: string; operationId: string }
   | { type: "task.return-control"; taskId: string; operationId: string }
   | { type: "task.restore"; taskId: string; operationId: string }
   | { type: "task.archive"; taskId: string; operationId: string }
@@ -577,6 +578,7 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
     "selectedResultIds",
   ],
   "task.stop": ["type", "taskId", "operationId"],
+  "task.cleanup.retry": ["type", "taskId", "operationId"],
   "task.return-control": ["type", "taskId", "operationId"],
   "task.restore": ["type", "taskId", "operationId"],
   "task.archive": ["type", "taskId", "operationId"],
@@ -1444,7 +1446,7 @@ export class LocalProductApi {
   private currentTaskId: string | undefined;
   private readonly recordingWarnings = new Set<string>();
   private readonly health: () => CodexHostHealth;
-  private readonly account: CodexAccountCatalogService;
+  private readonly account: CodexAccountCatalogPort;
   private readonly tasks: ProductTaskPort;
   private readonly attention: ProductAttentionPort;
   private readonly taskCwd: string;
@@ -1500,7 +1502,7 @@ export class LocalProductApi {
     | undefined;
   constructor(
     health: () => CodexHostHealth,
-    account: CodexAccountCatalogService,
+    account: CodexAccountCatalogPort,
     tasks: ProductTaskPort | object,
     _broker: object,
     attention: ProductAttentionPort,
@@ -1783,9 +1785,14 @@ export class LocalProductApi {
     const current = tasks.find((task) => task.taskId === this.currentTaskId);
     const blockers = [...tasks]
       .reverse()
-      .filter((task) => !["closed", "failed"].includes(task.lifecycle.phase));
+      .filter(
+        (task) =>
+          task.conversation?.archived !== true &&
+          !["closed", "failed"].includes(task.lifecycle.phase),
+      );
     if (
       current === undefined ||
+      current.conversation?.archived === true ||
       ["closed", "failed"].includes(current.lifecycle.phase)
     )
       this.currentTaskId = blockers[0]?.taskId;
@@ -2324,6 +2331,17 @@ export class LocalProductApi {
         ),
       });
     }
+    if (value.type === "task.cleanup.retry") {
+      await this.requireTaskAction(taskId, "retry_cleanup");
+      return this.tasks.submit({
+        type: "retry_cleanup",
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "cleanup retry operation id",
+        ),
+      });
+    }
     if (value.type === "task.return-control")
       return this.execute({
         type: value.type,
@@ -2335,39 +2353,23 @@ export class LocalProductApi {
       });
     if (value.type === "task.restore") {
       await this.requireTaskAction(taskId, "resume");
-      return this.execute({
-        type: "task.thread.unarchive",
+      return this.tasks.submit({
+        type: "unarchive",
         taskId,
         operationId: stableOperationId(
           value.operationId,
-          "resume operation id",
+          "restore operation id",
         ),
       });
     }
     if (value.type === "task.archive") {
-      const task = await this.taskProjection(taskId);
+      await this.requireTaskAction(taskId, "archive");
       const operationId = stableOperationId(
         value.operationId,
         "archive operation id",
       );
-      if (task.availableActions.includes("finish")) {
-        return this.tasks.submit({
-          type: "finish",
-          taskId,
-          operationId,
-        });
-      }
-      if (task.availableActions.includes("retry_cleanup")) {
-        return this.tasks.submit({
-          type: "retry_cleanup",
-          taskId,
-          operationId,
-        });
-      }
-      if (!task.availableActions.includes("archive"))
-        throw new Error("Archive is not available for this task.");
-      return this.execute({
-        type: "task.thread.archive",
+      return this.tasks.submit({
+        type: "archive",
         taskId,
         operationId,
       });

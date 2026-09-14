@@ -217,7 +217,7 @@ describe("SQLite task engine ledger", () => {
           "SELECT schema_version FROM task_engine_aggregate WHERE task_id = ?",
         )
         .get(accepted.aggregate.taskId),
-    ).toEqual({ schema_version: 2 });
+    ).toEqual({ schema_version: 3 });
     migrated.close();
     reopened.close();
   });
@@ -293,7 +293,7 @@ describe("SQLite task engine ledger", () => {
       taskWorkspaceRoot: join(root, "protected-task-workspaces"),
     });
     expect(await reopened.projection(accepted.aggregate.taskId)).toMatchObject({
-      phase: "failed",
+      phase: "recovering",
       recoveryRequired: expect.stringContaining(
         "outside the protected per-task root",
       ),
@@ -321,6 +321,81 @@ describe("SQLite task engine ledger", () => {
     expect(() => new SqliteTaskEngineStore({ path })).toThrow(
       "Unsupported persisted task aggregate version",
     );
+  });
+
+  it("reopens a legacy completed close and backfills unarchived local history", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-task-engine-lifecycle-"));
+    roots.push(root);
+    const path = join(root, "task.sqlite3");
+    const first = new SqliteTaskEngineStore({ path });
+    const accepted = await new TaskEngine(first).accept(launch());
+    first.close();
+
+    const database = new Database(path);
+    const row = database
+      .prepare(
+        "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+      )
+      .get(accepted.aggregate.taskId) as { payload_json: string };
+    const aggregate = JSON.parse(row.payload_json) as Record<string, unknown>;
+    aggregate.desiredState = "closed";
+    aggregate.record = {
+      schemaVersion: 1,
+      identity: {
+        taskId: accepted.aggregate.taskId,
+        threadId: "thread_legacy_archived",
+        browser: { mode: "temporary" },
+      },
+      bootstrap: {
+        operationId: launch().launch.bootstrapId,
+        threadSource: `rove:${accepted.aggregate.taskId}:${launch().launch.bootstrapId}`,
+        stage: "complete",
+      },
+      desiredState: "closed",
+      closeOperation: {
+        operationId: "intent_22345678-1234-4123-8123-123456789abc",
+        requestedAt: "2026-09-09T12:01:00.000Z",
+        stage: "complete",
+      },
+    };
+    aggregate.codex = {
+      availability: "available",
+      threadExists: true,
+      threadId: "thread_legacy_archived",
+      threadSource: `rove:${accepted.aggregate.taskId}:${launch().launch.bootstrapId}`,
+      sourceLookup: "exact",
+      runtimeStatus: "idle",
+      archived: true,
+      turn: "completed",
+    };
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET schema_version = 2, payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), accepted.aggregate.taskId);
+    database
+      .prepare(
+        "UPDATE task_engine_projection SET schema_version = 2 WHERE task_id = ?",
+      )
+      .run(accepted.aggregate.taskId);
+    database.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(await reopened.aggregate(accepted.aggregate.taskId)).toMatchObject({
+      desiredState: "open",
+      record: { desiredState: "open" },
+    });
+    expect(
+      (await reopened.aggregate(accepted.aggregate.taskId))?.record
+        ?.closeOperation,
+    ).toBeUndefined();
+    expect(reopened.taskHistoryArchived(accepted.aggregate.taskId)).toBe(false);
+    reopened.close();
+
+    const checked = new Database(path, { readonly: true });
+    expect(checked.pragma("integrity_check", { simple: true })).toBe("ok");
+    expect(checked.pragma("foreign_key_check")).toEqual([]);
+    checked.close();
   });
 
   it("reclaims a possibly-started command only through reconciliation", async () => {

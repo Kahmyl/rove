@@ -331,6 +331,12 @@ async function execute(command) {
       taskId: command.taskId,
       operationId: command.operationId,
     });
+  if (command.type === "task.cleanup.retry")
+    return core.api().executeRendererIntent({
+      type: "task.cleanup.retry",
+      taskId: command.taskId,
+      operationId: command.operationId,
+    });
   if (command.type === "browser.attach")
     return core.attachBrowser(command.taskId);
   if (command.type === "task.message")

@@ -43,6 +43,7 @@ export const PRODUCTION_LIFECYCLE_COMMAND_CLASS = {
   lookup_or_start_runtime: "external_dispatch",
   bind_runtime_identity: "internal_durable_transition",
   lookup_or_start_codex_thread: "external_dispatch",
+  prepare_codex_reassociation: "internal_durable_transition",
   bind_codex_identity: "internal_durable_transition",
   advance_bootstrap_stage: "internal_durable_transition",
   read_codex_thread: "observation_reconciliation",
@@ -1053,7 +1054,13 @@ export interface ProductTaskSnapshot {
   context: Omit<ResolvedTaskContext, "browserIdentity"> & {
     browserIdentity?: BrowserIdentity;
   };
-  conversation?: ConversationAssociation;
+  conversation?: Omit<
+    ConversationAssociation,
+    "codexThreadId" | "codexSessionId"
+  > & {
+    codexThreadId?: string;
+    codexSessionId?: string;
+  };
   lifecycle: { phase: ProductLifecyclePhase; reason: string };
   availableActions: ProductLifecycleAction[];
   runtime?: {
@@ -2875,7 +2882,7 @@ export class RoveTaskCoordinator {
         this.authority.get(taskId) ?? context,
         { type: "observe", taskId },
       );
-      if (projection.output.phase !== "closed")
+      if (projection.output.phase !== "ready")
         throw new Error(`Durable close stopped in ${projection.output.phase}.`);
       const current = this.authority.get(taskId) ?? context;
       await this.syncLedgerLifecycleRecord(current, projection.record);
@@ -3117,7 +3124,7 @@ export class RoveTaskCoordinator {
       context = await this.syncLedgerLifecycleRecord(context, decision.record);
       operation = { type: "observe", taskId };
       if (decision.output.nextCommand === null) {
-        if (decision.output.phase === "closed") return;
+        if (decision.output.phase === "ready") return;
         throw new Error(
           `Lifecycle reducer stopped close in ${decision.output.phase}: ${decision.output.attention?.message ?? decision.output.operationDisposition.reason}`,
         );
@@ -3368,6 +3375,17 @@ export class RoveTaskCoordinator {
             this.threadParams(context, issued.token),
           );
         return context;
+      }
+      case "prepare_codex_reassociation": {
+        const reassociated: ResolvedTaskContext = {
+          ...context,
+          bootstrap: { ...context.bootstrap, stage: "thread_dispatching" },
+        };
+        delete reassociated.codexThreadId;
+        delete reassociated.codexSessionId;
+        const next = this.authority.replace(context.roveTaskId, reassociated);
+        await this.persistContexts();
+        return next;
       }
       case "bind_codex_identity": {
         if (

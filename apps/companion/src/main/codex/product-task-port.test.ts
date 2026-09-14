@@ -243,7 +243,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     reopened.close();
   });
 
-  it("hides a terminal task when its bound historical thread is authoritatively absent", async () => {
+  it("keeps local history visible and restore/message usable without a provider thread", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-absent-thread-archive-"));
     roots.push(root);
     const store = new SqliteTaskEngineStore({
@@ -281,11 +281,98 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const [task] = await port.productTasks();
 
     expect(task).toBeDefined();
-    expect(task!.conversation?.archived).toBe(true);
+    expect(task!.conversation?.archived).toBe(false);
+    expect(task!.availableActions).toContain("archive");
     expect((await store.aggregate(seededTaskId))?.codex).toMatchObject({
       threadExists: false,
       archived: null,
     });
+
+    await port.submit({
+      type: "archive",
+      taskId: seededTaskId,
+      operationId: "intent_42345678-1234-4123-8123-123456789abc",
+    });
+    expect((await port.readTask(seededTaskId))?.conversation?.archived).toBe(
+      true,
+    );
+    await port.submit({
+      type: "unarchive",
+      taskId: seededTaskId,
+      operationId: "intent_52345678-1234-4123-8123-123456789abc",
+    });
+    expect((await port.readTask(seededTaskId))?.conversation?.archived).toBe(
+      false,
+    );
+    const later = await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId: "intent_62345678-1234-4123-8123-123456789abc",
+      message: "Continue with a new provider association if needed.",
+    });
+    expect(later).toMatchObject({
+      projection: { operationDisposition: { status: "accepted" } },
+      command: { type: "prepare_codex_reassociation" },
+    });
+    expect(later.aggregate.conversation).toEqual(
+      task!.conversation
+        ? expect.objectContaining({ items: task!.conversation.items })
+        : expect.anything(),
+    );
+    store.close();
+  });
+
+  it("does not derive local archive from provider archival and rejects archive during an active turn", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-provider-archive-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const engine = new TaskEngine(store);
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_thread_observed",
+      eventId: "codex:provider-archived-active",
+      taskId: seededTaskId,
+      source: {
+        kind: "codex",
+        id: "codex:provider-archived-active",
+        generation: 2,
+        position: 1,
+      },
+      observedAt: "2026-09-09T12:00:01.000Z",
+      thread: {
+        availability: "available",
+        threadExists: true,
+        threadId: "thread_seeded",
+        threadSource: `rove:${seededTaskId}:${seededBootstrapId}`,
+        sourceLookup: "exact",
+        runtimeStatus: "active",
+        archived: true,
+        turn: "active",
+        turnId: "turn_active",
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+
+    expect((await port.readTask(seededTaskId))?.conversation?.archived).toBe(
+      false,
+    );
+    expect((await port.readTask(seededTaskId))?.availableActions).not.toContain(
+      "archive",
+    );
+    await expect(
+      port.submit({
+        type: "archive",
+        taskId: seededTaskId,
+        operationId: "intent_72345678-1234-4123-8123-123456789abc",
+      }),
+    ).rejects.toThrow("Stop the current work before archiving this task");
     store.close();
   });
 
@@ -531,7 +618,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const cancelTask = vi.fn();
     const port = new LedgerProductTaskPort({
       engine: { accept } as never,
-      store: {} as never,
+      store: { aggregate: vi.fn(async () => null) } as never,
       worker: { signal: vi.fn(), cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
     });
@@ -588,7 +675,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const cancelTask = vi.fn();
     const port = new LedgerProductTaskPort({
       engine: { accept } as never,
-      store: {} as never,
+      store: { aggregate: vi.fn(async () => null) } as never,
       worker: { signal: vi.fn(), cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
     });

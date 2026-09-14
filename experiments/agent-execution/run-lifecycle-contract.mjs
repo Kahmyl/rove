@@ -587,12 +587,12 @@ for (const turn of ["active", "completed", "failed", "interrupted"])
             before,
             "restart replay",
           );
-          if (before.phase === "closed") break;
+          if (before.phase === "ready") break;
           check(before.nextCommand !== null, true, "close remains actionable");
           state = applyConfirmation(state, before);
           steps += 1;
         }
-        check(reduceTaskLifecycle(state).phase, "closed", "close converges");
+        check(reduceTaskLifecycle(state).phase, "ready", "cleanup converges");
         check(steps <= 9, true, "close convergence is bounded");
         check(
           reduceTaskLifecycle(state).nextCommand,
@@ -602,9 +602,6 @@ for (const turn of ["active", "completed", "failed", "interrupted"])
         modelSequences += 1;
       }
 
-const closedTask = inputFor(
-  fixture.cases.find((entry) => entry.name === "repeated-close-complete"),
-);
 const cleanupTask = inputFor(
   fixture.cases.find((entry) => entry.name === "temporary-runtime-missing"),
 );
@@ -624,7 +621,7 @@ secondCleanup.codex.threadId = SECOND_THREAD_ID;
 secondCleanup.codex.threadSource = `rove:task_22222222-2222-4222-8222-222222222222:${BOOTSTRAP_ID}`;
 
 const zero = reduceLifecycleInventory({
-  tasks: [closedTask],
+  tasks: [],
   requestedOperation: {
     type: "launch",
     operationId: "intent_44444444-4444-4444-8444-444444444444",
@@ -674,9 +671,8 @@ check(
   "end_runtime_session",
   "deferred launch emits only the blocker convergence command",
 );
-const convergedOne = applyConfirmation(convergingTask, one);
 const resumedLaunch = reduceLifecycleInventory({
-  tasks: [convergedOne],
+  tasks: [],
   requestedOperation: {
     type: "launch",
     operationId: one.operationDisposition.operationId,
@@ -797,6 +793,7 @@ const nonComponentCommands = new Set([
   "advance_bootstrap_stage",
   "bind_runtime_identity",
   "bind_codex_identity",
+  "prepare_codex_reassociation",
   "read_codex_thread",
   "read_runtime_inventory",
   "read_lifecycle_truth",
@@ -1214,11 +1211,6 @@ for (const requestedOperation of [
     requestId: "missing",
     generation: 1,
   },
-  {
-    type: "archive",
-    taskId: "task_11111111-1111-4111-8111-111111111111",
-    operationId: "intent_88888888-8888-4888-8888-888888888888",
-  },
 ]) {
   const rejected = reduceTaskLifecycle(
     inputFor({ patch: { requestedOperation } }),
@@ -1282,7 +1274,7 @@ const zeroMatchClose = converge(
       codex: { threadExists: false },
     },
   }),
-  (value) => value.phase === "closed",
+  (value) => value.phase === "ready",
 );
 check(
   zeroMatchClose.steps <= 4,
@@ -1595,22 +1587,14 @@ const firstArchive = inputFor({
 });
 const archiveCommand = reduceTaskLifecycle(firstArchive);
 check(
-  archiveCommand.nextCommand?.type,
-  "archive_codex_thread",
-  "archive applies only to unarchived closed thread",
-);
-const archivedAgain = reduceTaskLifecycle(
-  applyConfirmation(firstArchive, archiveCommand),
-);
-check(
-  archivedAgain.operationDisposition.status,
-  "accepted",
-  "repeated archive reconciles safely",
-);
-check(
-  archivedAgain.nextCommand,
+  archiveCommand.nextCommand,
   null,
-  "repeated archive emits no second component command",
+  "local archive emits no provider command",
+);
+check(
+  archiveCommand.operationDisposition.status,
+  "accepted",
+  "local archive is accepted independently of provider state",
 );
 transitionSequences += 1;
 
@@ -1636,8 +1620,8 @@ const appServerRecovered = converge(
 );
 check(
   appServerRecovered.steps,
-  2,
-  "App Server unarchive and resume are independently confirmed",
+  0,
+  "archived provider state does not block local task readiness",
 );
 transitionSequences += 1;
 
@@ -1703,7 +1687,7 @@ for (const stage of [
       };
     const done = converge(
       inputFor({ patch }),
-      (value) => value.phase === "closed",
+      (value) => value.phase === "ready",
     );
     check(done.steps <= 8, true, "every close stage contradiction converges");
     transitionSequences += 1;

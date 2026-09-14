@@ -7,6 +7,7 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   LocalBackupSettings,
   ProductSurface,
+  TaskArchiveConfirmation,
   browserIdentityLabel,
   compatibleReasoningEffort,
   commandPaletteMatches,
@@ -81,6 +82,25 @@ function snapshot(
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("presents Archive as a reversible confirmation with Cancel and Archive choices", () => {
+    const html = renderToStaticMarkup(
+      <TaskArchiveConfirmation
+        busy={false}
+        archiving={false}
+        error={null}
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+      />,
+    );
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain("Archive this task?");
+    expect(html).toContain("It will be removed from Task History.");
+    expect(html).toContain("You can restore it later.");
+    expect(html).toContain(">Cancel</button>");
+    expect(html).toContain(">Archive</button>");
+    expect(html).not.toContain("Delete");
+  });
+
   it("derives the restrained renderer accent from the canonical Rove mark", () => {
     const logo = readFileSync(
       new URL("./assets/rove-mark.png", import.meta.url),
@@ -685,7 +705,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           workflowName: "Job search",
         },
         lifecycle: { phase: "waiting_for_human", reason: "Choose a role." },
-        availableActions: ["finish"],
+        availableActions: [],
       },
       {
         taskId: "task_standalone",
@@ -1224,7 +1244,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           phase: "waiting_for_human",
           reason: "Choose the audience.",
         },
-        availableActions: ["finish"],
+        availableActions: [],
         conversation: {
           turnStatus: "in_progress",
           archived: false,
@@ -1309,7 +1329,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         bootstrapStage: "complete",
         results: [],
         lifecycle: { phase: "working", reason: "Working." },
-        availableActions: ["finish"],
+        availableActions: [],
         conversation: {
           turnStatus: "in_progress",
           archived: false,
@@ -1346,7 +1366,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       '<aside class="product-sidebar" aria-label="Task controls and status" tabindex="0">',
     );
     expect(html).toContain("Long conversation entry 39");
-    expect(html).toContain('aria-label="Archive Untitled task"');
+    expect(html).not.toContain('aria-label="Archive Untitled task"');
   });
 
   it("keeps messages and browser activity in one human-readable chronology", () => {

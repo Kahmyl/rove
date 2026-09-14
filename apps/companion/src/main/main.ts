@@ -176,9 +176,7 @@ async function refreshDesktopSurfaceSnapshot(
         ? runtime.getSnapshot()
         : Promise.resolve(companionOverride),
       runtime.getBrowserWorkspaceStatus(),
-      codexExecutionCore === undefined ||
-      codexExecutionCoreStarting ||
-      nextProductError !== null
+      codexExecutionCore === undefined || codexExecutionCoreStarting
         ? Promise.resolve(null)
         : codexExecutionCore
             .api()
@@ -1255,6 +1253,7 @@ async function startDesktop(): Promise<void> {
       codexProductError =
         error instanceof Error ? error.message : "Codex App Server failed.";
       console.error(`[codex] ${codexProductError}`);
+      await refreshDesktopSurfaceSnapshot(runtime);
     }
   } else {
     codexProductError = "Codex MCP launch configuration is unavailable.";

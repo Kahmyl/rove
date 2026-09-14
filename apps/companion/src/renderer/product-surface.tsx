@@ -1408,6 +1408,66 @@ export function LocalBackupSettings({
   );
 }
 
+export function TaskArchiveConfirmation({
+  busy,
+  archiving,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean;
+  archiving: boolean;
+  error: string | null;
+  onCancel(): void;
+  onConfirm(): void;
+}) {
+  return (
+    <div
+      className="profile-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onCancel();
+      }}
+    >
+      <section
+        className="profile-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="archive-task-title"
+      >
+        <header>
+          <div>
+            <div className="eyebrow">Task history</div>
+            <h2 id="archive-task-title">Archive this task?</h2>
+            <p>
+              It will be removed from Task History. You can restore it later.
+            </p>
+          </div>
+        </header>
+        {error && (
+          <div className="product-error modal-error" role="alert">
+            <strong>Rove needs attention</strong>
+            <span>{error}</span>
+          </div>
+        )}
+        <div className="modal-actions">
+          <button type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="primary"
+            type="button"
+            disabled={busy || archiving}
+            onClick={onConfirm}
+          >
+            Archive
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function ProductSurface({
   desktop,
   connectionError,
@@ -1460,6 +1520,7 @@ export function ProductSurface({
   const [archivingTaskIds, setArchivingTaskIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [archiveTaskId, setArchiveTaskId] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
@@ -1494,21 +1555,23 @@ export function ProductSurface({
     null,
   );
   const activeModal =
-    workflowCreateName !== null
-      ? "workflow-create"
-      : workflowEditor && !selectedWorkflowWorkspaceId
-        ? "workflow"
-        : resultEditor
-          ? "result"
-          : workflowPromotion
-            ? "promotion"
-            : profileManagerOpen
-              ? "profiles"
-              : settingsOpen
-                ? "settings"
-                : codexRecoveryOpen
-                  ? "codex"
-                  : null;
+    archiveTaskId !== null
+      ? "archive"
+      : workflowCreateName !== null
+        ? "workflow-create"
+        : workflowEditor && !selectedWorkflowWorkspaceId
+          ? "workflow"
+          : resultEditor
+            ? "result"
+            : workflowPromotion
+              ? "promotion"
+              : profileManagerOpen
+                ? "profiles"
+                : settingsOpen
+                  ? "settings"
+                  : codexRecoveryOpen
+                    ? "codex"
+                    : null;
   const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [taskContextMenu, setTaskContextMenu] = useState<{
     taskId: string;
@@ -2256,23 +2319,27 @@ export function ProductSurface({
       }),
     );
   };
-  const archiveTask = async (task = viewedTask) => {
+  const requestTaskArchive = (task = viewedTask) => {
     if (
       !task ||
-      (!task.availableActions.includes("archive") &&
-        !task.availableActions.includes("finish") &&
-        !task.availableActions.includes("retry_cleanup")) ||
+      !task.availableActions.includes("archive") ||
       archivingTaskIds.has(task.taskId)
     )
       return;
-    setArchivingTaskIds((current) => new Set(current).add(task.taskId));
+    setArchiveTaskId(task.taskId);
+  };
+  const confirmTaskArchive = async () => {
+    const taskId = archiveTaskId;
+    if (!taskId || archivingTaskIds.has(taskId)) return;
+    setArchivingTaskIds((current) => new Set(current).add(taskId));
     try {
       await command({
         type: "task.archive",
-        taskId: task.taskId,
+        taskId,
         operationId: `intent_${crypto.randomUUID()}`,
       });
       await refresh();
+      setArchiveTaskId(null);
       setOperationError(null);
     } catch (cause) {
       setOperationError(
@@ -2281,10 +2348,20 @@ export function ProductSurface({
     } finally {
       setArchivingTaskIds((current) => {
         const next = new Set(current);
-        next.delete(task.taskId);
+        next.delete(taskId);
         return next;
       });
     }
+  };
+  const retryTaskCleanup = async () => {
+    if (!viewedTask?.availableActions.includes("retry_cleanup")) return;
+    await run(() =>
+      command({
+        type: "task.cleanup.retry",
+        taskId: viewedTask.taskId,
+        operationId: `intent_${crypto.randomUUID()}`,
+      }),
+    );
   };
   const displayTaskTitle = (task: NonNullable<typeof viewedTask>) =>
     taskTitles[task.taskId] ?? taskHistoryTitle(task);
@@ -2944,6 +3021,9 @@ export function ProductSurface({
   const taskContextEntry = product?.tasks.find(
     (task) => task.taskId === taskContextMenu?.taskId,
   );
+  const archiveTask = product?.tasks.find(
+    (task) => task.taskId === archiveTaskId,
+  );
   const account = product?.catalog.account;
   const primaryRateLimit = product?.catalog.rateLimits?.[0];
   const usageRemaining =
@@ -3092,6 +3172,15 @@ export function ProductSurface({
       className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
     >
       {codexRecoveryDialog}
+      {archiveTask && (
+        <TaskArchiveConfirmation
+          busy={busy}
+          archiving={archivingTaskIds.has(archiveTask.taskId)}
+          error={error}
+          onCancel={() => setArchiveTaskId(null)}
+          onConfirm={() => void confirmTaskArchive()}
+        />
+      )}
       {workflowCreateName !== null && (
         <div className="profile-modal-backdrop" role="presentation">
           <section
@@ -3601,7 +3690,10 @@ export function ProductSurface({
                     </button>
                   )}
                   {viewedTask.availableActions.includes("retry_cleanup") && (
-                    <button disabled={busy} onClick={() => void stopTask()}>
+                    <button
+                      disabled={busy}
+                      onClick={() => void retryTaskCleanup()}
+                    >
                       Retry cleanup
                     </button>
                   )}
@@ -5892,16 +5984,14 @@ export function ProductSurface({
                       {` · ${entry.executionMode === "agent" ? "Agent" : entry.executionMode === "companion" ? "Companion" : "Capture"}`}
                     </span>
                   </button>
-                  {(entry.availableActions.includes("archive") ||
-                    entry.availableActions.includes("finish") ||
-                    entry.availableActions.includes("retry_cleanup")) && (
+                  {entry.availableActions.includes("archive") && (
                     <button
                       className="task-history-archive"
                       type="button"
                       aria-label={`Archive ${displayTaskTitle(entry)}`}
                       title="Archive task"
                       disabled={archivingTaskIds.has(entry.taskId)}
-                      onClick={() => void archiveTask(entry)}
+                      onClick={() => requestTaskArchive(entry)}
                     >
                       <svg viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M3.5 5.5h13v10.25a1.75 1.75 0 0 1-1.75 1.75h-9a1.75 1.75 0 0 1-1.75-1.75V5.5Zm-.5-3h14a1 1 0 0 1 1 1v2H2v-2a1 1 0 0 1 1-1Zm4 6.5h6" />
@@ -5963,16 +6053,12 @@ export function ProductSurface({
                     type="button"
                     role="menuitem"
                     disabled={
-                      (!taskContextEntry.availableActions.includes("archive") &&
-                        !taskContextEntry.availableActions.includes("finish") &&
-                        !taskContextEntry.availableActions.includes(
-                          "retry_cleanup",
-                        )) ||
+                      !taskContextEntry.availableActions.includes("archive") ||
                       archivingTaskIds.has(taskContextEntry.taskId)
                     }
                     onClick={() => {
                       setTaskContextMenu(null);
-                      void archiveTask(taskContextEntry);
+                      requestTaskArchive(taskContextEntry);
                     }}
                   >
                     {archivingTaskIds.has(taskContextEntry.taskId)

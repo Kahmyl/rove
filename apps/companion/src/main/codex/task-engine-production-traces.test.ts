@@ -169,7 +169,8 @@ describe("five process-backed production-composition lifecycle traces", () => {
     const rejectedId = "intent_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     await rejected.request(launchIntent(rejectedId));
     const failed = await rejected.until(
-      (value) => lifecycle(task(value, taskId(rejectedId))).phase === "failed",
+      (value) =>
+        lifecycle(task(value, taskId(rejectedId))).phase === "recovering",
     );
     expect(task(failed, taskId(rejectedId)).codexThreadId).toBeUndefined();
     const rejectedActions = await rejected.request({
@@ -387,7 +388,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
     ).toHaveLength(1);
   }, 120_000);
 
-  it("4. finishes from handoff state through settlement, attachment cleanup, Runtime close, archive, and closed projection", async () => {
+  it("4. cleans resources from handoff state, returns the Task to ready, and archives only locally", async () => {
     const current = await product();
     const selected = await current.request({
       type: "attachment.prepare",
@@ -400,9 +401,14 @@ describe("five process-backed production-composition lifecycle traces", () => {
     await current.request(
       launchIntent(ids.finish, { attachmentIds: [attachmentId] }),
     );
-    await current.until(
-      (value) => task(value, taskId(ids.finish)).bootstrapStage === "complete",
-    );
+    await current.until((value) => {
+      const entry = task(value, taskId(ids.finish));
+      return (
+        entry.bootstrapStage === "complete" &&
+        lifecycle(entry).phase === "ready" &&
+        conversation(entry).turnStatus === "completed"
+      );
+    });
     await current.request({
       type: "browser.attach",
       taskId: taskId(ids.finish),
@@ -424,19 +430,20 @@ describe("five process-backed production-composition lifecycle traces", () => {
       taskId: taskId(ids.finish),
       operationId: "intent_44444444-4444-4444-8444-444444444445",
     });
-    const closed = await current.until((value) => {
+    const cleaned = await current.until((value) => {
       const entry = task(value, taskId(ids.finish));
       return (
-        lifecycle(entry).phase === "closed" &&
-        conversation(entry).archived === true &&
-        availableActions(entry).includes("resume")
+        lifecycle(entry).phase === "ready" &&
+        conversation(entry).archived === false &&
+        availableActions(entry).includes("message") &&
+        availableActions(entry).includes("archive")
       );
     });
-    const entry = task(closed, taskId(ids.finish));
+    const entry = task(cleaned, taskId(ids.finish));
     expect(attachments(entry)).toEqual([]);
-    expect(conversation(entry).archived).toBe(true);
-    expect(entry.availableActions).not.toContain("message");
-    expect(entry.availableActions).toContain("resume");
+    expect(conversation(entry).archived).toBe(false);
+    expect(entry.availableActions).toContain("message");
+    expect(entry.availableActions).toContain("archive");
     let actions = await current.request({ type: "external.actions" });
     expect(
       (actions.runtime as ProductValue[]).filter(
@@ -447,24 +454,11 @@ describe("five process-backed production-composition lifecycle traces", () => {
       (actions.appServer as ProductValue[]).filter(
         (action) => action.method === "thread/archive",
       ),
-    ).toHaveLength(1);
-    await current.request({
-      type: "task.unarchive",
-      taskId: taskId(ids.finish),
-      operationId: "intent_44444444-4444-4444-8444-444444444446",
-    });
-    const unarchived = await current.until(
-      (value) =>
-        conversation(task(value, taskId(ids.finish))).archived === false &&
-        availableActions(task(value, taskId(ids.finish))).includes("archive"),
-    );
-    expect(task(unarchived, taskId(ids.finish)).availableActions).toContain(
-      "archive",
-    );
+    ).toHaveLength(0);
     await current.request({
       type: "task.archive",
       taskId: taskId(ids.finish),
-      operationId: "intent_44444444-4444-4444-8444-444444444447",
+      operationId: "intent_44444444-4444-4444-8444-444444444446",
     });
     await current.until(
       (value) =>
@@ -476,12 +470,23 @@ describe("five process-backed production-composition lifecycle traces", () => {
       (actions.appServer as ProductValue[]).filter(
         (action) => action.method === "thread/unarchive",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(
       (actions.appServer as ProductValue[]).filter(
         (action) => action.method === "thread/archive",
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
+
+    await current.request({
+      type: "task.unarchive",
+      taskId: taskId(ids.finish),
+      operationId: "intent_44444444-4444-4444-8444-444444444447",
+    });
+    await current.until(
+      (value) =>
+        conversation(task(value, taskId(ids.finish))).archived === false &&
+        availableActions(task(value, taskId(ids.finish))).includes("message"),
+    );
 
     const nextTaskOperation = "intent_44444444-4444-4444-8444-444444444448";
     await current.request(launchIntent(nextTaskOperation));
@@ -492,7 +497,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
     expect(task(nextTask, taskId(nextTaskOperation)).taskId).not.toBe(
       taskId(ids.finish),
     );
-    expect(lifecycle(task(nextTask, taskId(ids.finish))).phase).toBe("closed");
+    expect(lifecycle(task(nextTask, taskId(ids.finish))).phase).toBe("ready");
   }, 120_000);
 
   it("5. restores a browserless task across App Server, Runtime, and Desktop restarts and accepts a second product intent once", async () => {

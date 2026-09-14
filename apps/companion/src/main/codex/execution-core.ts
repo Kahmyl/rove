@@ -9,7 +9,11 @@ import {
   type TaskConversationItem,
   type TaskEvent,
 } from "@rove/protocol";
-import { CodexAccountCatalogService } from "./account-catalog.js";
+import {
+  CodexAccountCatalogService,
+  type CodexAccountCatalogPort,
+  type CodexCatalogSnapshot,
+} from "./account-catalog.js";
 import { CodexAppServerHost, readCodexVersion } from "./app-server-host.js";
 import { CodexRuntimeTaskAdapter } from "./codex-runtime-task-adapter.js";
 import { CodexThreadSessionSupervisor } from "./codex-thread-session-supervisor.js";
@@ -39,6 +43,20 @@ export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   projection: "sqlite",
   command: "sqlite",
 } as const);
+
+export function requiresRuntimeGenerationReconciliation(input: {
+  sessionId?: string;
+  status: NativeRuntimeTruth["status"];
+  attachment: NativeRuntimeTruth["attachment"];
+  recovery: NativeRuntimeTruth["recovery"];
+}): boolean {
+  if (!input.sessionId) return false;
+  return !(
+    ["completed", "failed"].includes(input.status) &&
+    input.attachment === "missing" &&
+    input.recovery === "not_needed"
+  );
+}
 
 /** Legacy test fixture only; production composition never calls this helper. */
 export function createProductionLifecycleRepositories() {
@@ -96,9 +114,7 @@ export function runtimeInventoryEventId(
   generation: number,
   position: number,
   fingerprint: string,
-  controlBacked = false,
 ): string {
-  if (controlBacked) return `runtime:${taskId}:${fingerprint}`;
   return `runtime:${taskId}:${generation}:${position}:${fingerprint}`;
 }
 
@@ -168,12 +184,49 @@ export class CodexExecutionCore {
     this.store = store;
     this.connectionGeneration = store.nextHostGeneration("codex");
     this.runtimeGeneration = store.nextHostGeneration("runtime");
-    const rpc = await this.host.start();
+    const engine = new TaskEngine(store);
+    let rpc;
+    try {
+      rpc = await this.host.start();
+    } catch (error) {
+      const taskPort = new LedgerProductTaskPort({
+        engine,
+        store,
+        worker: {
+          signal: () => undefined,
+          cancelTask: () => false,
+        },
+        ...(this.options.taskWorkspaceRoot
+          ? { taskWorkspaceRoot: this.options.taskWorkspaceRoot }
+          : {}),
+        ...(this.options.onProductStateChanged
+          ? { onPublished: this.options.onProductStateChanged }
+          : {}),
+      });
+      const attention = new LedgerAttentionView(store);
+      await attention.refresh();
+      this.taskPort = taskPort;
+      this.apiValue = new LocalProductApi(
+        () => this.host.getHealth(),
+        unavailableAccountCatalog(),
+        taskPort,
+        {},
+        attention,
+        this.options.taskWorkingDirectory ?? this.options.stateDirectory,
+        () => this.recoveryWarnings,
+        this.options.attachmentAuthority,
+        this.options.attachmentRuntime,
+        undefined,
+        store,
+        store,
+      );
+      await this.options.onProductStateChanged?.();
+      throw error;
+    }
     const account = new CodexAccountCatalogService(rpc);
     account.start();
     await account.refresh();
     this.account = account;
-    const engine = new TaskEngine(store);
     const capabilityIssuer = await persistedCapabilityIssuer(
       join(this.options.stateDirectory, "task-capability.key"),
     );
@@ -780,6 +833,21 @@ export class CodexExecutionCore {
     if (!this.store || !this.ingress) return;
     for (const projection of await this.store.projections()) {
       if (projection.phase === "closed") continue;
+      if (component === "runtime") {
+        const aggregate = await this.store.aggregate(projection.taskId);
+        if (
+          !aggregate ||
+          !requiresRuntimeGenerationReconciliation({
+            ...(aggregate.record?.identity.sessionId
+              ? { sessionId: aggregate.record.identity.sessionId }
+              : {}),
+            status: aggregate.runtime.status,
+            attachment: aggregate.runtime.attachment,
+            recovery: aggregate.runtime.recovery,
+          })
+        )
+          continue;
+      }
       await this.ingress.enqueue(Math.max(1, this.connectionGeneration), {
         schemaVersion: 1,
         type: "host_generation_changed",
@@ -911,7 +979,6 @@ export class CodexExecutionCore {
             sourceGeneration,
             position,
             fingerprint,
-            control !== undefined,
           ),
           taskId: projection.taskId,
           source: {
@@ -954,6 +1021,28 @@ export class CodexExecutionCore {
     this.store = undefined;
     await this.host.stop();
   }
+}
+
+function unavailableAccountCatalog(): CodexAccountCatalogPort {
+  const unavailable = (): never => {
+    throw new Error("Codex is unavailable.");
+  };
+  const snapshot: CodexCatalogSnapshot = {
+    account: { status: "unavailable" },
+    models: [],
+    rateLimits: null,
+    usage: null,
+    refreshedAt: new Date(0).toISOString(),
+  };
+  return {
+    snapshot: () => structuredClone(snapshot),
+    trustedLoginUrl: unavailable,
+    refresh: async () => structuredClone(snapshot),
+    refreshManagedToken: async () => structuredClone(snapshot),
+    login: async () => unavailable(),
+    cancelLogin: async () => unavailable(),
+    logout: async () => unavailable(),
+  };
 }
 
 async function persistedCapabilityIssuer(

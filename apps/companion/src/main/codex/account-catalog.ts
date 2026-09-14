@@ -63,6 +63,16 @@ type ActiveLogin =
       verificationUrl: string;
     });
 
+export interface CodexAccountCatalogPort {
+  snapshot(): CodexCatalogSnapshot;
+  trustedLoginUrl(loginId: string): string;
+  refresh(refreshToken?: boolean): Promise<CodexCatalogSnapshot>;
+  refreshManagedToken(): Promise<CodexCatalogSnapshot>;
+  login(type: "chatgpt" | "deviceCode"): Promise<LoginProjection>;
+  cancelLogin(loginId: string): Promise<{ status: string }>;
+  logout(): Promise<void>;
+}
+
 const MAX_MODELS = 100;
 const MAX_MODEL_EFFORTS = 16;
 const MAX_MODEL_MODALITIES = 8;
@@ -239,7 +249,7 @@ function accountLoginCompletion(
   return parsed.params as unknown as AccountLoginCompletion;
 }
 
-export class CodexAccountCatalogService {
+export class CodexAccountCatalogService implements CodexAccountCatalogPort {
   private snapshotValue: CodexCatalogSnapshot = {
     account: { status: "unavailable" },
     models: [],

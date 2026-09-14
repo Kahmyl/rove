@@ -460,14 +460,14 @@ describe("ledger-only lifecycle authority", () => {
           generation: 1,
           decision: "decline",
         }),
-      ).rejects.toThrow(/requires explicit recovery/);
+      ).rejects.toThrow(/requires truth-based recovery/);
       expect(responseCount).toBe(0);
       await expect(api.readSnapshot()).resolves.toMatchObject({
         tasks: expect.arrayContaining([
           expect.objectContaining({
             taskId,
             lifecycle: {
-              phase: "failed",
+              phase: "recovering",
               reason: expect.stringContaining("Legacy active task"),
             },
           }),
