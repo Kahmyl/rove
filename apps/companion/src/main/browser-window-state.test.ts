@@ -112,6 +112,11 @@ describe("CompanionRuntimeClient browser window state", () => {
         const url = String(input);
         expect(url).toContain("/sessions/ses_show/browser/show");
         expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          ownershipGeneration: 7,
+          handoffId: "handoff_exact",
+          handoffGeneration: 6,
+        });
         return new Response("true", {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -123,7 +128,13 @@ describe("CompanionRuntimeClient browser window state", () => {
       fetchImpl,
     });
 
-    await expect(client.showBrowserForSession("ses_show")).resolves.toBe(true);
+    await expect(
+      client.showBrowserForSession("ses_show", {
+        ownershipGeneration: 7,
+        handoffId: "handoff_exact",
+        handoffGeneration: 6,
+      }),
+    ).resolves.toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

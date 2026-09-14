@@ -97,7 +97,7 @@ export class OwnershipTransitionService {
 
   async takeHuman(
     sessionId: string,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
@@ -148,7 +148,7 @@ export class OwnershipTransitionService {
   async returnAgent(
     sessionId: string,
     flushHumanActivity: () => Promise<void>,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
@@ -237,7 +237,7 @@ export class OwnershipTransitionService {
 
   async pauseAgent(
     sessionId: string,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     const session = await this.sessions.get(sessionId);
 
@@ -279,12 +279,19 @@ export class OwnershipTransitionService {
     return this.toControlStatus(next, observation.seq);
   }
 
+  async assertExactControlAuthority(
+    sessionId: string,
+    authority: ControlMutationAuthority,
+  ): Promise<void> {
+    this.assertExactAuthority(await this.sessions.get(sessionId), authority);
+  }
+
   private assertExactAuthority(
     session: Session,
-    authority: ControlMutationAuthority | undefined,
+    authority: ControlMutationAuthority,
   ): void {
-    if (authority === undefined) return;
     if (
+      authority === undefined ||
       session.ownershipGeneration !== authority.ownershipGeneration ||
       session.activeHandoffId !== authority.handoffId ||
       session.activeHandoffGeneration !== authority.handoffGeneration

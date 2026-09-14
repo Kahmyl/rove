@@ -28,6 +28,7 @@ import {
   verifiedInteractionRequestSchema,
   advanceSemanticTransactionRequestSchema,
   beginSemanticTransactionRequestSchema,
+  controlMutationAuthoritySchema,
   semanticTransactionReferenceSchema,
   verifySemanticTransactionRequestSchema,
   type AdvanceSemanticTransactionRequest,
@@ -55,8 +56,11 @@ export class BrowserController {
   }
 
   @Post("show")
-  show(@Param("id") id: string) {
-    return this.runtime.showBrowser(id);
+  show(@Param("id") id: string, @Body() body: unknown) {
+    return this.runtime.showBrowser(
+      id,
+      controlMutationAuthoritySchema.parse(body),
+    );
   }
 
   @Post("navigate")

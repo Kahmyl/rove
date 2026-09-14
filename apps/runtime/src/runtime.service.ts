@@ -549,9 +549,17 @@ export class RuntimeService implements RoveRuntime {
     return this.browser.windowState(sessionId);
   }
 
-  async showBrowser(sessionId: string): Promise<boolean> {
-    await this.sessions.get(sessionId);
-    return this.browser.show(sessionId);
+  async showBrowser(
+    sessionId: string,
+    authority: ControlMutationAuthority,
+  ): Promise<boolean> {
+    return this.coordinator.execute(sessionId, async () => {
+      await this.ownershipTransitions.assertExactControlAuthority(
+        sessionId,
+        authority,
+      );
+      return this.browser.show(sessionId);
+    });
   }
 
   async listActiveSessions(mode?: SessionMode): Promise<Session[]> {
@@ -2989,7 +2997,7 @@ export class RuntimeService implements RoveRuntime {
 
   async takeHumanControl(
     sessionId: string,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.takeHuman(sessionId, authority),
@@ -2998,7 +3006,7 @@ export class RuntimeService implements RoveRuntime {
 
   async pauseAgentControl(
     sessionId: string,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.pauseAgent(sessionId, authority),
@@ -3007,7 +3015,7 @@ export class RuntimeService implements RoveRuntime {
 
   async returnAgentControl(
     sessionId: string,
-    authority?: ControlMutationAuthority,
+    authority: ControlMutationAuthority,
   ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
       this.ownershipTransitions.returnAgent(

@@ -43,19 +43,19 @@ export class ControlController {
     return this.runtime.requestHuman(id, requestHumanRequestSchema.parse(body));
   }
 
-  @Post("take") take(@Param("id") id: string, @Body() body?: unknown) {
+  @Post("take") take(@Param("id") id: string, @Body() body: unknown) {
     return this.runtime.takeHumanControl(
       id,
       controlMutationAuthoritySchema.parse(body),
     );
   }
-  @Post("pause") pause(@Param("id") id: string, @Body() body?: unknown) {
+  @Post("pause") pause(@Param("id") id: string, @Body() body: unknown) {
     return this.runtime.pauseAgentControl(
       id,
       controlMutationAuthoritySchema.parse(body),
     );
   }
-  @Post("return") return(@Param("id") id: string, @Body() body?: unknown) {
+  @Post("return") return(@Param("id") id: string, @Body() body: unknown) {
     return this.runtime.returnAgentControl(
       id,
       controlMutationAuthoritySchema.parse(body),

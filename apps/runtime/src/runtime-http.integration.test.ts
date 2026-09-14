@@ -663,6 +663,20 @@ describe("runtime HTTP API", () => {
       (await json(baseUrl, `/sessions/${sessionId}/control`, {}, authorization))
         .body,
     ).toMatchObject({ controller: "agent", status: "active" });
+    const authoritylessTake = await json(
+      baseUrl,
+      `/sessions/${sessionId}/control/take`,
+      { method: "POST", body: "{}" },
+      authorization,
+    );
+    expect(authoritylessTake.response.status).toBe(400);
+    const authoritylessShow = await json(
+      baseUrl,
+      `/sessions/${sessionId}/browser/show`,
+      { method: "POST", body: "{}" },
+      authorization,
+    );
+    expect(authoritylessShow.response.status).toBe(400);
     const requested = await json(
       baseUrl,
       `/sessions/${sessionId}/control/request-human`,

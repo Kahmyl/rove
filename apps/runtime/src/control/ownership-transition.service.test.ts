@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { PagePerceptionAssessment, Session } from "@rove/protocol";
+import type {
+  ControlMutationAuthority,
+  PagePerceptionAssessment,
+  Session,
+} from "@rove/protocol";
 
 import { BrowserService } from "../browser/browser.service.js";
 import { ObservationService } from "../observation/observation.service.js";
@@ -23,10 +27,23 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     mode: "agent",
     status: "active",
     controller: "agent",
+    ownershipGeneration: 1,
     createdAt: "2026-08-16T00:00:00.000Z",
     updatedAt: "2026-08-16T00:00:00.000Z",
     ...overrides,
   } as Session;
+}
+
+function controlAuthority(session: Session): ControlMutationAuthority {
+  return {
+    ownershipGeneration: session.ownershipGeneration!,
+    ...(session.activeHandoffId === undefined
+      ? {}
+      : {
+          handoffId: session.activeHandoffId,
+          handoffGeneration: session.activeHandoffGeneration!,
+        }),
+  };
 }
 
 function expectControlNotOwned(operation: () => unknown): void {
@@ -222,7 +239,10 @@ describe("OwnershipTransitionService", () => {
     });
 
     const afterRequestRestart = harness(requested.current());
-    const human = await afterRequestRestart.service.takeHuman("ses_test");
+    const human = await afterRequestRestart.service.takeHuman(
+      "ses_test",
+      controlAuthority(afterRequestRestart.current()),
+    );
     expect(human).toMatchObject({
       generation: 9,
       activeHandoffId: awaiting.activeHandoffId,
@@ -238,6 +258,7 @@ describe("OwnershipTransitionService", () => {
     const returned = await afterTakeRestart.service.returnAgent(
       "ses_test",
       async () => undefined,
+      controlAuthority(afterTakeRestart.current()),
     );
     expect(returned).toMatchObject({
       generation: 10,
@@ -344,7 +365,10 @@ describe("OwnershipTransitionService", () => {
       }),
     );
 
-    const result = await test.service.takeHuman("ses_test");
+    const result = await test.service.takeHuman(
+      "ses_test",
+      controlAuthority(test.current()),
+    );
 
     expect(result).toMatchObject({
       status: "active",
@@ -387,6 +411,7 @@ describe("OwnershipTransitionService", () => {
     const result = await test.service.returnAgent(
       "ses_test",
       flushHumanActivity,
+      controlAuthority(test.current()),
     );
 
     expect(flushHumanActivity).toHaveBeenCalledTimes(1);
@@ -424,7 +449,10 @@ describe("OwnershipTransitionService", () => {
   it("pauses only after draining agent authority and resumes through fresh target invalidation", async () => {
     const test = harness(makeSession({ mode: "companion" }));
     const lease = test.ownershipFence.acquire("ses_test", "agent");
-    const pausing = test.service.pauseAgent("ses_test");
+    const pausing = test.service.pauseAgent(
+      "ses_test",
+      controlAuthority(test.current()),
+    );
 
     await Promise.resolve();
     expect(test.update).not.toHaveBeenCalled();
@@ -444,6 +472,7 @@ describe("OwnershipTransitionService", () => {
     const resumed = await test.service.returnAgent(
       "ses_test",
       async () => undefined,
+      controlAuthority(test.current()),
     );
     expect(resumed).toMatchObject({ status: "active", controller: "agent" });
     expect(test.invalidateAllTargets).toHaveBeenCalledTimes(1);
