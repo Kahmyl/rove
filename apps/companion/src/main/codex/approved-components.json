@@ -24,7 +24,9 @@
       "schema": {
         "filename": "app-server-0.154.0-alpha.6.2.schemas.generated.json",
         "sha256": "61400fa7a6cd186c0189fc7f16644fa803c1ef60fc5c66a27e561ceadd1b7afd",
-        "aggregateSha256": "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e"
+        "compiledRuntimeSha256": "836271edd28f8adfd50fd45058d09c8255979057e74936eefae1169d4827d66c",
+        "aggregateSha256": "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e",
+        "generatedTsAggregateSha256": "b5cb05661da76c3693ed8dfe16dcf7666463e88d90d40c68675c4fa1a7de0311"
       },
       "qualification": {
         "date": "2026-09-14",
@@ -55,7 +57,9 @@
       "schema": {
         "filename": "app-server-0.153.4.schemas.generated.json",
         "sha256": "a03436395715878854863bf699c9a9fd73c50b7c1186ec5ceab3d7506f9c194f",
-        "aggregateSha256": "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5"
+        "compiledRuntimeSha256": "168c9dc7cd8c681d5d21392f2975782d58f44f285b0e6377320063ffb15b5ee3",
+        "aggregateSha256": "50cb262ffff7c4480e17f13a5667aeb5e3a411b2793a63327d03cc2d6cb6e5a5",
+        "generatedTsAggregateSha256": "da25480745b4de6f4c55035e73182fc173b7a322ef4c7ef32efc43bca1f6d54c"
       },
       "qualification": {
         "date": "2026-09-07",

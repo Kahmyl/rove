@@ -55,4 +55,34 @@ describe("qualified Codex component set", () => {
       ]),
     ).toThrow(/does not match its compiled schema binding/);
   });
+
+  it("refuses startup when the selected runtime catalog bytes or generated aggregate are tampered", () => {
+    const selected = resolveApprovedCodexComponentSet(manifest, bindings);
+    const evidence = {
+      catalog: selected.schemaCatalog as typeof selected.schemaCatalog & {
+        generatedTsAggregateSha256: string;
+      },
+      rawFileSha256: selected.binding.sha256,
+    };
+
+    expect(() =>
+      resolveApprovedCodexComponentSet(manifest, bindings, {
+        [selected.binding.filename]: {
+          ...evidence,
+          rawFileSha256: "tampered-catalog",
+        },
+      }),
+    ).toThrow(/raw-file digest/);
+    expect(() =>
+      resolveApprovedCodexComponentSet(manifest, bindings, {
+        [selected.binding.filename]: {
+          ...evidence,
+          catalog: {
+            ...evidence.catalog,
+            generatedTsAggregateSha256: "tampered-generated-aggregate",
+          },
+        },
+      }),
+    ).toThrow(/generated TypeScript aggregate/);
+  });
 });
