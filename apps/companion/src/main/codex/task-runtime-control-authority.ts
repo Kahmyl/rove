@@ -51,17 +51,29 @@ export function resolveTaskRuntimeControlAuthority(
     session.ownershipGeneration === undefined
   )
     throw new Error("Task Runtime authority is stale or mismatched.");
-  if (expectedHandoffGeneration !== undefined) {
+  const aggregateHasPendingHandoff = aggregate.continuation.status === "pending";
+  const runtimeHasPendingHandoff =
+    session.activeHandoffId !== undefined ||
+    session.activeHandoffGeneration !== undefined;
+  if (aggregateHasPendingHandoff || runtimeHasPendingHandoff) {
     if (
-      aggregate.continuation.status !== "pending" ||
+      !aggregateHasPendingHandoff ||
+      !runtimeHasPendingHandoff ||
       aggregate.continuation.taskId !== taskId ||
       aggregate.continuation.sessionId !== sessionId ||
-      aggregate.continuation.generation !== expectedHandoffGeneration ||
+      aggregate.continuation.handoffId === undefined ||
+      aggregate.continuation.generation === undefined ||
       aggregate.continuation.handoffId !== session.activeHandoffId ||
-      expectedHandoffGeneration !== session.activeHandoffGeneration
+      aggregate.continuation.generation !== session.activeHandoffGeneration
     )
       throw new Error("Task control handoff is stale or mismatched.");
   }
+  if (
+    expectedHandoffGeneration !== undefined &&
+    (!aggregateHasPendingHandoff ||
+      aggregate.continuation.generation !== expectedHandoffGeneration)
+  )
+    throw new Error("Task control handoff is stale or mismatched.");
   return {
     sessionId,
     ownershipGeneration: session.ownershipGeneration,

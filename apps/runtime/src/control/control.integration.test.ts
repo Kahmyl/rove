@@ -11,6 +11,8 @@ import { loadConfig } from "@rove/config";
 import {
   RoveError,
   type BrowserRuntimeCapabilities,
+  type ControlMutationAuthority,
+  type ControlStatus,
   type PageInspection,
   type TargetReference,
 } from "@rove/protocol";
@@ -54,6 +56,25 @@ const testCapabilities: BrowserRuntimeCapabilities = {
   sandbox: { requested: true, verified: "unknown" },
   diagnostics: [],
 };
+
+function controlAuthority(status: ControlStatus): ControlMutationAuthority {
+  return {
+    ownershipGeneration: status.generation,
+    ...(status.activeHandoffId === undefined
+      ? {}
+      : {
+          handoffId: status.activeHandoffId,
+          handoffGeneration: status.activeHandoffGeneration!,
+        }),
+  };
+}
+
+async function currentControlAuthority(
+  runtime: RuntimeService,
+  sessionId: string,
+): Promise<ControlMutationAuthority> {
+  return controlAuthority(await runtime.getControlStatus(sessionId));
+}
 
 async function harness(engine: BrowserEngine = new PlaywrightBrowserEngine()) {
   const home = await mkdtemp(join(tmpdir(), "rove-control-"));
@@ -152,7 +173,10 @@ describe("requested handoff", () => {
       afterSeq: requested.observationSeq,
       timeoutMs: 1_000,
     });
-    const taken = await runtime.takeHumanControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      controlAuthority(requested),
+    );
     expect(taken).toMatchObject({
       status: "active",
       controller: "human",
@@ -170,7 +194,10 @@ describe("requested handoff", () => {
       afterSeq: taken.observationSeq,
       timeoutMs: 1_000,
     });
-    const returned = await runtime.returnAgentControl(session.id);
+    const returned = await runtime.returnAgentControl(
+      session.id,
+      controlAuthority(taken),
+    );
     expect(returned).toMatchObject({ status: "active", controller: "agent" });
     expect(returned.handoff).toBeUndefined();
     await expect(waitForReturn).resolves.toMatchObject({
@@ -238,22 +265,41 @@ describe("mode transitions and all-page invalidation", () => {
       { runtime, id: companion.id },
       { runtime, id: capture.id },
     );
-    await expect(runtime.takeHumanControl(agent.id)).rejects.toMatchObject({
+    await expect(
+      runtime.takeHumanControl(
+        agent.id,
+        await currentControlAuthority(runtime, agent.id),
+      ),
+    ).rejects.toMatchObject({
       code: "HUMAN_CONTROL_REQUIRED",
     });
-    await expect(runtime.takeHumanControl(companion.id)).resolves.toMatchObject(
-      { controller: "human", status: "active" },
+    const companionTaken = await runtime.takeHumanControl(
+      companion.id,
+      await currentControlAuthority(runtime, companion.id),
     );
+    expect(companionTaken).toMatchObject({
+      controller: "human",
+      status: "active",
+    });
     await expect(
       runtime.navigate(companion.id, { url: "about:blank" }),
     ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
     await expect(
-      runtime.returnAgentControl(companion.id),
+      runtime.returnAgentControl(
+        companion.id,
+        controlAuthority(companionTaken),
+      ),
     ).resolves.toMatchObject({ controller: "agent" });
-    await expect(runtime.takeHumanControl(capture.id)).resolves.toMatchObject({
+    const captureTaken = await runtime.takeHumanControl(
+      capture.id,
+      await currentControlAuthority(runtime, capture.id),
+    );
+    expect(captureTaken).toMatchObject({
       controller: "human",
     });
-    await expect(runtime.returnAgentControl(capture.id)).rejects.toMatchObject({
+    await expect(
+      runtime.returnAgentControl(capture.id, controlAuthority(captureTaken)),
+    ).rejects.toMatchObject({
       code: "CONTROL_NOT_OWNED",
     });
   });
@@ -367,8 +413,14 @@ describe("mode transitions and all-page invalidation", () => {
     await expect(blocked).resolves.toMatchObject({ code: "CONTROL_NOT_OWNED" });
     expect(order).toEqual(["slow:start", "slow:end"]);
 
-    await runtime.takeHumanControl(session.id);
-    const returned = runtime.returnAgentControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
+    const returned = runtime.returnAgentControl(
+      session.id,
+      controlAuthority(taken),
+    );
     const stale = runtime
       .click(session.id, {
         target: { pageId: "page_01", revision: 0, ref: "t1" },
@@ -490,9 +542,12 @@ describe("mode transitions and all-page invalidation", () => {
     const ref1 = target(inspection1, "Change state");
     const before = await runtime.pages(session.id);
 
-    await runtime.takeHumanControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
     await browser.get(session.id).switchPage("page_02");
-    await runtime.returnAgentControl(session.id);
+    await runtime.returnAgentControl(session.id, controlAuthority(taken));
     expect((await runtime.getSession(session.id)).activePageId).toBe("page_02");
     const after = await runtime.pages(session.id);
     for (const page of before) {
@@ -519,13 +574,18 @@ describe("mode transitions and all-page invalidation", () => {
       browser: { mode: "temporary" },
     });
     active.push({ runtime, id: session.id });
-    const taken = await runtime.takeHumanControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
     const pending = runtime.waitForControl(session.id, {
       afterSeq: taken.observationSeq,
       timeoutMs: 1_000,
     });
     await browser.get(session.id).close();
-    await expect(runtime.returnAgentControl(session.id)).rejects.toMatchObject({
+    await expect(
+      runtime.returnAgentControl(session.id, controlAuthority(taken)),
+    ).rejects.toMatchObject({
       code: "BROWSER_CLOSED",
     });
     await expect(pending).resolves.toMatchObject({

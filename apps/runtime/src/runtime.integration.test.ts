@@ -14,6 +14,8 @@ import { loadConfig } from "@rove/config";
 import {
   RoveError,
   type BrowserRuntimeCapabilities,
+  type ControlMutationAuthority,
+  type ControlStatus,
   type PageInspection,
   type TargetReference,
 } from "@rove/protocol";
@@ -72,6 +74,25 @@ const testCapabilities: BrowserRuntimeCapabilities = {
   sandbox: { requested: true, verified: "unknown" },
   diagnostics: [],
 };
+
+function controlAuthority(status: ControlStatus): ControlMutationAuthority {
+  return {
+    ownershipGeneration: status.generation,
+    ...(status.activeHandoffId === undefined
+      ? {}
+      : {
+          handoffId: status.activeHandoffId,
+          handoffGeneration: status.activeHandoffGeneration!,
+        }),
+  };
+}
+
+async function currentControlAuthority(
+  runtime: RuntimeService,
+  sessionId: string,
+): Promise<ControlMutationAuthority> {
+  return controlAuthority(await runtime.getControlStatus(sessionId));
+}
 
 async function harness(
   engine: BrowserEngine = new PlaywrightBrowserEngine(),
@@ -279,6 +300,34 @@ afterEach(async () => {
 });
 
 describe("runtime integration", () => {
+  it("rejects stale browser-focus authority immediately before showing the owned browser", async () => {
+    let showCalls = 0;
+    const browserSession = readyBrowserSession("browser_show_authority");
+    browserSession.show = async () => {
+      showCalls += 1;
+    };
+    const { runtime } = await harness({ start: async () => browserSession });
+    const session = await runtime.startSession({
+      mode: "agent",
+      browser: { mode: "temporary" },
+    });
+    active.push({ runtime, id: session.id });
+    const authority = await currentControlAuthority(runtime, session.id);
+
+    await expect(
+      runtime.showBrowser(session.id, {
+        ...authority,
+        ownershipGeneration: authority.ownershipGeneration + 1,
+      }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+    expect(showCalls).toBe(0);
+
+    await expect(runtime.showBrowser(session.id, authority)).resolves.toBe(
+      true,
+    );
+    expect(showCalls).toBe(1);
+  });
+
   it("reports a terminal workspace session released while a newer session owns that workspace", async () => {
     const { runtime } = await harness({
       start: async (request) => readyBrowserSession(`browser_${request.mode}`),
@@ -527,7 +576,10 @@ describe("runtime integration", () => {
     const requested = await runtime.requestHuman(session.id, {
       reason: "Restart control-state qualification",
     });
-    const human = await runtime.takeHumanControl(session.id);
+    const human = await runtime.takeHumanControl(
+      session.id,
+      controlAuthority(requested),
+    );
     ownershipFence.clear(session.id);
 
     await expect(runtime.getControlStatus(session.id)).resolves.toMatchObject({
@@ -541,7 +593,10 @@ describe("runtime integration", () => {
     });
 
     ownershipFence.initialize(session.id, "human", human.generation);
-    const returned = await runtime.returnAgentControl(session.id);
+    const returned = await runtime.returnAgentControl(
+      session.id,
+      controlAuthority(human),
+    );
     ownershipFence.clear(session.id);
 
     await expect(runtime.getControlStatus(session.id)).resolves.toMatchObject({
@@ -809,8 +864,11 @@ describe("runtime integration", () => {
     await runtime.requestHuman(first.id, {
       reason: "Model a shared authentication change",
     });
-    await runtime.takeHumanControl(first.id);
-    await runtime.returnAgentControl(first.id);
+    const taken = await runtime.takeHumanControl(
+      first.id,
+      await currentControlAuthority(runtime, first.id),
+    );
+    await runtime.returnAgentControl(first.id, controlAuthority(taken));
 
     await expect(
       runtime.click(second.id, { target: staleTarget }),
@@ -1390,9 +1448,12 @@ describe("runtime integration", () => {
     active.push({ runtime, id: session.id });
 
     await runtime.requestHuman(session.id, { reason: "Smoke-test handoff" });
-    await runtime.takeHumanControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
     await browser.get(session.id).navigate(`${server.url}/result`);
-    await runtime.returnAgentControl(session.id);
+    await runtime.returnAgentControl(session.id, controlAuthority(taken));
 
     await expect(
       runtime.navigate(session.id, { url: `${server.url}/actions` }),
@@ -3659,8 +3720,11 @@ describe("runtime integration", () => {
       status: "awaiting_human",
       controller: null,
     });
-    await runtime.takeHumanControl(session.id);
-    await runtime.returnAgentControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
+    await runtime.returnAgentControl(session.id, controlAuthority(taken));
     inspection = await runtime.inspectBrowser(session.id);
     await expect(
       runtime.interact(session.id, {
@@ -4819,7 +4883,10 @@ describe("adversarial ownership races", () => {
 
     await inspectStarted.promise;
 
-    const takeover = runtime.takeHumanControl(session.id);
+    const takeover = runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
 
     await transitionStarted;
 
@@ -5147,11 +5214,16 @@ describe("adversarial ownership races", () => {
 
     await staleInspectStarted.promise;
 
-    const takeover = runtime.takeHumanControl(session.id);
+    const takeoverAuthority = await currentControlAuthority(
+      runtime,
+      session.id,
+    );
+    const takeover = runtime.takeHumanControl(session.id, takeoverAuthority);
 
-    // Queue the return behind takeover before the stale read is
-    // physically allowed to complete.
-    const returned = runtime.returnAgentControl(session.id);
+    // Return only with the exact generation established by takeover.
+    const returned = takeover.then((taken) =>
+      runtime.returnAgentControl(session.id, controlAuthority(taken)),
+    );
 
     await transitionStarted;
 
@@ -5446,7 +5518,10 @@ describe("adversarial ownership races", () => {
       id: session.id,
     });
 
-    await runtime.takeHumanControl(session.id);
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
 
     const groupBrowser = browser.get(session.id);
     const liveBrowser = physicalBrowser(browser, session.id);
@@ -5481,7 +5556,10 @@ describe("adversarial ownership races", () => {
       },
     });
 
-    const returning = runtime.returnAgentControl(session.id);
+    const returning = runtime.returnAgentControl(
+      session.id,
+      controlAuthority(taken),
+    );
 
     await invalidationStarted.promise;
 

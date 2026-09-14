@@ -314,10 +314,13 @@ export class CompanionRuntimeClient {
     );
   }
 
-  async showBrowserForSession(sessionId: string): Promise<boolean> {
+  async showBrowserForSession(
+    sessionId: string,
+    authority: ExactControlAuthority,
+  ): Promise<boolean> {
     return this.request<boolean>(
       `/sessions/${encodeURIComponent(sessionId)}/browser/show`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify(authority) },
     );
   }
 

@@ -618,7 +618,14 @@ async function execute(command) {
     try {
       humanControl = await runtimeRequest(
         `/sessions/${encodeURIComponent(task.roveSessionId)}/control/take`,
-        { method: "POST", body: "{}" },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ownershipGeneration: control.generation,
+            handoffId: control.activeHandoffId,
+            handoffGeneration: control.activeHandoffGeneration,
+          }),
+        },
       );
     } catch (error) {
       throw new Error(
@@ -688,7 +695,11 @@ async function execute(command) {
       );
     }
     if (command.returnBeforeRestart === true)
-      await runtime.returnControlForSession(task.roveSessionId);
+      await runtime.returnControlForSession(task.roveSessionId, {
+        ownershipGeneration: humanControl.generation,
+        handoffId: humanControl.activeHandoffId,
+        handoffGeneration: humanControl.activeHandoffGeneration,
+      });
     return { beforeHandoff, control, humanControl };
   }
   if (command.type === "handoff.status") {

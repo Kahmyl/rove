@@ -597,7 +597,7 @@ function registerIpc(
       await codexExecutionCore.resolveTaskRuntimeControl(taskId);
     if (authority.sessionId !== sessionId)
       throw new Error("Browser attachment returned mismatched task authority.");
-    const shown = await runtime.showBrowserForSession(sessionId);
+    const shown = await runtime.showBrowserForSession(sessionId, authority);
     if (shown) {
       closeFullSurface();
       await browserFollowController?.reconcileNow();
