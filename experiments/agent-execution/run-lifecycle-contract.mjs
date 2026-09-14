@@ -1091,16 +1091,16 @@ semantic(
   (value) => {
     check(
       value.phase,
-      "cleanup_required",
-      "missing persisted session requires cleanup",
+      "ready",
+      "missing detached session does not block an open task",
     );
     check(
       value.nextCommand?.type ?? null,
       null,
-      "missing persisted session cannot relaunch",
+      "missing detached session does not relaunch implicitly",
     );
   },
-  "missing persisted named session",
+  "missing detached session",
 );
 
 for (const mutator of [
@@ -1624,7 +1624,7 @@ const namedRecovery = inputFor({
   },
 });
 const namedDone = converge(namedRecovery, (value) => value.phase === "ready");
-check(namedDone.steps, 1, "named relaunch converges once");
+check(namedDone.steps, 0, "detached browser does not block task readiness");
 transitionSequences += 1;
 
 const archivedNotLoaded = inputFor({
@@ -1663,14 +1663,15 @@ const temporaryRetry = inputFor({
     },
   },
 });
-const temporaryDone = converge(
-  temporaryRetry,
-  (value) => value.phase === "closed",
-);
+const temporaryDone = {
+  state: temporaryRetry,
+  output: reduceTaskLifecycle(temporaryRetry),
+  steps: 0,
+};
 check(
-  temporaryDone.steps <= 5,
-  true,
-  "Temporary conservative cleanup is bounded",
+  temporaryDone.output.phase,
+  "ready",
+  "Detached temporary browser does not create task cleanup work",
 );
 check(
   temporaryDone.state.record.identity.browser.mode,

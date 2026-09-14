@@ -1011,7 +1011,7 @@ function validateInput(input) {
       "Codex thread source does not match the durable association.",
     );
   if (
-    input.record?.bootstrap.stage === "runtime_dispatching" &&
+    input.record?.bootstrap.stage === "intent_persisted" &&
     input.runtime.sessionExists
   )
     throw new Error("Runtime receipt exists before durable dispatch intent.");

@@ -131,8 +131,8 @@
       "patch": { "codex": { "availability": "unavailable" } },
       "expected": {
         "phase": "recovering",
-        "commandType": "read_lifecycle_truth",
-        "confirmationType": "lifecycle_truth"
+        "commandType": "read_codex_thread",
+        "confirmationType": "codex_thread_truth"
       }
     },
     {
@@ -145,7 +145,7 @@
         }
       },
       "expected": {
-        "phase": "cleanup_required",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null
       }
@@ -160,9 +160,9 @@
         }
       },
       "expected": {
-        "phase": "recovering",
-        "commandType": "relaunch_named_browser",
-        "confirmationType": "runtime_session_attached"
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
       }
     },
     {
@@ -177,7 +177,7 @@
         }
       },
       "expected": {
-        "phase": "cleanup_required",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null
       }
@@ -186,7 +186,7 @@
       "name": "runtime-attachment-conflict",
       "patch": { "runtime": { "attachment": "conflicting" } },
       "expected": {
-        "phase": "cleanup_required",
+        "phase": "ready",
         "commandType": null,
         "confirmationType": null
       }
@@ -414,9 +414,9 @@
         }
       },
       "expected": {
-        "phase": "closing",
-        "commandType": "persist_close_intent",
-        "confirmationType": "durable_close_intent"
+        "phase": "ready",
+        "commandType": null,
+        "confirmationType": null
       }
     },
     {

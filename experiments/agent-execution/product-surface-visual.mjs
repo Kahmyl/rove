@@ -1492,8 +1492,12 @@ async function assertUiTruthCase(page, item) {
         "B01 task remains usable without browser",
       );
       await requireVisible(
-        page.getByText("None", { exact: true }),
-        "B01 no browser controller",
+        page.getByText("No browser attached", { exact: true }),
+        "B01 explicit browser absence",
+      );
+      await requireAbsent(
+        page.getByText("Guest", { exact: true }),
+        "B01 must not project a detached browser identity",
       );
       await requireAbsent(
         page.getByText("The task failed.", { exact: true }),
@@ -1656,8 +1660,14 @@ async function assertUiTruthCase(page, item) {
           .getByRole("button", { name: "Export local backup…" })
           .click();
         await requireVisible(
-          page.getByText("The backup export was cancelled.", { exact: true }),
-          "D02 truthful export cancellation",
+          page.getByText("Backup export cancelled. No backup was created.", {
+            exact: true,
+          }),
+          "D02 neutral truthful export cancellation",
+        );
+        await requireAbsent(
+          page.getByRole("alert").filter({ hasText: /cancelled/i }),
+          "D02 customer cancellation must not use failure treatment",
         );
         await requireAbsent(
           page.getByText(/created with .* files/i),
@@ -2224,8 +2234,7 @@ try {
           selectBrowserWorkspace: async () => snapshot.workspaces,
           exportLocalBackup: async () => {
             window.__roveCalls.push({ type: "exportLocalBackup" });
-            if (backupOutcome === "cancel")
-              throw new Error("The backup export was cancelled.");
+            if (backupOutcome === "cancel") return { status: "cancelled" };
             return {
               status: "created",
               name: "rove-local-backup",
