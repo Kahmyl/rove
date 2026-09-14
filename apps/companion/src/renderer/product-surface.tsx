@@ -666,6 +666,25 @@ export function taskNeedsCustomerInput(
   );
 }
 
+export function taskHasUnresolvedAttention(
+  product: LocalProductSnapshot | null,
+  taskId: string,
+): boolean {
+  return (
+    product?.attention.some(
+      (entry) =>
+        entry.taskId === taskId &&
+        [
+          "pending",
+          "responding",
+          "awaiting_confirmation",
+          "resolution_unknown",
+          "stale",
+        ].includes(entry.status),
+    ) ?? false
+  );
+}
+
 export function browserIdentityLabel(
   desktop: DesktopSurfaceSnapshot | null,
   task: ProductTaskProjection | undefined,
@@ -1529,6 +1548,9 @@ export function ProductSurface({
   const [login, setLogin] = useState<LoginProjection | null>(null);
   const [codexRecoveryOpen, setCodexRecoveryOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [archivedPreviewTaskId, setArchivedPreviewTaskId] = useState<
+    string | null
+  >(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [workflowCreateName, setWorkflowCreateName] = useState<string | null>(
     null,
@@ -1702,9 +1724,15 @@ export function ProductSurface({
     setModel(entry.id);
     setEffort(compatibleReasoningEffort(entry, effort));
   };
+  const archivedPreviewTask = product?.tasks.find(
+    (entry) =>
+      entry.taskId === archivedPreviewTaskId &&
+      entry.conversation?.archived === true,
+  );
   const viewedTask = showNewTask
     ? undefined
-    : (product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
+    : (archivedPreviewTask ??
+      product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
       activeTask);
   const workflowWorkspace = workflowWorkspaceProjection(
     product,
@@ -1729,6 +1757,10 @@ export function ProductSurface({
     );
     previousCurrentTaskId.current = activeTask?.taskId ?? null;
   }, [activeTask?.taskId, product]);
+  useEffect(() => {
+    if (archivedPreviewTaskId && !archivedPreviewTask)
+      setArchivedPreviewTaskId(null);
+  }, [archivedPreviewTask, archivedPreviewTaskId]);
   useEffect(() => {
     if (selectedModel && !selectedModel.efforts.includes(effort))
       setEffort(selectedModel.defaultEffort);
@@ -4195,6 +4227,15 @@ export function ProductSurface({
               </div>
             </section>
           ))}
+          {viewedTask?.conversation?.archived === true && (
+            <section className="product-warning archived-task-notice">
+              <strong>Archived task</strong>
+              <span>
+                This conversation is preserved locally. Restore it to return it
+                to normal Task History.
+              </span>
+            </section>
+          )}
           {viewedTask?.attachments?.some(
             (attachment) => attachment.status === "unavailable",
           ) && (
@@ -5880,6 +5921,7 @@ export function ProductSurface({
               setSelectedWorkflowId("");
               setShareWorkflowContext("");
               setSelectedTaskId(null);
+              setArchivedPreviewTaskId(null);
               setShowNewTask(true);
             }}
           >
@@ -5913,6 +5955,7 @@ export function ProductSurface({
                   setWorkflowWorkspaceSection("home");
                   setSelectedWorkflowOutputId(null);
                   setSelectedTaskId(null);
+                  setArchivedPreviewTaskId(null);
                   setShowNewTask(false);
                 }}
               >
@@ -5967,6 +6010,7 @@ export function ProductSurface({
                       setSelectedWorkflowWorkspaceId(null);
                       setSelectedWorkflowOutputId(null);
                       setSelectedTaskId(entry.taskId);
+                      setArchivedPreviewTaskId(null);
                       setShowNewTask(false);
                     }}
                   >
@@ -6010,11 +6054,33 @@ export function ProductSurface({
                 <span>Archived tasks</span>
               </div>
               {archivedProductTasks(product).map((entry) => (
-                <div className="task-history-row" key={entry.taskId}>
-                  <div className="task-history-select">
+                <div
+                  className="task-history-row"
+                  key={entry.taskId}
+                  data-needs-input={
+                    taskHasUnresolvedAttention(product, entry.taskId)
+                      ? "true"
+                      : undefined
+                  }
+                >
+                  <button
+                    className="task-history-select"
+                    type="button"
+                    aria-label={`Read archived task: ${entry.taskId}`}
+                    onClick={() => {
+                      setArchivedPreviewTaskId(entry.taskId);
+                      setSelectedWorkflowWorkspaceId(null);
+                      setSelectedWorkflowOutputId(null);
+                      setShowNewTask(false);
+                    }}
+                  >
                     <strong>{displayTaskTitle(entry)}</strong>
-                    <span>Preserved locally</span>
-                  </div>
+                    <span>
+                      {taskHasUnresolvedAttention(product, entry.taskId)
+                        ? "Needs attention · Preserved locally"
+                        : "Preserved locally"}
+                    </span>
+                  </button>
                   <button
                     className="task-history-restore"
                     type="button"

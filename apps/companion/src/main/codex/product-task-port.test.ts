@@ -289,6 +289,60 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     store.close();
   });
 
+  it("replays exact local organization receipts and rejects conflicting operation reuse", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-history-operation-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store);
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const archiveOperationId = "intent_b2345678-1234-4123-8123-123456789abc";
+
+    expect(
+      await port.submit({
+        type: "archive",
+        taskId: seededTaskId,
+        operationId: archiveOperationId,
+      }),
+    ).toMatchObject({ duplicate: false });
+    await port.submit({
+      type: "unarchive",
+      taskId: seededTaskId,
+      operationId: "intent_c2345678-1234-4123-8123-123456789abc",
+    });
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    const restartedPort = new LedgerProductTaskPort({
+      engine: new TaskEngine(reopened),
+      store: reopened,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    expect(
+      await restartedPort.submit({
+        type: "archive",
+        taskId: seededTaskId,
+        operationId: archiveOperationId,
+      }),
+    ).toMatchObject({ duplicate: true });
+    expect(reopened.taskHistoryArchived(seededTaskId)).toBe(false);
+    await expect(
+      restartedPort.submit({
+        type: "unarchive",
+        taskId: seededTaskId,
+        operationId: archiveOperationId,
+      }),
+    ).rejects.toThrow(
+      "Task history operation identity was reused with different content",
+    );
+    expect(reopened.taskHistoryArchived(seededTaskId)).toBe(false);
+    reopened.close();
+  });
+
   it("archives locally while resource cleanup is still converging", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-history-cleanup-"));
     roots.push(root);
@@ -741,7 +795,10 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       store: {
         aggregate: vi.fn(async () => aggregate),
         taskHistoryArchived: vi.fn(() => true),
-        setTaskHistoryArchived: vi.fn(),
+        applyTaskHistoryPreference: vi.fn(() => ({
+          duplicate: false,
+          archived: false,
+        })),
       } as never,
       worker: { signal, cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
@@ -764,13 +821,18 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       throw new Error("execution acceptance must not be consulted");
     });
     const cancelTask = vi.fn();
-    const setTaskHistoryArchived = vi.fn();
+    const applyTaskHistoryPreference = vi.fn(
+      (input: { archived: boolean }) => ({
+        duplicate: false,
+        archived: input.archived,
+      }),
+    );
     const port = new LedgerProductTaskPort({
       engine: { accept } as never,
       store: {
         aggregate: vi.fn(async () => aggregate),
         taskHistoryArchived: vi.fn(() => false),
-        setTaskHistoryArchived,
+        applyTaskHistoryPreference,
       } as never,
       worker: { signal: vi.fn(), cancelTask } as never,
       now: () => "2026-09-09T12:00:00.000Z",
@@ -789,8 +851,14 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
 
     expect(cancelTask).not.toHaveBeenCalled();
     expect(accept).not.toHaveBeenCalled();
-    expect(setTaskHistoryArchived).toHaveBeenNthCalledWith(1, taskId, false);
-    expect(setTaskHistoryArchived).toHaveBeenNthCalledWith(2, taskId, true);
+    expect(applyTaskHistoryPreference).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ taskId, archived: false }),
+    );
+    expect(applyTaskHistoryPreference).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ taskId, archived: true }),
+    );
   });
 
   it("freezes a host-owned per-task cwd and ignores the caller cwd", async () => {

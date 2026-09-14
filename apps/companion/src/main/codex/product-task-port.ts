@@ -90,8 +90,13 @@ export interface ProductTaskPort {
 export interface LedgerProductTaskPortOptions {
   engine: TaskEngine;
   store: TaskEngineStore & {
-    setTaskHistoryArchived?(taskId: string, archived: boolean): void;
+    initializeTaskHistoryPreference?(taskId: string): void;
     taskHistoryArchived?(taskId: string): boolean | undefined;
+    applyTaskHistoryPreference?(input: {
+      taskId: string;
+      operationId: string;
+      archived: boolean;
+    }): { duplicate: boolean; archived: boolean };
   };
   worker: Pick<TaskEngineWorker, "signal" | "cancelTask">;
   taskWorkspaceRoot?: string;
@@ -157,13 +162,15 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       const aggregate = await this.options.store.aggregate(intent.taskId);
       if (!aggregate)
         throw new Error("Task history preference targets an unknown task.");
-      if (!this.options.store.setTaskHistoryArchived)
-        throw new Error("Task history preference storage is unavailable.");
+      if (!this.options.store.applyTaskHistoryPreference)
+        throw new Error("Task history operation storage is unavailable.");
       await this.options.onCut?.("before_event_commit", intent);
       const archived = intent.type === "archive";
-      const duplicate =
-        this.options.store.taskHistoryArchived?.(intent.taskId) === archived;
-      this.options.store.setTaskHistoryArchived(intent.taskId, archived);
+      const receipt = this.options.store.applyTaskHistoryPreference({
+        taskId: intent.taskId,
+        operationId: intent.operationId,
+        archived,
+      });
       await this.options.onCut?.("after_commit_before_claim", intent);
       const projection = {
         ...projectTaskAggregate(aggregate),
@@ -179,7 +186,12 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       this.revision += 1;
       for (const listener of this.listeners) listener(this.revision);
       await this.options.onPublished?.();
-      return { duplicate, aggregate, projection, command: null };
+      return {
+        duplicate: receipt.duplicate,
+        aggregate,
+        projection,
+        command: null,
+      };
     }
     if (launchWorkspace)
       await mkdir(launchWorkspace, { recursive: true, mode: 0o700 });
@@ -323,7 +335,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       accepted.projection.operationDisposition?.status !== "rejected" &&
       this.options.store.taskHistoryArchived?.(taskId) === undefined
     )
-      this.options.store.setTaskHistoryArchived?.(taskId, false);
+      this.options.store.initializeTaskHistoryPreference?.(taskId);
     if (
       accepted.command === null &&
       !accepted.duplicate &&

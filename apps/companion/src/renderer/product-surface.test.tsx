@@ -123,6 +123,21 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         availableActions: ["message", "resume"],
       },
     ];
+    value.product!.attention = [
+      {
+        authority: "codex",
+        kind: "network_approval",
+        requestId: "request_archived_uncertain_effect",
+        taskId: "task_archived_ready",
+        threadId: "thread_archived",
+        turnId: "turn_archived",
+        itemId: "item_archived_effect",
+        generation: 1,
+        status: "resolution_unknown",
+        sequence: 1,
+        title: "Confirm the uncertain external action",
+      },
+    ];
     delete value.product!.currentTaskId;
 
     const html = renderToStaticMarkup(
@@ -135,6 +150,10 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
 
     expect(html).toContain("Archived tasks");
+    expect(html).toContain("Needs attention · Preserved locally");
+    expect(html).toContain(
+      'aria-label="Read archived task: task_archived_ready"',
+    );
     expect(html).toContain(">Restore</button>");
     expect(html).not.toContain(
       'aria-label="Task history: task_archived_ready"',

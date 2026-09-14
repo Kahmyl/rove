@@ -264,6 +264,14 @@ export class SqliteTaskEngineStore
         updated_at TEXT NOT NULL,
         FOREIGN KEY(task_id) REFERENCES task_engine_aggregate(task_id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS task_history_operation (
+        operation_id TEXT PRIMARY KEY,
+        request_digest TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        archived INTEGER NOT NULL CHECK (archived IN (0, 1)),
+        accepted_at TEXT NOT NULL,
+        FOREIGN KEY(task_id) REFERENCES task_engine_aggregate(task_id) ON DELETE CASCADE
+      );
       CREATE TABLE IF NOT EXISTS task_engine_event (
         task_id TEXT NOT NULL,
         event_id TEXT NOT NULL,
@@ -1169,16 +1177,65 @@ export class SqliteTaskEngineStore
     return row.integer_value;
   }
 
-  setTaskHistoryArchived(taskId: string, archived: boolean): void {
+  initializeTaskHistoryPreference(taskId: string): void {
     this.db
       .prepare(
-        `INSERT INTO task_history_preference(task_id, archived, updated_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(task_id) DO UPDATE SET
-           archived = excluded.archived,
-           updated_at = excluded.updated_at`,
+        `INSERT OR IGNORE INTO task_history_preference(
+           task_id, archived, updated_at
+         ) VALUES (?, 0, ?)`,
       )
-      .run(taskId, archived ? 1 : 0, this.now());
+      .run(taskId, this.now());
+  }
+
+  applyTaskHistoryPreference(input: {
+    taskId: string;
+    operationId: string;
+    archived: boolean;
+  }): { duplicate: boolean; archived: boolean } {
+    const requestDigest = createHash("sha256")
+      .update(json({ taskId: input.taskId, archived: input.archived }))
+      .digest("hex");
+    const apply = this.db.transaction(() => {
+      const prior = this.db
+        .prepare(
+          `SELECT request_digest, archived
+           FROM task_history_operation WHERE operation_id = ?`,
+        )
+        .get(input.operationId) as
+        { request_digest: string; archived: number } | undefined;
+      if (prior) {
+        if (prior.request_digest !== requestDigest)
+          throw new Error(
+            "Task history operation identity was reused with different content.",
+          );
+        return { duplicate: true, archived: prior.archived === 1 };
+      }
+      const acceptedAt = this.now();
+      this.db
+        .prepare(
+          `INSERT INTO task_history_preference(task_id, archived, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(task_id) DO UPDATE SET
+             archived = excluded.archived,
+             updated_at = excluded.updated_at`,
+        )
+        .run(input.taskId, input.archived ? 1 : 0, acceptedAt);
+      this.db
+        .prepare(
+          `INSERT INTO task_history_operation(
+             operation_id, request_digest, task_id, archived, accepted_at
+           ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.taskId,
+          input.archived ? 1 : 0,
+          acceptedAt,
+        );
+      return { duplicate: false, archived: input.archived };
+    });
+    return apply.immediate();
   }
 
   taskHistoryArchived(taskId: string): boolean | undefined {
