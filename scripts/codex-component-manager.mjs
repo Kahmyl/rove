@@ -2,15 +2,17 @@
 
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import process from "node:process";
 
 import {
   componentPaths,
   componentManifestPath,
+  createQualificationReceipt,
   defaultManagedCodexRoot,
   inspectExternalCandidate,
   installQualifiedComponent,
+  qualificationEvidencePath,
   readComponentManifest,
   repositoryRoot,
   selectedComponent,
@@ -18,6 +20,7 @@ import {
   readCompiledSchemaBindings,
   verifyComponentDirectory,
   verifyCompiledSchemaBinding,
+  verifyPromotableComponentSet,
   writeComponentManifestAtomically,
 } from "./codex-component-lib.mjs";
 
@@ -81,17 +84,13 @@ if (command === "inspect") {
     ["experiments/agent-execution/live-app-server.mjs", "--mcp-boundary"],
     { ROVE_CODEX_EXECUTABLE: resolve(source) },
   );
-  const evidenceRoot = join(
-    repositoryRoot,
-    "artifacts",
-    "codex-component-qualification",
-    component.id,
-  );
+  const evidencePath = qualificationEvidencePath(component);
+  const evidenceRoot = dirname(evidencePath);
   await mkdir(evidenceRoot, { recursive: true });
-  const evidencePath = join(evidenceRoot, "qualification.json");
   await writeFile(
     evidencePath,
-    `${JSON.stringify({ qualifiedAt: new Date().toISOString(), componentId: component.id, candidate, schema: component.schema, isolatedAppServerLifecycle: true, liveModelTurn: false }, null, 2)}\n`,
+    `${JSON.stringify(createQualificationReceipt(component, candidate, new Date().toISOString()), null, 2)}\n`,
+    { mode: 0o600 },
   );
   process.stdout.write(
     `Qualified ${component.id}. Evidence: ${evidencePath}\n`,
@@ -120,11 +119,7 @@ if (command === "inspect") {
     throw new Error(
       `Qualified Codex component ${componentId} is not registered.`,
     );
-  await verifyCompiledSchemaBinding(promotionComponent, schemaBindings);
-  await verifyComponentDirectory(
-    componentPaths(defaultManagedCodexRoot(), promotionComponent).directory,
-    promotionComponent,
-  );
+  await verifyPromotableComponentSet(manifest, schemaBindings);
   const promoted = promoteComponentSelection(
     manifest,
     componentId,

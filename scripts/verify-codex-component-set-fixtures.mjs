@@ -15,6 +15,8 @@ import process from "node:process";
 import {
   componentPaths,
   compiledSchemaBinding,
+  createQualificationReceipt,
+  inspectExternalCandidate,
   installQualifiedComponent,
   promoteComponentSelection,
   readCompiledSchemaBindings,
@@ -24,6 +26,8 @@ import {
   sha256,
   verifyCompiledSchemaBinding,
   verifyComponentDirectory,
+  verifyPromotableComponentSet,
+  verifyQualificationReceipt,
   writeComponentManifestAtomically,
 } from "./codex-component-lib.mjs";
 import {
@@ -61,10 +65,17 @@ try {
 
   const manifestPath = join(root, "approved-components.json");
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const durabilitySteps = [];
   await writeComponentManifestAtomically(
     manifestPath,
     promoteComponentSelection(manifest, retained.id, schemaBindings),
+    { onDurabilityStep: (step) => durabilitySteps.push(step) },
   );
+  assert.deepEqual(durabilitySteps, [
+    "temporary-synced",
+    "renamed",
+    "parent-synced",
+  ]);
   const rolledBackManifest = await readComponentManifest(manifestPath);
   assert.equal(
     selectedComponent(rolledBackManifest).id,
@@ -123,7 +134,7 @@ try {
   const helper = join(sourceRoot, "codex-code-mode-host");
   const schemaFilename = "fixture.schemas.generated.json";
   const schemaPath = join(schemaRoot, schemaFilename);
-  const schemaContents = `${JSON.stringify({ generatedBy: "Codex App Server generate-ts 9.8.7-qualified --experimental", roots: {}, $defs: {} }, null, 2)}\n`;
+  const schemaContents = `${JSON.stringify({ generatedBy: "Codex App Server generate-ts 9.8.7-qualified --experimental", generatedTsAggregateSha256: "fixture-generated-ts", roots: {}, $defs: {} }, null, 2)}\n`;
   await Promise.all([
     writeFile(executable, "#!/bin/sh\necho 'codex-cli 9.8.7-qualified'\n"),
     writeFile(helper, "#!/bin/sh\necho 'Usage: codex-code-mode-host'\n"),
@@ -160,7 +171,9 @@ try {
     schema: {
       filename: schemaFilename,
       sha256: await sha256(schemaPath),
+      compiledRuntimeSha256: await sha256(schemaPath),
       aggregateSha256: "fixture-aggregate",
+      generatedTsAggregateSha256: "fixture-generated-ts",
     },
     qualification: {
       isolatedAppServerLifecycle: true,
@@ -193,18 +206,192 @@ try {
         executable: { ...component.executable, sha256: "unapproved" },
       },
       managedRoot,
+      join(root, "missing-qualification.json"),
     ),
-    /does not match qualified component/,
+    /does not match qualified component|qualification receipt is unavailable/,
+  );
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      managedRoot,
+      join(root, "missing-qualification.json"),
+    ),
+    /qualification receipt is unavailable/,
   );
 
-  await installQualifiedComponent(executable, component, managedRoot);
+  const receiptPath = join(root, "qualification.json");
+  const receipt = createQualificationReceipt(
+    component,
+    await inspectExternalCandidate(executable),
+    "2026-09-14T00:00:00.000Z",
+  );
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  await verifyQualificationReceipt(receiptPath, component);
+  const mismatchedReceiptPath = join(root, "mismatched-qualification.json");
+  await writeFile(
+    mismatchedReceiptPath,
+    `${JSON.stringify({ ...receipt, schema: { ...receipt.schema, sha256: "wrong" } }, null, 2)}\n`,
+  );
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      managedRoot,
+      mismatchedReceiptPath,
+    ),
+    /qualification receipt does not match/,
+  );
+
+  await installQualifiedComponent(
+    executable,
+    component,
+    managedRoot,
+    receiptPath,
+  );
+  const installedReceiptBefore = await readFile(
+    componentPaths(managedRoot, component).receipt,
+    "utf8",
+  );
+  await installQualifiedComponent(
+    executable,
+    component,
+    managedRoot,
+    receiptPath,
+  );
+  assert.equal(
+    await readFile(componentPaths(managedRoot, component).receipt, "utf8"),
+    installedReceiptBefore,
+    "An exact immutable install must be idempotent.",
+  );
+
+  const conflictRoot = join(root, "managed-conflict");
+  const conflict = componentPaths(conflictRoot, component);
+  await mkdir(conflict.directory, { recursive: true });
+  await writeFile(join(conflict.directory, "sentinel"), "preserve me");
+  await assert.rejects(
+    installQualifiedComponent(executable, component, conflictRoot, receiptPath),
+    /already exists but conflicts/,
+  );
+  assert.equal(
+    await readFile(join(conflict.directory, "sentinel"), "utf8"),
+    "preserve me",
+  );
+
+  const renameFailureRoot = join(root, "managed-rename-failure");
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      renameFailureRoot,
+      receiptPath,
+      {
+        renameDirectory: async () => {
+          throw new Error("injected rename failure");
+        },
+      },
+    ),
+    /injected rename failure/,
+  );
+  await assert.rejects(
+    stat(componentPaths(renameFailureRoot, component).directory),
+  );
+  await assert.rejects(
+    stat(
+      `${componentPaths(renameFailureRoot, component).directory}.installing-${process.pid}`,
+    ),
+  );
+
+  const retainedSchemaFilename = "retained-fixture.schemas.generated.json";
+  const retainedSchemaPath = join(schemaRoot, retainedSchemaFilename);
+  await writeFile(retainedSchemaPath, schemaContents);
+  const retainedComponent = {
+    ...component,
+    id: "codex-fixture-retained-qualified",
+    status: "retained-qualified",
+    schema: { ...component.schema, filename: retainedSchemaFilename },
+  };
+  fixtureBindings.bindings.push({
+    componentId: retainedComponent.id,
+    ...retainedComponent.schema,
+    historyMode: retainedComponent.historyMode,
+  });
+  const retainedReceiptPath = join(root, "retained-qualification.json");
+  await writeFile(
+    retainedReceiptPath,
+    `${JSON.stringify(createQualificationReceipt(retainedComponent, await inspectExternalCandidate(executable), "2026-09-13T00:00:00.000Z"), null, 2)}\n`,
+  );
+  await installQualifiedComponent(
+    executable,
+    retainedComponent,
+    managedRoot,
+    retainedReceiptPath,
+  );
   const fixtureManifestPath = join(root, "fixture-approved-components.json");
   const fixtureManifest = {
     schemaVersion: 2,
     component: "codex-app-server",
     selection: "not-selected",
-    components: [component],
+    components: [component, retainedComponent],
   };
+  await verifyPromotableComponentSet(
+    fixtureManifest,
+    fixtureBindings,
+    managedRoot,
+    schemaRoot,
+  );
+  const retainedInstalled = componentPaths(managedRoot, retainedComponent);
+  const retainedReceipt = await readFile(retainedInstalled.receipt, "utf8");
+  await writeFile(
+    retainedInstalled.receipt,
+    `${JSON.stringify({ ...JSON.parse(retainedReceipt), compatibility: { ...JSON.parse(retainedReceipt).compatibility, mcpBoundary: false } }, null, 2)}\n`,
+  );
+  await assert.rejects(
+    verifyPromotableComponentSet(
+      fixtureManifest,
+      fixtureBindings,
+      managedRoot,
+      schemaRoot,
+    ),
+    /qualification receipt does not match/,
+  );
+  await writeFile(retainedInstalled.receipt, retainedReceipt);
+  const retainedHelperBytes = await readFile(retainedInstalled.codeModeHost);
+  await writeFile(retainedInstalled.codeModeHost, "tampered retained helper");
+  await assert.rejects(
+    verifyPromotableComponentSet(
+      fixtureManifest,
+      fixtureBindings,
+      managedRoot,
+      schemaRoot,
+    ),
+    /size does not match|digest does not match/,
+  );
+  await writeFile(retainedInstalled.codeModeHost, retainedHelperBytes);
+  await chmod(retainedInstalled.codeModeHost, 0o755);
+  await rm(retainedInstalled.executable);
+  await assert.rejects(
+    verifyPromotableComponentSet(
+      fixtureManifest,
+      fixtureBindings,
+      managedRoot,
+      schemaRoot,
+    ),
+    /executable is unavailable/,
+  );
+  await writeFile(retainedInstalled.executable, executableBytes);
+  await chmod(retainedInstalled.executable, 0o755);
+  await rm(retainedSchemaPath);
+  await assert.rejects(
+    verifyPromotableComponentSet(
+      fixtureManifest,
+      fixtureBindings,
+      managedRoot,
+      schemaRoot,
+    ),
+    /schema is unavailable/,
+  );
+  await writeFile(retainedSchemaPath, schemaContents);
   await writeFile(
     fixtureManifestPath,
     `${JSON.stringify(fixtureManifest, null, 2)}\n`,
