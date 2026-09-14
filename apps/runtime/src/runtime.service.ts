@@ -13,6 +13,7 @@ import {
   type ActionResult,
   type ClickRequest,
   type ControlStatus,
+  type ControlMutationAuthority,
   type ControlWaitRequest,
   type ControlWaitResult,
   type Evidence,
@@ -2986,22 +2987,33 @@ export class RuntimeService implements RoveRuntime {
     );
   }
 
-  async takeHumanControl(sessionId: string): Promise<ControlStatus> {
+  async takeHumanControl(
+    sessionId: string,
+    authority?: ControlMutationAuthority,
+  ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
-      this.ownershipTransitions.takeHuman(sessionId),
+      this.ownershipTransitions.takeHuman(sessionId, authority),
     );
   }
 
-  async pauseAgentControl(sessionId: string): Promise<ControlStatus> {
+  async pauseAgentControl(
+    sessionId: string,
+    authority?: ControlMutationAuthority,
+  ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
-      this.ownershipTransitions.pauseAgent(sessionId),
+      this.ownershipTransitions.pauseAgent(sessionId, authority),
     );
   }
 
-  async returnAgentControl(sessionId: string): Promise<ControlStatus> {
+  async returnAgentControl(
+    sessionId: string,
+    authority?: ControlMutationAuthority,
+  ): Promise<ControlStatus> {
     return this.coordinator.execute(sessionId, () =>
-      this.ownershipTransitions.returnAgent(sessionId, () =>
-        this.flushHumanActivity(sessionId),
+      this.ownershipTransitions.returnAgent(
+        sessionId,
+        () => this.flushHumanActivity(sessionId),
+        authority,
       ),
     );
   }

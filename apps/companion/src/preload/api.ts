@@ -75,19 +75,23 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
         companionIpcChannels.followerPresentation,
       ) as Promise<FollowerPresentationMode>,
 
-    takeControl: () =>
+    takeControl: (taskId, handoffGeneration) =>
       ipc.invoke(
         companionIpcChannels.takeControl,
+        taskId,
+        handoffGeneration,
       ) as Promise<CompanionSnapshot | null>,
 
-    returnControl: () =>
+    returnControl: (taskId) =>
       ipc.invoke(
         companionIpcChannels.returnControl,
+        taskId,
       ) as Promise<CompanionSnapshot | null>,
 
-    pauseSession: () =>
+    pauseSession: (taskId) =>
       ipc.invoke(
         companionIpcChannels.pauseSession,
+        taskId,
       ) as Promise<CompanionSnapshot | null>,
 
     finishSession: (sessionId) =>

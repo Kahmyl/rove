@@ -260,6 +260,46 @@ describe("OwnershipTransitionService", () => {
     ).toBe(10);
   });
 
+  it("rejects stale or mismatched control identities before mutating the owned browser", async () => {
+    const test = harness(makeSession({ ownershipGeneration: 7 }));
+    const awaiting = await test.service.requestHuman("ses_test", "Sign in");
+    const authority = {
+      ownershipGeneration: awaiting.generation,
+      handoffId: awaiting.activeHandoffId!,
+      handoffGeneration: awaiting.activeHandoffGeneration!,
+    };
+
+    await expect(
+      test.service.takeHuman("ses_test", {
+        ...authority,
+        handoffGeneration: authority.handoffGeneration + 1,
+      }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+    await expect(
+      test.service.takeHuman("ses_test", {
+        ...authority,
+        handoffId: `handoff_${"f".repeat(32)}`,
+      }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+    await expect(
+      test.service.takeHuman("ses_test", {
+        ...authority,
+        ownershipGeneration: authority.ownershipGeneration - 1,
+      }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+
+    expect(test.beginHumanControl).not.toHaveBeenCalled();
+    expect(test.update).toHaveBeenCalledTimes(1);
+
+    await expect(
+      test.service.takeHuman("ses_test", authority),
+    ).resolves.toMatchObject({
+      controller: "human",
+      activeHandoffId: authority.handoffId,
+    });
+    expect(test.beginHumanControl).toHaveBeenCalledTimes(1);
+  });
+
   it("routes automatic F2 handoff through the same awaiting-human transition and remains idempotent", async () => {
     const test = harness(makeSession());
 

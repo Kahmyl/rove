@@ -1495,7 +1495,12 @@ export function ProductSurface({
   refresh,
 }: ProductSurfaceProps) {
   const product = desktop?.product ?? null;
-  const activeTask = activeProductTask(product);
+  const currentTask = activeProductTask(product);
+  const activeTask = follower
+    ? (product?.tasks.find(
+        (task) => task.roveSessionId === desktop?.companion?.session.id,
+      ) ?? currentTask)
+    : currentTask;
   const unmatchedSession = unmatchedRuntimeSession(desktop);
   const legacyView = toCompanionViewModel(
     desktop?.companion ?? null,
@@ -1840,6 +1845,11 @@ export function ProductSurface({
   const browserHandoff = taskAttention.find(
     (entry) => entry.authority === "rove_control",
   );
+  const viewedCompanion =
+    viewedTask?.roveSessionId !== undefined &&
+    desktop?.companion?.session.id === viewedTask.roveSessionId
+      ? desktop.companion
+      : null;
   const fileAttention = product?.fileAttention ?? [];
   const awaitingExplicitResponse = taskAttention.some(
     (entry) =>
@@ -2330,6 +2340,17 @@ export function ProductSurface({
         operationId: `intent_${crypto.randomUUID()}`,
       }),
     );
+  };
+  const takeControl = async (task: ProductTaskProjection | undefined) => {
+    if (!task) return;
+    const handoffGeneration = activeAttention.find(
+      (entry) =>
+        entry.taskId === task.taskId &&
+        entry.authority === "rove_control" &&
+        entry.kind === "control_handoff" &&
+        entry.status === "pending",
+    )?.generation;
+    await run(() => window.rove.takeControl(task.taskId, handoffGeneration));
   };
   const stopTask = async () => {
     if (!viewedTask) return;
@@ -2932,7 +2953,7 @@ export function ProductSurface({
         </div>
         <div className="expanded-actions">
           {activeTaskControl.canTakeControl && (
-            <button onClick={() => void run(window.rove.takeControl)}>
+            <button onClick={() => void takeControl(activeTask)}>
               Take Over
             </button>
           )}
@@ -6199,11 +6220,11 @@ export function ProductSurface({
                 <span className="inspector-section-title">Activity</span>
                 <div className="browser-metrics">
                   <div>
-                    <strong>{desktop?.companion?.observationCount ?? 0}</strong>
+                    <strong>{viewedCompanion?.observationCount ?? 0}</strong>
                     <small>Observations</small>
                   </div>
                   <div>
-                    <strong>{desktop?.companion?.evidenceCount ?? 0}</strong>
+                    <strong>{viewedCompanion?.evidenceCount ?? 0}</strong>
                     <small>Evidence</small>
                   </div>
                 </div>
@@ -6216,7 +6237,7 @@ export function ProductSurface({
                     void run(() => window.rove.showBrowser(viewedTask.taskId))
                   }
                 >
-                  {desktop?.companion?.browserOpen
+                  {viewedCompanion?.browserOpen
                     ? "View Browser"
                     : "Open Browser"}
                 </button>
@@ -6224,7 +6245,7 @@ export function ProductSurface({
                   <button
                     className="primary"
                     disabled={busy}
-                    onClick={() => void run(window.rove.takeControl)}
+                    onClick={() => void takeControl(viewedTask)}
                   >
                     Take Over
                   </button>

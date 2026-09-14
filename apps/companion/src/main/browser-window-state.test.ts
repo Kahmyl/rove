@@ -106,35 +106,10 @@ describe("CompanionRuntimeClient browser window state", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("asks Runtime to show the active managed browser without opening an external substitute", async () => {
+  it("asks Runtime to show only the supplied exact managed browser session", async () => {
     const fetchImpl = vi.fn(
       async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
-        if (
-          url.endsWith("/sessions?mode=companion") ||
-          url.endsWith("/sessions?mode=capture")
-        ) {
-          return new Response("[]", {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        }
-        if (url.endsWith("/sessions?mode=agent")) {
-          return new Response(
-            JSON.stringify([
-              {
-                id: "ses_show",
-                mode: "agent",
-                status: "active",
-                controller: "agent",
-                profile: { mode: "temporary" },
-                createdAt: "2026-09-12T00:00:00.000Z",
-                updatedAt: "2026-09-12T00:00:00.000Z",
-              },
-            ]),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
         expect(url).toContain("/sessions/ses_show/browser/show");
         expect(init?.method).toBe("POST");
         return new Response("true", {
@@ -148,6 +123,7 @@ describe("CompanionRuntimeClient browser window state", () => {
       fetchImpl,
     });
 
-    await expect(client.showBrowser()).resolves.toBe(true);
+    await expect(client.showBrowserForSession("ses_show")).resolves.toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

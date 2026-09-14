@@ -62,18 +62,24 @@ const api: RoveDesktopApi = {
       "rove:follower-presentation",
     ) as Promise<FollowerPresentationMode>,
 
-  takeControl: () =>
+  takeControl: (taskId, handoffGeneration) =>
     ipcRenderer.invoke(
       "rove:take-control",
+      taskId,
+      handoffGeneration,
     ) as Promise<CompanionSnapshot | null>,
 
-  returnControl: () =>
+  returnControl: (taskId) =>
     ipcRenderer.invoke(
       "rove:return-control",
+      taskId,
     ) as Promise<CompanionSnapshot | null>,
 
-  pauseSession: () =>
-    ipcRenderer.invoke("rove:pause") as Promise<CompanionSnapshot | null>,
+  pauseSession: (taskId) =>
+    ipcRenderer.invoke(
+      "rove:pause",
+      taskId,
+    ) as Promise<CompanionSnapshot | null>,
 
   finishSession: (sessionId) =>
     ipcRenderer.invoke(

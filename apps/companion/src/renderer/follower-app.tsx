@@ -37,6 +37,16 @@ export function FollowerApp({
 
   const session =
     desktop?.notice === null ? (desktop.companion?.session ?? null) : null;
+  const task = desktop?.product?.tasks.find(
+    (candidate) => candidate.roveSessionId === session?.id,
+  );
+  const handoffGeneration = desktop?.product?.attention.find(
+    (entry) =>
+      entry.taskId === task?.taskId &&
+      entry.authority === "rove_control" &&
+      entry.kind === "control_handoff" &&
+      entry.status === "pending",
+  )?.generation;
   const loading = desktop === null;
   const offline = connectionError !== null || operationError !== null;
   const presentation = followerPresentation(desktop);
@@ -83,9 +93,11 @@ export function FollowerApp({
 
     try {
       if (action === "take_control") {
-        await window.rove.takeControl();
+        if (!task) throw new Error("Browser control is not bound to a task.");
+        await window.rove.takeControl(task.taskId, handoffGeneration);
       } else {
-        await window.rove.returnControl();
+        if (!task) throw new Error("Browser control is not bound to a task.");
+        await window.rove.returnControl(task.taskId);
       }
 
       await refresh();
@@ -153,8 +165,18 @@ export function FollowerApp({
   const runSecondary = async (action: "pause" | "stop") => {
     setBusy(true);
     try {
-      if (action === "pause") await window.rove.pauseSession();
-      else await window.rove.finishSession();
+      if (action === "pause") {
+        if (!task) throw new Error("Browser control is not bound to a task.");
+        await window.rove.pauseSession(task.taskId);
+      } else if (task) {
+        await window.rove.executeProductIntent({
+          type: "task.stop",
+          taskId: task.taskId,
+          operationId: `intent_${crypto.randomUUID()}`,
+        });
+      } else if (session) {
+        await window.rove.finishSession(session.id);
+      }
       await refresh();
       setOperationError(null);
     } catch (cause) {

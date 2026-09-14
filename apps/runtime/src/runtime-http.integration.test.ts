@@ -687,7 +687,14 @@ describe("runtime HTTP API", () => {
     const taken = await json(
       baseUrl,
       `/sessions/${sessionId}/control/take`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ownershipGeneration: requested.body.generation,
+          handoffId: requested.body.activeHandoffId,
+          handoffGeneration: requested.body.activeHandoffGeneration,
+        }),
+      },
       authorization,
     );
     expect(taken.body).toMatchObject({ controller: "human" });
@@ -697,7 +704,14 @@ describe("runtime HTTP API", () => {
     const returned = await json(
       baseUrl,
       `/sessions/${sessionId}/control/return`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ownershipGeneration: taken.body.generation,
+          handoffId: taken.body.activeHandoffId,
+          handoffGeneration: taken.body.activeHandoffGeneration,
+        }),
+      },
       authorization,
     );
     expect(returned.body).toMatchObject({ controller: "agent" });
@@ -705,14 +719,20 @@ describe("runtime HTTP API", () => {
     const paused = await json(
       baseUrl,
       `/sessions/${sessionId}/control/pause`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({ ownershipGeneration: returned.body.generation }),
+      },
       authorization,
     );
     expect(paused.body).toMatchObject({ controller: null, status: "paused" });
     const resumed = await json(
       baseUrl,
       `/sessions/${sessionId}/control/return`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({ ownershipGeneration: paused.body.generation }),
+      },
       authorization,
     );
     expect(resumed.body).toMatchObject({

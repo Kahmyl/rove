@@ -150,12 +150,9 @@ export function taskControlProjection(
   product: LocalProductSnapshot | null,
 ): TaskControlProjection {
   const runtime = task?.runtime;
-  const isCurrent =
-    task !== undefined &&
-    task.taskId === product?.currentTaskId &&
-    !terminalProductTask(task);
   const pendingHandoff =
-    isCurrent &&
+    task !== undefined &&
+    !terminalProductTask(task) &&
     product?.attention.some(
       (entry) =>
         entry.taskId === task.taskId &&
@@ -177,7 +174,8 @@ export function taskControlProjection(
       runtime?.status === "awaiting_human" &&
       runtime.controller === null,
     canPause:
-      isCurrent &&
+      task !== undefined &&
+      !terminalProductTask(task) &&
       runtime?.status === "active" &&
       runtime.controller === "agent",
   };

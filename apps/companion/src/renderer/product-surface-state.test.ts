@@ -430,7 +430,7 @@ describe("native product composer state", () => {
     ).toMatchObject({ ready: true });
   });
 
-  it("derives controller and takeover truth only from the current product task", () => {
+  it("keeps exact takeover authority when another task owns current presentation", () => {
     const state = product();
     const task: ProductTaskProjection = {
       taskId: "task_waiting",
@@ -451,8 +451,18 @@ describe("native product composer state", () => {
         profileOwnership: "released",
       },
     };
-    state.tasks = [task];
-    state.currentTaskId = task.taskId;
+    const presented = {
+      ...task,
+      taskId: "task_presented",
+      lifecycle: { phase: "working" as const, reason: "Working." },
+      runtime: {
+        ...task.runtime!,
+        status: "active" as const,
+        controller: "agent" as const,
+      },
+    };
+    state.tasks = [task, presented];
+    state.currentTaskId = presented.taskId;
     state.attention = [
       {
         authority: "rove_control",
@@ -470,10 +480,10 @@ describe("native product composer state", () => {
       canTakeControl: true,
       canPause: false,
     });
-    delete state.currentTaskId;
-    expect(taskControlProjection(task, state)).toMatchObject({
-      controllerLabel: "Awaiting handoff",
+    expect(taskControlProjection(presented, state)).toEqual({
+      controllerLabel: "Agent",
       canTakeControl: false,
+      canPause: true,
     });
   });
 

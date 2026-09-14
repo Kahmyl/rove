@@ -9,6 +9,7 @@ const session: Session = {
   mode: "companion",
   status: "active",
   controller: "agent",
+  ownershipGeneration: 1,
   profile: {
     mode: "temporary",
   },
@@ -26,6 +27,38 @@ function jsonResponse(value: unknown, status = 200): Response {
 }
 
 describe("CompanionRuntimeClient", () => {
+  it("keeps an older pending takeover visible when a newer task session starts", async () => {
+    const awaiting = {
+      ...session,
+      id: "ses_task_a",
+      mode: "agent" as const,
+      status: "awaiting_human" as const,
+      controller: null,
+      updatedAt: "2026-08-10T07:00:00.000Z",
+    };
+    const newer = {
+      ...session,
+      id: "ses_task_b",
+      updatedAt: "2026-08-10T08:00:00.000Z",
+    };
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("?mode=agent")) return jsonResponse([awaiting, newer]);
+      if (url.endsWith("?mode=companion") || url.endsWith("?mode=capture"))
+        return jsonResponse([]);
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+    });
+
+    await expect(client.getActiveSession()).resolves.toMatchObject({
+      id: "ses_task_a",
+      status: "awaiting_human",
+    });
+  });
+
   it("reads exact consequential effect truth without authorizing or dispatching", async () => {
     const effect = {
       effectId: "a".repeat(64),
@@ -447,7 +480,7 @@ describe("CompanionRuntimeClient", () => {
     });
   });
 
-  it("uses runtime control and finish endpoints", async () => {
+  it("uses exact-session Runtime control and finish endpoints", async () => {
     const requests: {
       url: string;
       method: string;
@@ -490,6 +523,14 @@ describe("CompanionRuntimeClient", () => {
           });
         }
 
+        if (url.endsWith(`/sessions/${session.id}`)) {
+          return jsonResponse(session);
+        }
+
+        if (url.endsWith(`/sessions/${session.id}/browser/window`)) {
+          return jsonResponse(null);
+        }
+
         if (url.endsWith("/end")) {
           ended = true;
           return jsonResponse({
@@ -518,10 +559,11 @@ describe("CompanionRuntimeClient", () => {
       fetchImpl,
     });
 
-    await client.takeControl();
-    await client.pauseSession();
-    await client.returnControl();
-    await client.finishSession();
+    const authority = { ownershipGeneration: 1 };
+    await client.takeControlForSession(session.id, authority);
+    await client.pauseSessionForSession(session.id, authority);
+    await client.returnControlForSession(session.id, authority);
+    await client.endSession(session.id);
 
     expect(requests).toEqual(
       expect.arrayContaining([
@@ -571,7 +613,9 @@ describe("CompanionRuntimeClient", () => {
       fetchImpl,
     });
     await expect(
-      client.returnControlForSession("ses_companion"),
+      client.returnControlForSession("ses_companion", {
+        ownershipGeneration: 3,
+      }),
     ).resolves.toMatchObject({ session: { id: "ses_companion" } });
     expect(requests.some((entry) => entry.includes("sessions?mode="))).toBe(
       false,
@@ -590,7 +634,9 @@ describe("CompanionRuntimeClient", () => {
       ) as typeof fetch,
     });
     await expect(
-      mismatched.returnControlForSession("ses_companion"),
+      mismatched.returnControlForSession("ses_companion", {
+        ownershipGeneration: 3,
+      }),
     ).rejects.toThrow(/mismatched control session/);
   });
 
