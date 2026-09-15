@@ -3865,7 +3865,12 @@ export function ProductSurface({
             <span
               className={`status-pip status-${customerCodexStatus.ready ? "ready" : customerCodexStatus.kind === "starting" || customerCodexStatus.kind === "signing_in" ? "starting" : "offline"}`}
             />
-            <span>{customerCodexStatus.label}</span>
+            <span
+              className="product-health-label"
+              title={customerCodexStatus.label}
+            >
+              {customerCodexStatus.label}
+            </span>
             {!codexRecoveryOpen && customerCodexStatus.recovery !== null && (
               <button
                 className="product-health-action"
@@ -6081,6 +6086,11 @@ export function ProductSurface({
           <button
             className="sidebar-new-task"
             type="button"
+            aria-current={
+              viewedTask === undefined && selectedWorkflow === undefined
+                ? "page"
+                : undefined
+            }
             onClick={() => {
               setSelectedWorkflowWorkspaceId(null);
               setSelectedWorkflowOutputId(null);
@@ -6307,6 +6317,7 @@ export function ProductSurface({
             <section
               className="inspector-panel browser-status"
               aria-label="Browser status"
+              data-attached={browserAttached ? "true" : undefined}
             >
               <header className="inspector-heading">
                 <span>Browser</span>

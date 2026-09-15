@@ -503,6 +503,25 @@ try {
     note("Context remains secondary to work."),
   );
 
+  // Final brand review evidence is intentionally outside the customer-step
+  // manifest so visual QA does not inflate the journey's decision count.
+  await page.evaluate(() => {
+    document.documentElement.dataset.roveTheme = "light";
+  });
+  await page.screenshot({
+    path: join(outputRoot, "brand-light-workflow-home.png"),
+  });
+  await page.getByRole("button", { name: "Context", exact: true }).click();
+  await page.locator(".workflow-context-surface").waitFor();
+  await page.screenshot({
+    path: join(outputRoot, "brand-light-workflow-context.png"),
+  });
+  await page.getByRole("button", { name: "Home", exact: true }).click();
+  await page.locator(".workflow-start-card").waitFor();
+  await page.evaluate(() => {
+    document.documentElement.dataset.roveTheme = "dark";
+  });
+
   const journeyState = await page.evaluate(() => window.rove.getJourneyState());
   const creates = journeyState.calls.filter(
     (call) => call.type === "product" && call.intent.type === "workflow.create",
@@ -584,6 +603,10 @@ try {
       contextSecondary: true,
       standaloneHistoryPreserved: true,
     },
+    visualReviewEvidence: [
+      "brand-light-workflow-home.png",
+      "brand-light-workflow-context.png",
+    ],
     steps,
   };
   await writeFile(

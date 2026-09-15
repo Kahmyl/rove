@@ -1037,8 +1037,21 @@ select:focus-visible {
 }
 
 .product-health {
+  min-width: 0;
   gap: 8px;
   font-weight: 650;
+}
+
+.product-health .status-pip,
+.product-health-action {
+  flex: 0 0 auto;
+}
+
+.product-health-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .product-app .product-health-action {
@@ -1049,12 +1062,18 @@ select:focus-visible {
   background: var(--surface);
   color: var(--ink);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .product-topbar-actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
+}
+
+.product-topbar-actions .app-menu {
+  flex: 0 0 auto;
 }
 
 .app-menu {
@@ -1947,6 +1966,7 @@ html[data-rove-surface="follower"] #root {
   --rove-accent-strong: color-mix(in srgb, var(--rove-accent) 82%, var(--ink));
   --rove-accent-contrast: #faf5ee;
   --rove-accent-visible: var(--rove-accent);
+  --rove-accent-text: var(--rove-accent-strong);
   --rove-accent-soft: color-mix(
     in srgb,
     var(--rove-accent) 9%,
@@ -3862,7 +3882,7 @@ span.composer-control-icon {
   display: grid;
   height: 58px;
   min-height: 58px;
-  grid-template-columns: 272px minmax(0, 1fr) 286px;
+  grid-template-columns: 272px minmax(0, 1fr) 304px;
   align-items: stretch;
   padding: 0;
 }
@@ -3966,7 +3986,8 @@ span.composer-control-icon {
 .product-app:not(.product-auth-app) > .product-topbar .product-topbar-actions {
   grid-column: 3;
   justify-content: flex-end;
-  padding: 0 18px;
+  gap: 8px;
+  padding: 0 12px;
 }
 
 .product-app:not(.product-auth-app) .product-sidebar {
@@ -5007,6 +5028,15 @@ span.composer-control-icon {
   .product-app:not(.product-auth-app) > .product-topbar .product-brand {
     width: 236px;
   }
+
+  .product-health:has(.product-health-action) .product-health-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .attention-card strong,
@@ -5119,6 +5149,7 @@ span.composer-control-icon {
       var(--rove-accent) 48%,
       var(--rove-accent-contrast)
     );
+    --rove-accent-text: var(--rove-accent-visible);
     --rove-accent-soft: color-mix(
       in srgb,
       var(--rove-accent) 24%,
@@ -5327,6 +5358,7 @@ span.composer-control-icon {
   --danger: #a94848;
   --danger-soft: #faecec;
   --rove-accent-visible: var(--rove-accent);
+  --rove-accent-text: var(--rove-accent-strong);
   --success: #2f6f52;
   --success-soft: #e7f2eb;
   background: #ffffff;
@@ -5494,6 +5526,7 @@ html[data-rove-theme="light"] .account-avatar {
     var(--rove-accent) 48%,
     var(--rove-accent-contrast)
   );
+  --rove-accent-text: var(--rove-accent-visible);
   --rove-accent-soft: color-mix(
     in srgb,
     var(--rove-accent) 24%,
@@ -7115,4 +7148,117 @@ html[data-rove-theme="dark"]
   span[data-result-state="available"] {
   color: var(--success);
   background: var(--success-soft);
+}
+
+/* Restrained Rove accent language: identity, current context, and focus only. */
+.product-app .sidebar-new-task[aria-current="page"],
+.product-app .task-history-row[data-current="true"] {
+  background: var(--rove-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--rove-accent-visible);
+}
+
+.product-app .sidebar-new-task[aria-current="page"] > span {
+  color: var(--rove-accent-visible);
+}
+
+.product-app .sidebar-new-task[aria-current="page"]:hover,
+.product-app .task-history-row[data-current="true"]:hover {
+  background: var(--rove-accent-hover) !important;
+}
+
+.product-app button:focus-visible,
+.product-app summary:focus-visible,
+.product-app input:focus-visible,
+.product-app textarea:focus-visible,
+.product-app select:focus-visible {
+  outline-color: var(--rove-accent-visible);
+}
+
+.product-app input:focus-visible,
+.product-app textarea:focus-visible,
+.product-app select:focus-visible {
+  border-color: color-mix(in srgb, var(--rove-accent) 48%, var(--border));
+}
+
+.composer-input-shell:focus-within {
+  border-color: color-mix(in srgb, var(--rove-accent) 42%, var(--border));
+  box-shadow:
+    0 8px 30px rgb(0 0 0 / 0.07),
+    0 0 0 3px color-mix(in srgb, var(--rove-accent) 8%, transparent);
+}
+
+.composer-mode-menu > summary {
+  color: var(--rove-accent-text);
+}
+
+:root .product-app .composer-menu[open] > summary,
+:root .product-app .composer-menu > summary:focus-visible,
+:root .product-app .composer-command-menu[open] > summary {
+  color: var(--rove-accent-text);
+  background: var(--rove-accent-soft);
+}
+
+:root .product-app .composer-popover button[aria-pressed="true"],
+:root .product-app .composer-command-palette button[aria-pressed="true"] {
+  color: var(--rove-accent-text);
+  background: var(--rove-accent-soft);
+}
+
+.composer-popover button[aria-pressed="true"]::after {
+  color: var(--rove-accent-visible);
+}
+
+.composer-attachment-preview {
+  border-color: color-mix(in srgb, var(--rove-accent) 22%, var(--border));
+}
+
+.composer-attachment-thumbnail {
+  color: var(--rove-accent-text);
+  background: var(--rove-accent-soft);
+}
+
+.workflow-workspace-header > div > .eyebrow,
+.workflow-context-surface > header > .eyebrow {
+  color: var(--rove-accent-text);
+}
+
+.workflow-context-focused-editor {
+  border-color: color-mix(in srgb, var(--rove-accent) 24%, var(--border-soft));
+  box-shadow: inset 2px 0 0 var(--rove-accent-visible);
+}
+
+.product-app .workflow-context-section > header button:hover:not(:disabled),
+.product-app .workflow-context-section > header button:focus-visible,
+.product-app .workflow-context-advanced > button:hover:not(:disabled),
+.product-app .workflow-context-advanced > button:focus-visible {
+  color: var(--rove-accent-text);
+  background: var(--rove-accent-soft);
+}
+
+.browser-status[data-attached="true"] .browser-status-icon {
+  color: var(--rove-accent-visible);
+  background: var(--rove-accent-soft);
+}
+
+.product-app .recording-actions button:hover:not(:disabled),
+.product-app .recording-history button:hover:not(:disabled),
+.product-app .settings-data > button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--rove-accent) 32%, var(--border));
+  color: var(--rove-accent-text);
+  background: var(--rove-accent-soft);
+}
+
+.recording-panel > summary:focus-visible {
+  outline-color: var(--rove-accent-visible);
+}
+
+:root .product-app .theme-options > button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--rove-accent-soft);
+}
+
+.theme-options button[aria-pressed="true"] .theme-option-check {
+  border-color: var(--rove-accent-visible);
+  color: var(--rove-accent-contrast);
+  background: var(--rove-accent-visible);
 }
