@@ -265,6 +265,83 @@ try {
     "An exact immutable install must be idempotent.",
   );
 
+  const legacyReceipt = {
+    componentId: component.id,
+    installedAt: "2026-09-12T00:00:00.000Z",
+    sourceDigests: {
+      executable: component.executable.sha256,
+      codeModeHost: component.codeModeHost.sha256,
+    },
+  };
+  const installedPaths = componentPaths(managedRoot, component);
+  const binaryInodes = {
+    executable: (await stat(installedPaths.executable)).ino,
+    codeModeHost: (await stat(installedPaths.codeModeHost)).ino,
+  };
+  await writeFile(
+    installedPaths.receipt,
+    `${JSON.stringify(legacyReceipt, null, 2)}\n`,
+  );
+  const receiptDurabilitySteps = [];
+  await installQualifiedComponent(
+    executable,
+    component,
+    managedRoot,
+    receiptPath,
+    {
+      onReceiptDurabilityStep: (step) => receiptDurabilitySteps.push(step),
+    },
+  );
+  assert.deepEqual(receiptDurabilitySteps, [
+    "temporary-synced",
+    "renamed",
+    "parent-synced",
+  ]);
+  await verifyQualificationReceipt(installedPaths.receipt, component);
+  assert.deepEqual(
+    {
+      executable: (await stat(installedPaths.executable)).ino,
+      codeModeHost: (await stat(installedPaths.codeModeHost)).ino,
+    },
+    binaryInodes,
+    "Legacy receipt migration must not replace immutable binaries.",
+  );
+  await rm(installedPaths.receipt);
+  await installQualifiedComponent(
+    executable,
+    component,
+    managedRoot,
+    receiptPath,
+  );
+  await verifyQualificationReceipt(installedPaths.receipt, component);
+  assert.deepEqual(
+    {
+      executable: (await stat(installedPaths.executable)).ino,
+      codeModeHost: (await stat(installedPaths.codeModeHost)).ino,
+    },
+    binaryInodes,
+    "Missing receipt recovery must not replace immutable binaries.",
+  );
+
+  await writeFile(
+    installedPaths.receipt,
+    `${JSON.stringify({ ...legacyReceipt, sourceDigests: { ...legacyReceipt.sourceDigests, executable: "wrong" } }, null, 2)}\n`,
+  );
+  const mismatchedLegacyReceipt = await readFile(
+    installedPaths.receipt,
+    "utf8",
+  );
+  await assert.rejects(
+    installQualifiedComponent(executable, component, managedRoot, receiptPath),
+    /already exists but conflicts/,
+  );
+  assert.equal(
+    await readFile(installedPaths.receipt, "utf8"),
+    mismatchedLegacyReceipt,
+    "A conflicting legacy receipt must remain unchanged.",
+  );
+  await writeFile(installedPaths.receipt, installedReceiptBefore);
+
   const conflictRoot = join(root, "managed-conflict");
   const conflict = componentPaths(conflictRoot, component);
   await mkdir(conflict.directory, { recursive: true });
@@ -302,6 +379,97 @@ try {
     ),
   );
 
+  const receiptRenameFailureRoot = join(root, "managed-receipt-failure");
+  await installQualifiedComponent(
+    executable,
+    component,
+    receiptRenameFailureRoot,
+    receiptPath,
+  );
+  const receiptRenameFailurePaths = componentPaths(
+    receiptRenameFailureRoot,
+    component,
+  );
+  const legacyReceiptText = `${JSON.stringify(legacyReceipt, null, 2)}\n`;
+  await writeFile(receiptRenameFailurePaths.receipt, legacyReceiptText);
+  const failureBinaryInodes = {
+    executable: (await stat(receiptRenameFailurePaths.executable)).ino,
+    codeModeHost: (await stat(receiptRenameFailurePaths.codeModeHost)).ino,
+  };
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      receiptRenameFailureRoot,
+      join(root, "missing-qualification.json"),
+    ),
+    /qualification receipt is unavailable/,
+  );
+  assert.equal(
+    await readFile(receiptRenameFailurePaths.receipt, "utf8"),
+    legacyReceiptText,
+    "A legacy receipt must not migrate without new qualification evidence.",
+  );
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      receiptRenameFailureRoot,
+      mismatchedReceiptPath,
+    ),
+    /qualification receipt does not match/,
+  );
+  assert.equal(
+    await readFile(receiptRenameFailurePaths.receipt, "utf8"),
+    legacyReceiptText,
+    "Mismatched schema evidence must not migrate a legacy receipt.",
+  );
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      receiptRenameFailureRoot,
+      receiptPath,
+      {
+        renameReceipt: async () => {
+          throw new Error("injected receipt rename failure");
+        },
+      },
+    ),
+    /injected receipt rename failure/,
+  );
+  assert.equal(
+    await readFile(receiptRenameFailurePaths.receipt, "utf8"),
+    legacyReceiptText,
+    "A failed receipt upgrade must preserve the preceding receipt.",
+  );
+  await assert.rejects(
+    stat(`${receiptRenameFailurePaths.receipt}.upgrading-${process.pid}`),
+  );
+  assert.deepEqual(
+    {
+      executable: (await stat(receiptRenameFailurePaths.executable)).ino,
+      codeModeHost: (await stat(receiptRenameFailurePaths.codeModeHost)).ino,
+    },
+    failureBinaryInodes,
+    "A failed receipt upgrade must not replace immutable binaries.",
+  );
+  await writeFile(receiptRenameFailurePaths.codeModeHost, "tampered helper");
+  await assert.rejects(
+    installQualifiedComponent(
+      executable,
+      component,
+      receiptRenameFailureRoot,
+      receiptPath,
+    ),
+    /already exists but conflicts/,
+  );
+  assert.equal(
+    await readFile(receiptRenameFailurePaths.receipt, "utf8"),
+    legacyReceiptText,
+    "A binary conflict must not migrate the legacy receipt.",
+  );
+
   const retainedSchemaFilename = "retained-fixture.schemas.generated.json";
   const retainedSchemaPath = join(schemaRoot, retainedSchemaFilename);
   await writeFile(retainedSchemaPath, schemaContents);
@@ -320,6 +488,20 @@ try {
   await writeFile(
     retainedReceiptPath,
     `${JSON.stringify(createQualificationReceipt(retainedComponent, await inspectExternalCandidate(executable), "2026-09-13T00:00:00.000Z"), null, 2)}\n`,
+  );
+  await installQualifiedComponent(
+    executable,
+    retainedComponent,
+    managedRoot,
+    retainedReceiptPath,
+  );
+  await writeFile(installedPaths.receipt, legacyReceiptText);
+  await rm(componentPaths(managedRoot, retainedComponent).receipt);
+  await installQualifiedComponent(
+    executable,
+    component,
+    managedRoot,
+    receiptPath,
   );
   await installQualifiedComponent(
     executable,
@@ -411,6 +593,19 @@ try {
     schemaBindings: fixtureBindings,
     schemaRoot,
   });
+  await writeComponentManifestAtomically(
+    fixtureManifestPath,
+    promoteComponentSelection(
+      fixtureManifest,
+      retainedComponent.id,
+      fixtureBindings,
+    ),
+  );
+  assert.equal(
+    selectedComponent(await readComponentManifest(fixtureManifestPath)).id,
+    retainedComponent.id,
+    "The requalified retained set must remain available for whole-set rollback.",
+  );
 
   const stagedRoot = join(root, "staged-codex");
   await stageCodexComponentSet(verified, {

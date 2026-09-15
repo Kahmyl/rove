@@ -141,9 +141,7 @@ export async function writeComponentManifestAtomically(
   try {
     const temporaryHandle = await open(temporary, "w", 0o600);
     try {
-      await temporaryHandle.writeFile(
-        `${JSON.stringify(manifest, null, 2)}\n`,
-      );
+      await temporaryHandle.writeFile(`${JSON.stringify(manifest, null, 2)}\n`);
       await temporaryHandle.sync();
       onDurabilityStep("temporary-synced");
     } finally {
@@ -291,6 +289,93 @@ export async function verifyInstalledQualificationReceipt(
   );
 }
 
+function hasExactKeys(value, keys) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join("\0") === [...keys].sort().join("\0")
+  );
+}
+
+async function readOptionalFile(path) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+async function inspectInstalledQualificationReceipt(path, component) {
+  const raw = await readOptionalFile(path);
+  if (raw === undefined) return { kind: "missing", raw };
+  let receipt;
+  try {
+    receipt = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Immutable qualification receipt does not match component ${component.id} and its required compatibility evidence.`,
+    );
+  }
+  if (
+    receipt.schemaVersion !== undefined ||
+    receipt.qualifiedAt !== undefined
+  ) {
+    await verifyQualificationReceipt(path, component);
+    return { kind: "current", raw };
+  }
+  const legacyExact =
+    hasExactKeys(receipt, ["componentId", "installedAt", "sourceDigests"]) &&
+    receipt.componentId === component.id &&
+    typeof receipt.installedAt === "string" &&
+    Number.isFinite(Date.parse(receipt.installedAt)) &&
+    hasExactKeys(receipt.sourceDigests, ["executable", "codeModeHost"]) &&
+    receipt.sourceDigests.executable === component.executable.sha256 &&
+    receipt.sourceDigests.codeModeHost === component.codeModeHost.sha256;
+  if (!legacyExact)
+    throw new Error(
+      `Legacy qualification receipt does not match component ${component.id} and its source digests.`,
+    );
+  return { kind: "legacy", raw };
+}
+
+async function replaceQualificationReceiptAtomically(
+  path,
+  receipt,
+  expectedRaw,
+  { renameReceipt = rename, onReceiptDurabilityStep = () => {} } = {},
+) {
+  const temporary = `${path}.upgrading-${process.pid}`;
+  await rm(temporary, { force: true });
+  try {
+    const temporaryHandle = await open(temporary, "wx", 0o600);
+    try {
+      await temporaryHandle.writeFile(`${JSON.stringify(receipt, null, 2)}\n`);
+      await temporaryHandle.sync();
+      onReceiptDurabilityStep("temporary-synced");
+    } finally {
+      await temporaryHandle.close();
+    }
+    if ((await readOptionalFile(path)) !== expectedRaw)
+      throw new Error(
+        "Installed qualification receipt changed during upgrade.",
+      );
+    await renameReceipt(temporary, path);
+    onReceiptDurabilityStep("renamed");
+    const parentHandle = await open(dirname(path), "r");
+    try {
+      await parentHandle.sync();
+      onReceiptDurabilityStep("parent-synced");
+    } finally {
+      await parentHandle.close();
+    }
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
 export async function verifyPromotableComponentSet(
   manifest,
   registry,
@@ -405,7 +490,11 @@ export async function installQualifiedComponent(
   component,
   managedRoot = defaultManagedCodexRoot(),
   receiptPath = qualificationEvidencePath(component),
-  { renameDirectory = rename } = {},
+  {
+    renameDirectory = rename,
+    renameReceipt = rename,
+    onReceiptDurabilityStep = () => {},
+  } = {},
 ) {
   const candidate = await inspectExternalCandidate(sourceExecutable);
   if (
@@ -422,27 +511,40 @@ export async function installQualifiedComponent(
   const receipt = await verifyQualificationReceipt(receiptPath, component);
   await mkdir(managedRoot, { recursive: true, mode: 0o700 });
   const destination = componentPaths(managedRoot, component);
+  let destinationExists = true;
   try {
-    const installed = await verifyComponentDirectory(
-      destination.directory,
-      component,
-    );
-    await verifyInstalledQualificationReceipt(destination.directory, component);
-    return installed;
+    await stat(destination.directory);
   } catch (error) {
-    let destinationExists = true;
+    if (error?.code !== "ENOENT") throw error;
+    destinationExists = false;
+  }
+  if (destinationExists) {
+    let installed;
+    let receiptState;
     try {
-      await stat(destination.directory);
-    } catch (statError) {
-      if (statError?.code !== "ENOENT") throw error;
-      // The immutable destination is absent, so installation may proceed.
-      destinationExists = false;
-    }
-    if (destinationExists)
+      installed = await verifyComponentDirectory(
+        destination.directory,
+        component,
+      );
+      receiptState = await inspectInstalledQualificationReceipt(
+        destination.receipt,
+        component,
+      );
+    } catch (error) {
       throw new Error(
         `Managed Codex component ${component.id} already exists but conflicts with the qualified identity; it was left unchanged.`,
         { cause: error },
       );
+    }
+    if (receiptState.kind === "current") return installed;
+    await replaceQualificationReceiptAtomically(
+      destination.receipt,
+      receipt,
+      receiptState.raw,
+      { renameReceipt, onReceiptDurabilityStep },
+    );
+    await verifyInstalledQualificationReceipt(destination.directory, component);
+    return installed;
   }
   const temporary = `${destination.directory}.installing-${process.pid}`;
   await rm(temporary, { recursive: true, force: true });
