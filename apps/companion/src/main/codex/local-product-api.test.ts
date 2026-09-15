@@ -386,7 +386,8 @@ function resultStore(initial = taskResult()): ResultStore & {
           selectedRevision: current.revision,
         };
       else {
-        const { selectedRevision: _selectedRevision, ...unselected } = current;
+        const unselected = { ...current };
+        delete unselected.selectedRevision;
         current = { ...unselected, selected: false };
       }
       return current;

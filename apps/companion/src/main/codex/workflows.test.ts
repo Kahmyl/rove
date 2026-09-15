@@ -336,6 +336,8 @@ describe("local Workflow environments", () => {
       { migration_id: "0002_task_engine_event_aggregate_outbox" },
       { migration_id: "0003_add_workflow_configuration" },
       { migration_id: "0004_add_task_results" },
+      { migration_id: "0005_bind_selected_result_revision" },
+      { migration_id: "0006_atomically_consume_selected_results" },
     ]);
     inspected.close();
   });
