@@ -382,6 +382,12 @@ export class RoveAccountService {
   }
 }
 
+export function restoreRoveAccountSessionInBackground(
+  account: RoveAccountService,
+): void {
+  void account.start();
+}
+
 export function readRoveAccountConfiguration(
   environment: NodeJS.ProcessEnv,
 ): RoveAccountConfiguration | null {

@@ -46,6 +46,6 @@ The reconciliation source commits map to the integrated main commits as follows:
 
 The registered engineering-environment, MVP-completion, task-lifecycle, browser-perception, external-Chrome, handoff, capture, transport, and browser-policy branches were all ancestors of the candidate. The three reconciliation branches above are superseded by their integrated commits and were not re-merged.
 
-Reported unreachable commits were also accounted for: `20fec660` and `240d9dde` are patch-identical predecessors of `02893742` and `2a605b3e`; `0728f577` and `10d129d5` are earlier amended Workflow-journey candidates superseded by `201eb576`; and `d6078644` and `3aa78e3b` are earlier runtime candidates superseded by `19af4899`, whose final form adds stronger provenance handling and control-return coverage.
+Reported unreachable commits were also accounted for: `20fec660` and `240d9dde` are patch-identical predecessors of `02893742` and `2a605b3e`; `0728f577` and `10d129d5` are earlier amended Workflow-journey candidates superseded by `201eb576`; `d6078644` and `3aa78e3b` are earlier runtime candidates superseded by `19af4899`, whose final form adds stronger provenance handling and control-return coverage; and `7b2ccc01` is the unpushed, amended predecessor of this record with no unique product content.
 
 Verification commands and the exact final `main`, tree, remote, and cleanup state are retained in the final convergence report and post-convergence tag.

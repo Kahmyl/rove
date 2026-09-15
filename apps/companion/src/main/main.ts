@@ -81,6 +81,7 @@ import { LocalBackupExporter } from "./local-backup-exporter.js";
 import {
   EncryptedFileAuthStorage,
   readRoveAccountConfiguration,
+  restoreRoveAccountSessionInBackground,
   RoveAccountService,
 } from "./codex/rove-account-service.js";
 import { SupabaseWorkflowConfigurationProvider } from "./codex/supabase-workflow-provider.js";
@@ -1159,12 +1160,12 @@ async function startDesktop(): Promise<void> {
     authStorage,
     publishIdentityState,
   );
-  await roveAccountService.start();
+  if (roveAccountConfiguration) app.setAsDefaultProtocolClient("rove");
   if (pendingRoveDeepLink) {
     const value = pendingRoveDeepLink;
     pendingRoveDeepLink = undefined;
-    await acceptRoveDeepLink(value);
-  }
+    void acceptRoveDeepLink(value);
+  } else restoreRoveAccountSessionInBackground(roveAccountService);
   const nativeFileGrant = createLocalFileGrantAuthority({
     async selectPaths(request) {
       openFullSurface();
@@ -1648,7 +1649,6 @@ async function startDesktop(): Promise<void> {
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
-  app.setAsDefaultProtocolClient("rove");
   app.on("open-url", (event, url) => {
     event.preventDefault();
     void acceptRoveDeepLink(url);

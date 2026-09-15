@@ -8,6 +8,7 @@ import {
   EncryptedFileAuthStorage,
   RoveAccountService,
   readRoveAccountConfiguration,
+  restoreRoveAccountSessionInBackground,
 } from "./rove-account-service.js";
 import { WorkflowProviderError } from "./workflow-portability.js";
 
@@ -148,6 +149,25 @@ describe("Rove account boundary", () => {
         ROVE_SUPABASE_PUBLISHABLE_KEY: "key",
       }),
     ).toThrow(/HTTPS/);
+  });
+
+  it("does not put a pending cloud session restore on the local startup path", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "rove-auth-"));
+    directories.push(directory);
+    const account = new RoveAccountService(
+      configuration,
+      new EncryptedFileAuthStorage(join(directory, "session.enc"), {
+        available: () => false,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      }),
+      () => undefined,
+      fakeClient(() => new Promise(() => undefined)),
+    );
+
+    restoreRoveAccountSessionInBackground(account);
+
+    expect(account.snapshot()).toMatchObject({ status: "signed_out" });
   });
 
   it("quarantines corrupt encrypted cloud auth without failing local startup", async () => {

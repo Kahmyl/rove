@@ -1,5 +1,6 @@
 -- Rove cloud data is restricted to portable Workflow configuration.
--- Provision the Supabase project in Frankfurt (eu-central-1) on the Free plan.
+-- Applying this candidate migration requires prior provider, region, retention,
+-- sign-in, cost, and operating authority.
 create extension if not exists pgcrypto with schema extensions;
 create schema if not exists rove_private;
 revoke all on schema rove_private from public, anon, authenticated;
@@ -86,7 +87,9 @@ begin
   if jsonb_typeof(p_record->'approvedAt')<>'string' or (p_record->>'approvedAt')!~'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' then raise exception 'Workflow approval timestamp is invalid' using errcode='22023'; end if;
   perform (p_record->>'approvedAt')::timestamptz;
   if jsonb_typeof(configuration)<>'object' or (select count(*) from jsonb_object_keys(configuration))<>8 or not configuration ?& array['purpose','preferences','criteria','guidance','procedures','resourceRequirements','resultConventions','approvedKnowledge'] then raise exception 'Portable Workflow configuration fields are invalid' using errcode='22023'; end if;
-  perform rove_private.assert_portable_text(configuration->'purpose','Workflow purpose',2000,true);
+  if configuration->'purpose' <> '""'::jsonb then
+    perform rove_private.assert_portable_text(configuration->'purpose','Workflow purpose',2000,true);
+  end if;
   perform rove_private.assert_guidance_array(configuration->'preferences','Workflow preferences');
   perform rove_private.assert_guidance_array(configuration->'criteria','Workflow criteria');
   perform rove_private.assert_guidance_array(configuration->'guidance','Workflow guidance');

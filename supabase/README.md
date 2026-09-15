@@ -2,9 +2,11 @@
 
 This directory is the complete hosted boundary for optional personal Rove accounts and portable Workflow configuration. It is not a task, result, artifact, browser, credential, approval, or execution-state backend.
 
-## Private exploratory environment
+## Hypothetical isolated qualification environment
 
-1. Create one Supabase Free project in Frankfurt (`eu-central-1`). Do not enable paid compute, replicas, PITR, add-ons, or another hosted service.
+Do not provision or connect this candidate until provider, region, sign-in, retention, cost, and operating authority have been approved. If Supabase is approved for an isolated qualification exercise, use the authorized project settings and then:
+
+1. Do not enable paid compute, replicas, PITR, add-ons, or another hosted service unless separately authorized.
 2. Enable Email and Google Auth. Configure the email template as an OTP template containing `{{ .Token }}` rather than a magic-link-only template.
 3. Register `rove://auth/callback` as an allowed redirect URL and configure the same callback in the Google provider.
 4. Apply `migrations/202609130001_workflow_portability.sql`.
@@ -14,4 +16,4 @@ The database revokes direct table access, enables RLS, and exposes authenticated
 
 Run `pnpm test:workflow-sync:postgres` to create an isolated native PostgreSQL cluster, apply the real migration as a non-superuser migration owner, and exercise grants, RLS, owner denial, RPC schema validation, CAS concurrency, idempotency, paging, tombstones, purge, and account deletion as a non-`BYPASSRLS` client. Set `ROVE_POSTGRES_BIN` when PostgreSQL 17 binaries are not installed at the macOS default path. The harness simulates Supabase `auth.uid()` from a request claim; it does not qualify real JWT or gateway behavior.
 
-Before enabling synchronization for users, qualify two real devices, denied cross-owner/anonymous requests, offline concurrent edits, account switching, stale writes after deletion, 30-day purge/cursor expiry, Google and email OTP, provider pause/outage recovery, portable export, and account deletion. Account deletion must remove hosted configuration while leaving all device-local data untouched.
+Before enabling synchronization for users, settle provider authority and qualify two real devices, denied cross-owner/anonymous requests, offline concurrent edits, account switching, stale writes after deletion, the authorized retention period and cursor expiry, authorized sign-in methods, provider pause/outage recovery, portable export, and account deletion. Account deletion must remove hosted configuration while leaving all device-local data untouched.

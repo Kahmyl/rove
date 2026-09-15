@@ -313,6 +313,15 @@ try {
   );
   if (created.remoteRevision !== 1 || created.snapshot.digest !== main.digest)
     throw new Error("Create/digest qualification failed.");
+  const sparse = snapshot("workflow_sparse00", "");
+  const sparseCreated = JSON.parse(
+    asOwner(ownerA, writeCall(ownerA, "sync_create_sparse", null, sparse)),
+  );
+  if (
+    sparseCreated.remoteRevision !== 1 ||
+    sparseCreated.snapshot.configuration.purpose !== ""
+  )
+    throw new Error("Sparse name-only Workflow qualification failed.");
   sql(
     "grant select,insert,update,delete on public.rove_workflow_configurations to authenticated",
   );

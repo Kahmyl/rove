@@ -1666,12 +1666,7 @@ export function RoveAccountSettings({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() =>
-                  run(
-                    () => window.rove.bindWorkflowSync(true),
-                    "This device is now linked to the signed-in account.",
-                  )
-                }
+                onClick={() => run(() => window.rove.bindWorkflowSync(true))}
               >
                 Use this account on this device
               </button>
@@ -1681,12 +1676,10 @@ export function RoveAccountSettings({
               type="button"
               disabled={busy}
               onClick={() =>
-                run(
-                  () =>
-                    sync?.boundOwnerId
-                      ? window.rove.synchronizeWorkflows()
-                      : window.rove.bindWorkflowSync(),
-                  "Workflow synchronization finished.",
+                run(() =>
+                  sync?.boundOwnerId
+                    ? window.rove.synchronizeWorkflows()
+                    : window.rove.bindWorkflowSync(),
                 )
               }
             >
