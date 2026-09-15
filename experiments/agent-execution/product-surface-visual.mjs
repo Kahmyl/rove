@@ -2604,7 +2604,7 @@ try {
       if (!escapeDismissed)
         throw new Error("App menu remained open after Escape.");
       await page.locator(".app-menu > summary").click();
-      await page.getByRole("button", { name: "Settings" }).click();
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Settings" })
         .waitFor({ state: "visible" });
