@@ -51,6 +51,7 @@ export type WorkflowSyncPlan =
     }
   | { state: "synchronized"; remoteRevision: number }
   | { state: "conflicted"; remote: RemoteWorkflowRecord | null }
+  | { state: "absent_remotely" }
   | {
       state: "deleted_remotely";
       tombstone: RemoteWorkflowRecord & { state: "deleted" };
@@ -78,6 +79,24 @@ export class WorkflowSyncCursorExpiredError extends Error {
       "Workflow synchronization cursor is invalid or expired; perform an authoritative refresh.",
     );
     this.name = "WorkflowSyncCursorExpiredError";
+  }
+}
+
+export type WorkflowProviderFailureCode =
+  | "conflict"
+  | "auth_required"
+  | "unavailable"
+  | "schema_rejected"
+  | "transport_uncertain"
+  | "definitive";
+
+export class WorkflowProviderError extends Error {
+  constructor(
+    readonly code: WorkflowProviderFailureCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorkflowProviderError";
   }
 }
 
@@ -148,6 +167,25 @@ function sha256(value: unknown, label: string): string {
   return value;
 }
 
+export function canonicalPortableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value))
+    return `[${value.map((entry) => canonicalPortableJson(entry)).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(
+      ([key, entry]) =>
+        `${JSON.stringify(key)}:${canonicalPortableJson(entry)}`,
+    )
+    .join(",")}}`;
+}
+
+export function portableDigest(value: unknown): string {
+  return createHash("sha256")
+    .update(canonicalPortableJson(value))
+    .digest("hex");
+}
+
 export function portableWorkflowDigest(input: {
   workflowId: string;
   configurationRevision: number;
@@ -156,7 +194,7 @@ export function portableWorkflowDigest(input: {
   configuration: WorkflowConfiguration;
   approvedAt: string;
 }): string {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  return portableDigest(input);
 }
 
 export function validatePortableWorkflowSnapshot(
@@ -309,7 +347,7 @@ export function planWorkflowSynchronization(input: {
   if (input.remote === null)
     return input.cursor === null
       ? { state: "pending_upload", expectedRemoteRevision: null }
-      : { state: "conflicted", remote: null };
+      : { state: "absent_remotely" };
   const remote = validateRemoteWorkflowRecord(input.remote);
   if (remote.ownerId !== ownerId || remote.workflowId !== local.workflowId)
     throw new Error("Remote Workflow ownership or identity is invalid.");
@@ -338,7 +376,7 @@ export function planWorkflowSynchronization(input: {
 }
 
 function requestDigest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return portableDigest(value);
 }
 
 export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurationProvider {
@@ -362,6 +400,10 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
       }
   >();
   private nextCursor = 1;
+
+  constructor(
+    private readonly now: () => string = () => new Date().toISOString(),
+  ) {}
 
   async list(
     input: WorkflowProviderListInput,
@@ -446,7 +488,7 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
       "sync_",
     );
     const snapshot = validatePortableWorkflowSnapshot(input.snapshot);
-    const updatedAt = timestamp(input.updatedAt, "Workflow update timestamp");
+    timestamp(input.updatedAt, "Workflow update timestamp");
     if (
       input.expectedRemoteRevision !== null &&
       (!Number.isSafeInteger(input.expectedRemoteRevision) ||
@@ -458,8 +500,7 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
       ownerId,
       operationId,
       expectedRemoteRevision: input.expectedRemoteRevision,
-      snapshot,
-      updatedAt,
+      snapshotDigest: snapshot.digest,
     };
     const repeated = this.repeated(ownerId, operationId, request);
     if (repeated) {
@@ -475,7 +516,10 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
         ? current !== undefined
         : current?.remoteRevision !== input.expectedRemoteRevision)
     )
-      throw new Error("Workflow remote revision conflict.");
+      throw new WorkflowProviderError(
+        "conflict",
+        "Workflow remote revision conflict.",
+      );
     const result: RemoteWorkflowRecord & { state: "active" } = {
       schemaVersion: 1,
       ownerId,
@@ -483,7 +527,7 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
       remoteRevision: (current?.remoteRevision ?? 0) + 1,
       state: "active",
       snapshot,
-      updatedAt,
+      updatedAt: this.now(),
     };
     this.records.set(key, result);
     this.recordChange(ownerId, result);
@@ -509,18 +553,18 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
       "Sync operation identity",
       "sync_",
     );
-    const deletedAt = timestamp(input.deletedAt, "Workflow deletion timestamp");
+    timestamp(input.deletedAt, "Workflow deletion timestamp");
     positiveRevision(
       input.expectedRemoteRevision,
       "Expected remote Workflow revision",
     );
     const request = {
       kind: "delete",
-      ...input,
       ownerId,
       workflowId,
       operationId,
-      deletedAt,
+      expectedRemoteRevision: input.expectedRemoteRevision,
+      snapshotDigest: null,
     };
     const repeated = this.repeated(ownerId, operationId, request);
     if (repeated) {
@@ -531,7 +575,11 @@ export class InMemoryWorkflowConfigurationProvider implements WorkflowConfigurat
     const key = this.key(ownerId, workflowId);
     const current = this.records.get(key);
     if (!current || current.remoteRevision !== input.expectedRemoteRevision)
-      throw new Error("Workflow remote revision conflict.");
+      throw new WorkflowProviderError(
+        "conflict",
+        "Workflow remote revision conflict.",
+      );
+    const deletedAt = this.now();
     const result: RemoteWorkflowRecord & { state: "deleted" } = {
       schemaVersion: 1,
       ownerId,

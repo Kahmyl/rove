@@ -5,12 +5,17 @@ import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
   LocalBackupSettings,
   ProductSurface,
+  RoveAccountSettings,
+  canRemoveWorkflowFromCloud,
+  currentOwnerWorkflowSyncBinding,
   followupDraftForTask,
   permissionReviewDescription,
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   workflowConfigurationFromDraft,
   workflowDraft,
+  workflowSynchronizationBadge,
+  workflowSynchronizationDisclosure,
   withTaskFollowupDraft,
 } from "./product-surface.js";
 
@@ -65,7 +70,281 @@ function snapshot(
   };
 }
 
+function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
+  const value = snapshot();
+  const ownerId = "owner_11111111111141118111111111111111";
+  const workflowId = "workflow_aaaaaaaa";
+  value.roveAccount = {
+    status: "signed_in",
+    syncAvailable: true,
+    ownerId,
+    email: "owner@example.com",
+    sessionPersistence: "encrypted",
+  };
+  value.product!.workflows = [
+    {
+      workflowId,
+      name: "Owner workflow",
+      archived: false,
+      currentRevision: 1,
+      revision: {
+        workflowId,
+        revision: 1,
+        configuration: {
+          purpose: "Owner-scoped rendering test",
+          preferences: [],
+          criteria: [],
+          guidance: [],
+          procedures: [],
+          resourceRequirements: [],
+          resultConventions: [],
+          approvedKnowledge: [],
+        },
+        digest: "a".repeat(64),
+        approvedAt: "2026-09-13T12:00:00.000Z",
+      },
+      createdAt: "2026-09-13T12:00:00.000Z",
+      updatedAt: "2026-09-13T12:00:00.000Z",
+    },
+  ];
+  value.workflowSync = {
+    status: "ready",
+    boundOwnerId: ownerId,
+    signedInOwnerId: ownerId,
+    lastError: null,
+    lastFailureCode: null,
+    items: { [workflowId]: "conflicted" },
+    bindings: {
+      [workflowId]: { eligibility: "owner_bound", status: "conflicted" },
+    },
+    exportableWorkflowCount: 1,
+  };
+  return value;
+}
+
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("discloses device-only and active Workflow synchronization truthfully", () => {
+    expect(workflowSynchronizationDisclosure(null, "editor")).toContain(
+      "Stored on this device",
+    );
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "synchronized" },
+        "editor",
+      ),
+    ).toContain("Synced with your Rove account");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "conflicted" },
+        "editor",
+      ),
+    ).toContain("needs sync conflict resolution");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "pending_delete" },
+        "editor",
+      ),
+    ).toContain("Removal from your Rove account is pending");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "detached", status: "local_only" },
+        "editor",
+      ),
+    ).toContain("no longer synchronized");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "unavailable" },
+        "promotion",
+      ),
+    ).toContain("Sync will resume");
+    for (const binding of [
+      null,
+      { eligibility: "owner_bound", status: "synchronized" } as const,
+    ])
+      expect(workflowSynchronizationDisclosure(binding, "editor")).toContain(
+        "cannot guarantee detection of every secret",
+      );
+  });
+
+  it("projects synchronization state and actions only for the active owner", () => {
+    const value = synchronizedWorkflowSnapshot();
+    const workflowId = "workflow_aaaaaaaa";
+    const ownerA = "owner_11111111111141118111111111111111";
+    const ownerB = "owner_22222222222242228222222222222222";
+    const settings = () =>
+      renderToStaticMarkup(
+        <RoveAccountSettings
+          desktop={value}
+          busy={false}
+          email=""
+          code=""
+          status={null}
+          onEmail={() => {}}
+          onCode={() => {}}
+          run={() => {}}
+        />,
+      );
+
+    expect(currentOwnerWorkflowSyncBinding(value, workflowId)).toEqual({
+      eligibility: "owner_bound",
+      status: "conflicted",
+    });
+    expect(settings()).toContain("Keep cloud");
+
+    value.roveAccount = {
+      status: "signed_in",
+      syncAvailable: true,
+      ownerId: ownerB,
+      email: "other-owner@example.com",
+      sessionPersistence: "encrypted",
+    };
+    value.workflowSync = {
+      ...value.workflowSync!,
+      status: "account_mismatch",
+      signedInOwnerId: ownerB,
+      bindings: {
+        [workflowId]: {
+          eligibility: "other_owner",
+          status: "conflicted",
+        },
+      },
+    };
+    const otherOwnerBinding = currentOwnerWorkflowSyncBinding(
+      value,
+      workflowId,
+    );
+    expect(otherOwnerBinding).toEqual({
+      eligibility: "other_owner",
+      status: null,
+    });
+    expect(workflowSynchronizationBadge(otherOwnerBinding)).toBe(
+      "Not synced to this account",
+    );
+    expect(
+      workflowSynchronizationDisclosure(otherOwnerBinding, "editor"),
+    ).toContain("not synchronized with the current Rove account");
+    expect(settings()).not.toContain("Keep cloud");
+    expect(settings()).not.toContain("Keep both");
+    const otherOwnerSurface = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(otherOwnerSurface).toContain("Not synced to this account");
+    expect(otherOwnerSurface).not.toContain("Sync conflict");
+
+    value.roveAccount = {
+      status: "signed_in",
+      syncAvailable: true,
+      ownerId: ownerA,
+      email: "owner@example.com",
+      sessionPersistence: "encrypted",
+    };
+    value.workflowSync = {
+      ...value.workflowSync,
+      status: "ready",
+      signedInOwnerId: ownerA,
+      bindings: {
+        [workflowId]: { eligibility: "owner_bound", status: "conflicted" },
+      },
+    };
+    expect(settings()).toContain("Keep cloud");
+    expect(
+      renderToStaticMarkup(
+        <ProductSurface
+          desktop={value}
+          connectionError={null}
+          follower={false}
+          refresh={async () => undefined}
+        />,
+      ),
+    ).toContain("Sync conflict");
+  });
+
+  it("does not present null owner-bound status as synchronized or action-ready", () => {
+    const value = synchronizedWorkflowSnapshot();
+    const workflowId = "workflow_aaaaaaaa";
+    value.workflowSync = {
+      ...value.workflowSync!,
+      bindings: {
+        [workflowId]: { eligibility: "owner_bound", status: null },
+      },
+    };
+    const binding = currentOwnerWorkflowSyncBinding(value, workflowId);
+    expect(workflowSynchronizationDisclosure(binding, "editor")).toContain(
+      "status is not yet confirmed",
+    );
+    expect(workflowSynchronizationDisclosure(binding, "editor")).not.toContain(
+      "Synced with your Rove account",
+    );
+    expect(workflowSynchronizationBadge(binding)).toBe("Sync status pending");
+    expect(canRemoveWorkflowFromCloud(value, workflowId)).toBe(false);
+
+    value.workflowSync = {
+      ...value.workflowSync!,
+      bindings: {
+        [workflowId]: { eligibility: "owner_bound", status: "synchronized" },
+      },
+    };
+    expect(canRemoveWorkflowFromCloud(value, workflowId)).toBe(true);
+    value.workflowSync = {
+      ...value.workflowSync,
+      bindings: {
+        [workflowId]: { eligibility: "owner_bound", status: "pending_delete" },
+      },
+    };
+    expect(
+      workflowSynchronizationBadge(
+        currentOwnerWorkflowSyncBinding(value, workflowId),
+      ),
+    ).toBe("Pending cloud deletion");
+    expect(canRemoveWorkflowFromCloud(value, workflowId)).toBe(false);
+  });
+
+  it("enables owner-scoped export only for a signed-in matching owner with eligible Workflows", () => {
+    const value = snapshot();
+    value.roveAccount = {
+      status: "signed_in",
+      syncAvailable: true,
+      ownerId: "owner_11111111111111111111111111111111",
+      email: "owner@example.com",
+      sessionPersistence: "encrypted",
+    };
+    value.workflowSync = {
+      status: "ready",
+      boundOwnerId: value.roveAccount.ownerId,
+      signedInOwnerId: value.roveAccount.ownerId,
+      lastError: null,
+      lastFailureCode: null,
+      items: {},
+      bindings: {},
+      exportableWorkflowCount: 0,
+    };
+    const render = () =>
+      renderToStaticMarkup(
+        <RoveAccountSettings
+          desktop={value}
+          busy={false}
+          email=""
+          code=""
+          status={null}
+          onEmail={() => {}}
+          onCode={() => {}}
+          run={() => {}}
+        />,
+      );
+    expect(render()).toMatch(
+      /<button[^>]*disabled=""[^>]*>Export synchronized Workflows/,
+    );
+    value.workflowSync.exportableWorkflowCount = 1;
+    expect(render()).not.toMatch(
+      /<button[^>]*disabled=""[^>]*>Export synchronized Workflows/,
+    );
+  });
+
   it("offers an explicit managed-credential-store exclusion boundary", () => {
     const html = renderToStaticMarkup(
       <LocalBackupSettings busy={false} status={null} onExport={() => {}} />,

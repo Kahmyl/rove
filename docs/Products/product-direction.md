@@ -83,13 +83,13 @@ The MVP should use explicit approved facts, guidance, and selected reusable know
 
 The MVP supports portability of the reusable workflow environment, not full synchronization of the application or its execution history.
 
-| Portable across devices | Remains local to each device |
-| --- | --- |
-| Workflow definitions and purpose | Task conversations and execution history |
-| Approved preferences, guidance, and skills | Task findings, drafts, reports, and action records |
-| Explicitly saved reusable knowledge | Screenshots, recordings, downloads, and task attachments |
-| Non-secret connection configuration and resource requirements | Tokens, passwords, browser cookies, and credential stores |
-| Workflow configuration revisions | Live browser processes, page references, local paths, and execution state |
+| Portable across devices                                       | Remains local to each device                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Workflow definitions and purpose                              | Task conversations and execution history                                  |
+| Approved preferences, guidance, and skills                    | Task findings, drafts, reports, and action records                        |
+| Explicitly saved reusable knowledge                           | Screenshots, recordings, downloads, and task attachments                  |
+| Non-secret connection configuration and resource requirements | Tokens, passwords, browser cookies, and credential stores                 |
+| Workflow configuration revisions                              | Live browser processes, page references, local paths, and execution state |
 
 On another device, the user restores the same workflow environment, reconnects required services, supplies any necessary local resources, and starts new local tasks. The previous device's conversations do not appear merely because the workflow has synchronized.
 
@@ -103,7 +103,7 @@ Workflow edits, reconnects, deletions, and conflicts need defined behavior. Rece
 
 Local history remains valuable even though it is not synchronized. Provide an explicit export/backup path and clear deletion behavior. Do not present device-local storage as cross-device backup.
 
-The account and synchronization provider is not selected by this document. Earlier Supabase and PowerSync proposals are candidates from a broader design, not commitments under the reduced scope. Any chosen service must satisfy the small-data boundary, account isolation, and cost constraints without expanding the product into a hosted task platform.
+The selected boundary is an optional personal Rove account backed by Supabase Auth and Postgres/RLS in Frankfurt. Google and email OTP are the initial sign-in methods. It synchronizes only the approved portable Workflow projection, retains remote-deletion tombstones for 30 days, supports portable export, and remains independent of Codex/ChatGPT identity. During private exploration it must stay within Supabase Free; no organization/team tenancy, paid feature, additional hosted service, replica, PITR, or add-on is implied. Deleting cloud configuration or the Rove account never silently deletes device-local tasks, results, recordings, artifacts, or Workflows.
 
 ## 7. Application and Agent Architecture
 
@@ -243,17 +243,17 @@ Pin a tested compatibility set across Rove, Codex, browser tooling, runtime, and
 
 Product acceptance must demonstrate the following outcomes:
 
-| Area | Required outcome |
-| --- | --- |
-| Task independence | Non-browser tasks start without a browser; switching views never reroutes another task's execution. |
+| Area                  | Required outcome                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Task independence     | Non-browser tasks start without a browser; switching views never reroutes another task's execution.                                       |
 | Access and continuity | Existing work remains usable without Codex; unavailable-model submissions are honest; stopping permits later continuation or redirection. |
-| Workflows | Guidance improves repeated work without confining conversation or leaking another workflow's context. |
-| Portability | The same workflow environment is reusable on another device, while tasks, files, artifacts, and secrets remain local. |
-| Browser collaboration | Separate task-owned groups work correctly; shared-resource conflicts and human takeover remain appropriately scoped. |
-| Browser competence | Representative general interaction families pass, including icon-only menus and recovery after state changes. |
-| Capture and recording | Task-scoped records and requested playable videos have clear scope, controls, and sensitive-data handling. |
-| Results and actions | Selected results support follow-up; approval and outcome evidence prevent misleading completion and unsafe replay. |
-| Recovery and updates | Application, model, and browser interruptions preserve work; the packaged compatibility set passes the required journeys. |
+| Workflows             | Guidance improves repeated work without confining conversation or leaking another workflow's context.                                     |
+| Portability           | The same workflow environment is reusable on another device, while tasks, files, artifacts, and secrets remain local.                     |
+| Browser collaboration | Separate task-owned groups work correctly; shared-resource conflicts and human takeover remain appropriately scoped.                      |
+| Browser competence    | Representative general interaction families pass, including icon-only menus and recovery after state changes.                             |
+| Capture and recording | Task-scoped records and requested playable videos have clear scope, controls, and sensitive-data handling.                                |
+| Results and actions   | Selected results support follow-up; approval and outcome evidence prevent misleading completion and unsafe replay.                        |
+| Recovery and updates  | Application, model, and browser interruptions preserve work; the packaged compatibility set passes the required journeys.                 |
 
 Implement and verify coherent end-to-end slices rather than adding disconnected abstractions. The exact sync provider, browser-adapter changes, recording mechanism, UI-library adoption, schemas, and migrations remain implementation decisions. Qualify them against these outcomes without reopening the settled product scope or promoting earlier research candidates into requirements.
 

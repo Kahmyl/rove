@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
 
 import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
+import { portableWorkflowDigest } from "./workflow-portability.js";
 import {
   assembleWorkflowContext,
   validateWorkflowConfiguration,
@@ -255,6 +256,14 @@ describe("local Workflow environments", () => {
           { id: "bad_tmp", kind: "document", label: "/tmp" },
         ],
       },
+      {
+        guidance: [{ id: "/Users/me/private", text: "Valid", appliesTo: [] }],
+      },
+      {
+        resourceRequirements: [
+          { id: "C:\\private\\resource", kind: "document", label: "Valid" },
+        ],
+      },
     ]) {
       expect(() =>
         validateWorkflowConfiguration({ ...configuration(), ...invalid }),
@@ -314,5 +323,72 @@ describe("local Workflow environments", () => {
       { migration_id: "0004_add_task_results" },
     ]);
     inspected.close();
+  });
+
+  it("resolves keep-both conflicts atomically and idempotently across restart", async () => {
+    const fixture = await storeFixture();
+    const created = fixture.store.createWorkflow({
+      operationId: "intent_conflict_create_000000000001",
+      name: "Device workflow",
+      configuration: configuration("Device version"),
+    });
+    const remoteBase = {
+      workflowId: created.workflowId,
+      configurationRevision: 2,
+      name: "Cloud workflow",
+      archived: false,
+      configuration: configuration("Cloud version"),
+      approvedAt: "2026-09-13T11:00:00.000Z",
+    };
+    const remote = {
+      schemaVersion: 1 as const,
+      ...remoteBase,
+      digest: portableWorkflowDigest(remoteBase),
+    };
+    const operationId = "resolve_conflict_keep_both_000000001";
+
+    const fault = new Database(fixture.path);
+    fault.exec(`CREATE TRIGGER fail_conflict_receipt BEFORE INSERT ON workflow_conflict_resolution
+      BEGIN SELECT RAISE(ABORT, 'injected conflict commit failure'); END;`);
+    expect(() =>
+      fixture.store.resolvePortableWorkflowConflict({
+        operationId,
+        workflowId: created.workflowId,
+        remote,
+      }),
+    ).toThrow(/injected conflict commit failure/);
+    expect(fixture.store.listWorkflows({ includeArchived: true })).toHaveLength(
+      1,
+    );
+    expect(fixture.store.workflow(created.workflowId)?.currentRevision).toBe(1);
+    fault.exec("DROP TRIGGER fail_conflict_receipt");
+    fault.close();
+
+    const first = fixture.store.resolvePortableWorkflowConflict({
+      operationId,
+      workflowId: created.workflowId,
+      remote,
+    });
+    const repeated = fixture.store.resolvePortableWorkflowConflict({
+      operationId,
+      workflowId: created.workflowId,
+      remote,
+    });
+    expect(repeated.copy.workflowId).toBe(first.copy.workflowId);
+    expect(fixture.store.listWorkflows({ includeArchived: true })).toHaveLength(
+      2,
+    );
+    expect(first.workflow.revision.configuration.purpose).toBe("Cloud version");
+    fixture.store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path: fixture.path });
+    const afterRestart = reopened.resolvePortableWorkflowConflict({
+      operationId,
+      workflowId: created.workflowId,
+      remote,
+    });
+    expect(afterRestart.copy.workflowId).toBe(first.copy.workflowId);
+    expect(reopened.listWorkflows({ includeArchived: true })).toHaveLength(2);
+    reopened.close();
   });
 });

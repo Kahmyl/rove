@@ -115,6 +115,38 @@ const api: RoveDesktopApi = {
     ipcRenderer.invoke("rove:export-local-backup") as ReturnType<
       RoveDesktopApi["exportLocalBackup"]
     >,
+  sendRoveEmailCode: (email) =>
+    ipcRenderer.invoke("rove:account-email-code", email) as Promise<void>,
+  verifyRoveEmailCode: (code) =>
+    ipcRenderer.invoke("rove:account-verify-code", code) as Promise<void>,
+  beginRoveGoogleSignIn: () =>
+    ipcRenderer.invoke("rove:account-google") as Promise<void>,
+  signOutRoveAccount: () =>
+    ipcRenderer.invoke("rove:account-sign-out") as Promise<void>,
+  bindWorkflowSync: (confirmSwitch) =>
+    ipcRenderer.invoke(
+      "rove:workflow-sync-bind",
+      confirmSwitch,
+    ) as Promise<void>,
+  synchronizeWorkflows: () =>
+    ipcRenderer.invoke("rove:workflow-sync-now") as Promise<void>,
+  resolveWorkflowSync: (workflowId, choice) =>
+    ipcRenderer.invoke(
+      "rove:workflow-sync-resolve",
+      workflowId,
+      choice,
+    ) as Promise<void>,
+  removeWorkflowFromCloud: (workflowId) =>
+    ipcRenderer.invoke(
+      "rove:workflow-sync-remove-cloud",
+      workflowId,
+    ) as Promise<void>,
+  deleteRoveCloudAccount: () =>
+    ipcRenderer.invoke("rove:account-delete") as Promise<void>,
+  exportPortableWorkflows: () =>
+    ipcRenderer.invoke("rove:workflow-export") as ReturnType<
+      RoveDesktopApi["exportPortableWorkflows"]
+    >,
 
   getBrowserWorkspaces: () =>
     ipcRenderer.invoke(

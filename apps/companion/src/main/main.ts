@@ -5,6 +5,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  safeStorage,
   screen,
   shell,
   Tray,
@@ -14,6 +15,7 @@ import { loadConfig } from "@rove/config";
 import type { Session } from "@rove/protocol";
 import { FileRecordingStore } from "@rove/storage";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadEnvFile } from "node:process";
 
@@ -73,6 +75,14 @@ import {
 import { createProductIntentIpcHandler } from "./codex/product-intent-ipc.js";
 import { DesktopSnapshotCoordinator } from "./desktop-snapshot-coordinator.js";
 import { LocalBackupExporter } from "./local-backup-exporter.js";
+import {
+  EncryptedFileAuthStorage,
+  readRoveAccountConfiguration,
+  RoveAccountService,
+} from "./codex/rove-account-service.js";
+import { SupabaseWorkflowConfigurationProvider } from "./codex/supabase-workflow-provider.js";
+import { WorkflowSyncCoordinator } from "./codex/workflow-sync-coordinator.js";
+import { WorkflowSyncStateStore } from "./codex/workflow-sync-state.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 
@@ -94,6 +104,11 @@ let codexExecutionCore: CodexExecutionCore | undefined;
 let codexExecutionCoreStarting = false;
 
 let codexProductError: string | null = null;
+let roveAccountService: RoveAccountService | undefined;
+let workflowSyncCoordinator: WorkflowSyncCoordinator | undefined;
+let workflowSyncStateStore: WorkflowSyncStateStore | undefined;
+let workflowSyncMonitor: NodeJS.Timeout | undefined;
+let pendingRoveDeepLink: string | undefined;
 
 let hubConnector: HubConnector | undefined;
 
@@ -189,6 +204,12 @@ async function refreshDesktopSurfaceSnapshot(
       workspaces: toDesktopBrowserWorkspaceStatus(workspaces),
       product,
       productError: nextProductError,
+      ...(roveAccountService
+        ? { roveAccount: roveAccountService.snapshot() }
+        : {}),
+      ...(workflowSyncCoordinator
+        ? { workflowSync: workflowSyncCoordinator.projection() }
+        : { workflowSync: null }),
     };
   });
 }
@@ -201,7 +222,35 @@ function publishSurfaceState(): void {
     workspaces: current.workspaces,
     product: current.product,
     productError: current.productError,
+    ...(current.roveAccount ? { roveAccount: current.roveAccount } : {}),
+    workflowSync: current.workflowSync ?? null,
   }));
+}
+
+function publishIdentityState(): void {
+  if (!desktopSurfaceSnapshot || !roveAccountService) return;
+  workflowSyncCoordinator?.invalidate();
+  desktopSnapshotCoordinator.patch((current) => ({
+    ...current,
+    roveAccount: roveAccountService!.snapshot(),
+    workflowSync: workflowSyncCoordinator?.projection() ?? null,
+  }));
+}
+
+async function acceptRoveDeepLink(value: string): Promise<void> {
+  if (!value.startsWith("rove://auth/callback")) return;
+  if (!roveAccountService) {
+    pendingRoveDeepLink = value;
+    return;
+  }
+  try {
+    await roveAccountService.acceptOAuthCallback(value);
+    publishIdentityState();
+    openFullSurface();
+  } catch (error) {
+    console.error("[identity] Rove sign-in callback failed.", error);
+    openFullSurface();
+  }
 }
 
 function transitionSurface(transition: UnifiedSurfaceTransition): void {
@@ -375,6 +424,120 @@ function registerIpc(
     return (await refreshDesktopSurfaceSnapshot(runtime)).companion;
   };
 
+  const accountOperation = async (
+    operation: (account: RoveAccountService) => Promise<void>,
+  ) => {
+    if (!roveAccountService)
+      throw new Error("Rove account service is unavailable.");
+    await operation(roveAccountService);
+    await refreshDesktopSurfaceSnapshot(runtime);
+  };
+
+  ipcMain.handle(
+    companionIpcChannels.sendRoveEmailCode,
+    (_event, email: unknown) => {
+      if (typeof email !== "string")
+        throw new Error("Email address is invalid.");
+      return accountOperation((account) => account.sendEmailCode(email));
+    },
+  );
+  ipcMain.handle(
+    companionIpcChannels.verifyRoveEmailCode,
+    (_event, code: unknown) => {
+      if (typeof code !== "string") throw new Error("Email code is invalid.");
+      return accountOperation((account) => account.verifyEmailCode(code));
+    },
+  );
+  ipcMain.handle(companionIpcChannels.beginRoveGoogleSignIn, () =>
+    accountOperation(async (account) => {
+      await shell.openExternal(await account.googleAuthorizationUrl());
+    }),
+  );
+  ipcMain.handle(companionIpcChannels.signOutRoveAccount, async () => {
+    workflowSyncCoordinator?.invalidate();
+    await accountOperation((account) => account.signOut());
+  });
+  ipcMain.handle(
+    companionIpcChannels.bindWorkflowSync,
+    async (_event, confirmSwitch: unknown) => {
+      if (!workflowSyncCoordinator)
+        throw new Error("Workflow sync is unavailable.");
+      workflowSyncCoordinator.bindCurrentAccount(confirmSwitch === true);
+      await workflowSyncCoordinator.synchronize();
+      await refreshDesktopSurfaceSnapshot(runtime);
+    },
+  );
+  ipcMain.handle(companionIpcChannels.synchronizeWorkflows, async () => {
+    if (!workflowSyncCoordinator)
+      throw new Error("Workflow sync is unavailable.");
+    await workflowSyncCoordinator.synchronize();
+    await refreshDesktopSurfaceSnapshot(runtime);
+  });
+  ipcMain.handle(
+    companionIpcChannels.resolveWorkflowSync,
+    async (_event, workflowId: unknown, choice: unknown) => {
+      if (!workflowSyncCoordinator)
+        throw new Error("Workflow sync is unavailable.");
+      if (
+        typeof workflowId !== "string" ||
+        ![
+          "keep_local",
+          "keep_remote",
+          "create_copy",
+          "keep_device_only",
+        ].includes(String(choice))
+      )
+        throw new Error("Workflow synchronization choice is invalid.");
+      await workflowSyncCoordinator.resolve(
+        workflowId,
+        choice as
+          "keep_local" | "keep_remote" | "create_copy" | "keep_device_only",
+      );
+      await refreshDesktopSurfaceSnapshot(runtime);
+    },
+  );
+  ipcMain.handle(
+    companionIpcChannels.removeWorkflowFromCloud,
+    async (_event, workflowId: unknown) => {
+      if (!workflowSyncCoordinator)
+        throw new Error("Workflow sync is unavailable.");
+      if (typeof workflowId !== "string")
+        throw new Error("Workflow identity is invalid.");
+      workflowSyncCoordinator.removeFromCloud(workflowId);
+      await workflowSyncCoordinator.synchronize();
+      await refreshDesktopSurfaceSnapshot(runtime);
+    },
+  );
+  ipcMain.handle(companionIpcChannels.deleteRoveCloudAccount, async () => {
+    workflowSyncCoordinator?.invalidate();
+    await accountOperation(async (account) => {
+      await account.deleteCloudAccount();
+      workflowSyncCoordinator?.unbindAfterCloudDeletion();
+    });
+  });
+  ipcMain.handle(companionIpcChannels.exportPortableWorkflows, async () => {
+    if (!workflowSyncCoordinator)
+      throw new Error("Workflow synchronization is unavailable.");
+    const workflows = workflowSyncCoordinator.exportableWorkflows();
+    const result = await dialog.showSaveDialog({
+      title: "Export portable Workflows",
+      defaultPath: "rove-workflows.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath)
+      return { status: "cancelled" as const };
+    await writeFile(
+      result.filePath,
+      `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), workflows }, null, 2)}\n`,
+      { encoding: "utf8", mode: 0o600, flag: "wx" },
+    );
+    return {
+      status: "created" as const,
+      name: result.filePath.split(/[\\/]/).at(-1)!,
+      workflowCount: workflows.length,
+    };
+  });
+
   ipcMain.handle(companionIpcChannels.windowFullscreen, (event) => {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
@@ -411,7 +574,12 @@ function registerIpc(
         return codexExecutionCore.api();
       },
       async () => {
+        const changed = workflowSyncCoordinator?.noticeLocalChanges() ?? false;
         await refreshDesktopSurfaceSnapshot(runtime);
+        if (changed)
+          void workflowSyncCoordinator
+            ?.synchronize()
+            .then(() => refreshDesktopSurfaceSnapshot(runtime));
       },
     ),
   );
@@ -930,6 +1098,36 @@ async function startDesktop(): Promise<void> {
       ? {}
       : { qualificationOverride: process.env.ROVE_DESKTOP_HOME }),
   });
+  const authStorage = new EncryptedFileAuthStorage(
+    join(desktopHome, "identity", "supabase-session.enc"),
+    {
+      available: () =>
+        safeStorage.isEncryptionAvailable() &&
+        (process.platform !== "linux" ||
+          safeStorage.getSelectedStorageBackend() !== "basic_text"),
+      encrypt: (value) => safeStorage.encryptString(value),
+      decrypt: (value) => safeStorage.decryptString(value),
+    },
+  );
+  let roveAccountConfiguration: ReturnType<
+    typeof readRoveAccountConfiguration
+  > = null;
+  try {
+    roveAccountConfiguration = readRoveAccountConfiguration(process.env);
+  } catch (error) {
+    console.error("[identity] Workflow sync configuration is invalid.", error);
+  }
+  roveAccountService = new RoveAccountService(
+    roveAccountConfiguration,
+    authStorage,
+    publishIdentityState,
+  );
+  await roveAccountService.start();
+  if (pendingRoveDeepLink) {
+    const value = pendingRoveDeepLink;
+    pendingRoveDeepLink = undefined;
+    await acceptRoveDeepLink(value);
+  }
   const nativeFileGrant = createLocalFileGrantAuthority({
     async selectPaths(request) {
       openFullSurface();
@@ -1218,6 +1416,37 @@ async function startDesktop(): Promise<void> {
     codexExecutionCoreStarting = true;
     try {
       await codexExecutionCore.start();
+      if (roveAccountService.client) {
+        workflowSyncStateStore = new WorkflowSyncStateStore(
+          join(desktopHome, "identity", "workflow-sync.v1.sqlite3"),
+        );
+        workflowSyncCoordinator = new WorkflowSyncCoordinator(
+          codexExecutionCore.workflowStore(),
+          workflowSyncStateStore,
+          new SupabaseWorkflowConfigurationProvider(roveAccountService.client),
+          () => roveAccountService?.ownerId() ?? null,
+          () => roveAccountService?.authEpoch() ?? 0,
+        );
+        if (
+          roveAccountService.ownerId() &&
+          workflowSyncCoordinator.projection().boundOwnerId &&
+          workflowSyncCoordinator.projection().status !== "account_mismatch"
+        )
+          void workflowSyncCoordinator
+            .synchronize()
+            .then(() => refreshDesktopSurfaceSnapshot(runtime));
+        workflowSyncMonitor = setInterval(() => {
+          if (
+            roveAccountService?.ownerId() &&
+            workflowSyncCoordinator?.projection().boundOwnerId &&
+            workflowSyncCoordinator?.projection().status !== "account_mismatch"
+          )
+            void workflowSyncCoordinator
+              ?.synchronize()
+              .then(() => refreshDesktopSurfaceSnapshot(runtime));
+        }, 60_000);
+        workflowSyncMonitor.unref();
+      }
       codexExecutionCoreStarting = false;
       codexProductError = null;
       await refreshDesktopSurfaceSnapshot(runtime);
@@ -1364,7 +1593,16 @@ async function startDesktop(): Promise<void> {
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.setAsDefaultProtocolClient("rove");
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    void acceptRoveDeepLink(url);
+  });
+  app.on("second-instance", (_event, argv) => {
+    const deepLink = argv.find((value) =>
+      value.startsWith("rove://auth/callback"),
+    );
+    if (deepLink) void acceptRoveDeepLink(deepLink);
     openFullSurface();
   });
 
@@ -1385,6 +1623,10 @@ app.on("activate", () => {
 app.on("before-quit", (event) => {
   stopFollowerDragTracking();
   stopSessionSurfaceMonitor();
+  if (workflowSyncMonitor) clearInterval(workflowSyncMonitor);
+  workflowSyncMonitor = undefined;
+  workflowSyncStateStore?.close();
+  workflowSyncStateStore = undefined;
 
   browserFollowController?.stop();
   browserFollowController = undefined;

@@ -133,6 +133,44 @@ export function createDesktopApi(ipc: IpcInvoker): RoveDesktopApi {
       ipc.invoke(companionIpcChannels.exportLocalBackup) as ReturnType<
         RoveDesktopApi["exportLocalBackup"]
       >,
+    sendRoveEmailCode: (email) =>
+      ipc.invoke(
+        companionIpcChannels.sendRoveEmailCode,
+        email,
+      ) as Promise<void>,
+    verifyRoveEmailCode: (code) =>
+      ipc.invoke(
+        companionIpcChannels.verifyRoveEmailCode,
+        code,
+      ) as Promise<void>,
+    beginRoveGoogleSignIn: () =>
+      ipc.invoke(companionIpcChannels.beginRoveGoogleSignIn) as Promise<void>,
+    signOutRoveAccount: () =>
+      ipc.invoke(companionIpcChannels.signOutRoveAccount) as Promise<void>,
+    bindWorkflowSync: (confirmSwitch) =>
+      ipc.invoke(
+        companionIpcChannels.bindWorkflowSync,
+        confirmSwitch,
+      ) as Promise<void>,
+    synchronizeWorkflows: () =>
+      ipc.invoke(companionIpcChannels.synchronizeWorkflows) as Promise<void>,
+    resolveWorkflowSync: (workflowId, choice) =>
+      ipc.invoke(
+        companionIpcChannels.resolveWorkflowSync,
+        workflowId,
+        choice,
+      ) as Promise<void>,
+    removeWorkflowFromCloud: (workflowId) =>
+      ipc.invoke(
+        companionIpcChannels.removeWorkflowFromCloud,
+        workflowId,
+      ) as Promise<void>,
+    deleteRoveCloudAccount: () =>
+      ipc.invoke(companionIpcChannels.deleteRoveCloudAccount) as Promise<void>,
+    exportPortableWorkflows: () =>
+      ipc.invoke(companionIpcChannels.exportPortableWorkflows) as ReturnType<
+        RoveDesktopApi["exportPortableWorkflows"]
+      >,
 
     getBrowserWorkspaces: () =>
       ipc.invoke(companionIpcChannels.browserWorkspaces) as ReturnType<

@@ -18,7 +18,7 @@
 
 ## Reviewed dependency baseline
 
-The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository's Codex compatibility profile/generated schema is for `0.153.4`.
+The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Supabase JavaScript `2.111.0`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository's Codex compatibility profile/generated schema is for `0.153.4`.
 
 These are observations of the reviewed repository, not claims that they are the newest releases or that every combination is already supported on every platform. Install with the lockfile frozen. Update the binary, generated contracts, lockfile, native-module packaging, and verification evidence as one compatible change. Do not infer installed versions from a package range alone.
 
@@ -26,9 +26,9 @@ Required package `version` fields and generated upstream filenames remain techni
 
 ## Small account and workflow-sync boundary
 
-A provider is needed for Rove identity and cross-device approved workflow setup. It must support owner isolation, authenticated reads/writes, conditional revision updates, deletion semantics, and bounded configuration storage. The provider choice is not yet committed by the product direction.
+A personal Supabase Auth identity plus Postgres/RLS in Frankfurt is the selected provider for cross-device approved Workflow setup. The desktop adapter uses `@supabase/supabase-js` with a publishable key and user session only. A narrowly scoped database function deletes only the authenticated subject, so no service-role authority is shipped or added as another hosted runtime.
 
-A managed Auth plus database offering such as Supabase is a candidate, not a requirement to move tasks or artifacts to a hosted Postgres database. A small application API is also possible. Do not add PowerSync or general-purpose row replication solely to move a few approved configuration documents. Evaluate the narrow contract first.
+This choice does not move tasks or artifacts to hosted Postgres. Do not add PowerSync, general-purpose row replication, organizations, or another application service solely to move the approved configuration documents.
 
 Before selecting a provider, record actual free limits, inactivity behavior, email/social sign-in requirements, data region, export/deletion support, and operator cost. A free tier does not guarantee unlimited users, permanent availability, or zero future operating expense. No provider should receive Codex credentials or browser cookies through workflow configuration.
 

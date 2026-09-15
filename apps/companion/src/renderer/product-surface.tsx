@@ -28,6 +28,7 @@ import type {
   ExecutionMode,
 } from "../main/codex/task-coordinator.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
 import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
@@ -435,6 +436,97 @@ export function workflowConfigurationFromDraft(
         appliesTo: workflowLines(entry.appliesTo),
       })),
   };
+}
+
+export function workflowSynchronizationDisclosure(
+  binding: WorkflowSyncBindingProjection | null,
+  context: "editor" | "promotion",
+): string {
+  const location =
+    binding?.eligibility === "owner_bound"
+      ? binding.status === "conflicted"
+        ? "This Workflow needs sync conflict resolution."
+        : binding.status === "pending_delete"
+          ? "Removal from your Rove account is pending. The local Workflow remains on this device."
+          : binding.status === "deleted_remotely" ||
+              binding.status === "absent_remotely"
+            ? "The cloud Workflow is absent. The local Workflow remains on this device until you choose what to do."
+            : binding.status === "unavailable" ||
+                binding.status === "auth_required" ||
+                binding.status === "transport_uncertain"
+              ? "Changes are saved locally. Sync will resume when connection and account access are available."
+              : binding.status === "error"
+                ? "This Workflow is linked to your Rove account, but its current portable configuration cannot synchronize."
+                : binding.status === "pending_upload"
+                  ? "Changes are saved locally and pending synchronization with your Rove account."
+                  : binding.status === "synchronized"
+                    ? "Synced with your Rove account."
+                    : "This Workflow is linked to your Rove account, but its synchronization status is not yet confirmed."
+      : binding?.eligibility === "detached"
+        ? "Stored on this device. It is no longer synchronized with your Rove account."
+        : binding?.eligibility === "other_owner"
+          ? "Stored on this device. It is not synchronized with the current Rove account."
+          : context === "editor"
+            ? "Stored on this device."
+            : "This destination remains on this device.";
+  const exclusions =
+    context === "editor"
+      ? " Secrets, credentials, local paths, task history, attachments, approvals, execution state, and browser state are excluded."
+      : "";
+  return `${location}${exclusions} Automated checks cannot guarantee detection of every secret you manually enter in reusable text.`;
+}
+
+export function currentOwnerWorkflowSyncBinding(
+  desktop: DesktopSurfaceSnapshot | null,
+  workflowId: string,
+): WorkflowSyncBindingProjection | null {
+  const binding = desktop?.workflowSync?.bindings[workflowId];
+  if (!binding) return null;
+  const account = desktop?.roveAccount;
+  const ownerId = account?.status === "signed_in" ? account.ownerId : null;
+  const exactOwnerBinding =
+    ownerId !== null &&
+    desktop.workflowSync?.signedInOwnerId === ownerId &&
+    desktop.workflowSync.boundOwnerId === ownerId &&
+    binding.eligibility === "owner_bound";
+  if (exactOwnerBinding) return binding;
+  if (
+    binding.eligibility === "device_only" ||
+    binding.eligibility === "detached"
+  )
+    return { eligibility: binding.eligibility, status: null };
+  return { eligibility: "other_owner", status: null };
+}
+
+export function workflowSynchronizationBadge(
+  binding: WorkflowSyncBindingProjection | null,
+): string | null {
+  if (!binding || binding.eligibility === "device_only") return null;
+  if (binding.eligibility === "other_owner")
+    return "Not synced to this account";
+  if (binding.eligibility === "detached") return "This device only";
+  if (binding.status === "synchronized") return "Synced";
+  if (binding.status === "pending_upload") return "Pending upload";
+  if (binding.status === "pending_delete") return "Pending cloud deletion";
+  if (binding.status === "conflicted") return "Sync conflict";
+  if (binding.status === "deleted_remotely") return "Deleted in cloud";
+  if (binding.status === "absent_remotely") return "No longer in cloud";
+  if (binding.status === "unavailable") return "Sync unavailable";
+  if (binding.status === "auth_required") return "Sign-in required for sync";
+  if (binding.status === "transport_uncertain") return "Sync outcome uncertain";
+  if (binding.status === "error") return "Sync error";
+  if (binding.status === "local_only") return "This device only";
+  return "Sync status pending";
+}
+
+export function canRemoveWorkflowFromCloud(
+  desktop: DesktopSurfaceSnapshot | null,
+  workflowId: string,
+): boolean {
+  const binding = currentOwnerWorkflowSyncBinding(desktop, workflowId);
+  return (
+    binding?.eligibility === "owner_bound" && binding.status === "synchronized"
+  );
 }
 
 function workspaceChoice(desktop: DesktopSurfaceSnapshot | null): string {
@@ -906,6 +998,344 @@ export function LocalBackupSettings({
   );
 }
 
+export function RoveAccountSettings({
+  desktop,
+  busy,
+  email,
+  code,
+  status,
+  onEmail,
+  onCode,
+  run,
+}: {
+  desktop: DesktopSurfaceSnapshot | null;
+  busy: boolean;
+  email: string;
+  code: string;
+  status: string | null;
+  onEmail(value: string): void;
+  onCode(value: string): void;
+  run(operation: () => Promise<unknown>, success?: string): void;
+}) {
+  const account = desktop?.roveAccount;
+  const sync = desktop?.workflowSync;
+  const signedIn = account?.status === "signed_in";
+  const canExport = Boolean(
+    signedIn &&
+    sync?.boundOwnerId &&
+    sync.boundOwnerId === sync.signedInOwnerId &&
+    sync.exportableWorkflowCount > 0,
+  );
+  const actionableSyncItems = (desktop?.product?.workflows ?? []).flatMap(
+    (workflow) => {
+      const binding = currentOwnerWorkflowSyncBinding(
+        desktop,
+        workflow.workflowId,
+      );
+      return binding?.eligibility === "owner_bound" &&
+        (binding.status === "conflicted" ||
+          binding.status === "deleted_remotely" ||
+          binding.status === "absent_remotely")
+        ? [
+            {
+              workflowId: workflow.workflowId,
+              status: binding.status,
+            },
+          ]
+        : [];
+    },
+  );
+  return (
+    <section className="settings-data" aria-labelledby="rove-account-title">
+      <div>
+        <strong id="rove-account-title">Rove account and Workflow sync</strong>
+        <p>
+          A Rove account is optional. It synchronizes only portable Workflow
+          configuration and is independent of your Codex/ChatGPT connection.
+        </p>
+      </div>
+      {account?.status === "unconfigured" || !account ? (
+        <small>
+          Workflow sync is not configured in this build. Local tasks and
+          Workflows remain available.
+        </small>
+      ) : signedIn ? (
+        <>
+          <p>
+            Signed in as <strong>{account.email ?? "Rove account"}</strong>
+          </p>
+          {sync?.status === "account_mismatch" ? (
+            <>
+              <p role="alert">
+                This device was linked to another Rove account. Nothing will
+                sync until you confirm the switch.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  run(
+                    () => window.rove.bindWorkflowSync(true),
+                    "This device is now linked to the signed-in account.",
+                  )
+                }
+              >
+                Use this account on this device
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                run(
+                  () =>
+                    sync?.boundOwnerId
+                      ? window.rove.synchronizeWorkflows()
+                      : window.rove.bindWorkflowSync(),
+                  "Workflow synchronization finished.",
+                )
+              }
+            >
+              {sync?.status === "syncing"
+                ? "Synchronizing…"
+                : "Sync Workflows now"}
+            </button>
+          )}
+          {sync?.status === "unavailable" && (
+            <p role="status">
+              Sync is unavailable. Local Workflows still work and changes remain
+              on this device. {sync.lastError}
+            </p>
+          )}
+          {sync?.status === "auth_required" && (
+            <p role="alert">
+              Workflow sync needs you to sign in again. Local Workflows and
+              changes remain on this device.
+            </p>
+          )}
+          {sync?.status === "transport_uncertain" && (
+            <p role="status">
+              A sync request has an uncertain outcome. Rove will reconcile it
+              safely before retrying; local Workflows remain available.
+            </p>
+          )}
+          {sync?.status === "error" && (
+            <p role="alert">
+              A Workflow configuration was rejected and will not be retried
+              until it changes. Local Workflows and tasks remain available.
+            </p>
+          )}
+          {actionableSyncItems.length > 0 && (
+            <div role="alert">
+              <p>
+                Some Workflows need a conflict or deletion choice. Rove has kept
+                the local versions unchanged.
+              </p>
+              {actionableSyncItems.map(({ workflowId, status }) => (
+                <div key={workflowId}>
+                  <strong>
+                    {desktop?.product?.workflows.find(
+                      (workflow) => workflow.workflowId === workflowId,
+                    )?.name ?? "Workflow"}
+                  </strong>
+                  {status === "conflicted" ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          run(
+                            () =>
+                              window.rove.resolveWorkflowSync(
+                                workflowId,
+                                "keep_local",
+                              ),
+                            "Kept the device version and synchronized it.",
+                          )
+                        }
+                      >
+                        Keep this device
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          run(
+                            () =>
+                              window.rove.resolveWorkflowSync(
+                                workflowId,
+                                "keep_remote",
+                              ),
+                            "Kept the cloud version.",
+                          )
+                        }
+                      >
+                        Keep cloud
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          run(
+                            () =>
+                              window.rove.resolveWorkflowSync(
+                                workflowId,
+                                "create_copy",
+                              ),
+                            "Kept a local copy and applied the cloud version.",
+                          )
+                        }
+                      >
+                        Keep both
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          () =>
+                            window.rove.resolveWorkflowSync(
+                              workflowId,
+                              "keep_device_only",
+                            ),
+                          "Kept this Workflow on this device only.",
+                        )
+                      }
+                    >
+                      Keep on this device only
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              run(
+                () => window.rove.signOutRoveAccount(),
+                "Signed out. Device-local data was kept.",
+              )
+            }
+          >
+            Sign out
+          </button>
+          <button
+            className="danger-text"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Delete this Rove cloud account and its synchronized Workflow configuration? Device-local tasks, results, recordings, artifacts, and Workflows will stay on this device.",
+                )
+              )
+                run(
+                  () => window.rove.deleteRoveCloudAccount(),
+                  "Cloud account deleted. Device-local data was kept.",
+                );
+            }}
+          >
+            Delete cloud account…
+          </button>
+        </>
+      ) : (
+        <>
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => onEmail(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !email.trim()}
+            onClick={() =>
+              run(
+                () => window.rove.sendRoveEmailCode(email),
+                "Check your email for the six-digit Rove sign-in code.",
+              )
+            }
+          >
+            Email me a code
+          </button>
+          {account.status === "email_code_sent" && (
+            <>
+              <label>
+                <span>Six-digit code</span>
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) =>
+                    onCode(event.target.value.replace(/\D/g, ""))
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                disabled={busy || code.length !== 6}
+                onClick={() =>
+                  run(
+                    () => window.rove.verifyRoveEmailCode(code),
+                    "Signed in to Rove.",
+                  )
+                }
+              >
+                Verify code
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => window.rove.beginRoveGoogleSignIn())}
+          >
+            Continue with Google
+          </button>
+          {account.status === "error" && <p role="alert">{account.message}</p>}
+        </>
+      )}
+      <button
+        type="button"
+        disabled={busy || !desktop?.product || !canExport}
+        onClick={() =>
+          run(
+            () =>
+              window.rove.exportPortableWorkflows().then((result) => {
+                if (result.status === "created")
+                  return `${result.name} created with ${result.workflowCount} Workflows.`;
+              }),
+            "Portable Workflow export finished.",
+          )
+        }
+      >
+        Export synchronized Workflows…
+      </button>
+      {!canExport && (
+        <small>
+          Sign in to the linked Rove account and synchronize at least one
+          Workflow to enable this owner-scoped export.
+        </small>
+      )}
+      {status && <p role="status">{status}</p>}
+      <small>
+        Never synchronized: task conversations, results, recordings,
+        attachments, credentials, cookies, approvals, browser/live state, local
+        paths, or execution state.
+      </small>
+    </section>
+  );
+}
+
 export function ProductSurface({
   desktop,
   connectionError,
@@ -959,6 +1389,11 @@ export function ProductSurface({
   );
   const [operationError, setOperationError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [roveEmail, setRoveEmail] = useState("");
+  const [roveCode, setRoveCode] = useState("");
+  const [roveAccountStatus, setRoveAccountStatus] = useState<string | null>(
+    null,
+  );
   const [recordingConfirmed, setRecordingConfirmed] = useState(false);
   const [login, setLogin] = useState<LoginProjection | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -1347,6 +1782,18 @@ export function ProductSurface({
         workflowId: workflow.workflowId,
         expectedRevision: workflow.currentRevision,
       }),
+    );
+    if (result !== undefined) setWorkflowEditor(null);
+  };
+  const removeWorkflowFromCloud = async (workflow: WorkflowEnvironment) => {
+    if (
+      !window.confirm(
+        `Remove “${workflow.name}” from this Rove account? The Workflow and all local task history will stay on this device.`,
+      )
+    )
+      return;
+    const result = await run(() =>
+      window.rove.removeWorkflowFromCloud(workflow.workflowId),
     );
     if (result !== undefined) setWorkflowEditor(null);
   };
@@ -2467,11 +2914,44 @@ export function ProductSurface({
                 </select>
               </label>
               <p className="workflow-disclosure">
-                Workflow setup stays local unless a synchronization provider is
-                connected in the future. Secrets, credentials, local paths, task
-                history, attachments, and browser state are rejected.
+                {workflowSynchronizationDisclosure(
+                  workflowEditor.workflowId
+                    ? currentOwnerWorkflowSyncBinding(
+                        desktop,
+                        workflowEditor.workflowId,
+                      )
+                    : desktop?.workflowSync?.boundOwnerId &&
+                        desktop.workflowSync.boundOwnerId ===
+                          desktop.workflowSync.signedInOwnerId
+                      ? {
+                          eligibility: "owner_bound",
+                          status: "pending_upload",
+                        }
+                      : null,
+                  "editor",
+                )}
               </p>
               <div className="auth-actions">
+                {workflowEditor.workflowId &&
+                  canRemoveWorkflowFromCloud(
+                    desktop,
+                    workflowEditor.workflowId,
+                  ) && (
+                    <button
+                      type="button"
+                      className="danger-text"
+                      disabled={busy}
+                      onClick={() => {
+                        const workflow = product?.workflows.find(
+                          (entry) =>
+                            entry.workflowId === workflowEditor.workflowId,
+                        );
+                        if (workflow) void removeWorkflowFromCloud(workflow);
+                      }}
+                    >
+                      Remove from Rove account…
+                    </button>
+                  )}
                 {workflowEditor.workflowId &&
                   product?.workflows.find(
                     (entry) => entry.workflowId === workflowEditor.workflowId,
@@ -2793,6 +3273,15 @@ export function ProductSurface({
                 <p>
                   Review exactly what will become reusable. The conversation,
                   files, approvals, and browser state are not included.
+                </p>
+                <p>
+                  {workflowSynchronizationDisclosure(
+                    currentOwnerWorkflowSyncBinding(
+                      desktop,
+                      workflowPromotion.workflowId,
+                    ),
+                    "promotion",
+                  )}
                 </p>
               </div>
               <button
@@ -3312,6 +3801,35 @@ export function ProductSurface({
                         : "Rove could not export the local backup.",
                     );
                   })
+                  .finally(() => setBusy(false));
+              }}
+            />
+            <RoveAccountSettings
+              desktop={desktop}
+              busy={busy}
+              email={roveEmail}
+              code={roveCode}
+              status={roveAccountStatus}
+              onEmail={setRoveEmail}
+              onCode={setRoveCode}
+              run={(operation, success) => {
+                setBusy(true);
+                setRoveAccountStatus(null);
+                void operation()
+                  .then((result) => {
+                    setRoveAccountStatus(
+                      typeof result === "string" ? result : (success ?? null),
+                    );
+                    setOperationError(null);
+                    return refresh();
+                  })
+                  .catch((cause: unknown) =>
+                    setOperationError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Rove account operation failed.",
+                    ),
+                  )
                   .finally(() => setBusy(false));
               }}
             />
@@ -4557,6 +5075,15 @@ export function ProductSurface({
                     ).length
                   }{" "}
                   tasks
+                  {(() => {
+                    const badge = workflowSynchronizationBadge(
+                      currentOwnerWorkflowSyncBinding(
+                        desktop,
+                        workflow.workflowId,
+                      ),
+                    );
+                    return badge ? <> · {badge}</> : null;
+                  })()}
                 </small>
               </button>
             ))}

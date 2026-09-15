@@ -642,6 +642,11 @@ export class CodexExecutionCore {
     return this.apiValue;
   }
 
+  workflowStore(): SqliteTaskEngineStore {
+    if (!this.store) throw new Error("Codex execution core is not started.");
+    return this.store;
+  }
+
   async attachBrowser(taskId: string): Promise<string> {
     if (!this.store) throw new Error("Codex execution core is not started.");
     const aggregate = await this.store.aggregate(taskId);

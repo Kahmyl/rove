@@ -137,11 +137,15 @@ describe("Companion preload API", () => {
 
     expect(Object.keys(api).sort()).toEqual([
       "beginFollowerDrag",
+      "beginRoveGoogleSignIn",
+      "bindWorkflowSync",
       "createBrowserWorkspace",
       "deleteBrowserWorkspace",
+      "deleteRoveCloudAccount",
       "endFollowerDrag",
       "executeProductIntent",
       "exportLocalBackup",
+      "exportPortableWorkflows",
       "finishSession",
       "getBrowserWorkspaces",
       "getFollowerPresentation",
@@ -154,16 +158,22 @@ describe("Companion preload API", () => {
       "openRove",
       "openTrustedExternal",
       "pauseSession",
+      "removeWorkflowFromCloud",
       "renameBrowserWorkspace",
+      "resolveWorkflowSync",
       "returnControl",
       "selectBrowserWorkspace",
+      "sendRoveEmailCode",
       "setFollowerExpanded",
       "showBrowser",
+      "signOutRoveAccount",
       "subscribeSurfaceSnapshot",
       "subscribeWindowFullscreen",
+      "synchronizeWorkflows",
       "takeControl",
       "transitionSurface",
       "updateFollowerDrag",
+      "verifyRoveEmailCode",
     ]);
 
     await api.getWindowFullscreen();
@@ -208,6 +218,16 @@ describe("Companion preload API", () => {
     });
     await api.openRecording("task_exact", `rec_${"a".repeat(32)}`);
     await api.exportLocalBackup();
+    await api.sendRoveEmailCode("person@example.com");
+    await api.verifyRoveEmailCode("123456");
+    await api.beginRoveGoogleSignIn();
+    await api.signOutRoveAccount();
+    await api.bindWorkflowSync(true);
+    await api.synchronizeWorkflows();
+    await api.resolveWorkflowSync("workflow_12345678", "keep_device_only");
+    await api.removeWorkflowFromCloud("workflow_12345678");
+    await api.deleteRoveCloudAccount();
+    await api.exportPortableWorkflows();
     await api.getBrowserWorkspaces();
     await api.createBrowserWorkspace("Personal");
     await api.selectBrowserWorkspace(
@@ -243,6 +263,16 @@ describe("Companion preload API", () => {
       companionIpcChannels.openTrustedExternal,
       companionIpcChannels.openRecording,
       companionIpcChannels.exportLocalBackup,
+      companionIpcChannels.sendRoveEmailCode,
+      companionIpcChannels.verifyRoveEmailCode,
+      companionIpcChannels.beginRoveGoogleSignIn,
+      companionIpcChannels.signOutRoveAccount,
+      companionIpcChannels.bindWorkflowSync,
+      companionIpcChannels.synchronizeWorkflows,
+      companionIpcChannels.resolveWorkflowSync,
+      companionIpcChannels.removeWorkflowFromCloud,
+      companionIpcChannels.deleteRoveCloudAccount,
+      companionIpcChannels.exportPortableWorkflows,
       companionIpcChannels.browserWorkspaces,
       companionIpcChannels.createBrowserWorkspace,
       companionIpcChannels.selectBrowserWorkspace,
