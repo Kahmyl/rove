@@ -16,10 +16,12 @@ import { TaskProcessWorker } from "./task-process-worker.js";
 import { CodexAccountCatalogService } from "./account-catalog.js";
 import { CodexAppServerHost } from "./app-server-host.js";
 import {
+  browserAlternateCapabilityDisposition,
   browserRoutePageDisposition,
   browserRouteRecoveryDisposition,
   browserRouteDeveloperInstructions,
-  ROVE_BROWSER_ROUTE_POLICY_V4,
+  MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP,
+  ROVE_BROWSER_ROUTE_POLICY_V5,
 } from "./browser-route-policy.js";
 import {
   CodexAttentionBroker,
@@ -684,7 +686,7 @@ describe("Codex turn interruption convergence", () => {
   );
 });
 
-describe("Rove browser route recovery policy v4", () => {
+describe("Rove browser route recovery policy", () => {
   const base = {
     attemptsForStep: 0,
     retryable: false,
@@ -719,12 +721,12 @@ describe("Rove browser route recovery policy v4", () => {
     ).toBe("stop");
   });
 
-  it("keeps retryable pre-dispatch freshness recovery conversational", () => {
+  it("bounds freshly grounded pre-dispatch recovery by the attempt budget", () => {
     expect(
       browserRouteRecoveryDisposition({
         ...base,
         kind: "freshness",
-        attemptsForStep: 5,
+        attemptsForStep: MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP - 1,
         retryable: true,
       }),
     ).toBe("fresh_retry");
@@ -732,14 +734,22 @@ describe("Rove browser route recovery policy v4", () => {
       browserRouteRecoveryDisposition({
         ...base,
         kind: "freshness",
-        attemptsForStep: 5,
+        attemptsForStep: MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP,
+        retryable: true,
+      }),
+    ).toBe("stop");
+    expect(
+      browserRouteRecoveryDisposition({
+        ...base,
+        kind: "freshness",
+        attemptsForStep: 0,
         retryable: true,
         dispatchStatus: "unknown",
       }),
     ).toBe("stop");
   });
 
-  it("keeps safe read-only recovery available after prior grounded attempts", () => {
+  it("bounds safe read-only recovery and stops consequential replay", () => {
     const safe = {
       ...base,
       kind: "read_only_outcome" as const,
@@ -753,11 +763,53 @@ describe("Rove browser route recovery policy v4", () => {
       "alternate_read_only_route",
     );
     expect(
-      browserRouteRecoveryDisposition({ ...safe, attemptsForStep: 7 }),
-    ).toBe("alternate_read_only_route");
+      browserRouteRecoveryDisposition({
+        ...safe,
+        attemptsForStep: MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP,
+      }),
+    ).toBe("stop");
     expect(
       browserRouteRecoveryDisposition({ ...safe, consequential: true }),
     ).toBe("stop");
+  });
+
+  it("permits legitimate authorized alternates without enabling bypass or replay", () => {
+    const alternate = {
+      browserFailure: "read_only" as const,
+      authorized: true,
+      suitableForRequestedOutcome: true,
+      serviceRulesPermit: true,
+      wouldBypassRestriction: false,
+      wouldExpandAuthorization: false,
+      wouldReplayUnresolvedEffect: false,
+      consequentialOutcome: "completed" as const,
+    };
+    expect(browserAlternateCapabilityDisposition(alternate)).toBe(
+      "use_authorized_alternate",
+    );
+    expect(
+      browserAlternateCapabilityDisposition({
+        ...alternate,
+        browserFailure: "conclusively_pre_dispatch",
+        consequentialOutcome: "not_dispatched",
+      }),
+    ).toBe("use_authorized_alternate");
+    for (const blocked of [
+      { wouldBypassRestriction: true },
+      { wouldExpandAuthorization: true },
+      { wouldReplayUnresolvedEffect: true },
+      { consequentialOutcome: "unknown" as const },
+      { browserFailure: "hard_boundary" as const },
+      {
+        browserFailure: "conclusively_pre_dispatch" as const,
+        consequentialOutcome: "completed" as const,
+      },
+      { authorized: false },
+      { serviceRulesPermit: false },
+    ])
+      expect(
+        browserAlternateCapabilityDisposition({ ...alternate, ...blocked }),
+      ).toBe("stop");
   });
 
   it("ignores an unrelated optional survey after the requested path succeeds", () => {
@@ -3758,7 +3810,7 @@ describe("capability and bootstrap", () => {
       });
       await coordinator.resume({ roveTaskId: started.context.roveTaskId });
 
-      expect(ROVE_BROWSER_ROUTE_POLICY_V4).toContain("route policy v4");
+      expect(ROVE_BROWSER_ROUTE_POLICY_V5).toContain("route policy v5");
       const expected = browserRouteDeveloperInstructions(started.context);
       expect(expected).toContain(
         "Diagnostic browser evidence alone is not a required-path failure.",
@@ -3770,20 +3822,22 @@ describe("capability and bootstrap", () => {
         "unless evidence shows they prevented a required target or outcome",
       );
       expect(expected).toContain(
-        "An uncertain consequential receipt remains a stop boundary",
+        "an uncertain consequential receipt is an immediate no-replay boundary",
       );
-      expect(expected).toContain("A recoverable Rove rejection does not end");
-      expect(expected).toContain("continue with a newly grounded action");
+      expect(expected).toContain("small per-step recovery budget");
+      expect(expected).toContain("When that budget is exhausted");
       expect(expected).toContain("mechanically corrected request");
-      expect(expected).toContain("another safe read-only Rove route");
+      expect(expected).toContain("another freshly grounded safe Rove route");
       expect(expected).toContain(
         "A screenshot retry must bind to the newly returned observation.",
       );
       expect(expected).toContain(
+        "does not globally prohibit a separately authorized integration",
+      );
+      expect(expected).toContain(
         "never infer non-dispatch when Rove does not prove it",
       );
-      expect(expected).not.toContain("at most one recovery sequence");
-      expect(expected).not.toContain("After the budget is consumed");
+      expect(expected).toContain("must not bypass a restriction");
       expect(expected).toContain(
         `exact execution mode ${JSON.stringify(executionMode)}`,
       );

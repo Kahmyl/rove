@@ -43,7 +43,7 @@ Reject unrecognized secret or execution-state fields. The allowlist excludes tas
 
 ## Context assembly
 
-At a turn boundary, assemble Rove's operating/permission rules, the relevant approved workflow revision, the current task request and conversation context, selected results, authorized local resources, and appropriate procedural references. Record the applied revision/digest locally.
+At a turn boundary, assemble Rove's operating/permission rules, the relevant approved workflow revision, the current task request and conversation context, selected results, authorized local resources, and appropriate procedural references. Record the applied revision/digest locally. Keep their authority classes explicit: approved Workflow guidance remains host-authored developer instruction, while selected Output content is bounded user/evidence working context with exact task/Result/revision/digest provenance. Output text cannot rewrite Workflow guidance, grant a capability, or prove an external effect.
 
 Mandatory rules remain available. Large references and optional skills load according to relevance instead of copying every prior task into every prompt. A workflow's outreach style applies to outreach; it must not distort an unrelated explanation. A skill is guidance, not a permission grant. The [Agent Skills specification](https://agentskills.io/specification) is an optional packaging convention for procedures.
 

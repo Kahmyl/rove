@@ -306,6 +306,15 @@ function fixture(
 }
 
 function taskResult(overrides: Partial<TaskResult> = {}): TaskResult {
+  const revision = {
+    resultId: "result_local_1",
+    revision: 1,
+    title: "Reviewed draft",
+    body: "Use this exact reviewed material.",
+    artifactIds: [],
+    digest: "c".repeat(64),
+    createdAt: "2026-09-13T10:00:00.000Z",
+  };
   return {
     resultId: "result_local_1",
     taskId: "task_existing",
@@ -313,16 +322,9 @@ function taskResult(overrides: Partial<TaskResult> = {}): TaskResult {
     kind: "draft",
     lifecycle: "prepared",
     selected: true,
+    selectedRevision: { ...revision },
     currentRevision: 1,
-    revision: {
-      resultId: "result_local_1",
-      revision: 1,
-      title: "Reviewed draft",
-      body: "Use this exact reviewed material.",
-      artifactIds: [],
-      digest: "c".repeat(64),
-      createdAt: "2026-09-13T10:00:00.000Z",
-    },
+    revision,
     source: {
       conversationItemId: "item_1",
       conversationTextDigest: "d".repeat(64),
@@ -338,6 +340,7 @@ function resultStore(initial = taskResult()): ResultStore & {
   createResult: ReturnType<typeof vi.fn>;
   reviseDraft: ReturnType<typeof vi.fn>;
   setResultSelected: ReturnType<typeof vi.fn>;
+  consumeResultSelection: ReturnType<typeof vi.fn>;
   transitionAction: ReturnType<typeof vi.fn>;
 } {
   let current = initial;
@@ -373,7 +376,28 @@ function resultStore(initial = taskResult()): ResultStore & {
       return current;
     }),
     setResultSelected: vi.fn((input) => {
-      current = { ...current, selected: input.selected };
+      if (input.selected)
+        current = {
+          ...current,
+          selected: true,
+          selectedRevision: current.revision,
+        };
+      else {
+        const { selectedRevision: _selectedRevision, ...unselected } = current;
+        current = { ...unselected, selected: false };
+      }
+      return current;
+    }),
+    consumeResultSelection: vi.fn((input) => {
+      const selectedRevision = current.selectedRevision;
+      if (!selectedRevision) throw new Error("Selected result is unavailable.");
+      if (
+        selectedRevision.revision !== input.selectedRevision ||
+        selectedRevision.digest !== input.selectedDigest
+      )
+        throw new Error("Selected result changed before it could be consumed.");
+      const { selectedRevision: _selectedRevision, ...unselected } = current;
+      current = { ...unselected, selected: false };
       return current;
     }),
     createAction: vi.fn(() => current),
@@ -1245,6 +1269,35 @@ describe("LocalProductApi native product seam", () => {
       },
     ]);
     tasks.readTask.mockResolvedValue((await tasks.productTasks())[0]!);
+    results.reviseDraft({
+      operationId: "intent_30345678-1234-4123-8123-123456789abc",
+      taskId: result.taskId,
+      resultId: result.resultId,
+      expectedRevision: 1,
+      title: "Reviewed draft revised",
+      body: "A later edit that was not selected.",
+    });
+
+    tasks.submit.mockResolvedValueOnce({
+      duplicate: false,
+      aggregate: { taskId: result.taskId },
+      projection: {
+        operationDisposition: {
+          status: "rejected",
+          operationId: "intent_39345678-1234-4123-8123-123456789abc",
+          reason: "A newer turn is already active.",
+        },
+      },
+      command: null,
+    } as never);
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_39345678-1234-4123-8123-123456789abc",
+      outcome: "Rejected continuation",
+      selectedResultIds: [result.resultId],
+    });
+    expect(results.consumeResultSelection).not.toHaveBeenCalled();
 
     await api.executeRendererIntent({
       type: "task.message",
@@ -1260,10 +1313,32 @@ describe("LocalProductApi native product seam", () => {
     expect(message.message).toBe("Continue from the selected draft");
     expect(message.selectedResultContext).toMatchObject({
       resultIds: [result.resultId],
+      references: [
+        {
+          taskId: result.taskId,
+          resultId: result.resultId,
+          revision: 1,
+          digest: result.revision.digest,
+        },
+      ],
       digest: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
-    expect(message.selectedResultContext?.developerInstructions).toContain(
+    expect(message.selectedResultContext?.workingContext).toContain(
       "Use this exact reviewed material",
+    );
+    expect(message.selectedResultContext?.workingContext).not.toContain(
+      "A later edit that was not selected",
+    );
+    expect(
+      message.selectedResultContext?.developerInstructions,
+    ).toBeUndefined();
+    expect(results.consumeResultSelection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        taskId: result.taskId,
+        resultId: result.resultId,
+        selectedRevision: 1,
+        selectedDigest: result.revision.digest,
+      }),
     );
 
     await expect(

@@ -41,6 +41,7 @@ import {
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
 const RESULT_MIGRATION_ID = "0004_add_task_results";
+const RESULT_SELECTION_MIGRATION_ID = "0005_bind_selected_result_revision";
 const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
 
@@ -383,6 +384,15 @@ export class SqliteTaskEngineStore
         accepted_at TEXT NOT NULL,
         FOREIGN KEY(result_id, result_revision) REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
       );
+      CREATE TABLE IF NOT EXISTS task_result_selection (
+        result_id TEXT PRIMARY KEY REFERENCES task_result(result_id) ON DELETE RESTRICT,
+        task_id TEXT NOT NULL REFERENCES task_engine_aggregate(task_id) ON DELETE RESTRICT,
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        digest TEXT NOT NULL,
+        selected_at TEXT NOT NULL,
+        FOREIGN KEY(result_id, revision)
+          REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
+      );
       CREATE TABLE IF NOT EXISTS workflow_result_promotion_provenance (
         operation_id TEXT PRIMARY KEY REFERENCES workflow_operation(operation_id) ON DELETE RESTRICT,
         workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
@@ -402,6 +412,15 @@ export class SqliteTaskEngineStore
       VALUES ('${WORKFLOW_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${RESULT_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
+      INSERT OR IGNORE INTO task_result_selection(result_id, task_id, revision, digest, selected_at)
+      SELECT result.result_id, result.task_id, result.current_revision, revision.digest, result.updated_at
+      FROM task_result result
+      JOIN task_result_revision revision
+        ON revision.result_id = result.result_id
+       AND revision.revision = result.current_revision
+      WHERE result.selected = 1;
+      INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
+      VALUES ('${RESULT_SELECTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       COMMIT;
     `);
   }
@@ -796,6 +815,12 @@ export class SqliteTaskEngineStore
     artifact_ids_json: string;
     digest: string;
     revision_created_at: string;
+    selected_revision: number | null;
+    selected_digest: string | null;
+    selected_title: string | null;
+    selected_body: string | null;
+    selected_artifact_ids_json: string | null;
+    selected_revision_created_at: string | null;
   }): TaskResult {
     return validateTaskResult({
       resultId: row.result_id,
@@ -814,6 +839,24 @@ export class SqliteTaskEngineStore
         digest: row.digest,
         createdAt: row.revision_created_at,
       },
+      ...(row.selected_revision &&
+      row.selected_digest &&
+      row.selected_title &&
+      row.selected_body &&
+      row.selected_artifact_ids_json &&
+      row.selected_revision_created_at
+        ? {
+            selectedRevision: {
+              resultId: row.result_id,
+              revision: row.selected_revision,
+              title: row.selected_title,
+              body: row.selected_body,
+              artifactIds: parse<string[]>(row.selected_artifact_ids_json),
+              digest: row.selected_digest,
+              createdAt: row.selected_revision_created_at,
+            },
+          }
+        : {}),
       source: parse<TaskResultSource>(row.source_json),
       ...(row.action_material_json
         ? { actionMaterial: parse(row.action_material_json) }
@@ -828,11 +871,23 @@ export class SqliteTaskEngineStore
     const rows = this.db
       .prepare(
         `SELECT result.*, revision.title, revision.body, revision.artifact_ids_json,
-                revision.digest, revision.created_at AS revision_created_at
+                revision.digest, revision.created_at AS revision_created_at,
+                selection.revision AS selected_revision,
+                selection.digest AS selected_digest,
+                selected_revision.title AS selected_title,
+                selected_revision.body AS selected_body,
+                selected_revision.artifact_ids_json AS selected_artifact_ids_json,
+                selected_revision.created_at AS selected_revision_created_at
          FROM task_result result
          JOIN task_result_revision revision
            ON revision.result_id = result.result_id
           AND revision.revision = result.current_revision
+         LEFT JOIN task_result_selection selection
+           ON selection.result_id = result.result_id
+          AND selection.task_id = result.task_id
+         LEFT JOIN task_result_revision selected_revision
+           ON selected_revision.result_id = selection.result_id
+          AND selected_revision.revision = selection.revision
          ${taskId ? "WHERE result.task_id = ?" : ""}
          ORDER BY result.updated_at DESC, result.result_id ASC`,
       )
@@ -1057,6 +1112,32 @@ export class SqliteTaskEngineStore
       throw new Error("Result revision conflict. Refresh before selecting.");
     const now = this.now();
     const update = this.db.transaction(() => {
+      if (input.selected) {
+        this.db
+          .prepare(
+            `INSERT INTO task_result_selection(result_id, task_id, revision, digest, selected_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(result_id) DO UPDATE SET
+               task_id = excluded.task_id,
+               revision = excluded.revision,
+               digest = excluded.digest,
+               selected_at = excluded.selected_at`,
+          )
+          .run(
+            input.resultId,
+            input.taskId,
+            input.expectedRevision,
+            current.revision.digest,
+            now,
+          );
+      } else {
+        this.db
+          .prepare(
+            `DELETE FROM task_result_selection
+             WHERE result_id = ? AND task_id = ?`,
+          )
+          .run(input.resultId, input.taskId);
+      }
       const changed = this.db
         .prepare(
           `UPDATE task_result SET selected = ?, updated_at = ?
@@ -1084,6 +1165,60 @@ export class SqliteTaskEngineStore
         );
     });
     update.immediate();
+    return this.result(input.taskId, input.resultId)!;
+  }
+
+  consumeResultSelection(
+    input: Parameters<ResultStore["consumeResultSelection"]>[0],
+  ): TaskResult {
+    const requestDigest = this.workflowRequestDigest(input);
+    const prior = this.priorResultOperation(input.operationId, requestDigest);
+    if (prior) return prior;
+    const current = this.result(input.taskId, input.resultId);
+    if (!current?.selectedRevision)
+      throw new Error("Selected result is no longer available.");
+    if (
+      current.selectedRevision.revision !== input.selectedRevision ||
+      current.selectedRevision.digest !== input.selectedDigest
+    )
+      throw new Error("Selected result changed before it could be consumed.");
+    const now = this.now();
+    const consume = this.db.transaction(() => {
+      const removed = this.db
+        .prepare(
+          `DELETE FROM task_result_selection
+           WHERE result_id = ? AND task_id = ? AND revision = ? AND digest = ?`,
+        )
+        .run(
+          input.resultId,
+          input.taskId,
+          input.selectedRevision,
+          input.selectedDigest,
+        );
+      if (removed.changes !== 1)
+        throw new Error("Selected result changed before it could be consumed.");
+      const changed = this.db
+        .prepare(
+          `UPDATE task_result SET selected = 0, updated_at = ?
+           WHERE result_id = ? AND task_id = ? AND selected = 1`,
+        )
+        .run(now, input.resultId, input.taskId);
+      if (changed.changes !== 1)
+        throw new Error("Selected result changed before it could be consumed.");
+      this.db
+        .prepare(
+          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.resultId,
+          input.selectedRevision,
+          now,
+        );
+    });
+    consume.immediate();
     return this.result(input.taskId, input.resultId)!;
   }
 

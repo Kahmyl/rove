@@ -111,8 +111,19 @@ describe("stable task results", () => {
       }),
     ).toThrow(/different input/i);
 
-    const revised = store.reviseDraft({
+    const selected = store.setResultSelected({
       operationId: "intent_43345678-1234-4123-8123-123456789abc",
+      taskId,
+      resultId: created.resultId,
+      expectedRevision: 1,
+      selected: true,
+    });
+    expect(selected).toMatchObject({
+      selected: true,
+      selectedRevision: { revision: 1, body: "First reviewed version" },
+    });
+    const revised = store.reviseDraft({
+      operationId: "intent_53345678-1234-4123-8123-123456789abc",
       taskId,
       resultId: created.resultId,
       expectedRevision: 1,
@@ -125,7 +136,7 @@ describe("stable task results", () => {
     });
     expect(() =>
       store.reviseDraft({
-        operationId: "intent_53345678-1234-4123-8123-123456789abc",
+        operationId: "intent_63345678-1234-4123-8123-123456789abc",
         taskId,
         resultId: created.resultId,
         expectedRevision: 1,
@@ -133,14 +144,6 @@ describe("stable task results", () => {
         body: "Must not overwrite",
       }),
     ).toThrow(/revision conflict/i);
-    const selected = store.setResultSelected({
-      operationId: "intent_63345678-1234-4123-8123-123456789abc",
-      taskId,
-      resultId: created.resultId,
-      expectedRevision: 2,
-      selected: true,
-    });
-    expect(selected.selected).toBe(true);
     expect(store.result(otherTaskId, created.resultId)).toBeNull();
     store.close();
 
@@ -156,10 +159,28 @@ describe("stable task results", () => {
     ).toBe(2);
     db.close();
     const reopened = new SqliteTaskEngineStore({ path });
-    expect(reopened.result(taskId, created.resultId)).toMatchObject({
+    const recovered = reopened.result(taskId, created.resultId)!;
+    expect(recovered).toMatchObject({
       selected: true,
       currentRevision: 2,
       revision: { body: "Second reviewed version" },
+      selectedRevision: { revision: 1, body: "First reviewed version" },
+    });
+    const consume = {
+      operationId: "intent_6f345678-1234-4123-8123-123456789abc",
+      taskId,
+      resultId: created.resultId,
+      selectedRevision: 1,
+      selectedDigest: recovered.selectedRevision!.digest,
+    };
+    expect(reopened.consumeResultSelection(consume)).toMatchObject({
+      selected: false,
+      currentRevision: 2,
+      revision: { body: "Second reviewed version" },
+    });
+    expect(reopened.consumeResultSelection(consume)).toMatchObject({
+      selected: false,
+      currentRevision: 2,
     });
     reopened.close();
   });
@@ -207,11 +228,14 @@ describe("stable task results", () => {
     });
     expect(authorized.lifecycle).toBe("authorized");
     const authorizedContext = assembleTaskResultContext([authorized]);
-    expect(authorizedContext.developerInstructions).toContain(
+    expect(authorizedContext.workingContext).toContain(
       '"recipient":"ops@example.test"',
     );
     expect(authorizedContext.developerInstructions).toContain(
       `task-result:${action.resultId}:${action.materialDigest}`,
+    );
+    expect(authorizedContext.developerInstructions).not.toContain(
+      '"recipient":"ops@example.test"',
     );
     expect(() =>
       store.transitionAction({
@@ -325,10 +349,42 @@ describe("stable task results", () => {
     const snapshot = assembleTaskResultContext([result]);
     expect(snapshot.resultIds).toEqual([result.resultId]);
     expect(snapshot.digest).toMatch(/^[a-f0-9]{64}$/);
-    expect(snapshot.developerInstructions).toContain("One stable local fact");
-    expect(snapshot.developerInstructions).toContain("not as permission");
+    expect(snapshot.workingContext).toContain("One stable local fact");
+    expect(snapshot.workingContext).toContain("not as permission");
+    expect(snapshot.developerInstructions).toBeUndefined();
     expect(() => assembleTaskResultContext([])).toThrow(/1 to 8/i);
     store.close();
+  });
+
+  it("rejects a persisted selected revision whose digest changed", async () => {
+    const { path, store } = await fixture();
+    const result = store.createResult({
+      operationId: "intent_f0345678-1234-4123-8123-123456789abc",
+      taskId,
+      kind: "report",
+      title: "Bound report",
+      body: "Exact selected evidence",
+      source,
+    });
+    store.setResultSelected({
+      operationId: "intent_f1345678-1234-4123-8123-123456789abc",
+      taskId,
+      resultId: result.resultId,
+      expectedRevision: 1,
+      selected: true,
+    });
+    store.close();
+
+    const db = new Database(path);
+    db.prepare(
+      "UPDATE task_result_selection SET digest = ? WHERE result_id = ?",
+    ).run("f".repeat(64), result.resultId);
+    db.close();
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(() => reopened.result(taskId, result.resultId)).toThrow(
+      /selected result revision is invalid/i,
+    );
+    reopened.close();
   });
 
   it("records the additive results migration", async () => {
@@ -342,6 +398,13 @@ describe("stable task results", () => {
         )
         .get("0004_add_task_results"),
     ).toEqual({ migration_id: "0004_add_task_results" });
+    expect(
+      db
+        .prepare(
+          "SELECT migration_id FROM schema_migration WHERE migration_id = ?",
+        )
+        .get("0005_bind_selected_result_revision"),
+    ).toEqual({ migration_id: "0005_bind_selected_result_revision" });
     db.close();
   });
 

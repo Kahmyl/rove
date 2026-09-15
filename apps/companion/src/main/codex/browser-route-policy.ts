@@ -3,8 +3,10 @@ import type {
   ResolvedTaskContext,
 } from "./task-coordinator.js";
 
-export const ROVE_BROWSER_ROUTE_POLICY_V4 =
-  "Rove browser route policy v4: For this product task, perform browser work only through the required Rove MCP server. Use Rove session, observation, interaction, evidence, history, tab, download, and upload tools. A recoverable Rove rejection does not end the task. When a read-only operation or a conclusively pre-dispatch action fails because of PAGE_CHANGED, OBSERVATION_STALE, or equivalent freshness loss and the result permits retry, obtain a fresh inspection, re-ground the current page, and continue with a newly grounded action. If the former target or route is no longer present, inspect the current state and choose another safe Rove route consistent with the user's requested outcome; a missing target after refresh is not terminal by itself. INVALID_INPUT or schema validation may be followed by a mechanically corrected request only when returned details prove the handler never ran and no effect was dispatched, identify the exact invalid path, and fresh grounding supplies the corrected value; never replay an identical malformed request. After a safely completed read-only navigation or history operation returns the wrong nonconsequential outcome, inspect freshly and choose another safe read-only Rove route. Continue working through recoverable pre-dispatch and read-only failures until the requested outcome is achieved or an authoritative hard boundary is reached. Respect Runtime action-rate and repeated-action rejections and never retry in a tight loop. A screenshot retry must bind to the newly returned observation. Never retry an unknown or uncertain consequential action, and never infer non-dispatch when Rove does not prove it. An uncertain consequential receipt remains a stop boundary. Diagnostic browser evidence alone is not a required-path failure. When the main document succeeds and pageState is ready, unrelated non-main-frame or subresource failures such as analytics, ads, telemetry, optional media, and optional survey or feedback cards are diagnostic only unless evidence shows they prevented a required target or outcome. Human control is required for credentials, verification, access, or a consent choice needed to complete the requested path—not for an optional survey after the requested outcome is proven. Leave such a survey untouched; if it blocks a still-required target, dismiss it only through a freshly grounded nonconsequential action. Authentication, required consent, human verification, access restriction, terminal page failure, unresolved instability, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Never substitute connected apps, web search, Computer Use, shell or site APIs, or any other browser path.";
+export const ROVE_BROWSER_ROUTE_POLICY_V5 =
+  "Rove browser route policy v5: Browser operations for this product task must use the task-bound Rove MCP browser authority. Use its session, observation, interaction, evidence, history, tab, download, and upload tools; never use another browser path to evade access, consent, service restrictions, task ownership, or Runtime refusal. When a read-only operation or conclusively pre-dispatch action loses freshness and the receipt permits retry, obtain a fresh inspection, re-ground the current page, and retry only within the small per-step recovery budget. A screenshot retry must bind to the newly returned observation. A missing target after refresh may be replaced by another freshly grounded safe Rove route consistent with the requested outcome. An INVALID_INPUT or schema-validation failure may use a mechanically corrected request only when details prove the handler never ran and nothing was dispatched, identify the invalid path, and fresh grounding supplies a different valid request; never replay an identical malformed request. A safely completed read-only operation with the wrong nonconsequential outcome may use another freshly grounded safe Rove route within the same budget. When that budget is exhausted, stop browser recovery truthfully. Never retry an unknown or uncertain consequential action, and never infer non-dispatch when Rove does not prove it; an uncertain consequential receipt is an immediate no-replay boundary across every capability. A conclusively pre-dispatch or read-only browser failure does not globally prohibit a separately authorized integration, plugin, API, or suitable CLI when it is a legitimate capability for the requested outcome and applicable service rules permit it. Such a capability must not bypass a restriction, expand authorization, or replay an unresolved effect. Diagnostic browser evidence alone is not a required-path failure. When the main document succeeds and pageState is ready, unrelated non-main-frame or subresource failures such as analytics, ads, telemetry, optional media, and optional survey or feedback cards are diagnostic only unless evidence shows they prevented a required target or outcome. Human control is required for credentials, verification, access, or a consent choice needed to complete the requested path—not for an optional survey after the requested outcome is proven. Leave such a survey untouched; if it blocks a still-required target, dismiss it only through a freshly grounded nonconsequential action. Authentication, required consent, human verification, access restriction, terminal page failure, unresolved instability, Runtime refusal, and unknown consequential outcomes remain hard boundaries.";
+
+export const MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP = 2;
 
 export type BrowserRouteRecoveryInput = {
   kind: "freshness" | "invalid_input" | "read_only_outcome";
@@ -33,6 +35,12 @@ export function browserRouteRecoveryDisposition(
     (input.consequential && input.dispatchStatus !== "not_dispatched")
   )
     return "stop";
+  if (
+    !Number.isSafeInteger(input.attemptsForStep) ||
+    input.attemptsForStep < 0 ||
+    input.attemptsForStep >= MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP
+  )
+    return "stop";
 
   if (input.kind === "invalid_input")
     return !input.handlerRan &&
@@ -57,6 +65,36 @@ export function browserRouteRecoveryDisposition(
     input.freshGrounding
     ? "fresh_retry"
     : "stop";
+}
+
+export type BrowserAlternateCapabilityInput = {
+  browserFailure: "read_only" | "conclusively_pre_dispatch" | "hard_boundary";
+  authorized: boolean;
+  suitableForRequestedOutcome: boolean;
+  serviceRulesPermit: boolean;
+  wouldBypassRestriction: boolean;
+  wouldExpandAuthorization: boolean;
+  wouldReplayUnresolvedEffect: boolean;
+  consequentialOutcome: "not_dispatched" | "completed" | "unknown";
+};
+
+export function browserAlternateCapabilityDisposition(
+  input: BrowserAlternateCapabilityInput,
+): "use_authorized_alternate" | "stop" {
+  if (
+    input.browserFailure === "hard_boundary" ||
+    !input.authorized ||
+    !input.suitableForRequestedOutcome ||
+    !input.serviceRulesPermit ||
+    input.wouldBypassRestriction ||
+    input.wouldExpandAuthorization ||
+    input.wouldReplayUnresolvedEffect ||
+    input.consequentialOutcome === "unknown" ||
+    (input.browserFailure === "conclusively_pre_dispatch" &&
+      input.consequentialOutcome !== "not_dispatched")
+  )
+    return "stop";
+  return "use_authorized_alternate";
 }
 
 export type BrowserRoutePageInput = {
@@ -99,5 +137,5 @@ export function browserRouteDeveloperInstructions(context: {
       : context.browserIdentity?.mode === "temporary"
         ? `Begin with task-bound Rove session.start in exact execution mode ${JSON.stringify(context.executionMode)} and send browser {"mode":"temporary"}.`
         : `Only when browser work is actually needed, begin with task-bound Rove session.start in exact execution mode ${JSON.stringify(context.executionMode)}; omit browser selection to acquire the currently selected Rove browser profile then.`;
-  return `${ROVE_BROWSER_ROUTE_POLICY_V4} Browser resources are on-demand and must not be started for non-browser work. ${start}`;
+  return `${ROVE_BROWSER_ROUTE_POLICY_V5} Browser resources are on-demand and must not be started for non-browser work. ${start}`;
 }

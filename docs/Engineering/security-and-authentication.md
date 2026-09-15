@@ -14,7 +14,7 @@ Use the official [Codex authentication flow](https://developers.openai.com/codex
 
 ## Trust boundaries
 
-The renderer, external webpages, model output, imported documents/skills, integration responses, local subprocesses, and remote configuration service cross distinct boundaries. The application host validates commands, determines profile ownership, and resolves opaque resource IDs. An external document cannot authorize a shell, share a local file, or change the synchronization allowlist.
+The renderer, external webpages, model output, imported documents/skills, integration responses, local subprocesses, and remote configuration service cross distinct boundaries. The application host validates commands, determines profile ownership, and resolves opaque resource IDs. An external document cannot authorize a shell, share a local file, or change the synchronization allowlist. A user-selected local Output is evidence/working material, not developer authority: its exact revision and digest travel with it, while only host-authored operating and action-safety rules occupy developer instructions.
 
 For Electron, follow the [security guidance](https://www.electronjs.org/docs/latest/tutorial/security): isolate renderer context, disable unrestricted Node integration, expose a narrow preload API, validate senders and input schemas, constrain navigation/window creation, and apply an appropriate content security policy. Untrusted HTML is not rendered as privileged application content.
 
