@@ -103,11 +103,32 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       "aria-label={`Open Workflow output: ${result.resultId}`}",
     );
     expect(styles).toContain("--rove-accent: #c16137;");
+    expect(styles).toContain(
+      "--rove-accent-text: var(--rove-accent-strong);",
+    );
+    expect(styles).toContain(
+      "--rove-accent-text: var(--rove-accent-visible);",
+    );
     expect(styles).toContain("--rove-accent-contrast: #faf5ee;");
     expect(styles).not.toContain("--rove-accent: #245846;");
     expect(styles).toContain("--success: #2f6f52;");
     expect(styles).toContain("--warning: #a86d18;");
     expect(styles).toContain("--danger: #a94848;");
+    expect(styles).toContain(
+      '.product-app .task-history-row[data-current="true"]',
+    );
+    expect(styles).toContain("background: var(--rove-accent-soft) !important;");
+    expect(styles).toContain(
+      '.browser-status[data-attached="true"] .browser-status-icon',
+    );
+    expect(styles).toContain(
+      '.task-history-row[data-needs-input="true"]',
+    );
+    expect(styles).toContain("color: var(--warning);");
+    expect(styles).toContain(
+      '.recording-history-heading span[data-result-state="available"]',
+    );
+    expect(styles).toContain("color: var(--success);");
   });
 
   it("derives safe Output presentation without exposing Action creation", () => {
@@ -222,6 +243,11 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-label="Participation mode: Agent"');
     expect(html).toContain('aria-label="Approval policy: Approve for me"');
     expect(html).toContain('aria-label="Model and reasoning effort:');
+    expect(html).toContain('class="product-health-label"');
+    expect(html).toContain('title="Not signed in to Codex"');
+    expect(html).toContain(
+      'class="sidebar-new-task" type="button" aria-current="page"',
+    );
   });
 
   it("reconciles reasoning effort from the selected catalog model", () => {
