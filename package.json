@@ -83,7 +83,8 @@
     "check:repository": "node scripts/check-repository.mjs",
     "codex:context": "node .agents/skills/rove-engineering/scripts/context-snapshot.mjs",
     "codex:environment:check": "node scripts/check-codex-environment.mjs --installed-client",
-    "test:experiments": "node --test experiments/agent-execution/*.test.mjs"
+    "test:experiments": "node --test experiments/agent-execution/*.test.mjs",
+    "test:workflow-sync:postgres": "node scripts/qualification/workflow-sync-postgres.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

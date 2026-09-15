@@ -1,6 +1,6 @@
 # Workflow Context and Portability
 
-**Status:** Local Workflow setup, revisioning, explicit promotion, and turn-boundary context assembly are implemented. A strict provider-neutral portable projection, provider contract, tombstone semantics, and deterministic conflict planner are also implemented, but no production identity/provider is selected or connected. Portable synchronization remains unavailable and is deliberately not task, browser, or credential synchronization.
+**Status:** Local Workflow setup, revisioning, explicit promotion, and turn-boundary context assembly are implemented. An opt-in Supabase Auth plus PostgreSQL/RLS candidate, encrypted local session handling, owner-partitioned synchronization ledger, portable export, tombstones, and conflict UI are integrated but disabled without explicit configuration. The migration and synchronization protocol have deterministic local evidence only. Production provider authority, live OAuth/OTP, hosted Supabase, two packaged clients, provider pause/recovery, and packaged deep-link behavior remain unresolved or unqualified; synchronization is deliberately not task, browser, credential, approval, or execution-state synchronization.
 
 ## Current local implementation
 
@@ -8,7 +8,7 @@ The companion stores Workflow identities and immutable approved configuration re
 
 Task association is separate from disclosure. When starting a Workflow task, the user must explicitly choose whether relevant approved Workflow text may be sent to Codex or whether the association stays local only. For shared tasks, launch and each later idle-turn request assemble only applicable topic-scoped entries and record the exact revision and digest in the durable task event/outbox command. Steering an already-active turn does not change its context mid-action. A later approved edit or promotion can therefore apply at the next turn boundary without rewriting historical task or approval truth.
 
-Save to Workflow identifies one attachment-free task conversation item, shows editable proposed reusable text and a destination/category, and stores local source task/item/digest provenance. It does not copy the conversation, attachments, approvals, credentials, browser state, or execution state. The provider-neutral boundary validates the same allowlist and defines owner-scoped compare-and-set writes, idempotent operations, tombstone/non-resurrection semantics, bounded stable pagination, cursor invalidation with authoritative refresh, and explicit upload/download/conflict plans. Local persistence of sync cursors, a real Rove identity, a production provider, cross-device UI, and deployed recovery remain unimplemented.
+Save to Workflow identifies one attachment-free task conversation item, shows editable proposed reusable text and a destination/category, and stores source task/item/digest provenance only in the local task database. It does not copy that provenance, the conversation, attachments, approvals, credentials, browser state, or execution state into the portable projection. The Supabase boundary independently validates the exact allowlist and server digest, and defines owner-scoped compare-and-set writes, durable idempotent operations, tombstone/non-resurrection semantics, snapshot-stable pagination, cursor invalidation with authoritative refresh, and explicit upload/download/conflict states. Owner-bound incremental cursors advance only after corresponding local reconciliation succeeds. Local sync cursors, owner bindings, pending operations, distinct authentication/outage/transport-uncertainty failure state, account switching, owner-scoped export, and cloud-account deletion are implemented. Deployment-backed recovery and cross-device qualification remain pending.
 
 ## Approved environment
 
@@ -22,22 +22,29 @@ Keep four sources distinguishable: approved workflow guidance, the current task 
 
 ```json
 {
-  "workflowId": "workflow_opaque",
-  "revision": 12,
+  "schemaVersion": 1,
+  "workflowId": "workflow_opaque00000000",
+  "configurationRevision": 12,
   "name": "Job Search",
-  "purpose": "Find and pursue suitable roles",
-  "preferences": { "roleFamilies": ["backend engineering"] },
-  "exclusions": [],
-  "guidance": [],
-  "skills": [],
-  "resultConventions": { "includeSource": true },
-  "connectionRequirements": [{ "kind": "email", "label": "Outreach account" }],
-  "resourceRequirements": [{ "kind": "document", "label": "Current CV" }],
-  "approvedKnowledge": []
+  "archived": false,
+  "configuration": {
+    "purpose": "Find and pursue suitable roles",
+    "preferences": [],
+    "criteria": [],
+    "guidance": [],
+    "procedures": [],
+    "resourceRequirements": [
+      { "id": "resource_cv", "kind": "document", "label": "Current CV" }
+    ],
+    "resultConventions": [],
+    "approvedKnowledge": []
+  },
+  "digest": "sha256-of-the-approved-portable-fields",
+  "approvedAt": "2026-09-13T12:00:00.000Z"
 }
 ```
 
-This example is a design shape, not a finalized serialized API schema. `revision` is concurrency/history metadata, not a product version. Resource and connection requirements are descriptive references, not paths, tokens, or file bytes. Skills contain permitted procedural content, not arbitrary executable packages silently installed on another device.
+This is the version-one serialized shape. `configurationRevision` is concurrency/history metadata, not a product version. Resource requirements are descriptive references, not paths, tokens, file bytes, or usable connections. Guidance arrays contain only bounded `{id, text, appliesTo}` entries. The server rejects unknown fields at every nested level and recomputes the digest before accepting a write.
 
 Reject unrecognized secret or execution-state fields. The allowlist excludes task IDs/content, message history, results, recordings, screenshots, attachment bytes, cookies, tokens, local paths, page references, process identity, and operation/approval state. A useful non-secret fact may be intentionally promoted from a task only through user-visible selection and approval.
 
@@ -51,13 +58,15 @@ An edit does not alter a turn mid-action. Apply the new approved revision to a s
 
 ## Synchronization protocol
 
-The authenticated owner creates or reads an owner-scoped workflow document. A write sends the new approved configuration, a stable operation ID, and the expected remote revision. The service atomically validates ownership, schema, and expected revision, then returns the accepted revision. The same operation ID cannot commit two different payloads.
+The authenticated owner creates or reads an owner-scoped workflow document. A write sends the new approved configuration, a durable stable operation ID, and the expected remote revision. The service atomically validates authenticated ownership, the exact nested schema, the server-computed digest, and expected revision, then returns the accepted revision. The same operation ID cannot commit two different payloads. First creation is conditional and cannot become an overwrite when two devices race.
 
 If the expected revision is stale, return conflict with the current revision and preserve the local edit. For this MVP, present an explicit choice to keep local, keep remote, or create a separate workflow copy. Do not build a CRDT or silently choose by wall-clock time. A chosen replacement is submitted against the newly observed revision.
 
 Offline edits remain local pending configuration updates. Coalescing superseded unsent edits is acceptable if the final approved configuration and acknowledged base remain clear. Reconnect synchronizes setup only; it never dispatches tasks or grants permissions.
 
-For deletion, use a tombstone or equivalent deletion cursor. An offline client cannot recreate the same workflow from an old revision. If the service compacts tombstones, invalidate old cursors and require a complete authoritative refresh that still rejects stale writes. Re-creation is an explicit new workflow identity. Conflict handling must not silently delete local task history.
+For deletion, the device persists an owner-bound removal operation before network dispatch and the server supplies the authoritative tombstone time. “Remove from Rove account” deletes only the cloud copy and detaches synchronization; the device-local Workflow and all task history remain. After provider confirmation, pending-operation removal, binding detachment, and local acknowledgement commit in one SQLite transaction. Pending writes and removals retain their stable operation identity, reviewed snapshot, owner, and acknowledged base across restart and response uncertainty. “Keep both” atomically creates exactly one idempotently identified local copy while applying the cloud configuration to the original. An offline client cannot recreate the same workflow from an old revision. After 30 days, compaction removes all history and operation results for the identity, advances the cursor floor, and retains a minimal owner-scoped hash fence against resurrection. Re-creation requires an explicit new workflow identity. Conflict handling never deletes local task history.
+
+The local synchronization ledger stores device-local Workflow identity separately from the owner-scoped cloud identity. This prevents an account switch from transferring ownership and permits two owners whose portable Workflows have the same cloud identity to coexist as distinct local Workflows. Pending operations remain keyed to the original owner and cloud identity; sign-out, session change, account switch, and account deletion invalidate in-flight fences before later responses can mutate local synchronization state.
 
 ## Local behavior
 
@@ -73,6 +82,6 @@ Approved knowledge remains editable/removable. Saving guidance is not permission
 
 ## Provider acceptance
 
-A provider must demonstrate owner isolation, conditional updates, idempotent writes, offline conflict recovery, deletion convergence, export, account deletion, and realistic quotas. It is not necessary to deploy a general row-sync platform. The particular provider remains unselected; this contract deliberately prevents that choice from expanding scope to cloud task storage. The [Workflow Portability Decision](workflow-portability-decision.md) records the exact authority decision, recommendation, alternatives, current provider-neutral implementation, and work remaining after selection.
+A provider must demonstrate owner isolation, conditional updates, idempotent writes, offline conflict recovery, deletion convergence, export, account deletion, and realistic quotas. The integrated Supabase candidate includes a local PostgreSQL harness for the migration, grants/RLS, direct RPC boundary, CAS races, pagination, tombstones, purge, and account deletion without pretending to prove the Supabase gateway or real JWT lifecycle. It is not necessary to deploy a general row-sync platform. The [Workflow Portability Decision](workflow-portability-decision.md) retains the provider-authority decision and records the candidate evidence still requiring live qualification.
 
 Test two devices editing the same revision, an offline edit after deletion, expired cursors, sign-out/account switch, secret-field rejection, missing local resources, and a remote update arriving during an active turn. In every case, configuration synchronization must produce zero model or external-action dispatches.

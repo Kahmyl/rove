@@ -181,7 +181,7 @@ function guidanceEntries(
       "text",
       "appliesTo",
     ]);
-    const id = boundedText(record.id, `${label} identity`, 120);
+    const id = portableText(record.id, `${label} identity`, 120);
     if (ids.has(id)) throw new Error(`${label} contains duplicate identities.`);
     ids.add(id);
     return {
@@ -218,7 +218,11 @@ export function validateWorkflowConfiguration(
         "kind",
         "label",
       ]);
-      const id = boundedText(resource.id, "Resource requirement identity", 120);
+      const id = portableText(
+        resource.id,
+        "Resource requirement identity",
+        120,
+      );
       if (resourceIds.has(id))
         throw new Error(
           "Workflow resource requirement identities must be unique.",

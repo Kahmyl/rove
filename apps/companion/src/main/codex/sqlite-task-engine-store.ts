@@ -41,6 +41,10 @@ import {
   type TaskResultLifecycle,
   type TaskResultSource,
 } from "./results.js";
+import {
+  validatePortableWorkflowSnapshot,
+  type PortableWorkflowSnapshot,
+} from "./workflow-portability.js";
 
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
@@ -351,6 +355,13 @@ export class SqliteTaskEngineStore
         request_digest TEXT NOT NULL,
         workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
         result_revision INTEGER NOT NULL,
+        accepted_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS workflow_conflict_resolution (
+        operation_id TEXT PRIMARY KEY REFERENCES workflow_operation(operation_id) ON DELETE RESTRICT,
+        request_digest TEXT NOT NULL,
+        workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
+        copy_workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
         accepted_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS workflow_promotion_provenance (
@@ -711,6 +722,255 @@ export class SqliteTaskEngineStore
     });
     archive.immediate();
     return this.workflow(input.workflowId)!;
+  }
+
+  /** Applies only the allowlisted portable Workflow projection. Task, result,
+   * attachment, browser and execution tables are intentionally unreachable. */
+  applyPortableWorkflowSnapshot(
+    input: PortableWorkflowSnapshot,
+  ): WorkflowEnvironment {
+    const snapshot = validatePortableWorkflowSnapshot(input);
+    const current = this.workflow(snapshot.workflowId);
+    if (current && current.currentRevision === snapshot.configurationRevision) {
+      if (
+        current.name === snapshot.name &&
+        current.archived === snapshot.archived &&
+        current.revision.approvedAt === snapshot.approvedAt &&
+        workflowConfigurationDigest(current.revision.configuration) ===
+          workflowConfigurationDigest(snapshot.configuration)
+      )
+        return current;
+      throw new Error(
+        "Portable Workflow revision conflicts with local configuration.",
+      );
+    }
+    if (current && snapshot.configurationRevision < current.currentRevision)
+      throw new Error(
+        "Portable Workflow revision is older than local configuration.",
+      );
+    const apply = this.db.transaction(() => {
+      if (!current) {
+        this.db
+          .prepare(
+            `INSERT INTO workflow_environment(workflow_id,name,current_revision,archived,created_at,updated_at)
+          VALUES(?,?,?,?,?,?)`,
+          )
+          .run(
+            snapshot.workflowId,
+            snapshot.name,
+            snapshot.configurationRevision,
+            snapshot.archived ? 1 : 0,
+            snapshot.approvedAt,
+            snapshot.approvedAt,
+          );
+      } else {
+        this.db
+          .prepare(
+            `UPDATE workflow_environment SET name=?,current_revision=?,archived=?,updated_at=?
+          WHERE workflow_id=? AND current_revision=?`,
+          )
+          .run(
+            snapshot.name,
+            snapshot.configurationRevision,
+            snapshot.archived ? 1 : 0,
+            snapshot.approvedAt,
+            snapshot.workflowId,
+            current.currentRevision,
+          );
+      }
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id,revision,configuration_json,digest,approved_at)
+        VALUES(?,?,?,?,?)`,
+        )
+        .run(
+          snapshot.workflowId,
+          snapshot.configurationRevision,
+          json(snapshot.configuration),
+          workflowConfigurationDigest(snapshot.configuration),
+          snapshot.approvedAt,
+        );
+    });
+    apply.immediate();
+    return this.workflow(snapshot.workflowId)!;
+  }
+
+  replacePortableWorkflowSnapshot(
+    input: PortableWorkflowSnapshot,
+  ): WorkflowEnvironment {
+    const snapshot = validatePortableWorkflowSnapshot(input);
+    const current = this.workflow(snapshot.workflowId);
+    if (!current || snapshot.configurationRevision > current.currentRevision)
+      return this.applyPortableWorkflowSnapshot(snapshot);
+    const revision = current.currentRevision + 1;
+    const approvedAt = this.now();
+    const replace = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id,revision,configuration_json,digest,approved_at) VALUES(?,?,?,?,?)`,
+        )
+        .run(
+          snapshot.workflowId,
+          revision,
+          json(snapshot.configuration),
+          workflowConfigurationDigest(snapshot.configuration),
+          approvedAt,
+        );
+      this.db
+        .prepare(
+          `UPDATE workflow_environment SET name=?,current_revision=?,archived=?,updated_at=? WHERE workflow_id=? AND current_revision=?`,
+        )
+        .run(
+          snapshot.name,
+          revision,
+          snapshot.archived ? 1 : 0,
+          approvedAt,
+          snapshot.workflowId,
+          current.currentRevision,
+        );
+    });
+    replace.immediate();
+    return this.workflow(snapshot.workflowId)!;
+  }
+
+  createPortableWorkflowCopy(
+    input: PortableWorkflowSnapshot,
+  ): WorkflowEnvironment {
+    const snapshot = validatePortableWorkflowSnapshot(input);
+    const suffix = " (local copy)";
+    const name =
+      snapshot.name.length + suffix.length <= 120
+        ? `${snapshot.name}${suffix}`
+        : `${snapshot.name.slice(0, 120 - suffix.length)}${suffix}`;
+    return this.createWorkflow({
+      operationId: `workflow_operation_${randomUUID()}`,
+      name,
+      configuration: snapshot.configuration,
+    });
+  }
+
+  resolvePortableWorkflowConflict(input: {
+    operationId: string;
+    workflowId: string;
+    remote: PortableWorkflowSnapshot;
+  }): { workflow: WorkflowEnvironment; copy: WorkflowEnvironment } {
+    const remote = validatePortableWorkflowSnapshot(input.remote);
+    if (remote.workflowId !== input.workflowId)
+      throw new Error("Portable Workflow conflict identity is invalid.");
+    const current = this.workflow(input.workflowId);
+    if (!current) throw new Error("Workflow is unavailable.");
+    const requestDigest = this.workflowRequestDigest({
+      type: "resolve_portable_conflict_keep_both",
+      workflowId: input.workflowId,
+      remoteDigest: remote.digest,
+    });
+    const prior = this.db
+      .prepare(
+        `SELECT request_digest,workflow_id,copy_workflow_id
+         FROM workflow_conflict_resolution WHERE operation_id=?`,
+      )
+      .get(input.operationId) as
+      | {
+          request_digest: string;
+          workflow_id: string;
+          copy_workflow_id: string;
+        }
+      | undefined;
+    if (prior) {
+      if (
+        prior.request_digest !== requestDigest ||
+        prior.workflow_id !== input.workflowId
+      )
+        throw new Error(
+          "Workflow conflict resolution identity was reused with different input.",
+        );
+      const workflow = this.workflow(prior.workflow_id);
+      const copy = this.workflow(prior.copy_workflow_id);
+      if (!workflow || !copy)
+        throw new Error("Workflow conflict resolution result is unavailable.");
+      return { workflow, copy };
+    }
+
+    const copyWorkflowId = `workflow_${randomUUID()}`;
+    const suffix = " (local copy)";
+    const copyName =
+      current.name.length + suffix.length <= 120
+        ? `${current.name}${suffix}`
+        : `${current.name.slice(0, 120 - suffix.length)}${suffix}`;
+    const copyDigest = workflowConfigurationDigest(
+      current.revision.configuration,
+    );
+    const nextRevision = current.currentRevision + 1;
+    const remoteDigest = workflowConfigurationDigest(remote.configuration);
+    const now = this.now();
+    const resolve = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workflow_environment(workflow_id,name,current_revision,archived,created_at,updated_at)
+           VALUES(?,?,1,?,?,?)`,
+        )
+        .run(copyWorkflowId, copyName, current.archived ? 1 : 0, now, now);
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id,revision,configuration_json,digest,approved_at)
+           VALUES(?,1,?,?,?)`,
+        )
+        .run(
+          copyWorkflowId,
+          json(current.revision.configuration),
+          copyDigest,
+          now,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO workflow_revision(workflow_id,revision,configuration_json,digest,approved_at)
+           VALUES(?,?,?,?,?)`,
+        )
+        .run(
+          input.workflowId,
+          nextRevision,
+          json(remote.configuration),
+          remoteDigest,
+          now,
+        );
+      const changed = this.db
+        .prepare(
+          `UPDATE workflow_environment SET name=?,current_revision=?,archived=?,updated_at=?
+           WHERE workflow_id=? AND current_revision=?`,
+        )
+        .run(
+          remote.name,
+          nextRevision,
+          remote.archived ? 1 : 0,
+          now,
+          input.workflowId,
+          current.currentRevision,
+        );
+      if (changed.changes !== 1) throw new Error("Workflow revision conflict.");
+      this.db
+        .prepare(
+          `INSERT INTO workflow_operation(operation_id,request_digest,workflow_id,result_revision,accepted_at)
+           VALUES(?,?,?,?,?)`,
+        )
+        .run(input.operationId, requestDigest, copyWorkflowId, 1, now);
+      this.db
+        .prepare(
+          `INSERT INTO workflow_conflict_resolution(operation_id,request_digest,workflow_id,copy_workflow_id,accepted_at)
+           VALUES(?,?,?,?,?)`,
+        )
+        .run(
+          input.operationId,
+          requestDigest,
+          input.workflowId,
+          copyWorkflowId,
+          now,
+        );
+    });
+    resolve.immediate();
+    return {
+      workflow: this.workflow(input.workflowId)!,
+      copy: this.workflow(copyWorkflowId)!,
+    };
   }
 
   promoteToWorkflow(input: {

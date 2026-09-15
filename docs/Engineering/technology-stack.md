@@ -18,7 +18,7 @@
 
 ## Reviewed dependency baseline
 
-The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository-owned Codex component manifest currently selects App Server `0.154.0-alpha.6.2` on macOS arm64 and records the exact executable, companion helper, generated schema, and qualification identity.
+The inspected `pnpm-lock.yaml` resolves Playwright `1.62.1`, Electron `37.10.3`, React `19.2.8`, Supabase JavaScript `2.111.0`, Kysely `0.29.5`, better-sqlite3 `13.0.3`, Vite `7.3.6`, and Vitest `3.2.7`. The workspace requests pnpm `10.29.3`. The repository-owned Codex component manifest currently selects App Server `0.154.0-alpha.6.2` on macOS arm64 and records the exact executable, companion helper, generated schema, and qualification identity.
 
 These are observations of the reviewed repository, not claims that they are the newest releases or that every combination is already supported on every platform. Install with the lockfile frozen. Update the binary, generated contracts, lockfile, native-module packaging, and verification evidence as one compatible change. Do not infer installed versions from a package range alone.
 
@@ -30,11 +30,11 @@ Rove development and packaged builds consume a Rove-managed Codex component sele
 
 Candidate inspection and qualification are separate from installation and promotion. Qualification uses an explicitly named external executable, generates schemas through the upstream App Server commands, compares the capabilities Rove actually consumes, and records an immutable receipt binding exact executable/helper/schema identities to the required lifecycle and MCP compatibility evidence. Installation copies that receipt and already-qualified set into the managed store after re-verifying its identity; an exact existing install is idempotent and a conflict is never replaced. Reinstalling after requalification may durably upgrade only a missing receipt or the preceding exact component/digest receipt format when the existing executable/helper bytes and new external qualification receipt both match, without deleting or replacing the immutable binaries. Promotion durably changes one repository selection only after the target and every retained-qualified rollback component pass managed executable/helper, receipt, checked-in schema-file, generated aggregate, and compiled Runtime binding verification; development resolution and package staging cannot select independently. Retain a previous qualified executable/helper/schema/validator set until the replacement has passed runtime and package preparation checks so rollback changes the whole selection rather than compatibility policy.
 
-## Small account and workflow-sync boundary
+## Optional account and workflow-sync candidate
 
-A provider is needed for Rove identity and cross-device approved workflow setup. It must support owner isolation, authenticated reads/writes, conditional revision updates, deletion semantics, and bounded configuration storage. The provider choice is not yet committed by the product direction.
+A personal Supabase Auth identity plus Postgres/RLS is integrated as the bounded candidate for cross-device approved Workflow setup, but is not registered during normal startup without explicit configuration and is not production-qualified. The desktop adapter uses `@supabase/supabase-js` with a publishable key and user session only. A narrowly scoped database function deletes only the authenticated subject, so no service-role authority is shipped or added as another hosted runtime.
 
-A managed Auth plus database offering such as Supabase is a candidate, not a requirement to move tasks or artifacts to a hosted Postgres database. A small application API is also possible. Do not add PowerSync or general-purpose row replication solely to move a few approved configuration documents. Evaluate the narrow contract first.
+This choice does not move tasks or artifacts to hosted Postgres. Do not add PowerSync, general-purpose row replication, organizations, or another application service solely to move the approved configuration documents.
 
 Before selecting a provider, record actual free limits, inactivity behavior, email/social sign-in requirements, data region, export/deletion support, and operator cost. A free tier does not guarantee unlimited users, permanent availability, or zero future operating expense. No provider should receive Codex credentials or browser cookies through workflow configuration.
 

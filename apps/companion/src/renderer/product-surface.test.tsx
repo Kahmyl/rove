@@ -11,8 +11,10 @@ import {
   SettingsNavigation,
   TaskArchiveConfirmation,
   browserIdentityLabel,
+  canRemoveWorkflowFromCloud,
   compatibleReasoningEffort,
   commandPaletteMatches,
+  currentOwnerWorkflowSyncBinding,
   deriveOutputTitle,
   followupDraftForTask,
   localBackupExportStatus,
@@ -28,6 +30,8 @@ import {
   taskNeedsCustomerInput,
   workflowConfigurationFromDraft,
   workflowDraft,
+  workflowSynchronizationBadge,
+  workflowSynchronizationDisclosure,
   workflowWorkspaceProjection,
   withTaskFollowupDraft,
 } from "./product-surface.js";
@@ -83,7 +87,163 @@ function snapshot(
   };
 }
 
+function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
+  const value = snapshot();
+  const ownerId = "owner_11111111111141118111111111111111";
+  const workflowId = "workflow_aaaaaaaa";
+  value.roveAccount = {
+    status: "signed_in",
+    syncAvailable: true,
+    ownerId,
+    email: "owner@example.com",
+    sessionPersistence: "encrypted",
+  };
+  value.product!.workflows = [
+    {
+      workflowId,
+      name: "Owner workflow",
+      archived: false,
+      currentRevision: 1,
+      revision: {
+        workflowId,
+        revision: 1,
+        configuration: {
+          purpose: "Owner-scoped rendering test",
+          preferences: [],
+          criteria: [],
+          guidance: [],
+          procedures: [],
+          resourceRequirements: [],
+          resultConventions: [],
+          approvedKnowledge: [],
+        },
+        digest: "a".repeat(64),
+        approvedAt: "2026-09-13T12:00:00.000Z",
+      },
+      createdAt: "2026-09-13T12:00:00.000Z",
+      updatedAt: "2026-09-13T12:00:00.000Z",
+    },
+  ];
+  value.workflowSync = {
+    status: "ready",
+    boundOwnerId: ownerId,
+    signedInOwnerId: ownerId,
+    lastError: null,
+    lastFailureCode: null,
+    items: { [workflowId]: "conflicted" },
+    bindings: {
+      [workflowId]: { eligibility: "owner_bound", status: "conflicted" },
+    },
+    exportableWorkflowCount: 1,
+  };
+  return value;
+}
+
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("discloses optional Workflow synchronization without broadening its data boundary", () => {
+    expect(workflowSynchronizationDisclosure(null, "editor")).toContain(
+      "Stored on this device",
+    );
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "synchronized" },
+        "editor",
+      ),
+    ).toContain("Synced with your Rove account");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "conflicted" },
+        "editor",
+      ),
+    ).toContain("needs sync conflict resolution");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "detached", status: "local_only" },
+        "editor",
+      ),
+    ).toContain("no longer synchronized");
+    expect(
+      workflowSynchronizationDisclosure(
+        { eligibility: "owner_bound", status: "unavailable" },
+        "promotion",
+      ),
+    ).toContain("Sync will resume");
+    for (const binding of [
+      null,
+      { eligibility: "owner_bound", status: "synchronized" } as const,
+    ])
+      expect(workflowSynchronizationDisclosure(binding, "editor")).toContain(
+        "cannot guarantee detection of every secret",
+      );
+  });
+
+  it("projects synchronization actions only for the active owner", () => {
+    const value = synchronizedWorkflowSnapshot();
+    const workflowId = "workflow_aaaaaaaa";
+    const ownerA = "owner_11111111111141118111111111111111";
+    const ownerB = "owner_22222222222242228222222222222222";
+
+    expect(currentOwnerWorkflowSyncBinding(value, workflowId)).toEqual({
+      eligibility: "owner_bound",
+      status: "conflicted",
+    });
+    expect(canRemoveWorkflowFromCloud(value, workflowId)).toBe(false);
+
+    value.roveAccount = {
+      status: "signed_in",
+      syncAvailable: true,
+      ownerId: ownerB,
+      email: "other-owner@example.com",
+      sessionPersistence: "encrypted",
+    };
+    value.workflowSync = {
+      ...value.workflowSync!,
+      status: "account_mismatch",
+      signedInOwnerId: ownerB,
+      bindings: {
+        [workflowId]: { eligibility: "other_owner", status: "conflicted" },
+      },
+    };
+    const otherOwnerBinding = currentOwnerWorkflowSyncBinding(
+      value,
+      workflowId,
+    );
+    expect(otherOwnerBinding).toEqual({
+      eligibility: "other_owner",
+      status: null,
+    });
+    expect(workflowSynchronizationBadge(otherOwnerBinding)).toBe(
+      "Not synced to this account",
+    );
+    expect(
+      renderToStaticMarkup(
+        <ProductSurface
+          desktop={value}
+          connectionError={null}
+          follower={false}
+          refresh={async () => undefined}
+        />,
+      ),
+    ).not.toContain("Sync conflict");
+
+    value.roveAccount = {
+      status: "signed_in",
+      syncAvailable: true,
+      ownerId: ownerA,
+      email: "owner@example.com",
+      sessionPersistence: "encrypted",
+    };
+    value.workflowSync = {
+      ...value.workflowSync,
+      status: "ready",
+      signedInOwnerId: ownerA,
+      bindings: {
+        [workflowId]: { eligibility: "owner_bound", status: "synchronized" },
+      },
+    };
+    expect(canRemoveWorkflowFromCloud(value, workflowId)).toBe(true);
+  });
+
   it("presents Archive as a reversible confirmation with Cancel and Archive choices", () => {
     const html = renderToStaticMarkup(
       <TaskArchiveConfirmation
@@ -221,12 +381,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       "aria-label={`Open Workflow output: ${result.resultId}`}",
     );
     expect(styles).toContain("--rove-accent: #c16137;");
-    expect(styles).toContain(
-      "--rove-accent-text: var(--rove-accent-strong);",
-    );
-    expect(styles).toContain(
-      "--rove-accent-text: var(--rove-accent-visible);",
-    );
+    expect(styles).toContain("--rove-accent-text: var(--rove-accent-strong);");
+    expect(styles).toContain("--rove-accent-text: var(--rove-accent-visible);");
     expect(styles).toContain("--rove-accent-contrast: #faf5ee;");
     expect(styles).not.toContain("--rove-accent: #245846;");
     expect(styles).toContain("--success: #2f6f52;");
@@ -239,9 +395,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(styles).toContain(
       '.browser-status[data-attached="true"] .browser-status-icon',
     );
-    expect(styles).toContain(
-      '.task-history-row[data-needs-input="true"]',
-    );
+    expect(styles).toContain('.task-history-row[data-needs-input="true"]');
     expect(styles).toContain("color: var(--warning);");
     expect(styles).toContain(
       '.recording-history-heading span[data-result-state="available"]',

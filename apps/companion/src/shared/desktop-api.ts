@@ -9,6 +9,8 @@ import type {
   RendererProductIntent,
   TrustedExternalIntent,
 } from "../main/codex/local-product-api.js";
+import type { RoveAccountSnapshot } from "../main/codex/rove-account-service.js";
+import type { WorkflowSyncProjection } from "../main/codex/workflow-sync-coordinator.js";
 
 export type DesktopBrowserWorkspace = Omit<BrowserWorkspace, "userDataDir">;
 export type DesktopSession = Pick<
@@ -91,6 +93,8 @@ export interface DesktopSurfaceSnapshot {
   workspaces: DesktopBrowserWorkspaceStatus;
   product: LocalProductSnapshot | null;
   productError: string | null;
+  roveAccount?: RoveAccountSnapshot;
+  workflowSync?: WorkflowSyncProjection | null;
 }
 
 export function unmatchedRuntimeSession(
@@ -157,6 +161,22 @@ export interface RoveDesktopApi {
         missingCount: number;
       }
   >;
+  sendRoveEmailCode(email: string): Promise<void>;
+  verifyRoveEmailCode(code: string): Promise<void>;
+  beginRoveGoogleSignIn(): Promise<void>;
+  signOutRoveAccount(): Promise<void>;
+  bindWorkflowSync(confirmSwitch?: boolean): Promise<void>;
+  synchronizeWorkflows(): Promise<void>;
+  resolveWorkflowSync(
+    workflowId: string,
+    choice: "keep_local" | "keep_remote" | "create_copy" | "keep_device_only",
+  ): Promise<void>;
+  removeWorkflowFromCloud(workflowId: string): Promise<void>;
+  deleteRoveCloudAccount(): Promise<void>;
+  exportPortableWorkflows(): Promise<
+    | { status: "cancelled" }
+    | { status: "created"; name: string; workflowCount: number }
+  >;
   getBrowserWorkspaces(): Promise<DesktopBrowserWorkspaceStatus>;
   createBrowserWorkspace(
     displayName: string,
@@ -204,6 +224,16 @@ export const companionIpcChannels = {
   openTrustedExternal: "rove:open-trusted-external",
   openRecording: "rove:open-recording",
   exportLocalBackup: "rove:export-local-backup",
+  sendRoveEmailCode: "rove:account-email-code",
+  verifyRoveEmailCode: "rove:account-verify-code",
+  beginRoveGoogleSignIn: "rove:account-google",
+  signOutRoveAccount: "rove:account-sign-out",
+  bindWorkflowSync: "rove:workflow-sync-bind",
+  synchronizeWorkflows: "rove:workflow-sync-now",
+  resolveWorkflowSync: "rove:workflow-sync-resolve",
+  removeWorkflowFromCloud: "rove:workflow-sync-remove-cloud",
+  deleteRoveCloudAccount: "rove:account-delete",
+  exportPortableWorkflows: "rove:workflow-export",
   browserWorkspaces: "rove:browser-workspaces",
   createBrowserWorkspace: "rove:create-browser-workspace",
   selectBrowserWorkspace: "rove:select-browser-workspace",

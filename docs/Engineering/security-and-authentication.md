@@ -8,7 +8,7 @@ Rove identity owns approved portable workflow configuration and the local profil
 
 Changing Codex accounts preserves Rove data but invalidates assumptions about the previous engine connection and its permissions. Settle or stop affected work before replacing the connection. Reuse of an old thread under another account requires supported evidence, not copying credentials or private history files.
 
-Model disconnection leaves local history readable after profile access is established. Explicit Rove sign-out locks that profile's cached data and clears session authority. Temporary network loss is different from sign-out; cached approved local work remains usable under the chosen local-unlock policy. The precise account provider and offline unlock mechanism require qualification before public availability.
+Model disconnection leaves local history readable. The integrated Rove-account candidate is optional and authorizes only cross-device portable Workflow synchronization; sign-out clears cloud session authority but does not lock or delete device-local tasks, results, recordings, artifacts, or Workflows. Temporary network loss likewise leaves local work usable. The candidate uses Supabase Auth independently of Codex/ChatGPT identity, remains disabled without explicit configuration, and is not production-qualified.
 
 Use the official [Codex authentication flow](https://developers.openai.com/codex/auth/). Do not collect ChatGPT passwords, silently introduce API billing, or assume a subscription connection grants access to every connected app.
 
