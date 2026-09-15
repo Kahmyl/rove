@@ -7,7 +7,10 @@ import {
   LocalProductApi,
   validateTrustedExternalUrl,
 } from "./local-product-api.js";
-import type { ProductTaskIntent } from "./product-task-port.js";
+import type {
+  ProductTaskIntent,
+  ProductTaskPort,
+} from "./product-task-port.js";
 import {
   taskActionMaterialDigest,
   type ResultStore,
@@ -129,6 +132,7 @@ function fixture(
   };
   const attention = new OrderedAttentionQueue();
   const tasks = {
+    acceptedTaskMessage: vi.fn(async () => null),
     submit: vi.fn(async (input: ProductTaskIntent) => {
       let taskId = input.type === "launch" ? "task_existing" : input.taskId;
       if (input.type === "launch") {
@@ -340,7 +344,6 @@ function resultStore(initial = taskResult()): ResultStore & {
   createResult: ReturnType<typeof vi.fn>;
   reviseDraft: ReturnType<typeof vi.fn>;
   setResultSelected: ReturnType<typeof vi.fn>;
-  consumeResultSelection: ReturnType<typeof vi.fn>;
   transitionAction: ReturnType<typeof vi.fn>;
 } {
   let current = initial;
@@ -386,18 +389,6 @@ function resultStore(initial = taskResult()): ResultStore & {
         const { selectedRevision: _selectedRevision, ...unselected } = current;
         current = { ...unselected, selected: false };
       }
-      return current;
-    }),
-    consumeResultSelection: vi.fn((input) => {
-      const selectedRevision = current.selectedRevision;
-      if (!selectedRevision) throw new Error("Selected result is unavailable.");
-      if (
-        selectedRevision.revision !== input.selectedRevision ||
-        selectedRevision.digest !== input.selectedDigest
-      )
-        throw new Error("Selected result changed before it could be consumed.");
-      const { selectedRevision: _selectedRevision, ...unselected } = current;
-      current = { ...unselected, selected: false };
       return current;
     }),
     createAction: vi.fn(() => current),
@@ -1297,9 +1288,9 @@ describe("LocalProductApi native product seam", () => {
       outcome: "Rejected continuation",
       selectedResultIds: [result.resultId],
     });
-    expect(results.consumeResultSelection).not.toHaveBeenCalled();
+    expect(results.result(result.taskId, result.resultId)?.selected).toBe(true);
 
-    await api.executeRendererIntent({
+    const accepted = await api.executeRendererIntent({
       type: "task.message",
       taskId: "task_existing",
       operationId: "intent_34345678-1234-4123-8123-123456789abc",
@@ -1332,14 +1323,33 @@ describe("LocalProductApi native product seam", () => {
     expect(
       message.selectedResultContext?.developerInstructions,
     ).toBeUndefined();
-    expect(results.consumeResultSelection).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        taskId: result.taskId,
-        resultId: result.resultId,
-        selectedRevision: 1,
-        selectedDigest: result.revision.digest,
+    results.setResultSelected({
+      operationId: "intent_40345678-1234-4123-8123-123456789abc",
+      taskId: result.taskId,
+      resultId: result.resultId,
+      expectedRevision: 2,
+      selected: false,
+    });
+    const resultReads = vi.spyOn(results, "result");
+    const readsBeforeRetry = resultReads.mock.calls.length;
+    const taskReadsBeforeRetry = tasks.readTask.mock.calls.length;
+    const submitsBeforeRetry = tasks.submit.mock.calls.length;
+    tasks.acceptedTaskMessage.mockResolvedValueOnce({
+      ...(accepted as Awaited<ReturnType<ProductTaskPort["submit"]>>),
+      duplicate: true,
+    } as never);
+    await expect(
+      api.executeRendererIntent({
+        type: "task.message",
+        taskId: "task_existing",
+        operationId: "intent_34345678-1234-4123-8123-123456789abc",
+        outcome: "Continue from the selected draft",
+        selectedResultIds: [result.resultId],
       }),
-    );
+    ).resolves.toMatchObject({ duplicate: true });
+    expect(resultReads.mock.calls).toHaveLength(readsBeforeRetry);
+    expect(tasks.readTask.mock.calls).toHaveLength(taskReadsBeforeRetry);
+    expect(tasks.submit.mock.calls).toHaveLength(submitsBeforeRetry);
 
     await expect(
       api.executeRendererIntent({

@@ -32,6 +32,7 @@ import type {
   LocalFileGrantResult,
   PrepareTaskResultActionRequest,
   TaskResultActionPlan,
+  BrowserRecoveryAdmissionRequest,
 } from "@rove/protocol";
 
 export interface ScrollInput {
@@ -53,6 +54,10 @@ export interface RuntimeClient {
     sessionId: string,
     input: ObservationQuery,
   ): Promise<ObservationPage>;
+  admitBrowserRecovery?(
+    sessionId: string,
+    input: BrowserRecoveryAdmissionRequest,
+  ): Promise<{ admittedAttempt: number; remainingAttempts: number }>;
   navigate(sessionId: string, input: NavigateRequest): Promise<ActionResult>;
   openPage(sessionId: string, input: NavigateRequest): Promise<PageSummary>;
   pages(sessionId: string): Promise<PageSummary[]>;

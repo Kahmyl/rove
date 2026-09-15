@@ -511,6 +511,14 @@ export interface TaskEngineStore {
   projection(taskId: string): Promise<TaskProjection | null>;
   projections(): Promise<TaskProjection[]>;
   aggregate(taskId: string): Promise<TaskAggregate | null>;
+  acceptedEvent?(
+    taskId: string,
+    eventId: string,
+  ): Promise<{
+    event: TaskEvent;
+    digest: string;
+    acceptance: TaskAcceptance;
+  } | null>;
   markPossiblyStarted(commandId: string): Promise<void>;
   markRecoveryRequired(taskId: string, reason: string): Promise<void>;
 }

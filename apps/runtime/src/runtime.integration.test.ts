@@ -328,6 +328,82 @@ describe("runtime integration", () => {
     expect(showCalls).toBe(1);
   });
 
+  it("persists two browser recovery admissions and refuses the third", async () => {
+    const { home, runtime, sessions, browser, evidence } = await harness();
+    const starting = await sessions.start(
+      { mode: "agent", browser: { mode: "temporary" } },
+      { profile: { mode: "temporary" } },
+    );
+    const session = await sessions.update({
+      ...starting,
+      status: "active",
+      controller: "agent",
+    });
+    const recovery = {
+      operationId: "recovery-step-reviewed-search",
+      kind: "read_only_outcome" as const,
+      consequentialOutcome: "completed" as const,
+    };
+    await expect(
+      runtime.admitBrowserRecovery(session.id, recovery),
+    ).resolves.toEqual({ admittedAttempt: 1, remainingAttempts: 1 });
+    await expect(
+      runtime.admitBrowserRecovery(session.id, recovery),
+    ).resolves.toEqual({ admittedAttempt: 2, remainingAttempts: 0 });
+    for (let index = 0; index < 64; index += 1) {
+      await runtime.admitBrowserRecovery(session.id, {
+        operationId: `recovery-distinct-${index}`,
+        kind: "freshness",
+        consequentialOutcome: "not_dispatched",
+      });
+    }
+    const restartedSessions = new SessionService(new FileSessionStore(home));
+    const restartedObservations = new ObservationService(
+      new FileObservationStore(home),
+    );
+    const restartedRuntime = new RuntimeService(
+      restartedSessions,
+      new ControlService(),
+      new ControlWaitService(restartedSessions, restartedObservations),
+      new BrowserCommandCoordinator(),
+      browser,
+      restartedObservations,
+      evidence,
+      loadConfig({
+        cwd: home,
+        env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
+      }),
+      new BrowserOwnershipFence(),
+      new FileEffectJournalStore(home),
+    );
+    await expect(
+      restartedRuntime.admitBrowserRecovery(session.id, recovery),
+    ).rejects.toMatchObject({
+      code: "ACTION_BUDGET_EXCEEDED",
+      retryable: false,
+    });
+    const persisted = await new FileSessionStore(home).get(session.id);
+    expect(persisted.browserRecoveryAdmissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operationId: recovery.operationId,
+          kind: recovery.kind,
+          attempts: 2,
+        }),
+      ]),
+    );
+    await expect(
+      restartedRuntime.admitBrowserRecovery(session.id, {
+        operationId: "recovery-step-unknown-effect",
+        kind: "read_only_outcome",
+        consequentialOutcome: "unknown",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONSEQUENTIAL_ACTION_UNRESOLVED",
+      retryable: false,
+    });
+  });
+
   it("reports a terminal workspace session released while a newer session owns that workspace", async () => {
     const { runtime } = await harness({
       start: async (request) => readyBrowserSession(`browser_${request.mode}`),

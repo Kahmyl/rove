@@ -9,6 +9,7 @@ import type {
   browserWindowStateSchema,
   browserProfileSchema,
   browserRuntimeCapabilitiesSchema,
+  browserRecoveryAdmissionRequestSchema,
   clickRequestSchema,
   controllerSchema,
   controlMutationAuthoritySchema,
@@ -61,6 +62,9 @@ export type BrowserWorkspaceStatus = z.infer<
 >;
 export type BrowserRuntimeCapabilities = z.infer<
   typeof browserRuntimeCapabilitiesSchema
+>;
+export type BrowserRecoveryAdmissionRequest = z.infer<
+  typeof browserRecoveryAdmissionRequestSchema
 >;
 export type Session = z.infer<typeof sessionSchema>;
 export type RuntimeSessionInventory = z.infer<

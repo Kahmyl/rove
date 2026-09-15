@@ -13,7 +13,11 @@ import type {
   TaskEvent,
   TaskProjection,
 } from "@rove/protocol";
-import { emptyTaskAggregate, projectTaskAggregate } from "@rove/protocol";
+import {
+  emptyTaskAggregate,
+  projectTaskAggregate,
+  taskEventDigest,
+} from "@rove/protocol";
 import {
   newWorkflowEntry,
   textDigest,
@@ -42,6 +46,8 @@ const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
 const RESULT_MIGRATION_ID = "0004_add_task_results";
 const RESULT_SELECTION_MIGRATION_ID = "0005_bind_selected_result_revision";
+const RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID =
+  "0006_atomically_consume_selected_results";
 const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
 
@@ -97,6 +103,11 @@ export interface SqliteTaskEngineStoreOptions {
   taskWorkspaceRoot?: string;
   now?: () => string;
   leaseMilliseconds?: number;
+  onSelectedResultConsumption?: (input: {
+    eventId: string;
+    resultId: string;
+    position: number;
+  }) => void;
 }
 
 /** The single production lifecycle ledger. Every accepted event, aggregate,
@@ -108,6 +119,8 @@ export class SqliteTaskEngineStore
   private readonly now: () => string;
   private readonly leaseMilliseconds: number;
   private readonly taskWorkspaceRoot: string | undefined;
+  private readonly onSelectedResultConsumption:
+    SqliteTaskEngineStoreOptions["onSelectedResultConsumption"] | undefined;
   private readonly taskQueues = new Map<string, Promise<void>>();
 
   constructor(options: SqliteTaskEngineStoreOptions) {
@@ -120,6 +133,7 @@ export class SqliteTaskEngineStore
     this.now = options.now ?? (() => new Date().toISOString());
     this.leaseMilliseconds = options.leaseMilliseconds ?? 30_000;
     this.taskWorkspaceRoot = options.taskWorkspaceRoot;
+    this.onSelectedResultConsumption = options.onSelectedResultConsumption;
     this.migrate();
     const outboxColumns = this.db
       .prepare("PRAGMA table_info(task_engine_outbox)")
@@ -393,6 +407,22 @@ export class SqliteTaskEngineStore
         FOREIGN KEY(result_id, revision)
           REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
       );
+      CREATE TABLE IF NOT EXISTS task_result_context_consumption (
+        task_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        operation_id TEXT NOT NULL,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        result_id TEXT NOT NULL,
+        result_revision INTEGER NOT NULL CHECK (result_revision > 0),
+        result_digest TEXT NOT NULL,
+        consumed_at TEXT NOT NULL,
+        PRIMARY KEY(task_id, event_id, result_id),
+        UNIQUE(task_id, event_id, position),
+        FOREIGN KEY(task_id, event_id)
+          REFERENCES task_engine_event(task_id, event_id) ON DELETE RESTRICT,
+        FOREIGN KEY(result_id, result_revision)
+          REFERENCES task_result_revision(result_id, revision) ON DELETE RESTRICT
+      );
       CREATE TABLE IF NOT EXISTS workflow_result_promotion_provenance (
         operation_id TEXT PRIMARY KEY REFERENCES workflow_operation(operation_id) ON DELETE RESTRICT,
         workflow_id TEXT NOT NULL REFERENCES workflow_environment(workflow_id) ON DELETE RESTRICT,
@@ -421,6 +451,8 @@ export class SqliteTaskEngineStore
       WHERE result.selected = 1;
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${RESULT_SELECTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
+      INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
+      VALUES ('${RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       COMMIT;
     `);
   }
@@ -1168,60 +1200,6 @@ export class SqliteTaskEngineStore
     return this.result(input.taskId, input.resultId)!;
   }
 
-  consumeResultSelection(
-    input: Parameters<ResultStore["consumeResultSelection"]>[0],
-  ): TaskResult {
-    const requestDigest = this.workflowRequestDigest(input);
-    const prior = this.priorResultOperation(input.operationId, requestDigest);
-    if (prior) return prior;
-    const current = this.result(input.taskId, input.resultId);
-    if (!current?.selectedRevision)
-      throw new Error("Selected result is no longer available.");
-    if (
-      current.selectedRevision.revision !== input.selectedRevision ||
-      current.selectedRevision.digest !== input.selectedDigest
-    )
-      throw new Error("Selected result changed before it could be consumed.");
-    const now = this.now();
-    const consume = this.db.transaction(() => {
-      const removed = this.db
-        .prepare(
-          `DELETE FROM task_result_selection
-           WHERE result_id = ? AND task_id = ? AND revision = ? AND digest = ?`,
-        )
-        .run(
-          input.resultId,
-          input.taskId,
-          input.selectedRevision,
-          input.selectedDigest,
-        );
-      if (removed.changes !== 1)
-        throw new Error("Selected result changed before it could be consumed.");
-      const changed = this.db
-        .prepare(
-          `UPDATE task_result SET selected = 0, updated_at = ?
-           WHERE result_id = ? AND task_id = ? AND selected = 1`,
-        )
-        .run(now, input.resultId, input.taskId);
-      if (changed.changes !== 1)
-        throw new Error("Selected result changed before it could be consumed.");
-      this.db
-        .prepare(
-          `INSERT INTO task_result_operation(operation_id, request_digest, result_id, result_revision, accepted_at)
-           VALUES (?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.operationId,
-          requestDigest,
-          input.resultId,
-          input.selectedRevision,
-          now,
-        );
-    });
-    consume.immediate();
-    return this.result(input.taskId, input.resultId)!;
-  }
-
   transitionAction(
     input: Parameters<ResultStore["transitionAction"]>[0],
   ): TaskResult {
@@ -1652,6 +1630,7 @@ export class SqliteTaskEngineStore
             json({ ...acceptance, duplicate: false }),
             now,
           );
+        this.consumeAcceptedSelectedResults(event, acceptance, now);
         if (!existing || acceptance.aggregate.revision !== existing.revision)
           this.db
             .prepare(
@@ -1695,6 +1674,99 @@ export class SqliteTaskEngineStore
         if (acceptance.command) this.insertCommand(acceptance.command);
       },
     };
+  }
+
+  private consumeAcceptedSelectedResults(
+    event: TaskEvent,
+    acceptance: TaskAcceptance,
+    consumedAt: string,
+  ): void {
+    if (
+      (event.type !== "task_message_requested" &&
+        event.type !== "explicit_continuation_response_requested") ||
+      !event.selectedResultContext ||
+      acceptance.projection.operationDisposition?.status === "rejected"
+    )
+      return;
+    const references = event.selectedResultContext.references;
+    for (const reference of references) {
+      const row = this.db
+        .prepare(
+          `SELECT selection.revision, selection.digest,
+                  revision.digest AS revision_digest, result.selected
+           FROM task_result_selection selection
+           JOIN task_result result
+             ON result.result_id = selection.result_id
+            AND result.task_id = selection.task_id
+           JOIN task_result_revision revision
+             ON revision.result_id = selection.result_id
+            AND revision.revision = selection.revision
+           WHERE selection.task_id = ? AND selection.result_id = ?`,
+        )
+        .get(event.taskId, reference.resultId) as
+        | {
+            revision: number;
+            digest: string;
+            revision_digest: string;
+            selected: number;
+          }
+        | undefined;
+      if (
+        !row ||
+        row.selected !== 1 ||
+        row.revision !== reference.revision ||
+        row.digest !== reference.digest ||
+        row.revision_digest !== reference.digest
+      )
+        throw new Error(
+          "Selected result changed before task acceptance. Refresh and select it again.",
+        );
+    }
+    for (const [position, reference] of references.entries()) {
+      const removed = this.db
+        .prepare(
+          `DELETE FROM task_result_selection
+           WHERE task_id = ? AND result_id = ? AND revision = ? AND digest = ?`,
+        )
+        .run(
+          event.taskId,
+          reference.resultId,
+          reference.revision,
+          reference.digest,
+        );
+      const changed = this.db
+        .prepare(
+          `UPDATE task_result SET selected = 0, updated_at = ?
+           WHERE task_id = ? AND result_id = ? AND selected = 1`,
+        )
+        .run(consumedAt, event.taskId, reference.resultId);
+      if (removed.changes !== 1 || changed.changes !== 1)
+        throw new Error(
+          "Selected result changed before task acceptance. Refresh and select it again.",
+        );
+      this.db
+        .prepare(
+          `INSERT INTO task_result_context_consumption(
+             task_id, event_id, operation_id, position, result_id,
+             result_revision, result_digest, consumed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          event.taskId,
+          event.eventId,
+          event.operationId,
+          position,
+          reference.resultId,
+          reference.revision,
+          reference.digest,
+          consumedAt,
+        );
+      this.onSelectedResultConsumption?.({
+        eventId: event.eventId,
+        resultId: reference.resultId,
+        position,
+      });
+    }
   }
 
   private insertCommand(command: TaskCommand): void {
@@ -1832,6 +1904,37 @@ export class SqliteTaskEngineStore
     if (row && row.schema_version !== PERSISTED_TASK_SCHEMA_VERSION)
       throw new Error("Unsupported persisted task aggregate version.");
     return row ? normalizeAggregate(row.payload_json) : null;
+  }
+
+  async acceptedEvent(
+    taskId: string,
+    eventId: string,
+  ): Promise<{
+    event: TaskEvent;
+    digest: string;
+    acceptance: TaskAcceptance;
+  } | null> {
+    const row = this.db
+      .prepare(
+        `SELECT digest, payload_json, acceptance_json
+         FROM task_engine_event WHERE task_id = ? AND event_id = ?`,
+      )
+      .get(taskId, eventId) as
+      | {
+          digest: string;
+          payload_json: string;
+          acceptance_json: string;
+        }
+      | undefined;
+    if (!row) return null;
+    const event = parse<TaskEvent>(row.payload_json);
+    if (taskEventDigest(event) !== row.digest)
+      throw new Error("Stored task event digest is invalid.");
+    return {
+      event,
+      digest: row.digest,
+      acceptance: normalizeAcceptance(row.acceptance_json),
+    };
   }
 
   async markPossiblyStarted(commandId: string): Promise<void> {

@@ -78,6 +78,13 @@ export type ProductTaskIntent =
 
 export interface ProductTaskPort {
   submit(intent: ProductTaskIntent): Promise<TaskAcceptance>;
+  acceptedTaskMessage?(input: {
+    taskId: string;
+    operationId: string;
+    message: string;
+    attachmentIds: readonly string[];
+    selectedResultIds: readonly string[];
+  }): Promise<TaskAcceptance | null>;
   productTasks(): Promise<ProductTaskSnapshot[]>;
   readTask(taskId: string): Promise<ProductTaskSnapshot | null>;
   subscribe(
@@ -142,6 +149,48 @@ export class LedgerProductTaskPort implements ProductTaskPort {
   constructor(private readonly options: LedgerProductTaskPortOptions) {
     this.engine = options.engine;
     this.now = options.now ?? (() => new Date().toISOString());
+  }
+
+  async acceptedTaskMessage(input: {
+    taskId: string;
+    operationId: string;
+    message: string;
+    attachmentIds: readonly string[];
+    selectedResultIds: readonly string[];
+  }): Promise<TaskAcceptance | null> {
+    const read = this.options.store.acceptedEvent;
+    if (!read) return null;
+    const records = (
+      await Promise.all(
+        (["message", "explicit_continuation_response"] as const).map((type) =>
+          read.call(
+            this.options.store,
+            input.taskId,
+            `product:v2:${type}:${input.operationId}`,
+          ),
+        ),
+      )
+    ).filter((record) => record !== null);
+    if (records.length === 0) return null;
+    if (records.length !== 1)
+      throw new Error("Task message operation identity is ambiguous.");
+    const record = records[0]!;
+    const event = record.event;
+    if (
+      (event.type !== "task_message_requested" &&
+        event.type !== "explicit_continuation_response_requested") ||
+      event.operationId !== input.operationId ||
+      event.taskId !== input.taskId ||
+      event.message !== input.message ||
+      JSON.stringify(event.attachmentIds ?? []) !==
+        JSON.stringify(input.attachmentIds) ||
+      JSON.stringify(event.selectedResultContext?.resultIds ?? []) !==
+        JSON.stringify(input.selectedResultIds)
+    )
+      throw new Error(
+        "Task message operation identity was reused with different input.",
+      );
+    return { ...structuredClone(record.acceptance), duplicate: true };
   }
 
   async submit(intent: ProductTaskIntent): Promise<TaskAcceptance> {

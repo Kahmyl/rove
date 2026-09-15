@@ -2740,27 +2740,20 @@ export class LocalProductApi {
       }
       case "task.message": {
         const taskId = nonempty(command.taskId, "task id");
-        const existingTask = await this.tasks.readTask(taskId);
-        this.requireModelReady(
-          existingTask?.context.policy.model,
-          existingTask?.context.policy.reasoningEffort,
-        );
         const outcome = nonempty(command.outcome, "task outcome").slice(
           0,
           16_000,
         );
+        const operationId = stableOperationId(
+          command.operationId,
+          "message operation id",
+        );
         const attachmentIds = command.attachmentIds ?? [];
         if (
           !Array.isArray(attachmentIds) ||
-          attachmentIds.some((id) => typeof id !== "string") ||
-          JSON.stringify([...attachmentIds].sort()) !==
-            JSON.stringify(
-              (this.attachments?.listDrafts() ?? [])
-                .map((attachment) => attachment.id)
-                .sort(),
-            )
+          attachmentIds.some((id) => typeof id !== "string")
         )
-          throw new Error("Task message attachment selection is stale.");
+          throw new Error("Task message attachment selection is invalid.");
         const selectedResultIds = command.selectedResultIds ?? [];
         if (
           selectedResultIds.length > 8 ||
@@ -2771,6 +2764,28 @@ export class LocalProductApi {
           new Set(selectedResultIds).size !== selectedResultIds.length
         )
           throw new Error("Task result selection is invalid.");
+        const prior = await this.tasks.acceptedTaskMessage?.({
+          taskId,
+          operationId,
+          message: outcome,
+          attachmentIds,
+          selectedResultIds,
+        });
+        if (prior) return prior;
+        const existingTask = await this.tasks.readTask(taskId);
+        this.requireModelReady(
+          existingTask?.context.policy.model,
+          existingTask?.context.policy.reasoningEffort,
+        );
+        if (
+          JSON.stringify([...attachmentIds].sort()) !==
+          JSON.stringify(
+            (this.attachments?.listDrafts() ?? [])
+              .map((attachment) => attachment.id)
+              .sort(),
+          )
+        )
+          throw new Error("Task message attachment selection is stale.");
         const selectedResults = selectedResultIds.map((resultId) => {
           const result = this.results?.result(taskId, resultId);
           if (!result || !result.selected || !result.selectedRevision)
@@ -2819,22 +2834,8 @@ export class LocalProductApi {
           attachmentIds: [...attachmentIds],
           ...(workflowContext ? { workflowContext } : {}),
           ...(selectedResultContext ? { selectedResultContext } : {}),
-          operationId: stableOperationId(
-            command.operationId,
-            "message operation id",
-          ),
+          operationId,
         });
-        if (accepted.projection.operationDisposition?.status === "rejected")
-          return accepted;
-        for (const result of selectedResults) {
-          this.results!.consumeResultSelection({
-            operationId: `${command.operationId}:consume:${result.resultId}`,
-            taskId,
-            resultId: result.resultId,
-            selectedRevision: result.selectedRevision!.revision,
-            selectedDigest: result.selectedRevision!.digest,
-          });
-        }
         return accepted;
       }
       case "task.close":
