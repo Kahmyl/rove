@@ -10,6 +10,7 @@ import {
   Res,
 } from "@nestjs/common";
 import {
+  browserRecoveryAdmissionRequestSchema,
   clickRequestSchema,
   inspectOptionsSchema,
   navigateRequestSchema,
@@ -35,6 +36,7 @@ import {
   type TargetResolutionRequest,
   type VerifiedInteractionRequest,
   type VerifySemanticTransactionRequest,
+  type BrowserRecoveryAdmissionRequest,
 } from "@rove/protocol";
 import { RuntimeService } from "../runtime.service.js";
 
@@ -43,6 +45,17 @@ export class BrowserController {
   constructor(
     @Inject(RuntimeService) private readonly runtime: RuntimeService,
   ) {}
+
+  @Post("recovery-admissions")
+  admitRecovery(
+    @Param("id") id: string,
+    @Body() body: BrowserRecoveryAdmissionRequest,
+  ) {
+    return this.runtime.admitBrowserRecovery(
+      id,
+      browserRecoveryAdmissionRequestSchema.parse(body),
+    );
+  }
 
   @Get("host")
   host(@Param("id") id: string) {

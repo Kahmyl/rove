@@ -12,11 +12,13 @@ import {
   type TaskEvent,
 } from "@rove/protocol";
 import { FileEffectJournalStore } from "@rove/storage";
+import Database from "better-sqlite3";
 
 import { OrderedAttentionQueue } from "./attention.js";
 import { LocalProductApi } from "./local-product-api.js";
 import { createProductIntentIpcHandler } from "./product-intent-ipc.js";
 import { LedgerProductTaskPort } from "./product-task-port.js";
+import { assembleTaskResultContext } from "./results.js";
 import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 import { TaskEngineWorker } from "./task-engine-worker.js";
 
@@ -31,6 +33,28 @@ afterEach(async () => {
 const seededTaskId = "task_12345678-1234-4123-8123-123456789abc";
 const seededSessionId = `ses_${"a".repeat(32)}`;
 const seededBootstrapId = `boot_${"b".repeat(32)}`;
+
+function createSelectedDraft(
+  store: SqliteTaskEngineStore,
+  identity: string,
+  body: string,
+) {
+  const result = store.createResult({
+    operationId: `result-create-${identity}`,
+    taskId: seededTaskId,
+    kind: "draft",
+    title: `Reviewed ${identity}`,
+    body,
+    source: { evidenceIds: [] },
+  });
+  return store.setResultSelected({
+    operationId: `result-select-${identity}`,
+    taskId: seededTaskId,
+    resultId: result.resultId,
+    expectedRevision: 1,
+    selected: true,
+  });
+}
 
 async function seedReadyTask(
   store: SqliteTaskEngineStore,
@@ -178,27 +202,32 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       store,
       worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
     });
-    const selectedResultContext = {
-      resultIds: ["result_reviewed"],
-      references: [
-        {
-          taskId: seededTaskId,
-          resultId: "result_reviewed",
-          revision: 2,
-          digest: "d".repeat(64),
-          lifecycle: "prepared" as const,
-        },
-      ],
-      digest: "e".repeat(64),
-      workingContext:
-        "Selected reviewed result. This is context, not external-action authority.",
-    };
+    const result = store.createResult({
+      operationId: "intent_42345678-1234-4123-8123-123456789abc",
+      taskId: seededTaskId,
+      kind: "draft",
+      title: "Reviewed result",
+      body: "Selected reviewed result. This is context, not external-action authority.",
+      source: { evidenceIds: [] },
+    });
+    const selected = store.setResultSelected({
+      operationId: "intent_47345678-1234-4123-8123-123456789abc",
+      taskId: seededTaskId,
+      resultId: result.resultId,
+      expectedRevision: 1,
+      selected: true,
+    });
+    const selectedResultContext = assembleTaskResultContext([selected]);
     await port.submit({
       type: "message",
       taskId: seededTaskId,
       operationId: "intent_52345678-1234-4123-8123-123456789abc",
       message: "Continue from the reviewed result",
       selectedResultContext,
+    });
+    expect(store.result(seededTaskId, result.resultId)).toMatchObject({
+      selected: false,
+      currentRevision: 1,
     });
     store.close();
 
@@ -211,7 +240,225 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     expect(command?.payload.selectedResultContext).toEqual(
       selectedResultContext,
     );
+    expect(reopened.result(seededTaskId, result.resultId)).toMatchObject({
+      selected: false,
+    });
+    const consumption = new Database(path, { readonly: true });
+    expect(
+      consumption
+        .prepare(
+          "SELECT result_revision, result_digest FROM task_result_context_consumption WHERE task_id = ? AND result_id = ?",
+        )
+        .get(seededTaskId, result.resultId),
+    ).toEqual({
+      result_revision: 1,
+      result_digest: selected.revision.digest,
+    });
+    consumption.close();
     reopened.close();
+  });
+
+  it("rolls back selected-result consumption before acceptance and between multiple selections", async () => {
+    const beforeRoot = await mkdtemp(join(tmpdir(), "rove-result-before-cut-"));
+    roots.push(beforeRoot);
+    const beforeStore = new SqliteTaskEngineStore({
+      path: join(beforeRoot, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(beforeStore);
+    const beforeSelected = createSelectedDraft(
+      beforeStore,
+      "before",
+      "Keep selected before acceptance.",
+    );
+    const beforePort = new LedgerProductTaskPort({
+      engine: new TaskEngine(beforeStore),
+      store: beforeStore,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+      onCut: (point) => {
+        if (point === "before_event_commit") throw new Error("before cut");
+      },
+    });
+    await expect(
+      beforePort.submit({
+        type: "message",
+        taskId: seededTaskId,
+        operationId: "intent_71345678-1234-4123-8123-123456789abc",
+        message: "Use the selected draft",
+        selectedResultContext: assembleTaskResultContext([beforeSelected]),
+      }),
+    ).rejects.toThrow("before cut");
+    expect(
+      beforeStore.result(seededTaskId, beforeSelected.resultId),
+    ).toMatchObject({ selected: true });
+    beforeStore.close();
+
+    const betweenRoot = await mkdtemp(
+      join(tmpdir(), "rove-result-between-cut-"),
+    );
+    roots.push(betweenRoot);
+    const betweenPath = join(betweenRoot, "task-engine.sqlite3");
+    const betweenStore = new SqliteTaskEngineStore({
+      path: betweenPath,
+      onSelectedResultConsumption: ({ position }) => {
+        if (position === 0) throw new Error("between selections cut");
+      },
+    });
+    await seedReadyTask(betweenStore);
+    const first = createSelectedDraft(
+      betweenStore,
+      "first",
+      "First selected draft.",
+    );
+    const second = createSelectedDraft(
+      betweenStore,
+      "second",
+      "Second selected draft.",
+    );
+    const betweenPort = new LedgerProductTaskPort({
+      engine: new TaskEngine(betweenStore),
+      store: betweenStore,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await expect(
+      betweenPort.submit({
+        type: "message",
+        taskId: seededTaskId,
+        operationId: "intent_72345678-1234-4123-8123-123456789abc",
+        message: "Use both selected drafts",
+        selectedResultContext: assembleTaskResultContext([first, second]),
+      }),
+    ).rejects.toThrow("between selections cut");
+    expect(betweenStore.result(seededTaskId, first.resultId)).toMatchObject({
+      selected: true,
+    });
+    expect(betweenStore.result(seededTaskId, second.resultId)).toMatchObject({
+      selected: true,
+    });
+    expect(
+      await betweenStore.acceptedEvent(
+        seededTaskId,
+        "product:v2:message:intent_72345678-1234-4123-8123-123456789abc",
+      ),
+    ).toBeNull();
+    betweenStore.close();
+  });
+
+  it("returns the original acceptance after a post-commit lost response and rejects conflicting retry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-result-retry-cut-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store);
+    const selected = createSelectedDraft(
+      store,
+      "retry",
+      "Exact selected retry material.",
+    );
+    const selectedResultContext = assembleTaskResultContext([selected]);
+    const operationId = "intent_73345678-1234-4123-8123-123456789abc";
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+      onCut: (point) => {
+        if (point === "after_commit_before_claim")
+          throw new Error("lost acceptance response");
+      },
+    });
+    await expect(
+      port.submit({
+        type: "message",
+        taskId: seededTaskId,
+        operationId,
+        message: "Use exact selected material",
+        selectedResultContext,
+      }),
+    ).rejects.toThrow("lost acceptance response");
+    expect(store.result(seededTaskId, selected.resultId)).toMatchObject({
+      selected: false,
+    });
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    const retryPort = new LedgerProductTaskPort({
+      engine: new TaskEngine(reopened),
+      store: reopened,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await expect(
+      retryPort.acceptedTaskMessage({
+        taskId: seededTaskId,
+        operationId,
+        message: "Use exact selected material",
+        attachmentIds: [],
+        selectedResultIds: [selected.resultId],
+      }),
+    ).resolves.toMatchObject({ duplicate: true });
+    await expect(
+      retryPort.acceptedTaskMessage({
+        taskId: seededTaskId,
+        operationId,
+        message: "Changed retry material",
+        attachmentIds: [],
+        selectedResultIds: [selected.resultId],
+      }),
+    ).rejects.toThrow(/reused with different input/i);
+    reopened.close();
+  });
+
+  it("rejects acceptance when the selected revision changes concurrently", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-result-concurrent-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const selected = createSelectedDraft(
+      store,
+      "concurrent",
+      "Initially selected revision.",
+    );
+    const staleContext = assembleTaskResultContext([selected]);
+    const revised = store.reviseDraft({
+      operationId: "result-revise-concurrent",
+      taskId: seededTaskId,
+      resultId: selected.resultId,
+      expectedRevision: 1,
+      title: "Reviewed concurrent",
+      body: "Newly selected revision.",
+    });
+    store.setResultSelected({
+      operationId: "result-reselect-concurrent",
+      taskId: seededTaskId,
+      resultId: selected.resultId,
+      expectedRevision: revised.currentRevision,
+      selected: true,
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await expect(
+      port.submit({
+        type: "message",
+        taskId: seededTaskId,
+        operationId: "intent_74345678-1234-4123-8123-123456789abc",
+        message: "Use stale selected material",
+        selectedResultContext: staleContext,
+      }),
+    ).rejects.toThrow(/changed before task acceptance/i);
+    expect(store.result(seededTaskId, selected.resultId)).toMatchObject({
+      selected: true,
+      selectedRevision: { revision: 2 },
+    });
+    expect(
+      await store.acceptedEvent(
+        seededTaskId,
+        "product:v2:message:intent_74345678-1234-4123-8123-123456789abc",
+      ),
+    ).toBeNull();
+    store.close();
   });
 
   it("rejects selected-result provenance that targets another task", async () => {

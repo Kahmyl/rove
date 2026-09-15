@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_BROWSER_RECOVERY_ATTEMPTS_PER_OPERATION = 2;
+
 export const sessionModeSchema = z.enum(["agent", "companion", "capture"]);
 export const sessionStatusSchema = z.enum([
   "starting",
@@ -157,6 +159,20 @@ export const sessionSchema = z
     profile: browserProfileSchema,
     workspace: browserWorkspaceSchema.optional(),
     browserRuntime: browserRuntimeCapabilitiesSchema.optional(),
+    browserRecoveryAdmissions: z
+      .array(
+        z.object({
+          operationId: z.string().min(1).max(160),
+          kind: z.enum(["freshness", "read_only_outcome"]),
+          attempts: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_BROWSER_RECOVERY_ATTEMPTS_PER_OPERATION),
+          updatedAt: z.string().datetime(),
+        }),
+      )
+      .optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     endedAt: z.string().datetime().optional(),
@@ -227,6 +243,25 @@ export const startSessionRequestSchema = z
         ? ({ mode: "temporary" } as const)
         : ({ mode: "workspace" } as const)),
   }));
+
+export const browserRecoveryAdmissionRequestSchema = z
+  .object({
+    operationId: z.string().trim().min(1).max(160),
+    kind: z.enum(["freshness", "read_only_outcome"]),
+    consequentialOutcome: z.enum(["not_dispatched", "completed", "unknown"]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.kind === "freshness" &&
+      value.consequentialOutcome !== "not_dispatched"
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["consequentialOutcome"],
+        message: "Freshness recovery requires proven non-dispatch.",
+      });
+  });
 
 export const httpUrlSchema = z
   .string()

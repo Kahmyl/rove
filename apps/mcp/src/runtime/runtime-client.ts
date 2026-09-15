@@ -36,6 +36,7 @@ import {
   type LocalFileGrantResult,
   type PrepareTaskResultActionRequest,
   type TaskResultActionPlan,
+  type BrowserRecoveryAdmissionRequest,
 } from "@rove/protocol";
 import { RuntimeClientError } from "./runtime-client.error.js";
 import type {
@@ -122,6 +123,17 @@ export class RuntimeHttpClient implements RuntimeClient {
     return this.request(
       "GET",
       `/sessions/${encodeURIComponent(sessionId)}/observations?${query.toString()}`,
+    );
+  }
+
+  admitBrowserRecovery(
+    sessionId: string,
+    input: BrowserRecoveryAdmissionRequest,
+  ): Promise<{ admittedAttempt: number; remainingAttempts: number }> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/recovery-admissions`,
+      input,
     );
   }
 

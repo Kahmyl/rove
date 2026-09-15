@@ -10,6 +10,7 @@ import {
   semanticTransactionReferenceSchema,
   verifySemanticTransactionRequestSchema,
   prepareTaskResultActionRequestSchema,
+  browserRecoveryAdmissionRequestSchema,
 } from "@rove/protocol";
 import type { PageInspection } from "@rove/protocol";
 import { z } from "zod";
@@ -22,6 +23,37 @@ import {
   targetJsonSchema,
   targetSchema,
 } from "./schemas.js";
+
+const browserRecoveryJsonSchema = {
+  type: "object",
+  properties: {
+    operationId: { type: "string", minLength: 1, maxLength: 160 },
+    kind: { type: "string", enum: ["freshness", "read_only_outcome"] },
+    consequentialOutcome: {
+      type: "string",
+      enum: ["not_dispatched", "completed", "unknown"],
+    },
+  },
+  required: ["operationId", "kind", "consequentialOutcome"],
+  additionalProperties: false,
+} as const;
+
+function afterRecoveryAdmission<T>(
+  runtime: RuntimeClient,
+  sessionId: string,
+  recovery:
+    ReturnType<typeof browserRecoveryAdmissionRequestSchema.parse> | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (!recovery) return operation();
+  if (!runtime.admitBrowserRecovery)
+    return Promise.reject(
+      new Error("Runtime browser recovery admission is unavailable."),
+    );
+  return runtime
+    .admitBrowserRecovery(sessionId, recovery)
+    .then(() => operation());
+}
 
 const dialogDirectiveJsonSchema = {
   oneOf: [
@@ -774,7 +806,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "browser.interact",
       description:
-        'The single agent-facing tool for target-bound mutation. Put the target inside action, for example action:{kind:"fill",target:{pageId,revision,ref},value:"..."}; never put target beside action. Perform a grounded browser interaction, authorize its contextual effect, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. If INVALID_INPUT or schema validation identifies an exact invalid path, a mechanically corrected request is allowed when the returned result proves the handler never ran and no effect was dispatched and fresh grounding supplies the correction; never replay an identical malformed request. A recoverable pre-dispatch freshness rejection does not end the task: inspect freshly, re-ground the current state, and continue with a safe newly grounded action or route. Unrelated dynamic DOM churn triggers automatic exact-target revalidation immediately before dispatch; navigation, viewport/scroll change, ownership change, target/frame/root replacement, target identity/state/geometry change, ambiguity, occlusion, or disabled/hidden state still rejects before dispatch. Coordinate actions retain strict whole-observation freshness. The receipt outcome is authoritative for the requested effect: applied means positive predecessor-to-successor evidence reconciled the action; an already-visible text, already-equal URL, or already-satisfied target state is not causal proof. For named-link navigation, resolve kind:"link" and use url_changed, an exact new url_equals, or a condition absent before and present after. unknown is the consequential stop/reconciliation boundary and must not be replayed. download_completed waits for a new action-correlated managed download persisted as Runtime file evidence. Omit its optional filename when the user\'s request is to discover, confirm, or report the actual saved filename; include filename only when the user explicitly requires the saved artifact to equal that exact predeclared name. A browser collision suffix is a valid completed download when filename is omitted, and the actual filename must be read from durable evidence. An exact-name mismatch is not_applied and must never cause a second download. A pageState such as unknown_interstitial is observational evidence, not a page-wide stop: ordinary dialogs and overlays may be handled when the exact current target is freshly grounded and the declared effect is authorized. Ignore optional survey or feedback cards after the requested outcome is proven. If one blocks a still-required target, dismiss it only with a freshly grounded nonconsequential action. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Expected text_present/text_absent effects apply to the whole visible page; for rename, move, or removal outcomes where history/activity/toasts can retain old text, use exact target_present/target_absent or target-within-scope effects instead. Upload accepts either a direct file-input target that advertises upload or an exactly grounded activation target expected to open a dynamic file chooser; ground the latter by activate plus exact text/scope. External or irreversible actions must be marked consequential, include a stable consequenceKey, and include expected effects so Runtime can reconcile the outcome. A task-result commit additionally requires the exact authorizedPlanId and authorizationDigest returned by the concrete-plan status tool. Unknown consequential outcomes block replay of the same key.',
+        'The single agent-facing tool for target-bound mutation. Put the target inside action, for example action:{kind:"fill",target:{pageId,revision,ref},value:"..."}; never put target beside action. Perform a grounded browser interaction, authorize its contextual effect, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. If INVALID_INPUT or schema validation identifies an exact invalid path, a mechanically corrected request is allowed when the returned result proves the handler never ran and no effect was dispatched and fresh grounding supplies the correction; never replay an identical malformed request. A recoverable pre-dispatch freshness rejection does not end the task: inspect freshly, re-ground the current state, and continue with a safe newly grounded action or route. Every recovery retry must include recovery with one stable operationId; Runtime persists two admitted attempts and refuses the third. Unrelated dynamic DOM churn triggers automatic exact-target revalidation immediately before dispatch; navigation, viewport/scroll change, ownership change, target/frame/root replacement, target identity/state/geometry change, ambiguity, occlusion, or disabled/hidden state still rejects before dispatch. Coordinate actions retain strict whole-observation freshness. The receipt outcome is authoritative for the requested effect: applied means positive predecessor-to-successor evidence reconciled the action; an already-visible text, already-equal URL, or already-satisfied target state is not causal proof. For named-link navigation, resolve kind:"link" and use url_changed, an exact new url_equals, or a condition absent before and present after. unknown is the consequential stop/reconciliation boundary and must not be replayed. download_completed waits for a new action-correlated managed download persisted as Runtime file evidence. Omit its optional filename when the user\'s request is to discover, confirm, or report the actual saved filename; include filename only when the user explicitly requires the saved artifact to equal that exact predeclared name. A browser collision suffix is a valid completed download when filename is omitted, and the actual filename must be read from durable evidence. An exact-name mismatch is not_applied and must never cause a second download. A pageState such as unknown_interstitial is observational evidence, not a page-wide stop: ordinary dialogs and overlays may be handled when the exact current target is freshly grounded and the declared effect is authorized. Ignore optional survey or feedback cards after the requested outcome is proven. If one blocks a still-required target, dismiss it only with a freshly grounded nonconsequential action. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Expected text_present/text_absent effects apply to the whole visible page; for rename, move, or removal outcomes where history/activity/toasts can retain old text, use exact target_present/target_absent or target-within-scope effects instead. Upload accepts either a direct file-input target that advertises upload or an exactly grounded activation target expected to open a dynamic file chooser; ground the latter by activate plus exact text/scope. External or irreversible actions must be marked consequential, include a stable consequenceKey, and include expected effects so Runtime can reconcile the outcome. A task-result commit additionally requires the exact authorizedPlanId and authorizationDigest returned by the concrete-plan status tool. Unknown consequential outcomes block replay of the same key.',
       inputSchema: {
         type: "object",
         properties: {
@@ -829,6 +861,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             description:
               "Opaque Runtime plan identity authorized for this exact commit.",
           },
+          recovery: browserRecoveryJsonSchema,
         },
         required: ["sessionId", "observationId", "action"],
         allOf: [
@@ -881,21 +914,28 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
               .string()
               .regex(/^plan_[a-f0-9]{32}$/)
               .optional(),
+            recovery: browserRecoveryAdmissionRequestSchema.optional(),
           })
           .parse(input);
 
-        return runtime.interact(
+        return afterRecoveryAdmission(
+          runtime,
           parsed.sessionId,
-          verifiedInteractionRequestSchema.parse({
-            observationId: parsed.observationId,
-            action: parsed.action,
-            expectedEffects: parsed.expectedEffects,
-            consequential: parsed.consequential,
-            effect: parsed.effect,
-            consequenceKey: parsed.consequenceKey,
-            authorizationDigest: parsed.authorizationDigest,
-            authorizedPlanId: parsed.authorizedPlanId,
-          }),
+          parsed.recovery,
+          () =>
+            runtime.interact(
+              parsed.sessionId,
+              verifiedInteractionRequestSchema.parse({
+                observationId: parsed.observationId,
+                action: parsed.action,
+                expectedEffects: parsed.expectedEffects,
+                consequential: parsed.consequential,
+                effect: parsed.effect,
+                consequenceKey: parsed.consequenceKey,
+                authorizationDigest: parsed.authorizationDigest,
+                authorizedPlanId: parsed.authorizedPlanId,
+              }),
+            ),
         );
       },
     },
@@ -1101,23 +1141,34 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "browser.navigate",
       description:
-        "Navigate the active page to an absolute http or https URL. If a safely completed read-only navigation or history operation reaches the wrong nonconsequential outcome, inspect freshly and choose another safe read-only Rove route. Recoverable routing misses do not end the task. Runtime policy may reject repeated, over-budget, or unsafe actions; never retry in a tight loop.",
+        "Navigate the active page to an absolute http or https URL. If a safely completed read-only navigation or history operation reaches the wrong nonconsequential outcome, inspect freshly and choose another safe read-only Rove route. Every such retry must include recovery with one stable operationId; Runtime admits at most two attempts and refuses the third, including across restart. Recoverable routing misses do not end the task. Runtime policy may reject repeated, over-budget, or unsafe actions; never retry in a tight loop.",
       inputSchema: {
         type: "object",
         properties: {
           sessionId: { type: "string", minLength: 1 },
           url: { type: "string" },
+          recovery: browserRecoveryJsonSchema,
         },
         required: ["sessionId", "url"],
         additionalProperties: false,
       },
       handler: (input) => {
         const parsed = z
-          .object({ sessionId: sessionIdSchema, url: z.string() })
+          .object({
+            sessionId: sessionIdSchema,
+            url: z.string(),
+            recovery: browserRecoveryAdmissionRequestSchema.optional(),
+          })
           .parse(input);
-        return runtime.navigate(
+        return afterRecoveryAdmission(
+          runtime,
           parsed.sessionId,
-          navigateRequestSchema.parse({ url: parsed.url }),
+          parsed.recovery,
+          () =>
+            runtime.navigate(
+              parsed.sessionId,
+              navigateRequestSchema.parse({ url: parsed.url }),
+            ),
         );
       },
     },
@@ -1167,7 +1218,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId", "pageId"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({ sessionId: sessionIdSchema, pageId: z.string().min(1) })
           .parse(input);
@@ -1301,22 +1352,58 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "browser.back",
       description:
-        "Navigate the active page backward. If it safely completes at the wrong nonconsequential location, inspect freshly and choose another safe read-only Rove route.",
-      inputSchema: sessionIdJsonSchema,
-      handler: (input) =>
-        runtime.back(
-          z.object({ sessionId: sessionIdSchema }).parse(input).sessionId,
-        ),
+        "Navigate the active page backward. If it safely completes at the wrong nonconsequential location, inspect freshly and choose another safe read-only Rove route. Every retry must include recovery with one stable operationId; Runtime refuses the third admission.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", minLength: 1 },
+          recovery: browserRecoveryJsonSchema,
+        },
+        required: ["sessionId"],
+        additionalProperties: false,
+      },
+      handler: async (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            recovery: browserRecoveryAdmissionRequestSchema.optional(),
+          })
+          .parse(input);
+        return afterRecoveryAdmission(
+          runtime,
+          parsed.sessionId,
+          parsed.recovery,
+          () => runtime.back(parsed.sessionId),
+        );
+      },
     },
     {
       name: "browser.forward",
       description:
-        "Navigate the active page forward. If it safely completes at the wrong nonconsequential location, inspect freshly and choose another safe read-only Rove route.",
-      inputSchema: sessionIdJsonSchema,
-      handler: (input) =>
-        runtime.forward(
-          z.object({ sessionId: sessionIdSchema }).parse(input).sessionId,
-        ),
+        "Navigate the active page forward. If it safely completes at the wrong nonconsequential location, inspect freshly and choose another safe read-only Rove route. Every retry must include recovery with one stable operationId; Runtime refuses the third admission.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", minLength: 1 },
+          recovery: browserRecoveryJsonSchema,
+        },
+        required: ["sessionId"],
+        additionalProperties: false,
+      },
+      handler: (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            recovery: browserRecoveryAdmissionRequestSchema.optional(),
+          })
+          .parse(input);
+        return afterRecoveryAdmission(
+          runtime,
+          parsed.sessionId,
+          parsed.recovery,
+          () => runtime.forward(parsed.sessionId),
+        );
+      },
     },
     {
       name: "browser.screenshot",

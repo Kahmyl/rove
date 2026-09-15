@@ -166,22 +166,6 @@ describe("stable task results", () => {
       revision: { body: "Second reviewed version" },
       selectedRevision: { revision: 1, body: "First reviewed version" },
     });
-    const consume = {
-      operationId: "intent_6f345678-1234-4123-8123-123456789abc",
-      taskId,
-      resultId: created.resultId,
-      selectedRevision: 1,
-      selectedDigest: recovered.selectedRevision!.digest,
-    };
-    expect(reopened.consumeResultSelection(consume)).toMatchObject({
-      selected: false,
-      currentRevision: 2,
-      revision: { body: "Second reviewed version" },
-    });
-    expect(reopened.consumeResultSelection(consume)).toMatchObject({
-      selected: false,
-      currentRevision: 2,
-    });
     reopened.close();
   });
 
@@ -405,6 +389,15 @@ describe("stable task results", () => {
         )
         .get("0005_bind_selected_result_revision"),
     ).toEqual({ migration_id: "0005_bind_selected_result_revision" });
+    expect(
+      db
+        .prepare(
+          "SELECT migration_id FROM schema_migration WHERE migration_id = ?",
+        )
+        .get("0006_atomically_consume_selected_results"),
+    ).toEqual({
+      migration_id: "0006_atomically_consume_selected_results",
+    });
     db.close();
   });
 

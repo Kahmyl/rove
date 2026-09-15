@@ -258,6 +258,38 @@ describe("browser.interact MCP schema", () => {
     );
   });
 
+  it("requires Runtime recovery admission before each retried browser operation", async () => {
+    let attempts = 0;
+    const runtime = {
+      admitBrowserRecovery: vi.fn(async () => {
+        attempts += 1;
+        if (attempts > 2)
+          throw new Error("Browser recovery stopped after two attempts.");
+        return { admittedAttempt: attempts, remainingAttempts: 2 - attempts };
+      }),
+      navigate: vi.fn().mockResolvedValue({}),
+    } as unknown as RuntimeClient;
+    const navigate = browserTools(runtime).find(
+      (tool) => tool.name === "browser.navigate",
+    )!;
+    const input = {
+      sessionId: `ses_${"e".repeat(32)}`,
+      url: "https://example.test/reviewed",
+      recovery: {
+        operationId: "recovery-reviewed-navigation",
+        kind: "read_only_outcome",
+        consequentialOutcome: "completed",
+      },
+    };
+    await expect(navigate.handler(input)).resolves.toEqual({});
+    await expect(navigate.handler(input)).resolves.toEqual({});
+    await expect(navigate.handler(input)).rejects.toThrow(
+      /stopped after two attempts/i,
+    );
+    expect(runtime.admitBrowserRecovery).toHaveBeenCalledTimes(3);
+    expect(runtime.navigate).toHaveBeenCalledTimes(2);
+  });
+
   it("prepares and reads a concrete task-result plan without dispatching", async () => {
     const runtime = {
       prepareTaskResultAction: vi.fn().mockResolvedValue({ state: "planned" }),

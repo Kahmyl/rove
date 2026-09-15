@@ -10,6 +10,9 @@ import {
 } from "@rove/storage";
 import {
   RoveError,
+  browserRecoveryAdmissionRequestSchema,
+  MAX_BROWSER_RECOVERY_ATTEMPTS_PER_OPERATION,
+  type BrowserRecoveryAdmissionRequest,
   type ActionResult,
   type ClickRequest,
   type ControlStatus,
@@ -526,6 +529,69 @@ export class RuntimeService implements RoveRuntime {
 
   getSession(sessionId: string): Promise<Session> {
     return this.sessions.get(sessionId);
+  }
+
+  async admitBrowserRecovery(
+    sessionId: string,
+    request: BrowserRecoveryAdmissionRequest,
+  ): Promise<{ admittedAttempt: number; remainingAttempts: number }> {
+    const input = browserRecoveryAdmissionRequestSchema.parse(request);
+    return this.coordinator.execute(sessionId, async () => {
+      const session = await this.sessions.get(sessionId);
+      this.sessions.assertActive(session);
+      if (input.consequentialOutcome === "unknown")
+        throw new RoveError({
+          code: "CONSEQUENTIAL_ACTION_UNRESOLVED",
+          message:
+            "An unknown consequential browser outcome cannot enter recovery.",
+          retryable: false,
+        });
+      const admissions = [...(session.browserRecoveryAdmissions ?? [])];
+      const existing = admissions.find(
+        (entry) => entry.operationId === input.operationId,
+      );
+      if (existing && existing.kind !== input.kind)
+        throw new RoveError({
+          code: "ACTION_BUDGET_EXCEEDED",
+          message: "Browser recovery operation identity changed meaning.",
+          retryable: false,
+        });
+      if (
+        existing &&
+        existing.attempts >= MAX_BROWSER_RECOVERY_ATTEMPTS_PER_OPERATION
+      )
+        throw new RoveError({
+          code: "ACTION_BUDGET_EXCEEDED",
+          message:
+            "Browser recovery stopped after two admitted attempts for this operation.",
+          retryable: false,
+          details: {
+            operationId: input.operationId,
+            attempts: existing.attempts,
+          },
+        });
+      const now = new Date().toISOString();
+      const attempts = (existing?.attempts ?? 0) + 1;
+      const next = admissions.filter(
+        (entry) => entry.operationId !== input.operationId,
+      );
+      next.push({
+        operationId: input.operationId,
+        kind: input.kind,
+        attempts,
+        updatedAt: now,
+      });
+      await this.sessions.update({
+        ...session,
+        browserRecoveryAdmissions: next,
+        updatedAt: now,
+      });
+      return {
+        admittedAttempt: attempts,
+        remainingAttempts:
+          MAX_BROWSER_RECOVERY_ATTEMPTS_PER_OPERATION - attempts,
+      };
+    });
   }
 
   async getBrowserHostIdentity(sessionId: string) {

@@ -97,13 +97,6 @@ export interface ResultStore {
     expectedRevision: number;
     selected: boolean;
   }): TaskResult;
-  consumeResultSelection(input: {
-    operationId: string;
-    taskId: string;
-    resultId: string;
-    selectedRevision: number;
-    selectedDigest: string;
-  }): TaskResult;
   createAction(input: {
     operationId: string;
     taskId: string;
