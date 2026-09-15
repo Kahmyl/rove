@@ -24,6 +24,7 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Testing and Operations](Engineering/testing-and-operations.md)                                     | Executable checks, acceptance scenarios, packaging, recovery, backup, and evidence.           |
 | [Implementation Status](Engineering/implementation-status.md)                                       | Evidence-backed implemented, partial, unimplemented, qualification, and authority boundaries. |
 | [Engineering Agent Environment](Engineering/engineering-agent-environment.md)                       | Repository-owned Codex guidance, safety defaults, verification, and continuation workflow.    |
+| [Repository Convergence Record](Engineering/repository-convergence.md)                              | One-time provenance for preserved worktrees, reconciled source, and final-main accounting.    |
 
 There is no partner-facing platform API commitment. The usual API/Partner Integration document is therefore replaced by application and capability contracts. A separate distributed realtime platform, technical workflow engine, and product release-version documents are unnecessary. Small design rationales belong with the responsible document rather than in a second, competing architecture collection.
 
