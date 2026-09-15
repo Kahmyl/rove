@@ -67,8 +67,22 @@ export interface TaskWorkflowContextSnapshot {
 
 export interface TaskSelectedResultContextSnapshot {
   resultIds: readonly string[];
+  references: readonly {
+    taskId: string;
+    resultId: string;
+    revision: number;
+    digest: string;
+    lifecycle:
+      | "prepared"
+      | "authorized"
+      | "dispatched"
+      | "confirmed"
+      | "failed"
+      | "unresolved";
+  }[];
   digest: string;
-  developerInstructions: string;
+  workingContext: string;
+  developerInstructions?: string;
 }
 
 export interface TaskConversationItem {
@@ -603,14 +617,46 @@ function validateSelectedResultContextSnapshot(
     new Set(value.resultIds).size !== value.resultIds.length
   )
     throw new Error("Selected result context identities are invalid.");
+  if (
+    !Array.isArray(value.references) ||
+    value.references.length !== value.resultIds.length ||
+    value.references.some(
+      (reference, index) =>
+        reference === null ||
+        typeof reference !== "object" ||
+        reference.resultId !== value.resultIds[index] ||
+        typeof reference.taskId !== "string" ||
+        reference.taskId.trim().length < 1 ||
+        reference.taskId.length > 160 ||
+        !Number.isSafeInteger(reference.revision) ||
+        reference.revision < 1 ||
+        !/^[a-f0-9]{64}$/.test(reference.digest) ||
+        ![
+          "prepared",
+          "authorized",
+          "dispatched",
+          "confirmed",
+          "failed",
+          "unresolved",
+        ].includes(reference.lifecycle),
+    )
+  )
+    throw new Error("Selected result context references are invalid.");
   if (!/^[a-f0-9]{64}$/.test(value.digest))
     throw new Error("Selected result context digest is invalid.");
   if (
-    typeof value.developerInstructions !== "string" ||
-    value.developerInstructions.length < 1 ||
-    value.developerInstructions.length > 16_000
+    typeof value.workingContext !== "string" ||
+    value.workingContext.length < 1 ||
+    value.workingContext.length > 16_000
   )
-    throw new Error("Selected result context instructions are invalid.");
+    throw new Error("Selected result working context is invalid.");
+  if (
+    value.developerInstructions !== undefined &&
+    (typeof value.developerInstructions !== "string" ||
+      value.developerInstructions.length < 1 ||
+      value.developerInstructions.length > 8_000)
+  )
+    throw new Error("Selected result policy instructions are invalid.");
 }
 
 export function validateTaskEvent(event: TaskEvent): void {
@@ -641,8 +687,15 @@ export function validateTaskEvent(event: TaskEvent): void {
     event.type === "explicit_continuation_response_requested"
       ? event.selectedResultContext
       : undefined;
-  if (selectedResultContext)
+  if (selectedResultContext) {
     validateSelectedResultContextSnapshot(selectedResultContext);
+    if (
+      selectedResultContext.references.some(
+        (reference) => reference.taskId !== event.taskId,
+      )
+    )
+      throw new Error("Selected result context targets another task.");
+  }
   if (event.type === "codex_item_observed" && event.item?.clientId)
     requireIdentity(event.item.clientId, "Codex item client identity");
   if (event.type === "codex_item_observed" && event.item?.attachments) {

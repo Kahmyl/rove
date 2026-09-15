@@ -86,6 +86,10 @@ Human ownership and action authorization are related but different: permission t
 
 Errors include an operation reference, safe user message, classification, and explicit retry disposition. Secret tokens, local sensitive paths, and raw third-party payloads are not diagnostic messages.
 
+Browser recovery is bounded to two re-grounded attempts for one step. Invalid input may be mechanically corrected only with proof that the handler did not run and fresh grounding produces a different valid request. A safely completed read-only operation may try another freshly grounded Rove route within that budget. Unknown consequential outcomes stop immediately and cannot be replayed through any capability.
+
+A conclusively pre-dispatch or read-only browser failure does not prohibit a separately authorized integration, plugin, API, or suitable CLI when that capability legitimately fits the requested outcome and service rules permit it. The alternate must not expand authorization, evade a restriction, or replay an unresolved effect. This is capability selection, not a stealth-browser fallback.
+
 ## Workflow-sync and MCP boundaries
 
 Workflow synchronization uploads only validated approved configuration, using owner-scoped authentication and conditional revision semantics. It is not a remote execution API. See [portability](workflow-context-and-portability.md).
@@ -94,4 +98,4 @@ For HTTP MCP integrations, follow the selected supported [MCP authorization spec
 
 ## Implementation mapping
 
-Current entry points include `apps/companion/src/main/codex/local-product-api.ts`, `product-task-port.ts`, `results.ts`, the thread/session supervisor, `apps/mcp`, and the private Runtime API. Local result commands, selected-result turn snapshots, exact result-revision Workflow promotion, and Runtime-owned prepare/validate/authorize/commit plans for task-result actions are implemented through these seams. A semantic result authorization is not direct dispatch authority: the concrete grounded plan must match the saved recipient, content, files, target, and scope. Other command names in this target catalog are not thereby declared implemented. Existing command names and protocol identifiers are compatibility facts; adapt them deliberately rather than adding a competing second product API.
+Current entry points include `apps/companion/src/main/codex/local-product-api.ts`, `product-task-port.ts`, `results.ts`, `browser-route-policy.ts`, the thread/session supervisor, `apps/mcp`, and the private Runtime API. Local result commands, exact selected-revision turn snapshots, separated user/evidence input, bounded browser recovery/alternate classification, exact result-revision Workflow promotion, and Runtime-owned prepare/validate/authorize/commit plans for task-result actions are implemented through these seams. A semantic result authorization is not direct dispatch authority: the concrete grounded plan must match the saved recipient, content, files, target, and scope. Other command names in this target catalog are not thereby declared implemented. Existing command names and protocol identifiers are compatibility facts; adapt them deliberately rather than adding a competing second product API.

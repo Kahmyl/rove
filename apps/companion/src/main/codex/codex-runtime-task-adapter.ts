@@ -1262,6 +1262,11 @@ function messageHandler(
       thread,
       operationId,
       message,
+      ...(selectedResultContext
+        ? {
+            selectedResultWorkingContext: selectedResultContext.workingContext,
+          }
+        : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
       ...(activeTurnId ? { expectedActiveTurnId: activeTurnId } : {}),
     });

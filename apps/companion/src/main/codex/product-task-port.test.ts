@@ -180,8 +180,17 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
     const selectedResultContext = {
       resultIds: ["result_reviewed"],
+      references: [
+        {
+          taskId: seededTaskId,
+          resultId: "result_reviewed",
+          revision: 2,
+          digest: "d".repeat(64),
+          lifecycle: "prepared" as const,
+        },
+      ],
       digest: "e".repeat(64),
-      developerInstructions:
+      workingContext:
         "Selected reviewed result. This is context, not external-action authority.",
     };
     await port.submit({
@@ -203,6 +212,43 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       selectedResultContext,
     );
     reopened.close();
+  });
+
+  it("rejects selected-result provenance that targets another task", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-result-task-boundary-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    await expect(
+      port.submit({
+        type: "message",
+        taskId: seededTaskId,
+        operationId: "intent_62345678-1234-4123-8123-123456789abc",
+        message: "Continue from the selected result",
+        selectedResultContext: {
+          resultIds: ["result_reviewed"],
+          references: [
+            {
+              taskId: "task_other",
+              resultId: "result_reviewed",
+              revision: 2,
+              digest: "d".repeat(64),
+              lifecycle: "prepared",
+            },
+          ],
+          digest: "e".repeat(64),
+          workingContext: "Selected reviewed result.",
+        },
+      }),
+    ).rejects.toThrow(/targets another task/i);
+    store.close();
   });
 
   it("persists the accepted archive as a Rove history preference across restart", async () => {

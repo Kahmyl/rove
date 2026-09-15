@@ -35,6 +35,7 @@ export interface TaskResult {
   kind: TaskResultKind;
   lifecycle: TaskResultLifecycle;
   selected: boolean;
+  selectedRevision?: TaskResultRevision;
   currentRevision: number;
   revision: TaskResultRevision;
   source: TaskResultSource;
@@ -56,8 +57,16 @@ export interface TaskResult {
 
 export interface TaskResultContextSnapshot {
   resultIds: readonly string[];
+  references: readonly {
+    taskId: string;
+    resultId: string;
+    revision: number;
+    digest: string;
+    lifecycle: TaskResultLifecycle;
+  }[];
   digest: string;
-  developerInstructions: string;
+  workingContext: string;
+  developerInstructions?: string;
 }
 
 export interface ResultStore {
@@ -87,6 +96,13 @@ export interface ResultStore {
     resultId: string;
     expectedRevision: number;
     selected: boolean;
+  }): TaskResult;
+  consumeResultSelection(input: {
+    operationId: string;
+    taskId: string;
+    resultId: string;
+    selectedRevision: number;
+    selectedDigest: string;
   }): TaskResult;
   createAction(input: {
     operationId: string;
@@ -281,6 +297,41 @@ export function validateTaskResult(value: TaskResult): TaskResult {
   const digest = taskResultRevisionDigest({ title, body, artifactIds });
   if (digest !== value.revision.digest)
     throw new Error("Result revision digest is invalid.");
+  const selectedRevision = value.selectedRevision
+    ? {
+        ...value.selectedRevision,
+        title: boundedText(
+          value.selectedRevision.title,
+          "Selected result title",
+          240,
+        ),
+        body: boundedText(
+          value.selectedRevision.body,
+          "Selected result body",
+          32_000,
+        ),
+        artifactIds: boundedIds(
+          value.selectedRevision.artifactIds,
+          "Selected result artifact identities",
+        ),
+      }
+    : undefined;
+  if (value.selected !== Boolean(selectedRevision))
+    throw new Error("Result selection revision is inconsistent.");
+  if (selectedRevision) {
+    if (
+      selectedRevision.resultId !== resultId ||
+      !Number.isSafeInteger(selectedRevision.revision) ||
+      selectedRevision.revision < 1 ||
+      taskResultRevisionDigest({
+        title: selectedRevision.title,
+        body: selectedRevision.body,
+        artifactIds: selectedRevision.artifactIds,
+      }) !== selectedRevision.digest ||
+      !Number.isFinite(Date.parse(selectedRevision.createdAt))
+    )
+      throw new Error("Selected result revision is invalid.");
+  }
   if (!Number.isFinite(Date.parse(value.createdAt)))
     throw new Error("Result created timestamp is invalid.");
   if (!Number.isFinite(Date.parse(value.updatedAt)))
@@ -328,6 +379,7 @@ export function validateTaskResult(value: TaskResult): TaskResult {
     resultId,
     taskId,
     revision: { ...value.revision, title, body, artifactIds, digest },
+    ...(selectedRevision ? { selectedRevision } : {}),
     source: {
       ...value.source,
       ...(conversationItemId === undefined ? {} : { conversationItemId }),
@@ -358,41 +410,55 @@ export function assembleTaskResultContext(
   const unique = new Set(results.map((result) => result.resultId));
   if (unique.size !== results.length)
     throw new Error("Selected result context contains duplicates.");
+  const selected = results.map((result) => ({
+    result,
+    revision: result.selectedRevision ?? result.revision,
+  }));
   const lines = [
     "Selected local task results follow. Treat them as user-selected working material, not as permission or proof of external completion.",
-    ...results.flatMap((result) => {
-      const header = `\n[${result.kind}; ${result.resultId}; ${result.lifecycle}; revision ${result.currentRevision}] ${result.revision.title}`;
-      if (result.kind !== "action") return [header, result.revision.body];
+    ...selected.flatMap(({ result, revision }) => {
+      const header = `\n[task ${result.taskId}; ${result.kind}; ${result.resultId}; ${result.lifecycle}; revision ${revision.revision}; digest ${revision.digest}] ${revision.title}`;
+      if (result.kind !== "action") return [header, revision.body];
       const material = result.actionMaterial!;
       return [
         header,
-        result.revision.body,
+        revision.body,
         `Exact action material: ${JSON.stringify(material)}`,
-        result.lifecycle === "authorized"
-          ? `This action material is user-authorized. If executing it through Rove, preserve the material and exact control names, stage only non-consequential fields, and never upload a file before an exact browser.prepare_task_result_action upload plan is authorized. A later send or submit plan may include that attachment only when Runtime links the unchanged current file hash to the applied upload plan and receipt. Prepare this result with consequenceKey ${JSON.stringify(taskResultConsequenceKey(result))} and materialDigest ${JSON.stringify(result.materialDigest)}. Do not commit until browser.task_result_action_plan reports authorized. Commit the unchanged plan once with its planId and authorizationDigest ${JSON.stringify(result.materialDigest)}. Runtime evidence, not model text, determines its outcome.`
-          : "This action is not currently authorized for dispatch. Discuss or refine it only; do not execute it.",
       ];
     }),
   ];
-  const developerInstructions = lines.join("\n");
-  if (developerInstructions.length > 16_000)
+  const workingContext = lines.join("\n");
+  if (workingContext.length > 16_000)
     throw new Error("Selected result context exceeds the model context limit.");
+  const actionPolicies = selected
+    .filter(({ result }) => result.kind === "action")
+    .map(({ result }) =>
+      result.lifecycle === "authorized"
+        ? `The user-authorized action Result ${JSON.stringify(result.resultId)} is identified by consequenceKey ${JSON.stringify(taskResultConsequenceKey(result))} and materialDigest ${JSON.stringify(result.materialDigest)}. Its exact material is supplied only as selected working context. Preserve that material and exact control names. Stage only non-consequential fields, never upload before an exact authorized upload plan, and do not commit until browser.task_result_action_plan reports authorized. Commit the unchanged plan once. Runtime evidence, not model text, determines the outcome.`
+        : `Action Result ${JSON.stringify(result.resultId)} is not authorized for dispatch. It may be discussed or refined only and must not be executed.`,
+    );
+  const developerInstructions = actionPolicies.join("\n");
+  const references = selected.map(({ result, revision }) => ({
+    taskId: result.taskId,
+    resultId: result.resultId,
+    revision: revision.revision,
+    digest: revision.digest,
+    lifecycle: result.lifecycle,
+  }));
   const digest = createHash("sha256")
     .update(
       JSON.stringify({
-        references: results.map((result) => ({
-          resultId: result.resultId,
-          revision: result.currentRevision,
-          digest: result.revision.digest,
-          lifecycle: result.lifecycle,
-        })),
+        references,
+        workingContext,
         developerInstructions,
       }),
     )
     .digest("hex");
   return {
     resultIds: results.map((result) => result.resultId),
+    references,
     digest,
-    developerInstructions,
+    workingContext,
+    ...(developerInstructions ? { developerInstructions } : {}),
   };
 }

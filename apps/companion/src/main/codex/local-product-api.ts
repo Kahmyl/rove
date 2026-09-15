@@ -2773,7 +2773,7 @@ export class LocalProductApi {
           throw new Error("Task result selection is invalid.");
         const selectedResults = selectedResultIds.map((resultId) => {
           const result = this.results?.result(taskId, resultId);
-          if (!result || !result.selected)
+          if (!result || !result.selected || !result.selectedRevision)
             throw new Error(
               "Selected result is stale or belongs to another task.",
             );
@@ -2810,7 +2810,7 @@ export class LocalProductApi {
           existingTask.conversation?.turnStatus !== "in_progress"
             ? assembleWorkflowContext(associatedWorkflow, outcome)
             : undefined;
-        return this.tasks.submit({
+        const accepted = await this.tasks.submit({
           type: explicitContinuation
             ? "explicit_continuation_response"
             : "message",
@@ -2824,6 +2824,18 @@ export class LocalProductApi {
             "message operation id",
           ),
         });
+        if (accepted.projection.operationDisposition?.status === "rejected")
+          return accepted;
+        for (const result of selectedResults) {
+          this.results!.consumeResultSelection({
+            operationId: `${command.operationId}:consume:${result.resultId}`,
+            taskId,
+            resultId: result.resultId,
+            selectedRevision: result.selectedRevision!.revision,
+            selectedDigest: result.selectedRevision!.digest,
+          });
+        }
+        return accepted;
       }
       case "task.close":
         return this.tasks.submit({

@@ -139,6 +139,7 @@ export class CodexThreadSessionSupervisor {
     operationId: string;
     message: string;
     attachments?: readonly UserInput[];
+    selectedResultWorkingContext?: string;
     expectedActiveTurnId?: string;
   }): Promise<CodexMessageDeliveryEvidence> {
     const evidence = (
@@ -161,6 +162,15 @@ export class CodexThreadSessionSupervisor {
       const turnInput: UserInput[] = [
         ...(input.attachments ?? []),
         { type: "text", text: input.message, text_elements: [] },
+        ...(input.selectedResultWorkingContext
+          ? [
+              {
+                type: "text" as const,
+                text: input.selectedResultWorkingContext,
+                text_elements: [],
+              },
+            ]
+          : []),
       ];
       if (input.thread.status.type === "active") {
         const expectedTurnId = input.expectedActiveTurnId;
