@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import {
+  ArchivedTaskSettings,
   LocalBackupSettings,
   ProductSurface,
+  SettingsNavigation,
   TaskArchiveConfirmation,
   browserIdentityLabel,
   compatibleReasoningEffort,
@@ -101,7 +103,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Delete");
   });
 
-  it("removes archived ready work from normal history and offers a separate restore action", () => {
+  it("keeps archived work out of the main sidebar and offers it from settings", () => {
     const value = snapshot();
     value.product!.tasks = [
       {
@@ -149,15 +151,52 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
 
-    expect(html).toContain("Archived tasks");
-    expect(html).toContain("Needs attention · Preserved locally");
-    expect(html).toContain(
-      'aria-label="Read archived task: task_archived_ready"',
-    );
-    expect(html).toContain(">Restore</button>");
+    expect(html).not.toContain("Archived tasks");
     expect(html).not.toContain(
       'aria-label="Task history: task_archived_ready"',
     );
+    expect(html).toContain('aria-label="Open Rove profile settings"');
+    expect(html).toContain("Rove profile");
+    expect(html).toContain("Local profile");
+
+    const settingsHtml = renderToStaticMarkup(
+      <ArchivedTaskSettings
+        product={value.product}
+        busy={false}
+        titleForTask={() => "Untitled task"}
+        onOpen={() => undefined}
+        onRestore={() => undefined}
+      />,
+    );
+    expect(settingsHtml).toContain("Archived tasks");
+    expect(settingsHtml).toContain("Needs attention · Preserved locally");
+    expect(settingsHtml).toContain(
+      'aria-label="Read archived task: task_archived_ready"',
+    );
+    expect(settingsHtml).toContain(">Restore</button>");
+
+    const navigationHtml = renderToStaticMarkup(
+      <SettingsNavigation
+        active="archived-tasks"
+        archivedTaskCount={1}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(navigationHtml).toContain('aria-label="Settings sections"');
+    expect(navigationHtml).toContain("Appearance");
+    expect(navigationHtml).toContain(
+      '<button type="button" aria-current="page"><span>Archived tasks</span>',
+    );
+
+    const styles = readFileSync(
+      new URL("./styles.css", import.meta.url),
+      "utf8",
+    );
+    expect(styles).toContain(
+      ".product-sidebar .task-history::-webkit-scrollbar",
+    );
+    expect(styles).toContain("width: 2px;");
+    expect(styles).toContain("scrollbar-color: transparent transparent;");
   });
 
   it("derives the restrained renderer accent from the canonical Rove mark", () => {

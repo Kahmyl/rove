@@ -1428,6 +1428,109 @@ export function LocalBackupSettings({
   );
 }
 
+export function ArchivedTaskSettings({
+  product,
+  busy,
+  titleForTask,
+  onOpen,
+  onRestore,
+}: {
+  product: LocalProductSnapshot | null;
+  busy: boolean;
+  titleForTask(task: ProductTaskProjection): string;
+  onOpen(task: ProductTaskProjection): void;
+  onRestore(task: ProductTaskProjection): void;
+}) {
+  const tasks = archivedProductTasks(product);
+  return (
+    <section
+      className="settings-archive"
+      aria-labelledby="archived-tasks-title"
+    >
+      <header>
+        <div>
+          <h3 id="archived-tasks-title">Archived tasks</h3>
+          <p>Read or restore tasks preserved on this device.</p>
+        </div>
+      </header>
+      {tasks.length === 0 ? (
+        <div className="settings-empty-state">
+          <strong>No archived tasks</strong>
+          <span>Tasks you archive will appear here.</span>
+        </div>
+      ) : (
+        <div className="settings-archive-list">
+          {tasks.map((entry) => (
+            <article
+              className="settings-archive-row"
+              key={entry.taskId}
+              data-needs-input={
+                taskHasUnresolvedAttention(product, entry.taskId)
+                  ? "true"
+                  : undefined
+              }
+            >
+              <button
+                className="settings-archive-open"
+                type="button"
+                aria-label={`Read archived task: ${entry.taskId}`}
+                onClick={() => onOpen(entry)}
+              >
+                <strong>{titleForTask(entry)}</strong>
+                <span>
+                  {taskHasUnresolvedAttention(product, entry.taskId)
+                    ? "Needs attention · Preserved locally"
+                    : "Preserved locally"}
+                </span>
+              </button>
+              <button
+                className="settings-archive-restore"
+                type="button"
+                disabled={busy}
+                onClick={() => onRestore(entry)}
+              >
+                Restore
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type SettingsSection = "appearance" | "archived-tasks";
+
+export function SettingsNavigation({
+  active,
+  archivedTaskCount,
+  onSelect,
+}: {
+  active: SettingsSection;
+  archivedTaskCount: number;
+  onSelect(section: SettingsSection): void;
+}) {
+  return (
+    <nav className="settings-navigation" aria-label="Settings sections">
+      <button
+        type="button"
+        aria-current={active === "appearance" ? "page" : undefined}
+        onClick={() => onSelect("appearance")}
+      >
+        Appearance
+      </button>
+      <button
+        type="button"
+        aria-current={active === "archived-tasks" ? "page" : undefined}
+        onClick={() => onSelect("archived-tasks")}
+      >
+        <span>Archived tasks</span>
+        {archivedTaskCount > 0 && <small>{archivedTaskCount}</small>}
+      </button>
+    </nav>
+  );
+}
+
 export function TaskArchiveConfirmation({
   busy,
   archiving,
@@ -1525,6 +1628,8 @@ export function ProductSurface({
   const [workspaceDraft, setWorkspaceDraft] = useState("");
   const [profileManagerOpen, setProfileManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("appearance");
   const [themePreference, setThemePreference] =
     useState<ThemePreference>(loadThemePreference);
   const [sidebarCollapsed, setSidebarCollapsed] =
@@ -3793,6 +3898,7 @@ export function ProductSurface({
                 type="button"
                 onClick={(event) => {
                   closeParentMenu(event);
+                  setSettingsSection("appearance");
                   setSettingsOpen(true);
                 }}
               >
@@ -4102,53 +4208,92 @@ export function ProductSurface({
                 ×
               </button>
             </header>
-            <div className="theme-options" aria-label="Theme">
-              {(
-                [
-                  ["system", "System", "Use your desktop setting"],
-                  ["light", "Light", "Always use the light theme"],
-                  ["dark", "Dark", "Always use the dark theme"],
-                ] as const
-              ).map(([value, label, description]) => (
-                <button
-                  type="button"
-                  key={value}
-                  aria-pressed={themePreference === value}
-                  onClick={() => setThemePreference(value)}
-                >
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{description}</small>
-                  </span>
-                  <span className="theme-option-check" aria-hidden="true">
-                    {themePreference === value ? "✓" : ""}
-                  </span>
-                </button>
-              ))}
+            <div className="settings-layout">
+              <SettingsNavigation
+                active={settingsSection}
+                archivedTaskCount={archivedProductTasks(product).length}
+                onSelect={setSettingsSection}
+              />
+              <div className="settings-content">
+                {settingsSection === "appearance" ? (
+                  <>
+                    <section
+                      className="settings-appearance"
+                      aria-labelledby="appearance-title"
+                    >
+                      <header>
+                        <h3 id="appearance-title">Appearance</h3>
+                        <p>Choose how Rove looks on this device.</p>
+                      </header>
+                      <div className="theme-options" aria-label="Theme">
+                        {(
+                          [
+                            ["system", "System", "Use your desktop setting"],
+                            ["light", "Light", "Always use the light theme"],
+                            ["dark", "Dark", "Always use the dark theme"],
+                          ] as const
+                        ).map(([value, label, description]) => (
+                          <button
+                            type="button"
+                            key={value}
+                            aria-pressed={themePreference === value}
+                            onClick={() => setThemePreference(value)}
+                          >
+                            <span>
+                              <strong>{label}</strong>
+                              <small>{description}</small>
+                            </span>
+                            <span
+                              className="theme-option-check"
+                              aria-hidden="true"
+                            >
+                              {themePreference === value ? "✓" : ""}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                    <LocalBackupSettings
+                      busy={busy}
+                      status={backupStatus}
+                      onExport={() => {
+                        setBusy(true);
+                        setBackupStatus(null);
+                        void window.rove
+                          .exportLocalBackup()
+                          .then((result) => {
+                            setBackupStatus(localBackupExportStatus(result));
+                            setOperationError(null);
+                          })
+                          .catch((cause: unknown) => {
+                            setOperationError(
+                              cause instanceof Error
+                                ? cause.message
+                                : "Rove could not export the local backup.",
+                            );
+                          })
+                          .finally(() => setBusy(false));
+                      }}
+                    />
+                  </>
+                ) : (
+                  <ArchivedTaskSettings
+                    product={product}
+                    busy={busy}
+                    titleForTask={displayTaskTitle}
+                    onOpen={(task) => {
+                      setArchivedPreviewTaskId(task.taskId);
+                      setSelectedWorkflowWorkspaceId(null);
+                      setSelectedWorkflowOutputId(null);
+                      setShowNewTask(false);
+                      setSettingsOpen(false);
+                    }}
+                    onRestore={(task) => void restoreTask(task)}
+                  />
+                )}
+                {renderModalError()}
+              </div>
             </div>
-            <LocalBackupSettings
-              busy={busy}
-              status={backupStatus}
-              onExport={() => {
-                setBusy(true);
-                setBackupStatus(null);
-                void window.rove
-                  .exportLocalBackup()
-                  .then((result) => {
-                    setBackupStatus(localBackupExportStatus(result));
-                    setOperationError(null);
-                  })
-                  .catch((cause: unknown) => {
-                    setOperationError(
-                      cause instanceof Error
-                        ? cause.message
-                        : "Rove could not export the local backup.",
-                    );
-                  })
-                  .finally(() => setBusy(false));
-              }}
-            />
-            {renderModalError()}
           </section>
         </div>
       )}
@@ -6069,51 +6214,26 @@ export function ProductSurface({
             </section>
           )}
 
-          {archivedProductTasks(product).length > 0 && (
-            <section className="side-card task-history archived-task-history">
-              <div className="side-heading">
-                <span>Archived tasks</span>
-              </div>
-              {archivedProductTasks(product).map((entry) => (
-                <div
-                  className="task-history-row"
-                  key={entry.taskId}
-                  data-needs-input={
-                    taskHasUnresolvedAttention(product, entry.taskId)
-                      ? "true"
-                      : undefined
-                  }
-                >
-                  <button
-                    className="task-history-select"
-                    type="button"
-                    aria-label={`Read archived task: ${entry.taskId}`}
-                    onClick={() => {
-                      setArchivedPreviewTaskId(entry.taskId);
-                      setSelectedWorkflowWorkspaceId(null);
-                      setSelectedWorkflowOutputId(null);
-                      setShowNewTask(false);
-                    }}
-                  >
-                    <strong>{displayTaskTitle(entry)}</strong>
-                    <span>
-                      {taskHasUnresolvedAttention(product, entry.taskId)
-                        ? "Needs attention · Preserved locally"
-                        : "Preserved locally"}
-                    </span>
-                  </button>
-                  <button
-                    className="task-history-restore"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void restoreTask(entry)}
-                  >
-                    Restore
-                  </button>
-                </div>
-              ))}
-            </section>
-          )}
+          <button
+            className="sidebar-profile"
+            type="button"
+            aria-label="Open Rove profile settings"
+            onClick={() => {
+              setSettingsSection("appearance");
+              setSettingsOpen(true);
+            }}
+          >
+            <span className="sidebar-profile-avatar" aria-hidden="true">
+              R
+            </span>
+            <span className="sidebar-profile-copy">
+              <strong>Rove profile</strong>
+              <small>Local profile</small>
+            </span>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="m7.5 4 6 6-6 6" />
+            </svg>
+          </button>
 
           {taskContextMenu && taskContextEntry && (
             <div
