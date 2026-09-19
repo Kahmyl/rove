@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { projectTaskAggregate } from "@rove/protocol";
+import {
+  hasActionableTaskHandoff,
+  projectTaskAggregate,
+} from "@rove/protocol";
 import type {
   TaskEngine,
   TaskAcceptance,
@@ -523,6 +526,17 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             ...(aggregate.runtime.legacyEffects === undefined
               ? {}
               : { legacyEffects: aggregate.runtime.legacyEffects }),
+            ...(aggregate.runtime.handoffId !== undefined ||
+            aggregate.continuation.status === "pending"
+              ? {
+                  handoffActionable: hasActionableTaskHandoff(aggregate),
+                }
+              : {}),
+            ...(aggregate.runtime.handoffGeneration === undefined
+              ? {}
+              : {
+                  handoffGeneration: aggregate.runtime.handoffGeneration,
+                }),
           },
           conversation: {
             roveTaskId: aggregate.taskId,

@@ -1079,6 +1079,8 @@ export interface ProductTaskSnapshot {
     legacyEffects?:
       "not_applicable" | "acknowledgement_required" | "acknowledged";
     diagnostic?: string;
+    handoffActionable?: boolean;
+    handoffGeneration?: number;
   };
 }
 export type ActiveTaskIdentity = Pick<

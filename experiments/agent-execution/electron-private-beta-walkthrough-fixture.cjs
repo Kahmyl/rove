@@ -232,6 +232,9 @@ function browserSnapshot(state) {
           attachment: "attached",
           recovery: "not_needed",
           profileOwnership: "owned",
+          ...(state === "handoff"
+            ? { handoffActionable: true, handoffGeneration: 1 }
+            : {}),
         };
   const primary = task({
     taskId: "task_vendor_research",

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -386,6 +387,93 @@ describe("five process-backed production-composition lifecycle traces", () => {
           action.correlation === continuationCommandId,
       ),
     ).toHaveLength(1);
+  }, 120_000);
+
+  it("reconstructs a missing persisted handoff projection from corroborated authority", async () => {
+    const current = await product();
+    await current.request(launchIntent(ids.handoff));
+    await current.until((value) => {
+      const entry = task(value, taskId(ids.handoff));
+      return entry.bootstrapStage === "complete";
+    });
+    await current.request({
+      type: "browser.attach",
+      taskId: taskId(ids.handoff),
+    });
+    await current.request({
+      type: "handoff.prepare",
+      taskId: taskId(ids.handoff),
+      takeControl: false,
+    });
+    const handedOff = await current.until((value) =>
+      attention(value).some(
+        (request) =>
+          request.taskId === taskId(ids.handoff) &&
+          request.kind === "control_handoff" &&
+          request.status === "pending",
+      ),
+    );
+    expect(task(handedOff, taskId(ids.handoff)).runtime).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      handoffActionable: true,
+    });
+
+    await current.stop();
+    const database = new Database(
+      join(current.home, "codex-product", "task-process.v1.sqlite3"),
+    );
+    for (const table of [
+      "task_engine_aggregate",
+      "task_engine_projection",
+    ]) {
+      const row = database
+        .prepare(`SELECT payload_json FROM ${table} WHERE task_id = ?`)
+        .get(taskId(ids.handoff)) as { payload_json: string };
+      const payload = JSON.parse(row.payload_json) as ProductValue;
+      if (table === "task_engine_aggregate")
+        expect(payload.continuation).toMatchObject({
+          status: "pending",
+          policy: "resume_after_control_return",
+          handoffId: (payload.runtime as ProductValue).handoffId,
+          generation: (payload.runtime as ProductValue).handoffGeneration,
+        });
+      payload.attentions = [];
+      database
+        .prepare(`UPDATE ${table} SET payload_json = ? WHERE task_id = ?`)
+        .run(JSON.stringify(payload), taskId(ids.handoff));
+    }
+    database.close();
+
+    await current.start();
+    const recovered = await current.until((value) => {
+      const recoveredTask = task(value, taskId(ids.handoff));
+      const recoveredAttention = attention(value).find(
+        (request) =>
+          request.taskId === taskId(ids.handoff) &&
+          request.kind === "control_handoff" &&
+          request.status === "pending",
+      );
+      return (
+        recoveredTask.runtime !== undefined && recoveredAttention !== undefined
+      );
+    });
+    expect(
+      attention(recovered).filter(
+        (request) =>
+          request.taskId === taskId(ids.handoff) &&
+          request.kind === "control_handoff" &&
+          request.status === "pending",
+      ),
+    ).toHaveLength(1);
+    expect(
+      (task(recovered, taskId(ids.handoff)).runtime as ProductValue)
+        .handoffActionable,
+    ).toBe(true);
+    expect(task(recovered, taskId(ids.handoff)).runtime).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+    });
   }, 120_000);
 
   it("4. cleans resources from handoff state, returns the Task to ready, and archives only locally", async () => {

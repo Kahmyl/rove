@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import { TaskEngine, type TaskEvent } from "@rove/protocol";
+import {
+  projectTaskAggregate,
+  TaskEngine,
+  type TaskEvent,
+} from "@rove/protocol";
 
 import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 import { OrderedTaskIngress } from "./ordered-task-ingress.js";
@@ -69,6 +73,134 @@ describe("SQLite task engine ledger", () => {
     expect(accepted.aggregate.revision).toBe(1);
     expect(accepted.command?.type).toBe("persist_bootstrap_intent");
     expect(await store.projection(accepted.aggregate.taskId)).toEqual(
+      accepted.projection,
+    );
+    store.close();
+  });
+
+  it("commits mismatched handoff truth as fail-closed recovery", async () => {
+    const { path, store, engine } = await fixture();
+    const launched = await engine.accept(launch());
+    const aggregate = structuredClone(launched.aggregate);
+    const sessionId = `ses_${"a".repeat(32)}`;
+    const threadId = "thread_exact";
+    const handoffId = `handoff_${"b".repeat(32)}`;
+    aggregate.record = {
+      schemaVersion: 1,
+      identity: {
+        taskId: aggregate.taskId,
+        sessionId,
+        threadId,
+        browser: { mode: "temporary" },
+      },
+      bootstrap: {
+        operationId: aggregate.launch!.bootstrapId,
+        threadSource: `rove:${aggregate.taskId}:${aggregate.launch!.bootstrapId}`,
+        stage: "complete",
+      },
+      desiredState: "open",
+    };
+    aggregate.codex = {
+      availability: "available",
+      threadExists: true,
+      threadId,
+      threadSource: aggregate.record.bootstrap.threadSource,
+      sourceLookup: "exact",
+      runtimeStatus: "idle",
+      archived: false,
+      turn: "completed",
+    };
+    aggregate.runtime = {
+      availability: "available",
+      sessionExists: true,
+      sessionId,
+      bootstrapId: aggregate.launch!.bootstrapId,
+      bootstrapLookup: "exact",
+      status: "awaiting_human",
+      controller: null,
+      attachment: "attached",
+      profileLock: "released",
+      browserIdentity: { mode: "temporary" },
+      recovery: "not_needed",
+      ownershipGeneration: 3,
+      handoffId,
+      handoffGeneration: 3,
+      observationSeq: 1,
+    };
+    aggregate.continuation = {
+      status: "pending",
+      id: `continuation:${aggregate.taskId}:3`,
+      taskId: aggregate.taskId,
+      sessionId,
+      threadId,
+      handoffId,
+      generation: 3,
+      policy: "resume_after_control_return",
+      freshInspectionRequired: true,
+      preHandoffObservationSeq: 1,
+    };
+    aggregate.attentions = [
+      {
+        authority: "rove_control",
+        kind: "control_handoff",
+        requestId: "control:exact",
+        taskId: aggregate.taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        status: "pending",
+      },
+    ];
+    aggregate.requestedOperation = { type: "observe", taskId: aggregate.taskId };
+    const projection = projectTaskAggregate(aggregate);
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        "UPDATE task_engine_projection SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(projection), aggregate.taskId);
+    database.close();
+
+    const accepted = await engine.accept({
+      schemaVersion: 1,
+      type: "runtime_inventory_observed",
+      eventId: "runtime:mismatched-handoff",
+      taskId: aggregate.taskId,
+      source: {
+        kind: "runtime",
+        id: "runtime:mismatched-handoff",
+        generation: 2,
+        position: 1,
+      },
+      observedAt: "2026-09-09T12:01:00.000Z",
+      runtime: {
+        ...aggregate.runtime,
+        handoffId: `handoff_${"c".repeat(32)}`,
+        handoffGeneration: 4,
+        ownershipGeneration: 4,
+      },
+    });
+
+    expect(accepted.projection).toMatchObject({
+      phase: "recovering",
+      allowedActions: [],
+      recoveryRequired: expect.stringMatching(
+        /Runtime and durable browser handoff identities do not match/,
+      ),
+      attentions: [expect.objectContaining({ status: "stale" })],
+    });
+    expect(await store.aggregate(aggregate.taskId)).toMatchObject({
+      revision: 2,
+      recoveryRequired: accepted.projection.recoveryRequired,
+      attentions: [expect.objectContaining({ status: "stale" })],
+    });
+    expect(await store.projection(aggregate.taskId)).toEqual(
       accepted.projection,
     );
     store.close();

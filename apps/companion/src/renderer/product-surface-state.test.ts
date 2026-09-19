@@ -449,6 +449,8 @@ describe("native product composer state", () => {
         attachment: "attached",
         recovery: "not_needed",
         profileOwnership: "released",
+        handoffActionable: true,
+        handoffGeneration: 2,
       },
     };
     const presented = {
@@ -480,6 +482,26 @@ describe("native product composer state", () => {
       canTakeControl: true,
       canPause: false,
     });
+    state.attention = state.attention.map((entry) => ({
+      ...entry,
+      generation: 3,
+    }));
+    expect(taskControlProjection(task, state)).toEqual({
+      controllerLabel: "Awaiting handoff",
+      canTakeControl: false,
+      canPause: false,
+    });
+    state.attention = state.attention.map((entry) => ({
+      ...entry,
+      generation: 2,
+    }));
+    task.runtime!.handoffActionable = false;
+    expect(taskControlProjection(task, state)).toEqual({
+      controllerLabel: "Awaiting handoff",
+      canTakeControl: false,
+      canPause: false,
+    });
+    task.runtime!.handoffActionable = true;
     expect(taskControlProjection(presented, state)).toEqual({
       controllerLabel: "Agent",
       canTakeControl: false,

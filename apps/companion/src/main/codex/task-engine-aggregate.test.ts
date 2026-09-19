@@ -4,6 +4,7 @@ import {
   applySuccessfulTaskCommand,
   emptyTaskAggregate,
   foldTaskEvent,
+  hasActionableTaskHandoff,
   projectTaskAggregate,
   TaskEngine,
   type TaskAggregate,
@@ -53,6 +54,22 @@ function aggregate(): TaskAggregate {
     profileLock: "owned",
     browserIdentity: { mode: "temporary" },
     recovery: "not_needed",
+  };
+  return value;
+}
+
+function launchedAggregate(): TaskAggregate {
+  const value = aggregate();
+  value.launch = {
+    operationId: "intent_12345678-1234-4123-8123-123456789abc",
+    bootstrapId: "boot_1234567890abcdef1234567890abcdef",
+    requestedAt: "2026-09-09T12:00:00.000Z",
+    outcome: "Complete the browser handoff.",
+    executionMode: "agent",
+    browserIdentity: { mode: "temporary" },
+    approvalsReviewer: "auto_review",
+    cwd: "/work",
+    attachmentIds: [],
   };
   return value;
 }
@@ -443,6 +460,193 @@ describe("TaskAggregate exact event fold", () => {
     );
     expect(cleared.continuation).toEqual({ status: "none" });
     expect(cleared.attentions).toEqual([]);
+  });
+
+  it("recreates a missing handoff attention from matching Runtime and continuation truth", () => {
+    const before = launchedAggregate();
+    before.runtime = {
+      ...before.runtime,
+      status: "awaiting_human",
+      controller: null,
+      ownershipGeneration: 3,
+      handoffId,
+      handoffGeneration: 3,
+    };
+    before.continuation = {
+      status: "pending",
+      id: "continuation-1",
+      taskId,
+      sessionId,
+      threadId,
+      handoffId,
+      generation: 3,
+      policy: "resume_after_control_return",
+      freshInspectionRequired: true,
+      preHandoffObservationSeq: 0,
+    };
+    before.attentions = [];
+
+    const recovered = foldTaskEvent(
+      before,
+      event(1, {
+        type: "runtime_inventory_observed",
+        runtime: structuredClone(before.runtime),
+      }),
+    );
+
+    expect(recovered.attentions).toEqual([
+      expect.objectContaining({
+        authority: "rove_control",
+        kind: "control_handoff",
+        taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        status: "pending",
+      }),
+    ]);
+    expect(hasActionableTaskHandoff(recovered)).toBe(true);
+  });
+
+  it("restores stale exact handoff attention and keeps it pending across control.wait items", () => {
+    const before = launchedAggregate();
+    before.runtime = {
+      ...before.runtime,
+      status: "awaiting_human",
+      controller: null,
+      ownershipGeneration: 3,
+      handoffId,
+      handoffGeneration: 3,
+    };
+    before.continuation = {
+      status: "pending",
+      id: "continuation-1",
+      taskId,
+      sessionId,
+      threadId,
+      handoffId,
+      generation: 3,
+      policy: "resume_after_control_return",
+      freshInspectionRequired: true,
+    };
+    before.attentions = [
+      {
+        authority: "rove_control",
+        kind: "control_handoff",
+        requestId: "control-original",
+        taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        status: "stale",
+      },
+    ];
+    const recovered = foldTaskEvent(
+      before,
+      event(1, {
+        type: "runtime_inventory_observed",
+        runtime: structuredClone(before.runtime),
+      }),
+    );
+    const afterFirstWait = foldTaskEvent(
+      recovered,
+      event(2, {
+        type: "codex_item_observed",
+        threadId,
+        turnId: "turn-wait",
+        itemId: "item-wait",
+        terminal: true,
+        item: {
+          id: "item-wait",
+          turnId: "turn-wait",
+          kind: "tool",
+          status: "completed",
+          title: "Control Wait",
+        },
+      }),
+    );
+    const afterWait = foldTaskEvent(
+      afterFirstWait,
+      event(3, {
+        type: "codex_item_observed",
+        threadId,
+        turnId: "turn-wait",
+        itemId: "item-wait-2",
+        terminal: true,
+        item: {
+          id: "item-wait-2",
+          turnId: "turn-wait",
+          kind: "tool",
+          status: "completed",
+          title: "Control Wait",
+        },
+      }),
+    );
+
+    expect(afterWait.attentions).toEqual([
+      expect.objectContaining({
+        requestId: "control-original",
+        status: "pending",
+      }),
+    ]);
+    expect(hasActionableTaskHandoff(afterWait)).toBe(true);
+  });
+
+  it("does not project takeover for mismatched Runtime and continuation handoffs", () => {
+    const before = launchedAggregate();
+    before.continuation = {
+      status: "pending",
+      id: "continuation-1",
+      taskId,
+      sessionId,
+      threadId,
+      handoffId,
+      generation: 3,
+      policy: "resume_after_control_return",
+      freshInspectionRequired: true,
+      preHandoffObservationSeq: 0,
+    };
+    before.attentions = [
+      {
+        authority: "rove_control",
+        kind: "control_handoff",
+        requestId: "control-wrong",
+        taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        status: "pending",
+      },
+    ];
+    const mismatched = foldTaskEvent(
+      before,
+      event(1, {
+        type: "runtime_inventory_observed",
+        runtime: {
+          ...before.runtime,
+          status: "awaiting_human",
+          controller: null,
+          ownershipGeneration: 4,
+          handoffId: `handoff_${"a".repeat(32)}`,
+          handoffGeneration: 4,
+        },
+      }),
+    );
+
+    expect(hasActionableTaskHandoff(mismatched)).toBe(false);
+    expect(mismatched.attentions).toEqual([
+      expect.objectContaining({ status: "stale" }),
+    ]);
+    expect(projectTaskAggregate(mismatched)).toMatchObject({
+      phase: "recovering",
+      allowedActions: [],
+      recoveryRequired: expect.stringMatching(
+        /Runtime and durable browser handoff identities do not match/,
+      ),
+    });
   });
 
   it("replaces only the observed component", () => {
