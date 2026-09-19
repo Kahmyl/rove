@@ -20,6 +20,130 @@ async function store() {
 }
 
 describe("FileEffectJournalStore", () => {
+  const verificationBasis = {
+    schemaVersion: 1 as const,
+    effects: [
+      {
+        effect: { kind: "text_present" as const, text: "Created" },
+        predecessorState: "contradicted" as const,
+      },
+    ],
+  };
+
+  it("settles one unresolved version terminally under an optimistic race", async () => {
+    const journal = await store();
+    const prepared = await journal.prepare({
+      taskScope: "task-settle",
+      browserWorkspaceScope: "workspace-settle",
+      consequenceKey: "create:item",
+      actionFingerprint: "a".repeat(64),
+      verificationBasis,
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover",
+      preparedAt: "2026-09-19T12:00:00.000Z",
+      updatedAt: "2026-09-19T12:00:00.000Z",
+    });
+    const unresolved = await journal.update(prepared.effectId, 1, {
+      state: "unresolved",
+      updatedAt: "2026-09-19T12:00:01.000Z",
+    });
+
+    const attempts = await Promise.allSettled([
+      journal.settleUnresolved(unresolved.effectId, unresolved.version, {
+        state: "applied",
+        updatedAt: "2026-09-19T12:00:02.000Z",
+        observationId: "obs-applied",
+      }),
+      journal.settleUnresolved(unresolved.effectId, unresolved.version, {
+        state: "not_applied",
+        updatedAt: "2026-09-19T12:00:03.000Z",
+        observationId: "obs-not-applied",
+      }),
+    ]);
+
+    expect(
+      attempts.filter(({ status }) => status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(attempts.filter(({ status }) => status === "rejected")).toHaveLength(
+      1,
+    );
+    await expect(journal.findById(unresolved.effectId)).resolves.toMatchObject({
+      version: 3,
+      state: expect.stringMatching(/^(applied|not_applied)$/),
+      verificationBasis,
+    });
+  });
+
+  it("keeps legacy unresolved records readable but unsettleable", async () => {
+    const journal = await store();
+    const prepared = await journal.prepare({
+      taskScope: "task-legacy",
+      browserWorkspaceScope: "workspace-legacy",
+      consequenceKey: "legacy:item",
+      actionFingerprint: "b".repeat(64),
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover",
+      preparedAt: "2026-09-19T12:00:00.000Z",
+      updatedAt: "2026-09-19T12:00:00.000Z",
+    });
+    const unresolved = await journal.update(prepared.effectId, 1, {
+      state: "unresolved",
+      updatedAt: "2026-09-19T12:00:01.000Z",
+    });
+
+    await expect(journal.findById(unresolved.effectId)).resolves.toEqual(
+      unresolved,
+    );
+    await expect(
+      journal.settleUnresolved(unresolved.effectId, unresolved.version, {
+        state: "applied",
+        updatedAt: "2026-09-19T12:00:02.000Z",
+        observationId: "obs-late",
+      }),
+    ).rejects.toThrow("verification basis is unavailable");
+  });
+
+  it("rejects a changed verification basis for a same-key retry", async () => {
+    const journal = await store();
+    const prepared = await journal.prepare({
+      taskScope: "task-retry",
+      browserWorkspaceScope: "workspace-retry",
+      consequenceKey: "retry:item",
+      actionFingerprint: "c".repeat(64),
+      verificationBasis,
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "cutover",
+      preparedAt: "2026-09-19T12:00:00.000Z",
+      updatedAt: "2026-09-19T12:00:00.000Z",
+    });
+    const notApplied = await journal.update(prepared.effectId, 1, {
+      state: "not_applied",
+      updatedAt: "2026-09-19T12:00:01.000Z",
+    });
+
+    await expect(
+      journal.update(notApplied.effectId, notApplied.version, {
+        state: "prepared",
+        updatedAt: "2026-09-19T12:00:02.000Z",
+        verificationBasis: {
+          schemaVersion: 1,
+          effects: [
+            {
+              effect: { kind: "text_present", text: "Different" },
+              predecessorState: "contradicted",
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow("identity transition is invalid");
+    await expect(journal.findById(notApplied.effectId)).resolves.toEqual(
+      notApplied,
+    );
+  });
+
   it("persists a concrete task-result plan across restart before dispatch", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-effect-plan-test-"));
     roots.push(root);

@@ -38,6 +38,48 @@ function schemaVariant(
 }
 
 describe("browser.interact MCP schema", () => {
+  it("exposes read-only outcome reconciliation without replacement fields", async () => {
+    const reconcileConsequentialEffect = vi.fn(async () => ({
+      effectId: "a".repeat(64),
+      consequenceKey: "create:item",
+      state: "unresolved" as const,
+      version: 2,
+      settled: false,
+    }));
+    const tool = browserTools({
+      reconcileConsequentialEffect,
+    } as unknown as RuntimeClient).find(
+      (candidate) => candidate.name === "browser.reconcile_outcome",
+    )!;
+    const properties = record(tool.inputSchema.properties);
+
+    expect(Object.keys(properties).sort()).toEqual([
+      "consequenceKey",
+      "observationId",
+      "sessionId",
+    ]);
+    expect(tool.description).toContain("never redispatches");
+    expect(tool.description).toContain("remain immutable");
+    expect(tool.description).toContain("remains unresolved");
+    await tool.handler({
+      sessionId: "session_1",
+      consequenceKey: "create:item",
+      observationId: "obs_2",
+    });
+    expect(reconcileConsequentialEffect).toHaveBeenCalledWith("session_1", {
+      consequenceKey: "create:item",
+      observationId: "obs_2",
+    });
+    await expect(
+      tool.handler({
+        sessionId: "session_1",
+        consequenceKey: "create:item",
+        observationId: "obs_2",
+        outcomes: [],
+      }),
+    ).rejects.toThrow();
+  });
+
   it("exposes one contextual target-mutation surface", () => {
     const names = browserTools({} as RuntimeClient).map((tool) => tool.name);
 

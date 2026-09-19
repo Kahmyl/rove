@@ -3020,6 +3020,235 @@ describe("runtime integration", () => {
     expect(receipt).toMatchObject({ outcome: "applied", dispatched: true });
   });
 
+  it("durably settles a late focused-text and canonical-target proof without redispatch", async () => {
+    const server = await fixture();
+    const { runtime, browser, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+    });
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    let dispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      dispatches += 1;
+      return interact(...args);
+    };
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async () => {
+        throw new Error("withhold immediate successor evidence");
+      },
+    });
+    const consequenceKey = "fixture:late-settlement:applied";
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Change state"),
+      },
+      expectedEffects: [
+        { kind: "text_present", text: "State changed" },
+        {
+          kind: "target_present",
+          target: { name: "State changed", kind: "button" },
+        },
+      ],
+      consequential: true,
+      consequenceKey,
+    });
+    expect(receipt).toMatchObject({ outcome: "unknown", dispatched: true });
+    expect(dispatches).toBe(1);
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: inspect,
+    });
+    const fresh = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+      targetLimit: 1,
+    });
+    const before = await effectJournal.find(
+      session.bootstrapId ?? session.id,
+      session.workspace?.id ?? session.id,
+      consequenceKey,
+    );
+    expect(before).toMatchObject({
+      state: "unresolved",
+      version: 2,
+      verificationBasis: { schemaVersion: 1 },
+    });
+
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey,
+        observationId: fresh.observationId,
+      }),
+    ).resolves.toMatchObject({ state: "applied", version: 3, settled: true });
+    expect(dispatches).toBe(1);
+    await expect(
+      effectJournal.findById(before!.effectId),
+    ).resolves.toMatchObject({
+      effectId: before!.effectId,
+      state: "applied",
+      version: 3,
+      verificationBasis: before!.verificationBasis,
+    });
+  }, 15_000);
+
+  it("settles authoritative late contradiction as not applied and leaves pre-existing success unresolved", async () => {
+    const server = await fixture();
+    const { runtime, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const observation = await runtime.inspectBrowser(session.id);
+    const taskScope = session.bootstrapId ?? session.id;
+    const workspaceScope = session.workspace?.id ?? session.id;
+    const prepareUnresolved = async (
+      consequenceKey: string,
+      predecessorState: "observed" | "contradicted",
+      text: string,
+    ) => {
+      const prepared = await effectJournal.prepare({
+        taskScope,
+        browserWorkspaceScope: workspaceScope,
+        consequenceKey,
+        actionFingerprint: createHash("sha256")
+          .update(consequenceKey)
+          .digest("hex"),
+        verificationBasis: {
+          schemaVersion: 1,
+          effects: [
+            {
+              effect: { kind: "text_present", text },
+              predecessorState,
+            },
+          ],
+        },
+        state: "prepared",
+        ownershipGeneration: 1,
+        cutoverEpoch: "phase5-effect-journal-v1",
+        preparedAt: "2026-09-19T12:00:00.000Z",
+        updatedAt: "2026-09-19T12:00:00.000Z",
+      });
+      return effectJournal.update(prepared.effectId, prepared.version, {
+        state: "unresolved",
+        updatedAt: "2026-09-19T12:00:01.000Z",
+      });
+    };
+    const contradicted = await prepareUnresolved(
+      "fixture:late-settlement:not-applied",
+      "contradicted",
+      "Never rendered",
+    );
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey: contradicted.consequenceKey,
+        observationId: observation.observationId,
+      }),
+    ).resolves.toMatchObject({
+      state: "not_applied",
+      version: 3,
+      settled: true,
+    });
+
+    const preExisting = await prepareUnresolved(
+      "fixture:late-settlement:pre-existing",
+      "observed",
+      "Apply consequential mutation",
+    );
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey: preExisting.consequenceKey,
+        observationId: observation.observationId,
+      }),
+    ).resolves.toMatchObject({
+      state: "unresolved",
+      version: 2,
+      settled: false,
+    });
+    await expect(effectJournal.findById(preExisting.effectId)).resolves.toEqual(
+      preExisting,
+    );
+  });
+
+  it("keeps durable unknown truth and its replay fence when terminal settlement fails", async () => {
+    const server = await fixture();
+    const { runtime, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const observation = await runtime.inspectBrowser(session.id);
+    const consequenceKey = "fixture:late-settlement:write-failure";
+    const prepared = await effectJournal.prepare({
+      taskScope: session.bootstrapId ?? session.id,
+      browserWorkspaceScope: session.workspace?.id ?? session.id,
+      consequenceKey,
+      actionFingerprint: "d".repeat(64),
+      verificationBasis: {
+        schemaVersion: 1,
+        effects: [
+          {
+            effect: {
+              kind: "text_present",
+              text: "Apply consequential mutation",
+            },
+            predecessorState: "contradicted",
+          },
+        ],
+      },
+      state: "prepared",
+      ownershipGeneration: 1,
+      cutoverEpoch: "phase5-effect-journal-v1",
+      preparedAt: "2026-09-19T12:00:00.000Z",
+      updatedAt: "2026-09-19T12:00:00.000Z",
+    });
+    const unresolved = await effectJournal.update(
+      prepared.effectId,
+      prepared.version,
+      {
+        state: "unresolved",
+        updatedAt: "2026-09-19T12:00:01.000Z",
+      },
+    );
+    const settle = effectJournal.settleUnresolved.bind(effectJournal);
+    effectJournal.settleUnresolved = async () => {
+      throw new Error("forced durable settlement failure");
+    };
+
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey,
+        observationId: observation.observationId,
+      }),
+    ).rejects.toThrow("forced durable settlement failure");
+    await expect(effectJournal.findById(unresolved.effectId)).resolves.toEqual(
+      unresolved,
+    );
+    const replayFence = (
+      runtime as unknown as {
+        consequenceReplayFence: {
+          assertAvailable(sessionId: string, consequenceKey: string): void;
+        };
+      }
+    ).consequenceReplayFence;
+    expect(() =>
+      replayFence.assertAvailable(session.id, consequenceKey),
+    ).toThrow();
+    effectJournal.settleUnresolved = settle;
+  });
+
   it("reconciles delayed expected effects for ordinary navigation", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();
@@ -3478,6 +3707,21 @@ describe("runtime integration", () => {
       url: `${server.url}/consequential-form?churn=retry`,
     });
     const fresh = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.interact(session.id, {
+        observationId: fresh.observationId,
+        action: {
+          kind: "click",
+          target: target(fresh, "Create record"),
+        },
+        expectedEffects: [
+          { kind: "text_present", text: "Different retry outcome" },
+        ],
+        consequential: true,
+        consequenceKey: "fixture:predispatch:rejected",
+      }),
+    ).rejects.toMatchObject({ code: "ACTION_NOT_AUTHORIZED" });
+    expect(server.mutationCount()).toBe(0);
     await expect(
       runtime.interact(session.id, {
         observationId: fresh.observationId,

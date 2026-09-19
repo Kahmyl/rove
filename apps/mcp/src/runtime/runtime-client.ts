@@ -37,6 +37,8 @@ import {
   type PrepareTaskResultActionRequest,
   type TaskResultActionPlan,
   type BrowserRecoveryAdmissionRequest,
+  type ConsequentialEffectReconciliationResult,
+  type ReconcileConsequentialEffectRequest,
 } from "@rove/protocol";
 import { RuntimeClientError } from "./runtime-client.error.js";
 import type {
@@ -207,6 +209,17 @@ export class RuntimeHttpClient implements RuntimeClient {
     return this.request(
       "POST",
       `/sessions/${encodeURIComponent(sessionId)}/browser/interact`,
+      input,
+    );
+  }
+
+  reconcileConsequentialEffect(
+    sessionId: string,
+    input: ReconcileConsequentialEffectRequest,
+  ): Promise<ConsequentialEffectReconciliationResult> {
+    return this.request(
+      "POST",
+      `/sessions/${encodeURIComponent(sessionId)}/browser/reconcile-outcome`,
       input,
     );
   }

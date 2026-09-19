@@ -74,6 +74,7 @@ export async function executeHubCommand(
     case "browser.open_page":
     case "browser.resolve_target":
     case "browser.interact":
+    case "browser.reconcile_outcome":
     case "browser.click":
     case "browser.type":
     case "browser.press":
@@ -87,9 +88,11 @@ export async function executeHubCommand(
             ? "resolve-target"
             : command.operation === "browser.interact"
               ? "interact"
-              : command.operation === "browser.open_page"
-                ? "pages"
-                : command.operation.split(".")[1]
+              : command.operation === "browser.reconcile_outcome"
+                ? "reconcile-outcome"
+                : command.operation === "browser.open_page"
+                  ? "pages"
+                  : command.operation.split(".")[1]
         }`,
         input,
       );

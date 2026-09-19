@@ -23,6 +23,7 @@ describe("TOOL_CATALOG", () => {
         "browser.inspect",
         "browser.interact",
         "browser.prepare_task_result_action",
+        "browser.reconcile_outcome",
         "browser.task_result_action_plan",
         "browser.transaction_begin",
         "browser.transaction_advance",

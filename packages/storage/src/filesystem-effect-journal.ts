@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { link, mkdir, open, readFile, readdir, unlink } from "node:fs/promises";
 import { basename, dirname } from "node:path";
+import { expectedEffectSchema } from "@rove/protocol";
 
 import type {
   EffectJournalCutover,
@@ -122,6 +123,27 @@ function parseRecord(raw: string): EffectJournalRecord {
       (typeof value.evidenceId !== "string" || value.evidenceId.length === 0))
   )
     throw new Error("Effect journal record is invalid.");
+  if (value.verificationBasis !== undefined) {
+    const basis = value.verificationBasis;
+    if (
+      typeof basis !== "object" ||
+      basis === null ||
+      basis.schemaVersion !== 1 ||
+      !Array.isArray(basis.effects) ||
+      basis.effects.length < 1 ||
+      basis.effects.length > 20 ||
+      basis.effects.some(
+        (entry) =>
+          typeof entry !== "object" ||
+          entry === null ||
+          !expectedEffectSchema.safeParse(entry.effect).success ||
+          !["observed", "contradicted", "unresolved"].includes(
+            entry.predecessorState,
+          ),
+      )
+    )
+      throw new Error("Effect journal verification basis is invalid.");
+  }
   if (
     value.taskResultPlan !== undefined &&
     (typeof value.taskResultPlan !== "object" ||
@@ -220,6 +242,27 @@ function validTaskResultPlanTransition(
   return validTaskResultPlanReplacement(previous, next);
 }
 
+function sameVerificationBasis(
+  left: EffectJournalRecord["verificationBasis"],
+  right: EffectJournalRecord["verificationBasis"],
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function validVerificationBasisTransition(
+  previous: EffectJournalRecord,
+  next: EffectJournalRecord,
+): boolean {
+  if (sameVerificationBasis(previous.verificationBasis, next.verificationBasis))
+    return true;
+  return (
+    previous.verificationBasis === undefined &&
+    next.verificationBasis !== undefined &&
+    (previous.state === "planned" || previous.state === "authorized") &&
+    next.state === "prepared"
+  );
+}
+
 function parseCutover(raw: string): EffectJournalCutover {
   const parsed = JSON.parse(raw) as Partial<EffectJournalCutover>;
   const value = {
@@ -316,6 +359,7 @@ export class FileEffectJournalStore implements EffectJournalStore {
             record.consequenceKey !== previous.consequenceKey ||
             !validActionFingerprintTransition(previous, record) ||
             !validTaskResultPlanTransition(previous, record) ||
+            !validVerificationBasisTransition(previous, record) ||
             record.uncertaintyDomain !== previous.uncertaintyDomain ||
             record.affectedOperationFingerprint !==
               previous.affectedOperationFingerprint ||
@@ -375,7 +419,11 @@ export class FileEffectJournalStore implements EffectJournalStore {
         existing.taskScope !== input.taskScope ||
         existing.browserWorkspaceScope !== input.browserWorkspaceScope ||
         existing.consequenceKey !== input.consequenceKey ||
-        existing.attemptId !== input.attemptId
+        existing.attemptId !== input.attemptId ||
+        !sameVerificationBasis(
+          existing.verificationBasis,
+          input.verificationBasis,
+        )
       )
         throw new Error("Effect journal identity collision.");
       return existing;
@@ -392,7 +440,11 @@ export class FileEffectJournalStore implements EffectJournalStore {
         winner.taskScope !== input.taskScope ||
         winner.browserWorkspaceScope !== input.browserWorkspaceScope ||
         winner.consequenceKey !== input.consequenceKey ||
-        winner.attemptId !== input.attemptId
+        winner.attemptId !== input.attemptId ||
+        !sameVerificationBasis(
+          winner.verificationBasis,
+          input.verificationBasis,
+        )
       )
         throw new Error("Effect journal identity collision.");
       return winner;
@@ -408,7 +460,10 @@ export class FileEffectJournalStore implements EffectJournalStore {
       "state" | "updatedAt" | "observationId" | "evidenceId"
     > &
       Partial<
-        Pick<EffectJournalRecord, "ownershipGeneration" | "actionFingerprint">
+        Pick<
+          EffectJournalRecord,
+          "ownershipGeneration" | "actionFingerprint" | "verificationBasis"
+        >
       > & {
         taskResultPlan?: EffectJournalRecord["taskResultPlan"] | undefined;
       },
@@ -447,9 +502,42 @@ export class FileEffectJournalStore implements EffectJournalStore {
     };
     if (
       !validActionFingerprintTransition(current, next) ||
-      !validTaskResultPlanTransition(current, next)
+      !validTaskResultPlanTransition(current, next) ||
+      !validVerificationBasisTransition(current, next)
     )
       throw new Error("Effect journal identity transition is invalid.");
+    const created = await publishExclusive(
+      this.recordVersionPath(effectId, next.version),
+      next,
+    );
+    if (!created) throw new Error("Effect journal version conflict.");
+    return next;
+  }
+
+  async settleUnresolved(
+    effectId: string,
+    expectedVersion: number,
+    settlement: Pick<
+      EffectJournalRecord,
+      "state" | "updatedAt" | "observationId" | "evidenceId"
+    >,
+  ): Promise<EffectJournalRecord> {
+    if (settlement.state !== "applied" && settlement.state !== "not_applied")
+      throw new Error("Effect journal settlement must be terminal.");
+    if (!validTimestamp(settlement.updatedAt))
+      throw new Error("Effect journal settlement time is invalid.");
+    const current = await this.readRecord(effectId);
+    if (!current || current.version !== expectedVersion)
+      throw new Error("Effect journal version conflict.");
+    if (current.state !== "unresolved")
+      throw new Error("Only unresolved effects can be settled.");
+    if (!current.verificationBasis)
+      throw new Error("Effect journal verification basis is unavailable.");
+    const next: EffectJournalRecord = {
+      ...current,
+      ...settlement,
+      version: current.version + 1,
+    };
     const created = await publishExclusive(
       this.recordVersionPath(effectId, next.version),
       next,

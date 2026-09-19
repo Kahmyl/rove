@@ -24,4 +24,17 @@ describe("consequence replay fence", () => {
       fence.assertAvailable("session_a", "purchase:123"),
     ).not.toThrow();
   });
+
+  it("clears only the exact settled consequence key", () => {
+    const fence = new ConsequenceReplayFence();
+    fence.recordUnknown("session_a", "create:first");
+    fence.recordUnknown("session_a", "create:second");
+
+    fence.clear("session_a", "create:first");
+
+    expect(() =>
+      fence.assertAvailable("session_a", "create:first"),
+    ).not.toThrow();
+    expect(() => fence.assertAvailable("session_a", "create:second")).toThrow();
+  });
 });

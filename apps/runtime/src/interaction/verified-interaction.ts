@@ -13,6 +13,7 @@ import type {
   VerifiedInteractionRequest,
 } from "@rove/protocol";
 import type { FocusedPageTextRead } from "@rove/browser";
+import type { EffectVerificationBasis } from "@rove/storage";
 
 export type FocusedPageTextEvidence = ReadonlyMap<
   string,
@@ -215,9 +216,7 @@ function verifyEffect(
       return {
         effect,
         state: causalTransition(
-          predecessorPresent === undefined
-            ? undefined
-            : !predecessorPresent,
+          predecessorPresent === undefined ? undefined : !predecessorPresent,
           successorPresent === undefined ? undefined : !successorPresent,
         ),
       };
@@ -566,6 +565,17 @@ export function verifyExpectedCurrentStates(
   return expectedEffects.map((effect) => {
     if (effect.kind === "target_present")
       return verifyExpectedTargetPresentState(effect, observation);
+    if (effect.kind === "target_absent") {
+      const matches = matchingTargets(observation, effect.target);
+      return {
+        effect,
+        state: targetEvidenceIncomplete(observation)
+          ? "unresolved"
+          : matches.length === 0
+            ? "observed"
+            : "contradicted",
+      };
+    }
     if (effect.kind === "text_present" || effect.kind === "text_absent") {
       const present = pageTextProposition(
         observation,
@@ -615,6 +625,54 @@ export function verifyExpectedCurrentStates(
       };
     return { effect, state: "unresolved" };
   });
+}
+
+export function createExpectedEffectVerificationBasis(
+  expectedEffects: ExpectedEffect[],
+  predecessor: BrowserObservation,
+  focusedTextEvidence?: FocusedPageTextEvidence,
+): EffectVerificationBasis {
+  return {
+    schemaVersion: 1,
+    effects: verifyExpectedCurrentStates(
+      expectedEffects,
+      predecessor,
+      focusedTextEvidence,
+    ).map(({ effect, state }) => ({ effect, predecessorState: state })),
+  };
+}
+
+export function verifyExpectedEffectsFromBasis(
+  basis: EffectVerificationBasis,
+  observation: BrowserObservation,
+  focusedTextEvidence?: FocusedPageTextEvidence,
+): EffectVerification[] {
+  const current = verifyExpectedCurrentStates(
+    basis.effects.map(({ effect }) => effect),
+    observation,
+    focusedTextEvidence,
+  );
+  return current.map((verification, index) => {
+    const predecessorState = basis.effects[index]!.predecessorState;
+    if (
+      predecessorState === "unresolved" ||
+      verification.state === "unresolved"
+    )
+      return { effect: verification.effect, state: "unresolved" };
+    if (verification.state === "contradicted")
+      return { effect: verification.effect, state: "contradicted" };
+    return {
+      effect: verification.effect,
+      state: predecessorState === "contradicted" ? "observed" : "unresolved",
+    };
+  });
+}
+
+export function sameExpectedEffectVerificationBasis(
+  left: EffectVerificationBasis,
+  right: EffectVerificationBasis,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export interface ExpectedEffectEvidenceIssue {
