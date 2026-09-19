@@ -83,25 +83,46 @@ The canonical documentation has been reconciled before implementation:
 
 Documents whose existing boundaries remain valid do not need speculative edits: workflow portability, provider choice, local data portability, recording scope, and repository convergence.
 
-## Current implementation assumptions to verify
+## Established current implementation map
 
-Before changing behavior, re-establish the exact source seams for:
+The read-only source audit at the current documentation baseline established the existing ownership seams before implementation work begins.
 
-- browser observation construction and coverage/truncation metadata;
-- target resolution and freshness;
-- `browser.interact` request/receipt semantics;
-- expected-effect evaluation and immediate successor inspection;
-- effect-journal persistence and consequence fencing;
-- semantic transaction begin/advance/verify behavior;
-- screenshot acquisition and how visual evidence reaches Codex;
-- task-engine `read_truth` / `correlate_receipt` patterns that may be reusable;
-- MCP/browser-route instructions that currently expose verification mechanics to Codex.
+| Responsibility | Current owner / path | Disposition |
+| --- | --- | --- |
+| Task-level reasoning and browser-route choice | Codex through the task-bound MCP tool surface and `browser-route-policy.ts` | **Move responsibility selectively.** Codex should keep task reasoning and grounded action choice, but should not have to program Rove-specific proof mechanics. |
+| Agent-facing browser contract | `apps/mcp/src/tools/browser.tools.ts` | **Generalize.** It currently exposes `expectedEffects` and detailed verifier advice directly to Codex, then passes those predicates through to Runtime. |
+| Structured perception | `packages/browser` inspection/perception pipeline plus `browser.inspect` | **Keep and reuse.** Observations already expose semantic hierarchy, geometry, frame provenance, page-state facts, coverage/truncation, and freshness authority. |
+| Visual perception primitive | `browser.screenshot` backed by the browser/Runtime evidence path | **Keep and orchestrate.** Viewport, full-page, target, and region capture already exist and can be bound to an observation. The missing work is automatic evidence-strategy selection, not screenshot acquisition. |
+| Target grounding and stale-observation authority | `packages/browser` observation authority, target registry/resolution, Runtime interaction policy | **Keep.** Current page/revision/mutation/viewport authority and stale-target refusal are safety foundations. |
+| Action authorization and dispatch | Runtime interaction policy, ownership/coordinator boundaries, `browser.interact` | **Keep.** Runtime remains the single mutation authority. |
+| Immediate effect verification | `apps/runtime/src/interaction/verified-interaction.ts` | **Keep as a low-level evidence mechanism.** Causal transition rules and truncation-aware refusal correctly avoid false success. |
+| Short asynchronous settlement | `RuntimeService.interact` bounded successor-reinspection loop | **Generalize rather than duplicate.** Ordinary interactions already wait and re-inspect after dispatch without redispatch, but they repeatedly evaluate the same caller-selected `expectedEffects` against essentially the same observation strategy. |
+| Durable external-effect truth / replay fencing | Runtime effect journal plus consequence replay fence | **Keep and extend only as needed.** This is already the authority that prevents duplicate consequential effects and stores outcome/evidence references. |
+| Specialized later verification | semantic transaction begin/advance/verify/store | **Reuse/converge.** Transfer transactions already support a later fresh observation and explicit verification after commit, but the model is specialized and still expected-effect driven. |
+| Generic process-cut reconciliation | task-engine command classifications, worker `execute/reconcile`, `read_truth` / `correlate_receipt` | **Reuse as an engineering pattern, not as a second browser lifecycle.** |
+| Customer action lifecycle | Companion Result/action projection and renderer | **Keep.** Prepared/authorized/dispatched/confirmed/failed/unresolved remains the product truth projection; stronger browser evidence should settle the same action rather than create another lifecycle. |
 
-Do not assume that all of these require redesign. Prefer adapting existing seams where ownership remains correct.
+### Corrected diagnosis
+
+Ordinary `browser.interact` is **not** missing all post-dispatch reconciliation. Runtime already performs bounded delayed successor inspections after a dispatched action and never redispatches the operation during that loop.
+
+The missing capability is **adaptive outcome/evidence strategy**:
+
+- the caller currently selects low-level `expectedEffects`;
+- the MCP contract teaches Codex when to choose page text, exact targets, scopes, URLs, and other verifier primitives;
+- Runtime can wait for the application to settle, but it keeps re-evaluating the same proof contract;
+- when the proof contract itself is unsuitable for the observation — for example whole-page text on a known-truncated virtualized surface — waiting longer cannot make that proof authoritative;
+- screenshots, target coverage, scoped grounding, other read-only browser routes, and specialized later verification already exist as separate primitives, but no cohesive ordinary-interaction layer chooses among them to settle the intended outcome.
+
+Therefore this work should **extend and compose the existing interaction/receipt/effect-journal path**, not add a parallel reconciliation engine.
+
+The motivating Drive case remains a regression for this gap: the safe Runtime machinery correctly refused false certainty and duplicate dispatch, while the browser execution layer failed to adapt its proof strategy to observation limits.
 
 ## Work sequence
 
 ### 1. Establish the browser execution map
+
+**Status:** Complete for the current implementation baseline. The ownership map above satisfies this investigation gate and corrects the earlier assumption that ordinary interactions lacked any post-dispatch reconciliation.
 
 Produce a code-level map from agent request through MCP, Runtime dispatch, observation, effect verification, journal persistence, and customer action projection.
 
@@ -130,6 +151,8 @@ Specify the smallest internal contract needed to separate:
 - terminal outcome.
 
 Do not commit prematurely to a public tool name or database schema. Determine whether existing `ActionReceipt`, operation records, and effect journals can carry the required truth with additive fields or projections.
+
+Start from the existing `browser.interact` receipt/effect-journal path and its bounded successor-reinspection loop. The next design must show why any new state or API cannot be represented by extending that authority. Do not create a second reconciliation lifecycle merely because the current proof strategy is too rigid.
 
 The contract must allow:
 
@@ -176,7 +199,7 @@ Compatibility can be maintained temporarily while old and new paths coexist, but
 
 ### 5. Generalize post-dispatch reconciliation
 
-Add a bounded read-only path for an existing consequential operation whose mutation has already crossed the dispatch boundary.
+Generalize the existing bounded post-dispatch successor-reinspection path for a consequential operation whose mutation has already crossed the dispatch boundary. Preserve its no-redispatch semantics, but allow reconciliation to change the read-only evidence strategy when repeating the original expected-effect check cannot establish the intended outcome.
 
 Reconciliation may:
 
