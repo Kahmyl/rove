@@ -37,7 +37,7 @@ A workflow can exist without configuration beyond its name and without tasks on 
 | Page group            | Task-owned set of pages within a host; not an authentication boundary.                    | Local mapping, re-established using current browser evidence.       |
 | Grant                 | User-authorized access to a resource and operations within a scope.                       | Local, revocable, never inherited from webpage instructions.        |
 | Attention request     | A pending decision or intervention addressed to one task/operation.                       | Local with resolved/cancelled/expired state.                        |
-| Operation             | One accepted command with stable identity and dispatch/outcome evidence.                  | Local journal; deduplication is not external exactly-once delivery. |
+| Operation             | One accepted command with stable identity plus intent, dispatch, reconciliation, and outcome evidence. | Local journal; deduplication is not external exactly-once delivery. |
 | Result                | A finding collection, draft, record, recommendation, or action outcome.                   | Local; can reference sources and artifacts.                         |
 | Artifact              | A managed local file with ownership, type, size, integrity, and origin metadata.          | Local bytes and metadata.                                           |
 | Workflow promotion    | User-approved selection of reusable information to place in guidance.                     | Portable only after explicit approval and validation.               |
@@ -62,7 +62,7 @@ A task does not require a browser. Browser attachments are acquired on demand, a
 
 Approved workflow guidance, task instructions, observed facts, and suggested learning are distinguishable. Guidance revisions are immutable records of an approved configuration. A running turn records the applied revision or snapshot; it does not silently consume a mid-action configuration edit.
 
-An operation records authorization, dispatch, and observed outcome separately. An approval binds the actual recipient/content/resource scope. Retrying after uncertain external dispatch is a reconciliation decision, not an ordinary transport retry.
+An operation records intended consequence, authorization, dispatch, reconciliation evidence, and terminal outcome separately. An approval binds the actual recipient/content/resource scope. After uncertain external dispatch, the mutation remains fenced while bounded read-only reconciliation may continue against current evidence. Re-dispatch is not reconciliation and is never an ordinary transport retry.
 
 ## Boundaries and aggregates
 
