@@ -192,11 +192,81 @@ describe("browser.interact MCP schema", () => {
     );
     expect(tool!.inputSchema.additionalProperties).toBe(false);
 
-    expect(allOf).toHaveLength(1);
+    expect(allOf).toHaveLength(2);
 
     const conditional = record(allOf[0]);
 
     expect(record(conditional.then).required).toEqual(["consequenceKey"]);
+
+    const taskResultConditional = record(allOf[1]);
+    expect(
+      record(record(record(taskResultConditional.if).properties).consequenceKey)
+        .pattern,
+    ).toBe("^task-result:");
+    expect(record(taskResultConditional.then).required).toEqual([
+      "consequential",
+    ]);
+    expect(
+      record(record(taskResultConditional.then).properties).consequential,
+    ).toEqual({ const: true });
+  });
+
+  it.each([undefined, false])(
+    "rejects a non-consequential task-result commit before Runtime (%s)",
+    (consequential) => {
+      const runtime = {
+        interact: vi.fn(),
+        consequentialEffect: vi.fn(),
+      } as unknown as RuntimeClient;
+      const interact = browserTools(runtime).find(
+        (tool) => tool.name === "browser.interact",
+      )!;
+      const authorizationDigest = "a".repeat(64);
+
+      expect(() =>
+        interact.handler({
+          sessionId: `ses_${"b".repeat(32)}`,
+          observationId: "bobs_current",
+          action: {
+            kind: "click",
+            target: { pageId: "page_01", revision: 1, ref: "t1" },
+          },
+          consequenceKey: `task-result:result_01:${authorizationDigest}`,
+          authorizationDigest,
+          authorizedPlanId: `plan_${"b".repeat(32)}`,
+          ...(consequential === undefined ? {} : { consequential }),
+        }),
+      ).toThrow(/task-result browser commits must be consequential/i);
+      expect(runtime.consequentialEffect).not.toHaveBeenCalled();
+      expect(runtime.interact).not.toHaveBeenCalled();
+    },
+  );
+
+  it("continues to admit an ordinary non-consequential interaction", async () => {
+    const runtime = {
+      interact: vi.fn().mockResolvedValue({ outcome: "unknown" }),
+    } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
+
+    await expect(
+      interact.handler({
+        sessionId: `ses_${"b".repeat(32)}`,
+        observationId: "bobs_current",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "t1" },
+        },
+      }),
+    ).resolves.toEqual({ outcome: "unknown" });
+    expect(runtime.interact).toHaveBeenCalledWith(
+      `ses_${"b".repeat(32)}`,
+      expect.objectContaining({
+        consequential: false,
+        expectedEffects: [],
+      }),
+    );
   });
 
   it("forwards the exact task-result authorization digest to Runtime", async () => {

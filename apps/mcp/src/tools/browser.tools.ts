@@ -1055,6 +1055,23 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
               required: ["consequenceKey"],
             },
           },
+          {
+            if: {
+              properties: {
+                consequenceKey: {
+                  type: "string",
+                  pattern: "^task-result:",
+                },
+              },
+              required: ["consequenceKey"],
+            },
+            then: {
+              properties: {
+                consequential: { const: true },
+              },
+              required: ["consequential"],
+            },
+          },
         ],
         additionalProperties: false,
       },
@@ -1097,6 +1114,8 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
 
         const taskResultCommit =
           parsed.consequenceKey?.startsWith("task-result:");
+        if (taskResultCommit && !parsed.consequential)
+          throw new Error("Task-result browser commits must be consequential.");
         if (
           parsed.consequential &&
           !taskResultCommit &&
