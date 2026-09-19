@@ -53,6 +53,48 @@ describe("interaction contracts", () => {
     ).toBe(true);
   });
 
+  it("requires task-result actions to be consequential", () => {
+    const request = {
+      observationId: "bobs_current",
+      consequenceKey: `task-result:result_1:${"a".repeat(64)}`,
+      authorizationDigest: "a".repeat(64),
+      authorizedPlanId: `plan_${"b".repeat(32)}`,
+      action: {
+        kind: "click" as const,
+        target: { pageId: "page_01", revision: 1, ref: "t1" },
+      },
+    };
+
+    for (const consequential of [undefined, false]) {
+      const result = verifiedInteractionRequestSchema.safeParse({
+        ...request,
+        ...(consequential === undefined ? {} : { consequential }),
+      });
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ["consequential"],
+              message: "Task-result actions must be marked consequential.",
+            }),
+          ]),
+        );
+    }
+  });
+
+  it("continues to accept ordinary non-consequential interactions", () => {
+    expect(
+      verifiedInteractionRequestSchema.safeParse({
+        observationId: "bobs_current",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "t1" },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
   it("accepts neutral grounding intent without numeric scoring fields", () => {
     expect(
       targetResolutionRequestSchema.parse({

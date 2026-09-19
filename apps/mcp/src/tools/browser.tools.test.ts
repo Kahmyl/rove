@@ -45,6 +45,12 @@ describe("browser.interact MCP schema", () => {
     expect(names).not.toContain("browser.click");
     expect(names).not.toContain("browser.type");
     expect(names).not.toContain("browser.press");
+    expect(names).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/focused/i),
+        expect.stringMatching(/canonical/i),
+      ]),
+    );
   });
 
   it("advertises action-specific required fields", () => {
@@ -67,13 +73,7 @@ describe("browser.interact MCP schema", () => {
       "target",
       "value",
     ]);
-    expect(tool!.description).toContain(
-      'action:{kind:"fill",target:{pageId,revision,ref},value:"..."}',
-    );
-    expect(tool!.description).toContain("mechanically corrected request");
-    expect(tool!.description).toContain(
-      "never replay an identical malformed request",
-    );
+    expect(tool!.description).toContain("fresh grounded observation");
 
     expect(schemaVariant(variants, "drag").required).toEqual([
       "kind",
@@ -113,7 +113,7 @@ describe("browser.interact MCP schema", () => {
     ]);
   });
 
-  it("advertises the bounded expected-effect union", () => {
+  it("advertises the bounded semantic outcome union", () => {
     const tool = browserTools({} as RuntimeClient).find(
       (candidate) => candidate.name === "browser.interact",
     );
@@ -122,59 +122,39 @@ describe("browser.interact MCP schema", () => {
 
     const properties = record(tool!.inputSchema.properties);
 
-    const expectedEffects = record(properties.expectedEffects);
+    expect(properties).not.toHaveProperty("expectedEffects");
+    const outcomes = record(properties.outcomes);
 
-    const effectSchema = record(expectedEffects.items);
+    const outcomeSchema = record(outcomes.items);
 
-    const variants = array(effectSchema.oneOf);
+    const variants = array(outcomeSchema.oneOf);
 
-    expect(variants).toHaveLength(28);
+    expect(variants).toHaveLength(10);
 
-    expect(schemaVariant(variants, "download_completed").required).toEqual([
-      "kind",
-    ]);
+    expect(schemaVariant(variants, "download").required).toEqual(["kind"]);
     expect(
-      record(
-        record(schemaVariant(variants, "download_completed").properties)
-          .filename,
-      ).maxLength,
+      record(record(schemaVariant(variants, "download").properties).filename)
+        .maxLength,
     ).toBe(500);
-    expect(schemaVariant(variants, "download_completed").description).toContain(
-      "Omit filename when discovering or reporting the actual saved filename",
+    expect(schemaVariant(variants, "download").description).toContain(
+      "Omit filename when discovering or reporting",
     );
-
-    expect(tool!.description).toContain(
-      "include filename only when the user explicitly requires",
-    );
-    expect(tool!.description).toContain(
-      "An exact-name mismatch is not_applied and must never cause a second download",
-    );
-
-    expect(schemaVariant(variants, "page_opened").required).toEqual(["kind"]);
-
-    expect(schemaVariant(variants, "selected_value").required).toEqual([
+    expect(schemaVariant(variants, "page").required).toEqual(["kind", "state"]);
+    expect(schemaVariant(variants, "selection").required).toEqual([
       "kind",
       "target",
       "value",
     ]);
-
-    expect(schemaVariant(variants, "target_numeric_value").required).toEqual([
+    expect(schemaVariant(variants, "target_location").required).toEqual([
       "kind",
       "target",
-      "value",
-    ]);
-
-    expect(schemaVariant(variants, "target_within_scope").required).toEqual([
-      "kind",
-      "target",
+      "relation",
       "scope",
     ]);
-
-    expect(schemaVariant(variants, "text_absent").description).toContain(
-      "Page-wide visible-text absence",
-    );
-    expect(schemaVariant(variants, "target_absent").description).toContain(
-      "Exact semantic target absence",
+    expect(tool!.description).toContain("desired user-visible outcomes");
+    expect(tool!.description).toContain("Runtime chooses");
+    expect(tool!.description).not.toMatch(
+      /expectedEffects|canonical|focused|text_present|url_changed/,
     );
   });
 
@@ -212,24 +192,101 @@ describe("browser.interact MCP schema", () => {
     );
     expect(tool!.inputSchema.additionalProperties).toBe(false);
 
-    expect(allOf).toHaveLength(1);
+    expect(allOf).toHaveLength(2);
 
     const conditional = record(allOf[0]);
 
     expect(record(conditional.then).required).toEqual(["consequenceKey"]);
+
+    const taskResultConditional = record(allOf[1]);
+    expect(
+      record(record(record(taskResultConditional.if).properties).consequenceKey)
+        .pattern,
+    ).toBe("^task-result:");
+    expect(record(taskResultConditional.then).required).toEqual([
+      "consequential",
+    ]);
+    expect(
+      record(record(taskResultConditional.then).properties).consequential,
+    ).toEqual({ const: true });
   });
 
-  it("forwards the exact task-result authorization digest to Runtime", async () => {
+  it.each([undefined, false])(
+    "rejects a non-consequential task-result commit before Runtime (%s)",
+    (consequential) => {
+      const runtime = {
+        interact: vi.fn(),
+        consequentialEffect: vi.fn(),
+      } as unknown as RuntimeClient;
+      const interact = browserTools(runtime).find(
+        (tool) => tool.name === "browser.interact",
+      )!;
+      const authorizationDigest = "a".repeat(64);
+
+      expect(() =>
+        interact.handler({
+          sessionId: `ses_${"b".repeat(32)}`,
+          observationId: "bobs_current",
+          action: {
+            kind: "click",
+            target: { pageId: "page_01", revision: 1, ref: "t1" },
+          },
+          consequenceKey: `task-result:result_01:${authorizationDigest}`,
+          authorizationDigest,
+          authorizedPlanId: `plan_${"b".repeat(32)}`,
+          ...(consequential === undefined ? {} : { consequential }),
+        }),
+      ).toThrow(/task-result browser commits must be consequential/i);
+      expect(runtime.consequentialEffect).not.toHaveBeenCalled();
+      expect(runtime.interact).not.toHaveBeenCalled();
+    },
+  );
+
+  it("continues to admit an ordinary non-consequential interaction", async () => {
     const runtime = {
-      interact: vi.fn().mockResolvedValue({}),
+      interact: vi.fn().mockResolvedValue({ outcome: "unknown" }),
     } as unknown as RuntimeClient;
     const interact = browserTools(runtime).find(
       (tool) => tool.name === "browser.interact",
     )!;
+
+    await expect(
+      interact.handler({
+        sessionId: `ses_${"b".repeat(32)}`,
+        observationId: "bobs_current",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "t1" },
+        },
+      }),
+    ).resolves.toEqual({ outcome: "unknown" });
+    expect(runtime.interact).toHaveBeenCalledWith(
+      `ses_${"b".repeat(32)}`,
+      expect.objectContaining({
+        consequential: false,
+        expectedEffects: [],
+      }),
+    );
+  });
+
+  it("forwards the exact task-result authorization digest to Runtime", async () => {
     const authorizationDigest = "a".repeat(64);
     const consequenceKey = `task-result:result_01:${authorizationDigest}`;
     const authorizedPlanId = `plan_${"b".repeat(32)}`;
-
+    const runtime = {
+      interact: vi.fn().mockResolvedValue({}),
+      consequentialEffect: vi.fn().mockResolvedValue({
+        state: "authorized",
+        taskResultPlan: {
+          planId: authorizedPlanId,
+          materialDigest: authorizationDigest,
+          expectedEffects: [{ kind: "url_changed" }],
+        },
+      }),
+    } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
     expect(record(interact.inputSchema.properties)).toHaveProperty(
       "authorizationDigest",
     );
@@ -240,7 +297,6 @@ describe("browser.interact MCP schema", () => {
         kind: "click",
         target: { pageId: "page_01", revision: 1, ref: "t1" },
       },
-      expectedEffects: [{ kind: "url_changed" }],
       consequential: true,
       effect: "external_commit",
       consequenceKey,
@@ -254,7 +310,12 @@ describe("browser.interact MCP schema", () => {
         consequenceKey,
         authorizationDigest,
         authorizedPlanId,
+        expectedEffects: [{ kind: "url_changed" }],
       }),
+    );
+    expect(runtime.consequentialEffect).toHaveBeenCalledWith(
+      `ses_${"b".repeat(32)}`,
+      consequenceKey,
     );
   });
 
@@ -292,8 +353,17 @@ describe("browser.interact MCP schema", () => {
 
   it("prepares and reads a concrete task-result plan without dispatching", async () => {
     const runtime = {
-      prepareTaskResultAction: vi.fn().mockResolvedValue({ state: "planned" }),
-      consequentialEffect: vi.fn().mockResolvedValue({ state: "planned" }),
+      prepareTaskResultAction: vi.fn().mockResolvedValue({
+        planId: `plan_${"a".repeat(32)}`,
+        expectedEffects: [{ kind: "url_changed" }],
+      }),
+      consequentialEffect: vi.fn().mockResolvedValue({
+        state: "planned",
+        taskResultPlan: {
+          planId: `plan_${"a".repeat(32)}`,
+          expectedEffects: [{ kind: "url_changed" }],
+        },
+      }),
     } as unknown as RuntimeClient;
     const tools = browserTools(runtime);
     const prepare = tools.find(
@@ -302,6 +372,9 @@ describe("browser.interact MCP schema", () => {
     const status = tools.find(
       (tool) => tool.name === "browser.task_result_action_plan",
     )!;
+    const prepareProperties = record(prepare.inputSchema.properties);
+    expect(prepareProperties).toHaveProperty("outcomes");
+    expect(prepareProperties).not.toHaveProperty("expectedEffects");
     const sessionId = `ses_${"c".repeat(32)}`;
     const materialDigest = "d".repeat(64);
     const consequenceKey = `task-result:result_1:${materialDigest}`;
@@ -315,23 +388,42 @@ describe("browser.interact MCP schema", () => {
         kind: "click",
         target: { pageId: "page_1", revision: 3, ref: "send" },
       },
-      expectedEffects: [{ kind: "url_changed" }],
+      outcomes: [{ kind: "url", state: "changed" }],
       effect: "external_commit",
     };
 
-    await prepare.handler({ sessionId, ...request });
-    await status.handler({ sessionId, consequenceKey });
+    const preparedPlan = record(
+      await prepare.handler({ sessionId, ...request }),
+    );
+    const agentStatus = record(
+      await status.handler({ sessionId, consequenceKey }),
+    );
     expect(runtime.prepareTaskResultAction).toHaveBeenCalledWith(
       sessionId,
-      request,
+      expect.objectContaining({
+        observationId: request.observationId,
+        consequenceKey,
+        commitAction: request.commitAction,
+        expectedEffects: [{ kind: "url_changed" }],
+      }),
     );
+    expect(
+      record(
+        (runtime.prepareTaskResultAction as ReturnType<typeof vi.fn>).mock
+          .calls[0]![1],
+      ),
+    ).not.toHaveProperty("outcomes");
     expect(runtime.consequentialEffect).toHaveBeenCalledWith(
       sessionId,
       consequenceKey,
     );
+    expect(record(agentStatus.taskResultPlan)).not.toHaveProperty(
+      "expectedEffects",
+    );
+    expect(preparedPlan).not.toHaveProperty("expectedEffects");
   });
 
-  it("rejects unsupported and duplicate download expectations before Runtime", () => {
+  it("rejects unsupported and duplicate download expectations before Runtime", async () => {
     const runtime = { interact: vi.fn() } as unknown as RuntimeClient;
     const interact = browserTools(runtime).find(
       (tool) => tool.name === "browser.interact",
@@ -345,7 +437,7 @@ describe("browser.interact MCP schema", () => {
       },
     };
 
-    expect(() =>
+    await expect(
       interact.handler({
         ...base,
         action: {
@@ -353,18 +445,100 @@ describe("browser.interact MCP schema", () => {
           target: base.action.target,
           key: "Enter",
         },
-        expectedEffects: [{ kind: "download_completed" }],
+        outcomes: [{ kind: "download" }],
       }),
-    ).toThrow(/requires a grounded click action/);
-    expect(() =>
+    ).rejects.toThrow(/requires a grounded click action/);
+    await expect(
       interact.handler({
         ...base,
-        expectedEffects: [
-          { kind: "download_completed" },
-          { kind: "download_completed", filename: "second.pdf" },
+        outcomes: [
+          { kind: "download" },
+          { kind: "download", filename: "second.pdf" },
         ],
       }),
-    ).toThrow(/at most one download_completed/);
+    ).rejects.toThrow(/at most one download_completed/);
+    expect(runtime.interact).not.toHaveBeenCalled();
+  });
+
+  it("routes a visible-text outcome into Runtime focused text escalation", async () => {
+    const runtime = {
+      interact: vi.fn().mockResolvedValue({ outcome: "applied" }),
+    } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
+
+    await expect(
+      interact.handler({
+        sessionId: `ses_${"a".repeat(32)}`,
+        observationId: "bobs_truncated",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "save" },
+        },
+        outcomes: [{ kind: "visible_text", state: "present", text: "Saved" }],
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: "save:document:1",
+      }),
+    ).resolves.toEqual({ outcome: "applied" });
+    expect(runtime.interact).toHaveBeenCalledWith(
+      `ses_${"a".repeat(32)}`,
+      expect.objectContaining({
+        expectedEffects: [{ kind: "text_present", text: "Saved" }],
+      }),
+    );
+  });
+
+  it("rejects consequential interactions without a usable outcome before Runtime", () => {
+    const runtime = { interact: vi.fn() } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
+
+    expect(() =>
+      interact.handler({
+        sessionId: `ses_${"a".repeat(32)}`,
+        observationId: "bobs_current",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "t1" },
+        },
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: "publish:article:1",
+      }),
+    ).toThrow(/require at least one semantic outcome/i);
+    expect(runtime.interact).not.toHaveBeenCalled();
+  });
+
+  it("does not let a task-result commit resupply its authorized outcomes", () => {
+    const runtime = {
+      interact: vi.fn(),
+      consequentialEffect: vi.fn(),
+    } as unknown as RuntimeClient;
+    const interact = browserTools(runtime).find(
+      (tool) => tool.name === "browser.interact",
+    )!;
+    const digest = "a".repeat(64);
+
+    expect(() =>
+      interact.handler({
+        sessionId: `ses_${"a".repeat(32)}`,
+        observationId: "bobs_current",
+        action: {
+          kind: "click",
+          target: { pageId: "page_01", revision: 1, ref: "t1" },
+        },
+        outcomes: [{ kind: "url", state: "changed" }],
+        consequential: true,
+        effect: "external_commit",
+        consequenceKey: `task-result:result_1:${digest}`,
+        authorizationDigest: digest,
+        authorizedPlanId: `plan_${"b".repeat(32)}`,
+      }),
+    ).toThrow(/authorized plan outcomes/i);
+    expect(runtime.consequentialEffect).not.toHaveBeenCalled();
     expect(runtime.interact).not.toHaveBeenCalled();
   });
 });

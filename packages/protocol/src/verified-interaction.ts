@@ -471,6 +471,16 @@ export const verifiedInteractionRequestSchema = z
     }
     if (
       value.consequenceKey?.startsWith("task-result:") &&
+      !value.consequential
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["consequential"],
+        message: "Task-result actions must be marked consequential.",
+      });
+    }
+    if (
+      value.consequenceKey?.startsWith("task-result:") &&
       (value.authorizationDigest === undefined ||
         value.authorizedPlanId === undefined)
     ) {

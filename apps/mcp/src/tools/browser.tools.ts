@@ -12,11 +12,15 @@ import {
   prepareTaskResultActionRequestSchema,
   browserRecoveryAdmissionRequestSchema,
 } from "@rove/protocol";
-import type { PageInspection } from "@rove/protocol";
+import type { PageInspection, TaskResultActionPlan } from "@rove/protocol";
 import { z } from "zod";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
 import type { ToolDefinition } from "../server/register-tools.js";
 import { toolSuccessWithImage } from "../server/tool-result.js";
+import {
+  browserOutcomeSchema,
+  compileBrowserOutcomes,
+} from "./browser-outcome.js";
 import {
   sessionIdJsonSchema,
   sessionIdSchema,
@@ -550,6 +554,147 @@ const expectedEffectJsonSchema = {
   ],
 } as const;
 
+const browserOutcomeJsonSchema = {
+  oneOf: [
+    {
+      type: "object",
+      properties: {
+        kind: { const: "url" },
+        state: { const: "changed" },
+      },
+      required: ["kind", "state"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "url" },
+        state: { const: "equals" },
+        url: { type: "string", format: "uri" },
+      },
+      required: ["kind", "state", "url"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "visible_text" },
+        state: { type: "string", enum: ["present", "absent"] },
+        text: { type: "string", minLength: 1, maxLength: 5000 },
+      },
+      required: ["kind", "state", "text"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "target" },
+        target: expectedTargetJsonSchema,
+        state: {
+          type: "string",
+          enum: [
+            "present",
+            "absent",
+            "enabled",
+            "disabled",
+            "checked",
+            "unchecked",
+            "focused",
+            "blurred",
+            "expanded",
+            "collapsed",
+            "pressed",
+            "unpressed",
+            "selected",
+            "unselected",
+            "open",
+            "closed",
+          ],
+        },
+      },
+      required: ["kind", "target", "state"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "target_location" },
+        target: expectedTargetJsonSchema,
+        relation: { type: "string", enum: ["within", "outside"] },
+        scope: structuralScopeJsonSchema,
+      },
+      required: ["kind", "target", "relation", "scope"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "target_value" },
+        target: expectedTargetJsonSchema,
+        value: {
+          oneOf: [{ type: "string", maxLength: 100000 }, { type: "number" }],
+        },
+      },
+      required: ["kind", "target", "value"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "selection" },
+        target: expectedTargetJsonSchema,
+        value: { type: "string", maxLength: 5000 },
+      },
+      required: ["kind", "target", "value"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "target_files" },
+        state: { const: "equals" },
+        target: expectedTargetJsonSchema,
+        files: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", minLength: 1, maxLength: 500 },
+              sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+            },
+            required: ["name", "sha256"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["kind", "state", "target", "files"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        kind: { const: "page" },
+        state: { type: "string", enum: ["opened", "closed"] },
+      },
+      required: ["kind", "state"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      description:
+        "A completed managed download. Omit filename when discovering or reporting the saved name; include it only when the requested outcome requires that exact filename.",
+      properties: {
+        kind: { const: "download" },
+        filename: { type: "string", minLength: 1, maxLength: 500 },
+      },
+      required: ["kind"],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
 function inspectionForAgent(inspection: PageInspection): PageInspection {
   const observationalMetadata = { ...(inspection.metadata ?? {}) };
   delete observationalMetadata.pagePolicy;
@@ -565,6 +710,22 @@ function inspectionForAgent(inspection: PageInspection): PageInspection {
         interactionTool: "browser.interact",
       },
     },
+  };
+}
+
+function taskResultPlanForAgent(plan: TaskResultActionPlan): unknown {
+  const agentPlan: Partial<TaskResultActionPlan> = { ...plan };
+  delete agentPlan.expectedEffects;
+  return agentPlan;
+}
+
+function taskResultActionStatusForAgent(
+  record: Awaited<ReturnType<RuntimeClient["consequentialEffect"]>>,
+): unknown {
+  if (!record?.taskResultPlan) return record;
+  return {
+    ...record,
+    taskResultPlan: taskResultPlanForAgent(record.taskResultPlan),
   };
 }
 
@@ -706,7 +867,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
     {
       name: "browser.prepare_task_result_action",
       description:
-        "Prepare, but do not dispatch, one concrete commit for a saved task-result action. First stage the exact recipient/content/files with ordinary grounded interactions. This call snapshots the current field values, immutable file evidence, commit target, expected effects, page revision, and action fingerprint. It remains non-dispatching until the Companion validates the plan against the user's saved authorization. Use browser.task_result_action_plan to observe authorization, then commit the unchanged plan once with browser.interact.",
+        "Prepare, but do not dispatch, one concrete commit for a saved task-result action. First stage the exact recipient, content, and files with grounded interactions, then describe the desired outcomes. Runtime snapshots the material, commit target, outcomes, and action identity for Companion authorization. Use browser.task_result_action_plan to observe authorization, then commit the unchanged plan once with browser.interact.",
       inputSchema: {
         type: "object",
         properties: {
@@ -741,11 +902,11 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             },
           },
           commitAction: browserInteractionActionJsonSchema,
-          expectedEffects: {
+          outcomes: {
             type: "array",
             minItems: 1,
             maxItems: 20,
-            items: expectedEffectJsonSchema,
+            items: browserOutcomeJsonSchema,
           },
           effect: {
             type: "string",
@@ -760,20 +921,34 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           "fieldBindings",
           "attachmentBindings",
           "commitAction",
-          "expectedEffects",
+          "outcomes",
           "effect",
         ],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const value = z
-          .object({ sessionId: sessionIdSchema })
-          .passthrough()
+          .object({
+            sessionId: sessionIdSchema,
+            observationId: z.string().min(1).max(200),
+            consequenceKey: z.string().min(1).max(500),
+            materialDigest: z.string().regex(/^[a-f0-9]{64}$/),
+            fieldBindings: z.array(z.unknown()).max(2),
+            attachmentBindings: z.array(z.unknown()).max(64),
+            commitAction: z.unknown(),
+            outcomes: z.array(browserOutcomeSchema).min(1).max(20),
+            effect: z.enum(["external_commit", "irreversible"]),
+          })
           .parse(input);
-        const { sessionId, ...request } = value;
-        return runtime.prepareTaskResultAction(
-          sessionId,
-          prepareTaskResultActionRequestSchema.parse(request),
+        const { sessionId, outcomes, ...request } = value;
+        return taskResultPlanForAgent(
+          await runtime.prepareTaskResultAction(
+            sessionId,
+            prepareTaskResultActionRequestSchema.parse({
+              ...request,
+              expectedEffects: compileBrowserOutcomes(outcomes),
+            }),
+          ),
         );
       },
     },
@@ -790,23 +965,25 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId", "consequenceKey"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
             consequenceKey: z.string().min(1).max(500),
           })
           .parse(input);
-        return runtime.consequentialEffect(
-          parsed.sessionId,
-          parsed.consequenceKey,
+        return taskResultActionStatusForAgent(
+          await runtime.consequentialEffect(
+            parsed.sessionId,
+            parsed.consequenceKey,
+          ),
         );
       },
     },
     {
       name: "browser.interact",
       description:
-        'The single agent-facing tool for target-bound mutation. Put the target inside action, for example action:{kind:"fill",target:{pageId,revision,ref},value:"..."}; never put target beside action. Perform a grounded browser interaction, authorize its contextual effect, collect a successor observation, verify bounded expected effects, and return an ActionReceipt. If INVALID_INPUT or schema validation identifies an exact invalid path, a mechanically corrected request is allowed when the returned result proves the handler never ran and no effect was dispatched and fresh grounding supplies the correction; never replay an identical malformed request. A recoverable pre-dispatch freshness rejection does not end the task: inspect freshly, re-ground the current state, and continue with a safe newly grounded action or route. Every recovery retry must include recovery with one stable operationId; Runtime persists two admitted attempts and refuses the third. Unrelated dynamic DOM churn triggers automatic exact-target revalidation immediately before dispatch; navigation, viewport/scroll change, ownership change, target/frame/root replacement, target identity/state/geometry change, ambiguity, occlusion, or disabled/hidden state still rejects before dispatch. Coordinate actions retain strict whole-observation freshness. The receipt outcome is authoritative for the requested effect: applied means positive predecessor-to-successor evidence reconciled the action; an already-visible text, already-equal URL, or already-satisfied target state is not causal proof. For named-link navigation, resolve kind:"link" and use url_changed, an exact new url_equals, or a condition absent before and present after. unknown is the consequential stop/reconciliation boundary and must not be replayed. download_completed waits for a new action-correlated managed download persisted as Runtime file evidence. Omit its optional filename when the user\'s request is to discover, confirm, or report the actual saved filename; include filename only when the user explicitly requires the saved artifact to equal that exact predeclared name. A browser collision suffix is a valid completed download when filename is omitted, and the actual filename must be read from durable evidence. An exact-name mismatch is not_applied and must never cause a second download. A pageState such as unknown_interstitial is observational evidence, not a page-wide stop: ordinary dialogs and overlays may be handled when the exact current target is freshly grounded and the declared effect is authorized. Ignore optional survey or feedback cards after the requested outcome is proven. If one blocks a still-required target, dismiss it only with a freshly grounded nonconsequential action. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Expected text_present/text_absent effects apply to the whole visible page; for rename, move, or removal outcomes where history/activity/toasts can retain old text, use exact target_present/target_absent or target-within-scope effects instead. Upload accepts either a direct file-input target that advertises upload or an exactly grounded activation target expected to open a dynamic file chooser; ground the latter by activate plus exact text/scope. External or irreversible actions must be marked consequential, include a stable consequenceKey, and include expected effects so Runtime can reconcile the outcome. A task-result commit additionally requires the exact authorizedPlanId and authorizationDigest returned by the concrete-plan status tool. Unknown consequential outcomes block replay of the same key.',
+        "Perform one interaction from a fresh grounded observation and describe the desired user-visible outcomes. Use a target outcome for a named entity, control, or row; use visible_text only for genuinely page-visible copy. Runtime chooses and escalates the evidence strategy, reconciles the result without redispatch, and returns the authoritative receipt. Consequential actions require a stable consequenceKey and at least one usable outcome; task-result commits instead use the exact authorized plan outcomes and require its authorizedPlanId and authorizationDigest. Authentication, required consent, human verification, credentials, access restrictions, instability, confirmation requirements, Runtime refusal, and unknown consequential outcomes remain hard boundaries. Never replay an unknown consequential outcome.",
       inputSchema: {
         type: "object",
         properties: {
@@ -820,10 +997,10 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             maxLength: 200,
           },
           action: browserInteractionActionJsonSchema,
-          expectedEffects: {
+          outcomes: {
             type: "array",
             maxItems: 20,
-            items: expectedEffectJsonSchema,
+            items: browserOutcomeJsonSchema,
           },
           consequential: {
             type: "boolean",
@@ -878,6 +1055,23 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
               required: ["consequenceKey"],
             },
           },
+          {
+            if: {
+              properties: {
+                consequenceKey: {
+                  type: "string",
+                  pattern: "^task-result:",
+                },
+              },
+              required: ["consequenceKey"],
+            },
+            then: {
+              properties: {
+                consequential: { const: true },
+              },
+              required: ["consequential"],
+            },
+          },
         ],
         additionalProperties: false,
       },
@@ -887,8 +1081,8 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             sessionId: sessionIdSchema,
             observationId: z.string().min(1).max(200),
             action: z.unknown(),
-            expectedEffects: z
-              .array(z.unknown())
+            outcomes: z
+              .array(browserOutcomeSchema)
               .max(20)
               .optional()
               .default([]),
@@ -918,24 +1112,60 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           })
           .parse(input);
 
+        const taskResultCommit =
+          parsed.consequenceKey?.startsWith("task-result:");
+        if (taskResultCommit && !parsed.consequential)
+          throw new Error("Task-result browser commits must be consequential.");
+        if (
+          parsed.consequential &&
+          !taskResultCommit &&
+          parsed.outcomes.length === 0
+        )
+          throw new Error(
+            "Consequential browser interactions require at least one semantic outcome.",
+          );
+        if (taskResultCommit && parsed.outcomes.length > 0)
+          throw new Error(
+            "Task-result commits use the authorized plan outcomes; do not supply outcomes again.",
+          );
+
         return afterRecoveryAdmission(
           runtime,
           parsed.sessionId,
           parsed.recovery,
-          () =>
-            runtime.interact(
+          async () => {
+            let expectedEffects = compileBrowserOutcomes(parsed.outcomes);
+            if (taskResultCommit) {
+              const registered = await runtime.consequentialEffect(
+                parsed.sessionId,
+                parsed.consequenceKey!,
+              );
+              const plan = registered?.taskResultPlan;
+              if (
+                registered?.state !== "authorized" ||
+                !plan ||
+                plan.planId !== parsed.authorizedPlanId ||
+                plan.materialDigest !== parsed.authorizationDigest
+              )
+                throw new Error(
+                  "This task-result action does not have a matching authorized plan.",
+                );
+              expectedEffects = [...plan.expectedEffects];
+            }
+            return runtime.interact(
               parsed.sessionId,
               verifiedInteractionRequestSchema.parse({
                 observationId: parsed.observationId,
                 action: parsed.action,
-                expectedEffects: parsed.expectedEffects,
+                expectedEffects,
                 consequential: parsed.consequential,
                 effect: parsed.effect,
                 consequenceKey: parsed.consequenceKey,
                 authorizationDigest: parsed.authorizationDigest,
                 authorizedPlanId: parsed.authorizedPlanId,
               }),
-            ),
+            );
+          },
         );
       },
     },
