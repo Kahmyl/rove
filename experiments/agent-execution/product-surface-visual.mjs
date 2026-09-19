@@ -310,6 +310,8 @@ function activeSnapshot(presentation) {
         attachment: "attached",
         recovery: "not_needed",
         profileOwnership: "owned",
+        handoffActionable: true,
+        handoffGeneration: 2,
       },
     },
   ];
@@ -572,6 +574,8 @@ function uiTruthWorkingSnapshot() {
       attachment: "attached",
       recovery: "not_needed",
       profileOwnership: "owned",
+      handoffActionable: true,
+      handoffGeneration: 1,
     },
   });
 

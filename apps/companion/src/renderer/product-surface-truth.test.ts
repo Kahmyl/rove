@@ -206,6 +206,8 @@ describe("UI Truth renderer projection table", () => {
         attachment: "attached",
         recovery: "not_needed",
         profileOwnership: "owned",
+        handoffActionable: true,
+        handoffGeneration: 1,
       },
       availableActions: ["finish"],
     });

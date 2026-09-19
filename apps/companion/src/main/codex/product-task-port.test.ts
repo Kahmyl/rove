@@ -1244,6 +1244,8 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       recovery: "not_needed",
       profileOwnership: "released",
       legacyEffects: "acknowledgement_required",
+      handoffActionable: false,
+      handoffGeneration: 2,
     });
     expect((await port.productTasks())[0]?.availableActions).toContain(
       "acknowledge_legacy_effects",

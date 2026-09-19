@@ -1335,6 +1335,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           attachment: "attached",
           recovery: "not_needed",
           profileOwnership: "owned",
+          handoffActionable: true,
+          handoffGeneration: 3,
         },
         conversation: {
           turnStatus: "in_progress",
@@ -1413,6 +1415,19 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       html.indexOf('aria-label="Task controls and status"'),
     );
     expect(html).toContain("Awaiting handoff");
+
+    value.product!.tasks[0]!.runtime!.handoffActionable = false;
+    const mismatched = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(mismatched).toContain("Awaiting handoff");
+    expect(mismatched).not.toContain(">Take Over</button>");
+    value.product!.tasks[0]!.runtime!.handoffActionable = true;
 
     value.companion.browserOpen = false;
     const browserClosed = renderToStaticMarkup(

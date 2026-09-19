@@ -615,22 +615,24 @@ async function execute(command) {
       );
     }
     let humanControl;
-    try {
-      humanControl = await runtimeRequest(
-        `/sessions/${encodeURIComponent(task.roveSessionId)}/control/take`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            ownershipGeneration: control.generation,
-            handoffId: control.activeHandoffId,
-            handoffGeneration: control.activeHandoffGeneration,
-          }),
-        },
-      );
-    } catch (error) {
-      throw new Error(
-        `L2 take-control failed after ${JSON.stringify(control)}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    if (command.takeControl !== false) {
+      try {
+        humanControl = await runtimeRequest(
+          `/sessions/${encodeURIComponent(task.roveSessionId)}/control/take`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              ownershipGeneration: control.generation,
+              handoffId: control.activeHandoffId,
+              handoffGeneration: control.activeHandoffGeneration,
+            }),
+          },
+        );
+      } catch (error) {
+        throw new Error(
+          `L2 take-control failed after ${JSON.stringify(control)}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     const appServerControlPath = join(home, "app-server-control.json");
     await writeFile(
@@ -694,13 +696,17 @@ async function execute(command) {
           `Human control:\n${JSON.stringify(humanControl, null, 2)}`,
       );
     }
-    if (command.returnBeforeRestart === true)
+    if (command.returnBeforeRestart === true && humanControl)
       await runtime.returnControlForSession(task.roveSessionId, {
         ownershipGeneration: humanControl.generation,
         handoffId: humanControl.activeHandoffId,
         handoffGeneration: humanControl.activeHandoffGeneration,
       });
-    return { beforeHandoff, control, humanControl };
+    return {
+      beforeHandoff,
+      control,
+      ...(humanControl ? { humanControl } : {}),
+    };
   }
   if (command.type === "handoff.status") {
     const snapshot = await core.api().readSnapshot();

@@ -158,7 +158,8 @@ export function taskControlProjection(
         entry.taskId === task.taskId &&
         entry.authority === "rove_control" &&
         entry.kind === "control_handoff" &&
-        entry.status === "pending",
+        entry.status === "pending" &&
+        entry.generation === runtime?.handoffGeneration,
     );
   return {
     controllerLabel:
@@ -170,6 +171,7 @@ export function taskControlProjection(
             ? "Awaiting handoff"
             : "None",
     canTakeControl:
+      runtime?.handoffActionable === true &&
       pendingHandoff === true &&
       runtime?.status === "awaiting_human" &&
       runtime.controller === null,

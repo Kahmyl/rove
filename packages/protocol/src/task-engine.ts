@@ -954,6 +954,149 @@ function assertBindings(aggregate: TaskAggregate): void {
   }
 }
 
+const HANDOFF_AUTHORITY_RECOVERY =
+  "Runtime and durable browser handoff identities do not match. Refresh Runtime truth before retrying takeover.";
+
+function exactPendingHandoffBinding(aggregate: TaskAggregate): boolean {
+  const continuation = aggregate.continuation;
+  const runtime = aggregate.runtime;
+  return (
+    aggregate.desiredState === "open" &&
+    aggregate.launch !== null &&
+    aggregate.record?.bootstrap.stage === "complete" &&
+    aggregate.record.bootstrap.operationId === aggregate.launch.bootstrapId &&
+    continuation.status === "pending" &&
+    continuation.taskId === aggregate.taskId &&
+    continuation.sessionId === aggregate.record.identity.sessionId &&
+    continuation.threadId === aggregate.record.identity.threadId &&
+    continuation.handoffId !== undefined &&
+    continuation.generation !== undefined &&
+    runtime.sessionExists &&
+    runtime.sessionId === continuation.sessionId &&
+    runtime.bootstrapLookup === "exact" &&
+    runtime.bootstrapId === aggregate.launch.bootstrapId &&
+    runtime.ownershipGeneration !== undefined
+  );
+}
+
+function exactPendingHandoffAuthority(aggregate: TaskAggregate): boolean {
+  const continuation = aggregate.continuation;
+  const runtime = aggregate.runtime;
+  return (
+    exactPendingHandoffBinding(aggregate) &&
+    runtime.handoffId === continuation.handoffId &&
+    runtime.handoffGeneration === continuation.generation &&
+    ((runtime.status === "awaiting_human" && runtime.controller === null) ||
+      (runtime.status === "active" && runtime.controller === "human"))
+  );
+}
+
+function exactReturnedHandoffAuthority(aggregate: TaskAggregate): boolean {
+  const continuation = aggregate.continuation;
+  const runtime = aggregate.runtime;
+  return (
+    exactPendingHandoffBinding(aggregate) &&
+    runtime.status === "active" &&
+    runtime.controller === "agent" &&
+    runtime.handoffId === undefined &&
+    runtime.handoffGeneration === undefined &&
+    runtime.lastReturnedHandoffId === continuation.handoffId
+  );
+}
+
+function isExactHandoffAttention(
+  aggregate: TaskAggregate,
+  attention: NativeAttentionTruth,
+): boolean {
+  const continuation = aggregate.continuation;
+  return (
+    attention.authority === "rove_control" &&
+    attention.kind === "control_handoff" &&
+    attention.taskId === aggregate.taskId &&
+    attention.sessionId === continuation.sessionId &&
+    attention.threadId === continuation.threadId &&
+    attention.handoffId === continuation.handoffId &&
+    attention.generation === continuation.generation
+  );
+}
+
+/** Runtime plus the durable continuation own handoff authority. Attention is
+ * their customer-facing action-routing projection and is repaired only after
+ * a fresh Runtime observation corroborates the exact durable identity. */
+function reconcileHandoffAttentionProjection(aggregate: TaskAggregate): void {
+  const codexAttention = aggregate.attentions.filter(
+    (attention) => attention.authority !== "rove_control",
+  );
+  const exactAuthority = exactPendingHandoffAuthority(aggregate);
+  if (!exactAuthority) {
+    aggregate.attentions = [
+      ...codexAttention,
+      ...aggregate.attentions
+        .filter((attention) => attention.authority === "rove_control")
+        .map((attention) =>
+          [
+            "pending",
+            "responding",
+            "awaiting_confirmation",
+            "resolution_unknown",
+          ].includes(attention.status)
+            ? { ...attention, status: "stale" as const }
+            : attention,
+        ),
+    ];
+    if (
+      aggregate.continuation.status === "pending" &&
+      !exactReturnedHandoffAuthority(aggregate)
+    ) {
+      if (
+        aggregate.recoveryRequired === null ||
+        aggregate.recoveryRequired === HANDOFF_AUTHORITY_RECOVERY
+      )
+        aggregate.recoveryRequired = HANDOFF_AUTHORITY_RECOVERY;
+    } else if (aggregate.recoveryRequired === HANDOFF_AUTHORITY_RECOVERY) {
+      aggregate.recoveryRequired = null;
+    }
+    return;
+  }
+
+  if (aggregate.recoveryRequired === HANDOFF_AUTHORITY_RECOVERY)
+    aggregate.recoveryRequired = null;
+
+  const continuation = aggregate.continuation;
+  const existing = aggregate.attentions.find((attention) =>
+    isExactHandoffAttention(aggregate, attention),
+  );
+  aggregate.attentions = [
+    ...codexAttention,
+    existing
+      ? { ...structuredClone(existing), status: "pending" as const }
+      : {
+          authority: "rove_control",
+          kind: "control_handoff",
+          requestId: `control:${continuation.id ?? `${aggregate.taskId}:${continuation.handoffId}:${continuation.generation}`}`,
+          taskId: aggregate.taskId,
+          sessionId: continuation.sessionId!,
+          threadId: continuation.threadId!,
+          handoffId: continuation.handoffId!,
+          generation: continuation.generation!,
+          status: "pending",
+        },
+  ];
+}
+
+export function hasActionableTaskHandoff(aggregate: TaskAggregate): boolean {
+  return (
+    exactPendingHandoffAuthority(aggregate) &&
+    aggregate.runtime.status === "awaiting_human" &&
+    aggregate.runtime.controller === null &&
+    aggregate.attentions.filter(
+      (attention) =>
+        attention.status === "pending" &&
+        isExactHandoffAttention(aggregate, attention),
+    ).length === 1
+  );
+}
+
 export function foldTaskEvent(
   current: TaskAggregate | null,
   event: TaskEvent,
@@ -1146,6 +1289,7 @@ export function foldTaskEvent(
     }
     case "runtime_inventory_observed":
       aggregate.runtime = structuredClone(event.runtime);
+      reconcileHandoffAttentionProjection(aggregate);
       break;
     case "runtime_control_observed":
       if (
@@ -1188,6 +1332,7 @@ export function foldTaskEvent(
         ),
         ...(event.attention ? [structuredClone(event.attention)] : []),
       ];
+      reconcileHandoffAttentionProjection(aggregate);
       break;
     case "attachment_state_observed":
       aggregate.attachment = {
