@@ -196,7 +196,7 @@ The audit shows that perception is not broadly missing. Existing primitives are 
 - bounded scroll/history/navigation reads already exist;
 - screenshot capture already supports viewport, full-page, target, and region modes, can bind to an exact observation authority, persists durable evidence, and is returned through an image-capable MCP tool result.
 
-The missing capability is **evidence suitability and read-strategy selection**. Runtime currently learns that text or target evidence was inadequate only inside post-dispatch expected-effect verification. There is no general pre-dispatch check that asks whether the selected proof surface can authoritatively establish the intended effect.
+Slice 3A introduced pre-dispatch evidence-suitability handling and authoritative canonical-target evidence behind presentation limits. Slice 3B then added automatic observation-bound focused whole-page visible-text proposition reads before and after dispatch, including the existing bounded delayed successor loop. The remaining gap is **generalizing that evidence-strategy selection model to other evidence surfaces** rather than inventing evidence suitability from scratch.
 
 The audit also establishes an important distinction:
 
@@ -209,9 +209,9 @@ Do not solve this by indiscriminately raising text/target limits. Larger agent-v
 
 **Implemented.** Runtime now distinguishes the bounded target presentation from an authoritative canonical-target view. `readObservation()` marks that view complete only when the canonical registry exists, target acquisition reported no errors, and every semantic interactive control is represented in the semantic outcome partition. Total registered-target count does not contribute to that semantic completeness decision, so unrelated non-semantic targets cannot conceal a semantic discovery gap. Successor verification re-reads the inspected observation through that authority, so presentation-only `targetLimit` truncation does not make exact target effects unresolved while actual acquisition uncertainty still does.
 
-Before consequential dispatch, a pure suitability assessment rejects whole-page `text_present` and `text_absent` effects when predecessor text is missing or truncated. The verifier independently treats missing or truncated predecessor/successor text as unresolved rather than authoritative absence. The existing `INSPECTION_REQUIRED` error includes the unsuitable effect, incomplete `page_text` surface, `mutationDispatched: false`, and the requirement for stronger read-only evidence. This occurs before effect-journal preparation or browser mutation dispatch; complete predecessor text continues through the existing authorization, receipt, causal-verification, and replay-fencing path.
+Slice 3A added a pure suitability assessment that classified whole-page `text_present` and `text_absent` effects backed by missing or truncated predecessor text as requiring stronger evidence before consequential dispatch. Slice 3B now satisfies that requirement automatically with a focused proposition read: authoritative focused truth continues through the existing causal verifier, while an `unknown` focused result preserves the `INSPECTION_REQUIRED` refusal with `mutationDispatched: false`. The verifier still treats unresolved missing or truncated predecessor/successor text as non-authoritative rather than absence, and no refusal path crosses effect-journal preparation or browser mutation dispatch. Complete ordinary page text continues through the existing authorization, receipt, causal-verification, and replay-fencing path without focused escalation.
 
-Deterministic evidence is in `packages/browser/src/playwright-browser-inspection.test.ts`, `apps/runtime/src/interaction/verified-interaction.test.ts`, and `apps/runtime/src/runtime.integration.test.ts`. It covers canonical targets behind a presentation limit, production-path semantic incompleteness remaining unresolved despite an unrelated non-semantic registered target, missing and truncated whole-page text remaining unavailable for proof, pre-dispatch refusal with zero mutation/journal/receipt effects, the complete-text path, and the existing delayed one-dispatch reconciliation behavior.
+Deterministic Slice 3A evidence is in `packages/browser/src/playwright-browser-inspection.test.ts`, `apps/runtime/src/interaction/verified-interaction.test.ts`, and `apps/runtime/src/runtime.integration.test.ts`. It covers canonical targets behind a presentation limit, production-path semantic incompleteness remaining unresolved despite an unrelated non-semantic registered target, incomplete whole-page text being classified as unsuitable for direct proof, the pre-dispatch refusal boundary used when stronger evidence remains unavailable, the complete-text path, and the existing delayed one-dispatch reconciliation behavior.
 
 The implemented slice is:
 
@@ -225,7 +225,7 @@ Required regression evidence for Slice 3A:
 
 - a presentation-limited target list can still verify an exact target effect from canonical target evidence when target acquisition itself is complete;
 - target acquisition errors/incompleteness do not get upgraded to certainty;
-- a consequential `text_present`/`text_absent` request whose predecessor text is missing or truncated is refused before mutation dispatch;
+- a consequential `text_present`/`text_absent` request whose predecessor text is missing or truncated cannot dispatch on that incomplete ordinary evidence; after Slice 3B it first receives focused proposition evidence and is refused only if that stronger read remains unknown;
 - the same verification remains admissible when its predecessor text is complete;
 - the motivating Drive-shaped failure therefore cannot dispatch with a proof surface Rove already knows is incapable of establishing the effect.
 
