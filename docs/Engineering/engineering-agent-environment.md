@@ -6,7 +6,7 @@
 
 Codex can receive an engineering objective directly, recover the relevant repository context, investigate current technical facts, choose and implement a proportionate design, verify and review it, and leave useful continuation evidence. ChatGPT, subagents, bulk terminal work, and human review remain optional collaborators rather than mandatory lifecycle stages.
 
-Canonical product and engineering documents remain authoritative. The environment does not add a planner, task database, agent manager, or separate memory system. It does not turn old task transcripts or generated continuation notes into product requirements.
+Canonical product and engineering documents remain authoritative. Active documents under `docs/Planning/` may sequence implementation after those contracts are settled, but they are subordinate to them and cannot silently redefine target behavior or implementation status. The environment does not add a planner, task database, agent manager, or separate memory system. It does not turn old task transcripts or generated continuation notes into product requirements.
 
 ## Checked-in layers
 
@@ -14,6 +14,7 @@ Canonical product and engineering documents remain authoritative. The environmen
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                                                    | Short instructions that must be present in every repository task.                                                    |
 | `docs/README.md` and responsible product/engineering contracts | Product authority, target behavior, architecture, and verification policy.                                           |
+| `docs/Planning/README.md` and applicable active plan          | Subordinate execution sequence, evidence gaps, dependencies, and completion conditions for approved work.           |
 | `.agents/skills/rove-engineering`                              | Progressive workflow for context recovery, research, design, implementation, verification, review, and continuation. |
 | `.codex/config.toml`                                           | Trusted-project safety defaults and stable feature enablement.                                                       |
 | `.codex/rules/rove.rules`                                      | Approval boundaries for repository integration, destructive development cleanup, and opt-in live checks.             |
@@ -48,13 +49,14 @@ Ordinary feature and bug work must not modify `AGENTS.md`, `.agents/**`, `.codex
 
 1. Start in the intended checkout and run `pnpm codex:context`.
 2. Load the `rove-engineering` skill and follow its document routing.
-3. Inspect implementation and verification truth before proposing edits.
-4. Research current or unfamiliar behavior from primary sources when local help and pinned source are insufficient.
-5. Use deeper design judgment only when ownership, persistence, contracts, concurrency, recovery, security, or another material boundary warrants it.
-6. Implement the smallest coherent change and test the behavior at its owning boundary.
-7. Review the complete diff, update the responsible canonical documentation, and record exact verification.
-8. For a frozen candidate, use a separate read-only Codex task/subagent for independent review when requested or proportionate. Findings distinguish confirmed defects, evidence gaps, and unproven risks; remediation remains a root/human decision.
-9. Use an authorized Git commit as a durable checkpoint. If interrupted before a coherent commit, leave the existing ignored continuation note defined by the skill.
+3. Read the responsible canonical Product/Engineering contracts, then any applicable active document under `docs/Planning/`; resolve conflicts in favor of the canonical contract and update it before following a contradictory plan.
+4. Inspect implementation and verification truth before proposing edits.
+5. Research current or unfamiliar behavior from primary sources when local help and pinned source are insufficient.
+6. Use deeper design judgment only when ownership, persistence, contracts, concurrency, recovery, security, or another material boundary warrants it.
+7. Implement the smallest coherent change and test the behavior at its owning boundary and against the active plan's stop condition.
+8. Review the complete diff, update the responsible canonical documentation and Implementation Status from actual evidence, and revise/advance the active plan without claiming unfinished work is complete.
+9. For a frozen candidate, use a separate read-only Codex task/subagent for independent review when requested or proportionate. Findings distinguish confirmed defects, evidence gaps, and unproven risks; remediation remains a root/human decision.
+10. Use an authorized Git commit as a durable checkpoint. If interrupted before a coherent commit, leave the existing ignored continuation note defined by the skill.
 
 Independent review is read-only by default and is not mandatory for trivial work. It begins from requirements and non-goals, freezes branch/HEAD/status, inspects the actual diff plus relevant unchanged source and assertions, and reports severity, scenario, consequence, evidence, and the smallest correction without unrelated redesign. Codex can perform this review; ChatGPT is not a required stage.
 
