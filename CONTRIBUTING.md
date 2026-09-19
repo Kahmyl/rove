@@ -14,7 +14,7 @@ An existing persisted compatibility epoch containing historical wording must rem
 
 ## Documentation structure
 
-Keep one current account of each responsibility in `docs/Products` and `docs/Engineering`. Use Git history for historical proposals and implementation diaries, not a second legacy documentation collection. Do not label target design as implemented or claim a production qualification from an unrelated old report.
+Keep one current canonical account of product and engineering responsibilities in `docs/Products` and `docs/Engineering`. Active implementation sequencing may live under `docs/Planning`, but it remains subordinate to those canonical contracts and to `docs/Engineering/implementation-status.md`; it must not become a competing architecture, product brief, or implementation-status authority. Use Git history for historical proposals and implementation diaries, not a second legacy documentation collection. Do not label target design as implemented or claim a production qualification from an unrelated old report.
 
 Place primary references next to the decision they support. Link related contracts rather than duplicating them with divergent rules. No document is required merely because another project used that template: Rove has application/capability contracts, not an invented partner platform.
 
