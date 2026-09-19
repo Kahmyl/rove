@@ -262,6 +262,7 @@ export interface BrowserObservation extends PageInspection {
       | "canonical_registry_unavailable"
       | "target_acquisition_failed"
       | "semantic_targets_unaccounted"
+      | "virtualized_content_unrendered"
     >;
   };
 }

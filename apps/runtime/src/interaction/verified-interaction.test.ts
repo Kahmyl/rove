@@ -276,6 +276,42 @@ describe("verified interaction semantics", () => {
     expect(effects).toEqual([expect.objectContaining({ state: "unresolved" })]);
   });
 
+  it("does not infer logical absence from a partial virtualized render window", () => {
+    const predecessor = observation("before", "https://example.test", "");
+    const successor = observation("after", "https://example.test", "");
+    predecessor.targetEvidence = successor.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "incomplete",
+      incompleteReasons: ["virtualized_content_unrendered"],
+    };
+    predecessor.targets = [
+      {
+        ref: "rendered-before",
+        kind: "button",
+        name: "Different rendered item",
+        visible: true,
+        enabled: true,
+      },
+    ];
+    successor.targets = [];
+
+    expect(
+      verifyExpectedEffects(
+        [
+          {
+            kind: "target_absent",
+            target: { name: "Off-rendered item", kind: "button" },
+          },
+        ],
+        predecessor,
+        successor,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+  });
+
   it("identifies whole-page text effects that cannot use a truncated predecessor", () => {
     const predecessor = observation("before", "https://example.test", "Create");
     predecessor.metadata = { textTruncated: true };

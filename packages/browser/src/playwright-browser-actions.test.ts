@@ -769,6 +769,39 @@ describe("browser actions", () => {
     });
   });
 
+  it("adapts through an icon control, hover menu, dialog, and DOM replacement", async () => {
+    const { session } = await setup("/adaptive-controls");
+    let observation = await session.inspect();
+
+    await session.interact(
+      { kind: "hover", target: target(observation, "Open tools") },
+      { observationId: observation.observationId },
+    );
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find(
+        (candidate) => candidate.name === "Open settings",
+      ),
+    ).toMatchObject({ kind: "menuitem" });
+
+    await session.click(target(observation, "Open settings"));
+    observation = await session.inspect();
+    expect(
+      observation.targets?.find(
+        (candidate) => candidate.name === "Apply setting",
+      )?.perceived?.scopes,
+    ).toContainEqual({ kind: "dialog", label: "Settings overlay" });
+
+    await session.click(target(observation, "Apply setting"));
+    observation = await session.inspect();
+    expect(observation.text).toContain(
+      "Setting applied after control replacement",
+    );
+    expect(
+      observation.targets?.find((candidate) => candidate.name === "Open tools"),
+    ).toBeDefined();
+  });
+
   it("never returns or serializes sensitive typed values", async () => {
     const { session } = await setup();
     const inspection = await session.inspect();

@@ -64,6 +64,106 @@ interface ResolvedInspectOptions {
   targetKinds?: TargetKind[];
 }
 
+interface VirtualizedContentCoverage {
+  incomplete: boolean;
+  logicalItemCount?: number;
+  logicalItemCountUnknown: boolean;
+  renderedItemCount: number;
+}
+
+async function readVirtualizedContentCoverage(
+  frame: Frame,
+): Promise<VirtualizedContentCoverage> {
+  return frame.evaluate(() => {
+    const partialCollections: Array<{
+      logicalItemCount?: number;
+      logicalItemCountUnknown: boolean;
+      renderedItemCount: number;
+    }> = [];
+
+    for (const item of Array.from(
+      document.querySelectorAll<HTMLElement>("[aria-setsize]"),
+    )) {
+      const declaredItemCount = Number(item.getAttribute("aria-setsize"));
+      if (!Number.isInteger(declaredItemCount)) continue;
+      const parent = item.parentElement;
+      if (parent === null) continue;
+      const role = item.getAttribute("role");
+      const renderedItemCount = Array.from(parent.children).filter(
+        (candidate) =>
+          candidate instanceof HTMLElement &&
+          candidate.getAttribute("aria-setsize") ===
+            String(declaredItemCount) &&
+          candidate.getAttribute("role") === role,
+      ).length;
+      if (declaredItemCount === -1) {
+        partialCollections.push({
+          logicalItemCountUnknown: true,
+          renderedItemCount,
+        });
+      } else if (
+        declaredItemCount > 0 &&
+        renderedItemCount < declaredItemCount
+      ) {
+        partialCollections.push({
+          logicalItemCount: declaredItemCount,
+          logicalItemCountUnknown: false,
+          renderedItemCount,
+        });
+      }
+    }
+
+    for (const grid of Array.from(
+      document.querySelectorAll<HTMLElement>('[role="grid"][aria-rowcount]'),
+    )) {
+      const declaredItemCount = Number(grid.getAttribute("aria-rowcount"));
+      if (!Number.isInteger(declaredItemCount)) continue;
+      const renderedItemCount = grid.querySelectorAll('[role="row"]').length;
+      if (declaredItemCount === -1) {
+        partialCollections.push({
+          logicalItemCountUnknown: true,
+          renderedItemCount,
+        });
+      } else if (
+        declaredItemCount > 0 &&
+        renderedItemCount < declaredItemCount
+      ) {
+        partialCollections.push({
+          logicalItemCount: declaredItemCount,
+          logicalItemCountUnknown: false,
+          renderedItemCount,
+        });
+      }
+    }
+
+    return partialCollections.reduce<VirtualizedContentCoverage>(
+      (summary, collection) => ({
+        incomplete: true,
+        ...(summary.logicalItemCount === undefined &&
+        collection.logicalItemCount === undefined
+          ? {}
+          : {
+              logicalItemCount: Math.max(
+                summary.logicalItemCount ?? 0,
+                collection.logicalItemCount ?? 0,
+              ),
+            }),
+        logicalItemCountUnknown:
+          summary.logicalItemCountUnknown || collection.logicalItemCountUnknown,
+        renderedItemCount: Math.max(
+          summary.renderedItemCount,
+          collection.renderedItemCount,
+        ),
+      }),
+      {
+        incomplete: false,
+        logicalItemCountUnknown: false,
+        renderedItemCount: 0,
+      },
+    );
+  });
+}
+
 export function resolveInspectOptions(
   options: InspectOptions = {},
 ): ResolvedInspectOptions {
@@ -161,9 +261,7 @@ export class PageInspector {
     return {
       state: classifyFocusedTextRead(
         query,
-        succeeded
-          .map((part) => part.text)
-          .filter((text) => text.length > 0),
+        succeeded.map((part) => part.text).filter((text) => text.length > 0),
         failed.length,
       ),
       frameCount: frames.length,
@@ -266,6 +364,17 @@ export class PageInspector {
             acquisitionErrors.push("accessibility_recovery_failed");
           }
 
+          const virtualizedContent: VirtualizedContentCoverage =
+            await readVirtualizedContentCoverage(frame.frame).catch(() => {
+              acquisitionErrors.push("virtualized_coverage_failed");
+              return {
+                incomplete: false,
+                logicalItemCountUnknown: false,
+                renderedItemCount: 0,
+              };
+            });
+          assertCurrent();
+
           const discoveredCandidates = [...primary, ...recovery.recovered];
           const targetSnapshots = await readTargetSnapshots(
             frame.frame,
@@ -310,6 +419,7 @@ export class PageInspector {
             excludedByReason,
             acquisitionErrors,
             semanticMarkers,
+            virtualizedContent,
             targetSnapshots: targetSnapshots ?? new Map(),
           };
         }),
@@ -508,6 +618,32 @@ export class PageInspector {
           semanticAmbiguous -
           semanticNoDomBinding,
       );
+      const virtualizedCoverage = acquired.reduce<VirtualizedContentCoverage>(
+        (summary, frame) => ({
+          incomplete: summary.incomplete || frame.virtualizedContent.incomplete,
+          ...(summary.logicalItemCount === undefined &&
+          frame.virtualizedContent.logicalItemCount === undefined
+            ? {}
+            : {
+                logicalItemCount: Math.max(
+                  summary.logicalItemCount ?? 0,
+                  frame.virtualizedContent.logicalItemCount ?? 0,
+                ),
+              }),
+          logicalItemCountUnknown:
+            summary.logicalItemCountUnknown ||
+            frame.virtualizedContent.logicalItemCountUnknown,
+          renderedItemCount: Math.max(
+            summary.renderedItemCount,
+            frame.virtualizedContent.renderedItemCount,
+          ),
+        }),
+        {
+          incomplete: false,
+          logicalItemCountUnknown: false,
+          renderedItemCount: 0,
+        },
+      );
 
       metadata.targetsTruncated = targetsTruncated;
       metadata.targetCoverage = {
@@ -529,6 +665,22 @@ export class PageInspector {
         exposedTargetCount: result.targets.length,
         excludedByReason,
         acquisitionErrors: acquired.flatMap((frame) => frame.acquisitionErrors),
+        ...(virtualizedCoverage.incomplete
+          ? {
+              virtualizedContentIncomplete: true,
+              ...(virtualizedCoverage.logicalItemCount === undefined
+                ? {}
+                : {
+                    virtualizedLogicalItemCount:
+                      virtualizedCoverage.logicalItemCount,
+                  }),
+              ...(virtualizedCoverage.logicalItemCountUnknown
+                ? { virtualizedLogicalItemCountUnknown: true }
+                : {}),
+              virtualizedRenderedItemCount:
+                virtualizedCoverage.renderedItemCount,
+            }
+          : {}),
         semanticOutcomes: {
           targeted: semanticTargeted,
           hidden: semanticHidden,
