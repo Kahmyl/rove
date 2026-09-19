@@ -219,7 +219,9 @@ async function runAgentScenario(client: Client): Promise<void> {
         target: target(inspection, "Search"),
       },
       effect: "navigate",
-      expectedEffects: [{ kind: "text_present", text: "Search results" }],
+      outcomes: [
+        { kind: "visible_text", state: "present", text: "Search results" },
+      ],
     });
 
     inspection = await callJson<Inspection>(client, "browser.inspect", {
@@ -236,9 +238,10 @@ async function runAgentScenario(client: Client): Promise<void> {
         target: target(inspection, "Rove result"),
       },
       effect: "navigate",
-      expectedEffects: [
+      outcomes: [
         {
-          kind: "text_present",
+          kind: "visible_text",
+          state: "present",
           text: "Structured browser automation fixture record.",
         },
       ],
@@ -370,8 +373,12 @@ async function runAgentScenario(client: Client): Promise<void> {
         consequential: true,
         effect: "external_commit",
         consequenceKey: `fixture-upload:${generatedFile.id}`,
-        expectedEffects: [
-          { kind: "text_present", text: "uploaded:acceptance.txt" },
+        outcomes: [
+          {
+            kind: "visible_text",
+            state: "present",
+            text: "uploaded:acceptance.txt",
+          },
         ],
       },
     );

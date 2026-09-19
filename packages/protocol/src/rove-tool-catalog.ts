@@ -68,4 +68,4 @@ export function canonicalRoveToolDefinitionsJsonWire(
 
 /** SHA-256 of canonicalRoveToolDefinitionsJsonWire for the 0.1.0 tools/list payload. */
 export const ROVE_TOOL_DEFINITIONS_SHA256 =
-  "7279aade8a734e41d377905a1ddc9a4e201e9be841aa9b7cbeebb57cc4f85960";
+  "0a4c464ede9f3d8c48210065b2378984a3900a870e5b3be8bbaeac0fd402f745";
