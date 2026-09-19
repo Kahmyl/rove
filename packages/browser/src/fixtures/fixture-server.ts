@@ -551,7 +551,10 @@ const SEMANTIC_CLIPBOARD_TRANSFER_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
-const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
+const virtualizedCollectionHtml = (
+  kind: "list" | "grid",
+  total: "known" | "unknown" = "known",
+) => `<!doctype html>
 <html><head><title>Virtualized ${kind}</title></head><body>
   <h1>Virtualized ${kind}</h1>
   <button id="create">Create logical item</button>
@@ -561,13 +564,14 @@ const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
   <p id="audit" role="status">No collection changes</p>
   <div id="viewport" tabindex="0" style="height:160px;overflow:auto;border:1px solid" ${
     kind === "grid"
-      ? 'role="grid" aria-label="Records" aria-rowcount="20"'
+      ? `role="grid" aria-label="Records" aria-rowcount="${total === "unknown" ? -1 : 20}"`
       : 'role="listbox" aria-label="Records"'
   }>
     <div id="spacer" style="height:800px;position:relative"></div>
   </div>
   <script>
     const kind = ${JSON.stringify(kind)};
+    const total = ${JSON.stringify(total)};
     const viewport = document.querySelector('#viewport');
     const spacer = document.querySelector('#spacer');
     const items = Array.from({ length: 20 }, (_, index) => 'Item ' + String(index + 1).padStart(2, '0'));
@@ -575,7 +579,7 @@ const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
       const row = document.createElement('div');
       row.style.cssText = 'position:absolute;height:40px;left:0;right:0';
       row.setAttribute('role', kind === 'grid' ? 'row' : 'option');
-      if (kind === 'list') row.setAttribute('aria-setsize', String(items.length));
+      if (kind === 'list') row.setAttribute('aria-setsize', total === 'unknown' ? '-1' : String(items.length));
       const button = document.createElement('button');
       row.append(button);
       spacer.append(row);
@@ -587,7 +591,7 @@ const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
         const index = start + offset;
         row.style.top = (index * 40) + 'px';
         row.setAttribute('aria-posinset', String(index + 1));
-        row.setAttribute('aria-setsize', String(items.length));
+        row.setAttribute('aria-setsize', total === 'unknown' ? '-1' : String(items.length));
         row.querySelector('button').textContent = 'Open ' + items[index];
       });
     };
@@ -599,7 +603,7 @@ const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
     document.querySelector('#create').addEventListener('click', () => {
       items.push('Item 21');
       spacer.style.height = (items.length * 40) + 'px';
-      viewport.setAttribute('aria-rowcount', String(items.length));
+      if (total === 'known') viewport.setAttribute('aria-rowcount', String(items.length));
       report('Created Item 21 outside the current render window');
     });
     document.querySelector('#rename').addEventListener('click', () => {
@@ -615,10 +619,22 @@ const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
       const index = items.indexOf('Item 16');
       if (index >= 0) items.splice(index, 1);
       spacer.style.height = (items.length * 40) + 'px';
-      viewport.setAttribute('aria-rowcount', String(items.length));
+      if (total === 'known') viewport.setAttribute('aria-rowcount', String(items.length));
       report('Removed Item 16 outside the current render window');
     });
     render();
+  </script>
+</body></html>`;
+
+const VIRTUALIZED_PROBE_FAILURE_HTML = `<!doctype html>
+<html><head><title>Virtualized coverage probe failure</title></head><body>
+  <button>Ordinary action</button>
+  <script>
+    const querySelectorAll = document.querySelectorAll.bind(document);
+    document.querySelectorAll = selector => {
+      if (selector === '[aria-setsize]') throw new Error('forced virtualized coverage failure');
+      return querySelectorAll(selector);
+    };
   </script>
 </body></html>`;
 
@@ -817,6 +833,15 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/semantic-clipboard-transfer": SEMANTIC_CLIPBOARD_TRANSFER_HTML,
         "/virtualized-list": virtualizedCollectionHtml("list"),
         "/virtualized-grid": virtualizedCollectionHtml("grid"),
+        "/virtualized-list-unknown": virtualizedCollectionHtml(
+          "list",
+          "unknown",
+        ),
+        "/virtualized-grid-unknown": virtualizedCollectionHtml(
+          "grid",
+          "unknown",
+        ),
+        "/virtualized-probe-failure": VIRTUALIZED_PROBE_FAILURE_HTML,
         "/alternate-read-commit": ALTERNATE_READ_COMMIT_HTML,
         "/alternate-read-history": ALTERNATE_READ_HISTORY_HTML,
         "/adaptive-controls": ADAPTIVE_CONTROLS_HTML,

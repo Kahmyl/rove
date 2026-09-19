@@ -2741,6 +2741,44 @@ describe("runtime integration", () => {
     ]);
   });
 
+  it.each(["list", "grid"] as const)(
+    "keeps off-rendered target absence unresolved for unknown-size virtualized %s evidence",
+    async (kind) => {
+      const server = await fixture();
+      const { runtime, browser } = await harness();
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/virtualized-${kind}-unknown`,
+      });
+      active.push({ runtime, id: session.id });
+      const presented = await runtime.inspectBrowser(session.id);
+      const authoritative = await physicalBrowser(
+        browser,
+        session.id,
+      ).readObservation(presented.observationId);
+
+      expect(authoritative.targetEvidence).toMatchObject({
+        completeness: "incomplete",
+        incompleteReasons: ["virtualized_content_unrendered"],
+      });
+      expect(
+        verifyExpectedEffects(
+          [
+            {
+              kind: "target_absent",
+              target: { name: "Off-rendered item", kind: "button" },
+            },
+          ],
+          authoritative,
+          authoritative,
+          undefined,
+          [],
+          [],
+        ),
+      ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+    },
+  );
+
   it.each([
     { kind: "text_present" as const, text: "Mutation applied" },
     { kind: "text_absent" as const, text: "Apply consequential mutation" },

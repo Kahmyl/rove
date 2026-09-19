@@ -344,6 +344,56 @@ describe("PlaywrightBrowserSession inspection", () => {
     },
   );
 
+  it.each(["list", "grid"] as const)(
+    "keeps unknown-size virtualized %s coverage incomplete without inventing a total",
+    async (kind) => {
+      const server = await startServer();
+      const session = await startSession();
+      await session.navigate(`${server.url}/virtualized-${kind}-unknown`);
+
+      const observation = await session.inspect();
+      const authoritative = await session.readObservation(
+        observation.observationId,
+      );
+      expect(authoritative.targetEvidence).toEqual({
+        source: "canonical_registry",
+        completeness: "incomplete",
+        incompleteReasons: ["virtualized_content_unrendered"],
+      });
+      expect(observation.metadata).toMatchObject({
+        targetCoverage: {
+          virtualizedContentIncomplete: true,
+          virtualizedLogicalItemCountUnknown: true,
+          virtualizedRenderedItemCount: 4,
+        },
+      });
+      expect(observation.metadata?.targetCoverage).not.toHaveProperty(
+        "virtualizedLogicalItemCount",
+      );
+    },
+  );
+
+  it("fails closed when virtualized coverage acquisition fails", async () => {
+    const server = await startServer();
+    const session = await startSession();
+    await session.navigate(`${server.url}/virtualized-probe-failure`);
+
+    const observation = await session.inspect();
+    const authoritative = await session.readObservation(
+      observation.observationId,
+    );
+    expect(observation.metadata).toMatchObject({
+      targetCoverage: {
+        acquisitionErrors: ["virtualized_coverage_failed"],
+      },
+    });
+    expect(authoritative.targetEvidence).toEqual({
+      source: "canonical_registry",
+      completeness: "incomplete",
+      incompleteReasons: ["target_acquisition_failed"],
+    });
+  });
+
   it("fences an aborted inspection before it can publish late target authority", async () => {
     const server = await startServer();
     const session = await startSession();
