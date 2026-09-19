@@ -149,17 +149,21 @@ A mandatory cloud relay, hosted browser, remote task executor, or distributed wo
 
 Rove may use a browser, integration, plugin, API, scoped file operation, or suitable CLI when that capability is available and authorized. Browser-only instructions must not govern every task.
 
-Select capabilities according to the requested outcome, available permissions, reliability, and applicable service rules. An alternative capability must not be used to evade a restriction or repeat an action whose outcome is unresolved.
+Select capabilities according to the requested outcome, available permissions, reliability, cost, and applicable service rules. An alternative capability must not be used to evade a restriction or repeat an action whose outcome is unresolved.
 
-When browser work is needed, the browser must be broadly competent. Its supporting role is not permission to accept ordinary interaction failures. Structural observations and screenshots should work together; visually ambiguous controls should receive visual inspection promptly rather than after arbitrary repeated failures.
+When browser work is needed, the browser must be broadly competent. Its supporting role is not permission to accept ordinary interaction failures. Browser execution should behave as an adaptive loop: perceive the current state, choose a grounded action, dispatch through the authorized safety boundary, inspect what happened, gather additional evidence when the immediate result is insufficient, and reconcile the intended outcome before claiming completion.
 
-The agent should inspect the current state, identify an appropriate action, perform it against current targets, and verify the resulting state. Changes caused by the user or website require fresh grounding. A sent input is not automatically proof of the intended outcome.
+The reasoning agent should operate primarily in terms of user intent and intended outcomes, not be required to program Rove's low-level verification machinery correctly for every website. Runtime predicates, target freshness checks, effect matching, and receipt correlation remain useful implementation mechanisms, but the browser capability owns how those mechanisms are combined into a reliable outcome assessment.
 
-Qualify reusable capability families: ordinary and icon-only controls, hover menus, dialogs, dynamic lists, tabs and popups, frames, editors, keyboard operations, file transfer, and recovery after page changes. Fix failures at the general capability level and test variations, rather than accumulating one-off rules for particular websites.
+Perception is deliberately multi-modal and progressive. Start with bounded structural and semantic observations where they are sufficient. When coverage is incomplete or ambiguity remains, use targeted re-inspection, scoped structure, scrolling or search, screenshots/visual interpretation, another read-only application view, or human participation as appropriate. A known-truncated observation must not be treated as authoritative proof merely because it contains convenient text.
+
+A consequential mutation is still dispatched at most once under its consequence identity. If immediate evidence cannot establish the effect, mutation replay remains fenced while read-only reconciliation may continue. Reconciliation may wait for convergence, inspect fresh state, navigate to an authoritative view, search for the created/changed object, correlate durable browser evidence, or use another permitted read-only route. It must not widen authorization, disguise a retry, or convert weak evidence into certainty. Only after bounded reconciliation cannot settle the outcome should Rove present it as genuinely unresolved or request human reconciliation.
+
+Qualify reusable capability families: ordinary and icon-only controls, hover menus, dialogs, dynamic and virtualized lists, tabs and popups, frames, editors, keyboard operations, file transfer, visual-only or visually ambiguous surfaces, asynchronous state convergence, and recovery after page changes. Fix failures at the general capability level and test variations across unrelated applications rather than accumulating one-off rules for particular websites.
 
 Retain custom browser behavior that improves task ownership, human control, outcome handling, or reliability. Adopt existing libraries where they genuinely simplify implementation without degrading those qualities. Neither sunk effort nor library popularity is a sufficient decision criterion.
 
-Do not introduce another separately billed perception model or an oversized browser subsystem by default. The quality target is demonstrated competence and useful recovery, not an unsupported guarantee that every website will always work.
+Do not introduce another separately billed perception model or a second autonomous planning framework by default. The quality target is demonstrated cross-application competence, adaptive recovery, and truthful outcome reconciliation, not an unsupported guarantee that every website will always work.
 
 ## 9. Task-Owned Browser Page Groups
 
