@@ -266,6 +266,19 @@ function hasBoundedTransferCommitEvidence(
   });
 }
 
+function hasIndependentDestinationContextEvidence(
+  transaction: SemanticTransactionSnapshot,
+  effects: ExpectedEffect[],
+): boolean {
+  return effects.some(
+    (effect) =>
+      !(
+        effect.kind === "target_present" &&
+        sameExpectedTarget(effect, transaction.source)
+      ),
+  );
+}
+
 function isTrustedClipboardPrepare(
   transaction: SemanticTransactionSnapshot,
   request: AdvanceSemanticTransactionRequest,
@@ -1123,7 +1136,10 @@ export class RuntimeService implements RoveRuntime {
       sessionId,
       input.transactionId,
     );
-    if (transaction.status !== "committed") {
+    const retryingUnknownVerification =
+      transaction.status === "uncertain" &&
+      transaction.verification?.outcome === "unknown";
+    if (transaction.status !== "committed" && !retryingUnknownVerification) {
       throw new RoveError({
         code: "TRANSACTION_STATE_INVALID",
         message: "Only a committed semantic transaction can be verified.",
@@ -1139,12 +1155,15 @@ export class RuntimeService implements RoveRuntime {
 
         if (
           transaction.destination.verification === "destination_observation" &&
-          input.additionalExpectedEffects.length === 0
+          !hasIndependentDestinationContextEvidence(
+            transaction,
+            input.additionalExpectedEffects,
+          )
         ) {
           throw new RoveError({
             code: "TRANSACTION_STATE_INVALID",
             message:
-              "Remote destination verification requires at least one independent destination-context effect, such as the exact destination URL or breadcrumb.",
+              "Remote destination verification requires at least one independent destination outcome, such as the exact destination URL or breadcrumb.",
           });
         }
 
@@ -1163,9 +1182,20 @@ export class RuntimeService implements RoveRuntime {
                   target: transaction.source,
                 },
               ];
-        const effects = verifyExpectedCurrentStates(
-          [...requiredEffects, ...input.additionalExpectedEffects],
+        const expectedEffects = [
+          ...requiredEffects,
+          ...input.additionalExpectedEffects,
+        ];
+        const focusedTextEvidence = await readFocusedPageTextEvidence(
+          browser,
           observation,
+          expectedEffects,
+        );
+        lease.assertCurrent();
+        const effects = verifyExpectedCurrentStates(
+          expectedEffects,
+          observation,
+          focusedTextEvidence,
         );
         const outcome = classifyActionOutcome(effects);
         const updated = this.semanticTransactions.recordVerification(
@@ -1175,12 +1205,6 @@ export class RuntimeService implements RoveRuntime {
           outcome,
           effects,
         );
-        if (outcome === "unknown") {
-          this.consequenceReplayFence.recordUnknown(
-            sessionId,
-            transaction.consequenceKey,
-          );
-        }
         return { transaction: updated, outcome, effects };
       },
     );
@@ -2282,6 +2306,11 @@ export class RuntimeService implements RoveRuntime {
       });
     if (record.state === "applied" || record.state === "not_applied") {
       this.consequenceReplayFence.clear(sessionId, input.consequenceKey);
+      this.semanticTransactions.recordCommitSettlement(
+        sessionId,
+        input.consequenceKey,
+        record.state,
+      );
       return {
         effectId: record.effectId,
         consequenceKey: record.consequenceKey,
@@ -2355,6 +2384,11 @@ export class RuntimeService implements RoveRuntime {
           },
         );
         this.consequenceReplayFence.clear(sessionId, input.consequenceKey);
+        this.semanticTransactions.recordCommitSettlement(
+          sessionId,
+          input.consequenceKey,
+          settled.state as "applied" | "not_applied",
+        );
         return {
           effectId: settled.effectId,
           consequenceKey: settled.consequenceKey,

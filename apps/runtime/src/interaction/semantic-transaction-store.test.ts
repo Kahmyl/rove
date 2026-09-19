@@ -237,4 +237,101 @@ describe("SemanticTransactionStore", () => {
       steps: [{ evidenceBasis: "unverified" }],
     });
   });
+
+  it("requires durable commit settlement before retryable destination verification", () => {
+    const store = new SemanticTransactionStore();
+    const transaction = store.begin("session_1", request, {
+      name: "Quarterly report",
+      kind: "button",
+    });
+    store.acquireAdvance("session_1", transaction.transactionId, "bobs_1");
+    expect(
+      store.recordStep(
+        "session_1",
+        transaction.transactionId,
+        "commit",
+        receipt("unknown", "uncertain"),
+      ).status,
+    ).toBe("uncertain");
+    expectCode(
+      () =>
+        store.recordVerification(
+          "session_1",
+          transaction.transactionId,
+          "bobs_verify_1",
+          "applied",
+          [],
+        ),
+      "TRANSACTION_STATE_INVALID",
+    );
+
+    expect(
+      store.recordCommitSettlement(
+        "session_1",
+        request.consequenceKey,
+        "applied",
+      )?.status,
+    ).toBe("committed");
+    expect(
+      store.recordVerification(
+        "session_1",
+        transaction.transactionId,
+        "bobs_verify_1",
+        "unknown",
+        [],
+      ).status,
+    ).toBe("uncertain");
+    expectCode(
+      () =>
+        store.recordVerification(
+          "session_1",
+          transaction.transactionId,
+          "bobs_verify_1",
+          "applied",
+          [],
+        ),
+      "TRANSACTION_STATE_INVALID",
+    );
+    expect(
+      store.recordVerification(
+        "session_1",
+        transaction.transactionId,
+        "bobs_verify_2",
+        "applied",
+        [],
+      ).status,
+    ).toBe("verified");
+  });
+
+  it("projects durable not-applied commit truth without another advance", () => {
+    const store = new SemanticTransactionStore();
+    const transaction = store.begin("session_1", request, {
+      name: "Quarterly report",
+      kind: "button",
+    });
+    store.acquireAdvance("session_1", transaction.transactionId, "bobs_1");
+    store.recordStep(
+      "session_1",
+      transaction.transactionId,
+      "commit",
+      receipt("unknown", "uncertain"),
+    );
+
+    expect(
+      store.recordCommitSettlement(
+        "session_1",
+        request.consequenceKey,
+        "not_applied",
+      )?.status,
+    ).toBe("not_applied");
+    expectCode(
+      () =>
+        store.acquireAdvance(
+          "session_1",
+          transaction.transactionId,
+          "bobs_2",
+        ),
+      "TRANSACTION_STATE_INVALID",
+    );
+  });
 });
