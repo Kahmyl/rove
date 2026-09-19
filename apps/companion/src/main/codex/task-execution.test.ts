@@ -3843,6 +3843,12 @@ describe("capability and bootstrap", () => {
       expect(expected).toContain(
         "never infer non-dispatch when Rove does not prove it",
       );
+      expect(expected).toContain(
+        "reports status awaiting_human before a completed control.request_human call",
+      );
+      expect(expected).toContain(
+        "An automatic Runtime handoff is not a substitute for this durable continuation request.",
+      );
       expect(expected).toContain("must not bypass a restriction");
       expect(expected).toContain(
         `exact execution mode ${JSON.stringify(executionMode)}`,

@@ -8,6 +8,11 @@ import type { ToolDefinition } from "../server/register-tools.js";
 import { sessionIdJsonSchema, sessionIdSchema } from "./schemas.js";
 
 export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
+  const explicitlyRequestedHandoffs = new Map<
+    string,
+    { handoffId: string; handoffGeneration: number }
+  >();
+
   return [
     {
       name: "control.status",
@@ -33,15 +38,10 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
             enum: ["resume_after_control_return", "explicit_user_response"],
           },
         },
-        required: [
-          "sessionId",
-          "reason",
-          "instruction",
-          "continuationPolicy",
-        ],
+        required: ["sessionId", "reason", "instruction", "continuationPolicy"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
@@ -54,7 +54,26 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
           })
           .strict()
           .parse(input);
-        return runtime.requestHuman(parsed.sessionId, parsed.reason);
+        const status = await runtime.requestHuman(
+          parsed.sessionId,
+          parsed.reason,
+        );
+        if (
+          status.sessionId !== parsed.sessionId ||
+          status.status !== "awaiting_human" ||
+          status.controller !== null ||
+          status.activeHandoffId === undefined ||
+          status.activeHandoffGeneration === undefined
+        ) {
+          throw new Error(
+            "control.request_human did not return an exact active handoff identity",
+          );
+        }
+        explicitlyRequestedHandoffs.set(parsed.sessionId, {
+          handoffId: status.activeHandoffId,
+          handoffGeneration: status.activeHandoffGeneration,
+        });
+        return status;
       },
     },
     {
@@ -71,11 +90,24 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId"],
         additionalProperties: false,
       },
-      handler: (input, signal) => {
+      handler: async (input, signal) => {
         const parsed = z
           .object({ sessionId: sessionIdSchema })
           .extend(controlWaitRequestSchema.shape)
           .parse(input);
+        const requestedHandoff = explicitlyRequestedHandoffs.get(
+          parsed.sessionId,
+        );
+        const status = await runtime.getControlStatus(parsed.sessionId);
+        if (
+          requestedHandoff === undefined ||
+          status.activeHandoffId !== requestedHandoff.handoffId ||
+          status.activeHandoffGeneration !== requestedHandoff.handoffGeneration
+        ) {
+          throw new Error(
+            "control.wait requires a successful control.request_human for the exact active handoff",
+          );
+        }
         return runtime.waitForControl(
           parsed.sessionId,
           {

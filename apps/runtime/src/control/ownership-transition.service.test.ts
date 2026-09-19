@@ -335,6 +335,10 @@ describe("OwnershipTransitionService", () => {
       observationType: "authentication_required",
       pageState: ready,
     });
+    const explicit = await test.service.requestHuman(
+      "ses_test",
+      "Sign in, then return control.",
+    );
 
     expect(test.current()).toMatchObject({
       status: "awaiting_human",
@@ -342,6 +346,12 @@ describe("OwnershipTransitionService", () => {
       handoff: {
         reason: "Authentication required",
       },
+    });
+    expect(explicit).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      activeHandoffId: test.current().activeHandoffId,
+      activeHandoffGeneration: test.current().activeHandoffGeneration,
     });
 
     expect(test.update).toHaveBeenCalledTimes(1);
