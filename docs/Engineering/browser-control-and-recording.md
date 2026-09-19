@@ -34,15 +34,23 @@ Admission waits identify the resource and preserve other task operations. Do not
 
 Human takeover prevents new conflicting mutations before showing control as acquired. If safe isolation cannot be established within a shared host, pause that host's conflicting actions while keeping unrelated tasks/capabilities usable. On return, inspect actual state and discard stale target references.
 
-## Observation and action
+## Adaptive observation, action, and reconciliation
 
-Observations provide bounded meaningful content, semantic structure, current page identity/revision, target provenance, and visual context when useful. Icon-only controls, menus revealed by hover, dynamic lists, dialogs, frames, editors, and popups are ordinary test families, not reasons for website-specific architecture.
+Observations provide bounded meaningful content, semantic structure, current page identity/revision, target provenance, coverage/truncation metadata, and visual context when useful. Icon-only controls, menus revealed by hover, dynamic and virtualized lists, dialogs, frames, editors, and popups are ordinary capability families, not reasons for website-specific architecture.
 
-Use screenshots promptly when structure is insufficient. The same task model can interpret them; do not add a paid perception service by default. Screenshot capture binds current viewport/page evidence so a visual target is not reused after navigation or material change.
+The browser capability treats observation limits as control input. When text is truncated, target exposure is bounded, structure is ambiguous, state is still converging, or the required proposition is not represented in the current view, Rove should change how it observes rather than silently ask Codex to prove an outcome from incomplete evidence. Progressive observation can include targeted/scoped inspection, differently bounded capture, scroll/search, waiting for convergence, another read-only application view, or a screenshot.
 
-An action checks current ownership, target freshness, visibility/actionability, grant/approval scope, and applicable resource coordination. Then dispatch once and inspect the resulting state. Distinguish dispatched input from a verified outcome. Recoverable stale observations can be refreshed; uncertain consequential actions cannot be blindly retried.
+Use screenshots promptly when structure is insufficient or the important control/state is primarily visual. The same task model can interpret them; do not add a paid perception service by default. Screenshot capture binds current viewport/page evidence so a visual target or conclusion is not reused after navigation or material change. Visual evidence complements semantic structure rather than replacing freshness, ownership, or authorization.
 
-Multi-step consequential work retains a single consequence identity with an explicit commit boundary and outcome evidence. Preparation does not authorize another destination or mechanism after an uncertain commit. This preserves useful existing Rove semantics without making all navigation globally restrictive.
+Codex should reason primarily in terms of the user's intended browser outcome and current grounded state. The browser capability may translate that intent into Runtime expected effects, target/scope predicates, correlation strategies, or other verification mechanisms internally. Those primitives remain valuable safety/evidence mechanisms but are not themselves the user outcome, and Codex should not need detailed knowledge of Rove's truncation or verifier implementation to choose a safe proof strategy.
+
+An action checks current ownership, target freshness, visibility/actionability, grant/approval scope, and applicable resource coordination. Then the consequential mutation is dispatched at most once under its stable consequence identity. Immediate successor inspection may establish the effect; a completed click or input alone does not.
+
+If dispatch occurred but immediate evidence is insufficient, preserve the operation as dispatched/unverified and enter bounded read-only reconciliation. Reconciliation may fresh-inspect, wait for asynchronous convergence, inspect a target or semantic scope, search the application, navigate to an authoritative read surface, use screenshot/visual evidence, or correlate durable Runtime/browser evidence. It remains tied to the existing operation and consequence identity. It cannot repeat the mutation, change approved material, switch transport to evade the fence, or treat unrelated/pre-existing state as causal proof.
+
+Only after permitted reconciliation cannot establish the effect should the operation become genuinely unresolved or require human reconciliation. An unknown outcome therefore fences mutation replay without making the browser incapable of learning more about what already happened.
+
+Multi-step consequential work may retain specialized transaction identity where a transfer or other operation spans several resources/locations. Specialized semantic transactions should reuse the same meanings for observation, dispatch, reconciliation, evidence, and unresolved outcome rather than becoming a separate browser truth model.
 
 ## Files, dialogs, and diagnostics
 
