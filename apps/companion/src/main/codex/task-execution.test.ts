@@ -21,7 +21,7 @@ import {
   browserRouteRecoveryDisposition,
   browserRouteDeveloperInstructions,
   MAX_BROWSER_RECOVERY_ATTEMPTS_PER_STEP,
-  ROVE_BROWSER_ROUTE_POLICY_V5,
+  ROVE_BROWSER_ROUTE_POLICY,
 } from "./browser-route-policy.js";
 import {
   CodexAttentionBroker,
@@ -3811,7 +3811,8 @@ describe("capability and bootstrap", () => {
       });
       await coordinator.resume({ roveTaskId: started.context.roveTaskId });
 
-      expect(ROVE_BROWSER_ROUTE_POLICY_V5).toContain("route policy v5");
+      expect(ROVE_BROWSER_ROUTE_POLICY).toContain("Rove browser route policy:");
+      expect(ROVE_BROWSER_ROUTE_POLICY).not.toMatch(/route policy v\d+/i);
       const expected = browserRouteDeveloperInstructions(started.context);
       expect(expected).toContain(
         "Diagnostic browser evidence alone is not a required-path failure.",
@@ -3823,8 +3824,12 @@ describe("capability and bootstrap", () => {
         "unless evidence shows they prevented a required target or outcome",
       );
       expect(expected).toContain(
-        "an uncertain consequential receipt is an immediate no-replay boundary",
+        "an uncertain consequential receipt is an immediate no-replay mutation boundary",
       );
+      expect(expected).toContain("It is not a stop on read-only investigation");
+      expect(expected).toContain("browser.reconcile_outcome");
+      expect(expected).toContain("exact existing consequence key");
+      expect(expected).toContain("leave it unresolved");
       expect(expected).toContain("small per-step recovery budget");
       expect(expected).toContain("When that budget is exhausted");
       expect(expected).toContain("mechanically corrected request");

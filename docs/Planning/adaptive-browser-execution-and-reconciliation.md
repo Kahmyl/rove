@@ -1,6 +1,7 @@
 # Adaptive Browser Execution and Reconciliation
 
-**Status:** Active implementation plan  
+**Status:** Complete implementation plan
+
 **Authority:** Derived from the Product Direction and browser/capability engineering contracts. This document sequences work; it does not override those contracts or claim implementation.
 
 ## Why this work exists
@@ -369,11 +370,11 @@ Qualification found and fixed one general safety defect: a rendered ARIA window 
 
 **Stop condition:** Met for the deterministic generalized capability. Unrelated structured, truncated, asynchronous, alternate-view, virtualized, popup/frame, takeover, and shared-host patterns pass through the same observation, grounding, action, verification, escalation, and reconciliation authorities without site-specific execution rules. Remaining failures are classified capability or live/model boundaries rather than verifier-programming ambiguity.
 
-**Stop condition:** several unrelated application patterns pass through the same browser capability without site-specific execution rules.
-
 ### 8. Remove obsolete contract leakage
 
-After the new path is qualified:
+**Status:** Complete. The final agent boundary exposes grounded actions, semantic outcomes, consequence identity, authoritative receipts, and read-only reconciliation without exposing Runtime expected-effect fields or predicate kinds. The serialized production `tools/list` browser contract now has a whole-boundary regression, while the capability atlas separately names agent outcome families and private Runtime predicates. Browser-route guidance treats an unknown consequential receipt as a mutation no-replay boundary while explicitly permitting bounded read-only investigation and exact-key reconciliation. The source-only route-policy identifier no longer carries a pre-production version suffix; durable and wire compatibility identifiers remain unchanged.
+
+The completed cleanup:
 
 - remove or demote obsolete Codex-facing instructions that require low-level verification programming;
 - keep compatibility identifiers only where installed data/protocol readers require them;
@@ -381,7 +382,9 @@ After the new path is qualified:
 - update the capability atlas and regression fixtures;
 - run the full repository and packaged-app qualification appropriate to the changed compatibility set.
 
-Do not remove safety checks merely because higher-level orchestration becomes more capable.
+Private `ExpectedEffect`, task-result plan, semantic-transaction, and EffectJournal verification-basis fields remain the compiled/internal representation. No safety check, migration, durable history, or Runtime verifier was removed.
+
+**Stop condition:** Met. The architecture-correction plan is complete. Remaining work—arbitrary off-rendered traversal/search, broader cross-origin action, richer visual-only and composite-widget acceptance, live/model visual acceptance, and representative packaged/OS qualification where applicable—is a bounded capability or environment extension, not unresolved architectural ambiguity.
 
 ## Verification requirements for every implementation slice
 
@@ -416,6 +419,6 @@ This work does not authorize:
 
 ## Completion condition
 
-This plan is complete when the canonical contracts are implemented and qualified such that an unfamiliar browser task can normally be handled through adaptive structured/visual perception, grounded action, safe one-dispatch semantics, and read-only outcome reconciliation without requiring new website-specific engineering.
+This plan is complete. The canonical contracts and deterministic generalized families establish adaptive structured/visual perception, grounded action, safe one-dispatch semantics, and read-only outcome reconciliation without requiring website-specific verifier programming.
 
-At that point, remaining failures should be classifiable as a concrete unsupported browser capability, a hard human/security/service boundary, or a bounded defect—not merely another consequence of the browser agent being forced to guess Rove's verifier internals.
+Remaining failures are classifiable as a concrete unsupported browser capability, a hard human/security/service boundary, an environment qualification gap, or a bounded defect—not another consequence of the browser agent being forced to guess Rove's verifier internals. Further work should begin from one of those concrete gaps; this sequence does not continue to another numbered item.

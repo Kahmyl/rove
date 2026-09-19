@@ -37,7 +37,8 @@ interface CapabilityAtlas {
     targetCapabilities: string[];
     structuralScopes: string[];
     verifiedInteractions: string[];
-    expectedEffects: string[];
+    agentOutcomeKinds: string[];
+    internalExpectedEffects: string[];
   };
   sources: Record<string, string>;
   capabilities: AtlasCapability[];
@@ -154,7 +155,7 @@ describe("Web Capability Atlas governance", () => {
     expect(atlas.currentContract.verifiedInteractions).toEqual(
       discriminatedKinds(browserInteractionRequestSchema),
     );
-    expect(atlas.currentContract.expectedEffects).toEqual(
+    expect(atlas.currentContract.internalExpectedEffects).toEqual(
       discriminatedKinds(expectedEffectSchema),
     );
   });
@@ -168,7 +169,7 @@ describe("Web Capability Atlas governance", () => {
       correlation: "post_dispatch_action_boundary",
       truth: "persisted_runtime_file_evidence",
     });
-    expect(atlas.currentContract.expectedEffects).toContain(
+    expect(atlas.currentContract.internalExpectedEffects).toContain(
       download?.verificationContract?.expectedEffect,
     );
   });

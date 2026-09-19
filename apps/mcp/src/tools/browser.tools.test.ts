@@ -195,6 +195,11 @@ describe("browser.interact MCP schema", () => {
     ]);
     expect(tool!.description).toContain("desired user-visible outcomes");
     expect(tool!.description).toContain("Runtime chooses");
+    expect(tool!.description).toContain("no-replay mutation boundary");
+    expect(tool!.description).toContain("permitted read-only investigation");
+    expect(tool!.description).toContain("browser.reconcile_outcome");
+    expect(tool!.description).toContain("same consequenceKey");
+    expect(tool!.description).toContain("remain unresolved");
     expect(tool!.description).not.toMatch(
       /expectedEffects|canonical|focused|text_present|url_changed/,
     );
@@ -617,8 +622,12 @@ describe("browser.inspect MCP projection", () => {
       "unless evidence shows they prevented a required target or outcome",
     );
     expect(inspect.description).toContain(
-      "unknown or uncertain consequential outcome remain hard boundaries",
+      "unknown consequential receipt must never be replayed",
     );
+    expect(inspect.description).toContain(
+      "does not prohibit fresh read-only inspection",
+    );
+    expect(inspect.description).toContain("browser.reconcile_outcome");
     expect(inspect.description).not.toContain("Google");
     expect(inspect.description).not.toContain("status-code allowlist");
     expect(inspect.description).not.toContain("ignore errors");
