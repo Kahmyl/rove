@@ -23,8 +23,11 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Browser Control and Recording](Engineering/browser-control-and-recording.md)                       | Task-owned pages, shared resources, perception, handoff, capture, and requested video.        |
 | [Testing and Operations](Engineering/testing-and-operations.md)                                     | Executable checks, acceptance scenarios, packaging, recovery, backup, and evidence.           |
 | [Implementation Status](Engineering/implementation-status.md)                                       | Evidence-backed implemented, partial, unimplemented, qualification, and authority boundaries. |
+| [Planning](Planning/README.md)                                                                       | Active implementation sequencing derived from approved Product and Engineering contracts.      |
 | [Engineering Agent Environment](Engineering/engineering-agent-environment.md)                       | Repository-owned Codex guidance, safety defaults, verification, and continuation workflow.    |
 | [Repository Convergence Record](Engineering/repository-convergence.md)                              | One-time provenance for preserved worktrees, reconciled source, and final-main accounting.    |
+
+Planning documents are subordinate execution guidance. They may record evidence, open engineering questions, implementation slices, dependencies, and verification requirements, but they do not override Product or Engineering contracts and do not prove implementation status. When investigation changes an approved contract, update the responsible canonical document first and then revise the plan.
 
 There is no partner-facing platform API commitment. The usual API/Partner Integration document is therefore replaced by application and capability contracts. A separate distributed realtime platform, technical workflow engine, and product release-version documents are unnecessary. Small design rationales belong with the responsible document rather than in a second, competing architecture collection.
 

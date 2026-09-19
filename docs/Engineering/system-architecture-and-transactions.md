@@ -11,7 +11,10 @@ Application service
     |-- Local task/workflow/result authority
     |-- Context assembly and human attention
     |-- Codex adapter -> qualified local App Server process
-    |-- Capability adapters -> browser, files, authorized integrations
+    |-- Capability adapters
+    |      |-- Adaptive browser execution/reconciliation -> Runtime/browser authority
+    |      |-- Scoped files
+    |      `-- Authorized integrations, plugins, APIs, or CLI tools
     |-- SQLite metadata + managed local artifact files
     `-- Account and small workflow-configuration synchronization adapter
 ```
@@ -19,6 +22,8 @@ Application service
 Logical boundaries need not become independently deployed services. Keep Electron/React as the starting shell. Keep the browser and Codex in supervised processes where useful. The existing NestJS Runtime may continue serving browser authority through a private adapter. It must not decide that every new conversation requires a browser.
 
 The application service owns product commands and task state. The Codex adapter owns transport, supported protocol conversion, engine-account association, and event correlation. Runtime/capability adapters own the truth they can actually observe. The renderer submits intent and renders projections, not a second task scheduler.
+
+For browser work, the capability boundary includes adaptive execution and reconciliation above the low-level Runtime. Codex remains the reasoning engine and expresses task intent, grounded interaction choices, and outcome needs. The browser capability decides how to combine bounded structure, targeted inspection, screenshots/visual evidence, settling/waiting, and permitted read-only navigation into an evidence strategy. Runtime remains authoritative for page ownership, freshness, grants/approvals, resource coordination, dispatch, consequence fencing, durable receipts, and the browser facts it can directly observe. This orchestration boundary is not a second autonomous planner and must not become a competing task lifecycle.
 
 A mandatory cloud task executor, device relay, hosted browser, or distributed workflow engine is unnecessary. The cloud-facing boundary is limited to account identity and approved workflow configuration. Existing control-plane experiments may remain available but are not a prerequisite for ordinary local tasks.
 
@@ -47,9 +52,11 @@ A readiness check is not a guarantee that dispatch succeeds. A pre-dispatch fail
 
 For a consequential action, validate current task ownership, grant scope, targets, content, and any approval. Persist the intended operation and its consequence identity before dispatch. Perform the external action outside the database transaction. Persist the observed receipt afterward.
 
-Separate dispatch from outcome: not dispatched, possibly dispatched, dispatched with an unverified effect, confirmed effect, and confirmed failure are different facts. If acknowledgement is lost after an email might have been sent, inspect permitted evidence or request user reconciliation. A new adapter, restart, or retry button does not make repetition safe. No universal exactly-once guarantee is made for third-party websites.
+Separate dispatch from outcome: not dispatched, possibly dispatched, dispatched with an unverified effect, reconciling, confirmed effect, confirmed failure, and genuinely unresolved are different facts. If acknowledgement is lost after an email might have been sent, fence that mutation and inspect permitted evidence or request user reconciliation. A new adapter, restart, or retry button does not make repetition safe. No universal exactly-once guarantee is made for third-party websites.
 
-Read-only operations and proven pre-dispatch failures may use bounded retries with fresh grounding. Classify errors rather than blanket-retrying every exception. Each retry remains within permission and repeated-action limits.
+Immediate successor evidence is not required to be the only evidence source for an external effect. After a consequential dispatch, the owning capability may perform bounded read-only reconciliation using fresh observations, settling/waiting, search or navigation to an authoritative read surface, screenshot/visual evidence, or correlated durable receipts. Reconciliation may improve knowledge of the already-dispatched operation; it may not repeat the mutation, change its material, widen authorization, or use another transport to evade the fence.
+
+Read-only operations and proven pre-dispatch failures may use bounded retries with fresh grounding. Read-only reconciliation after possible dispatch is separately bounded and tied to the existing operation/consequence identity. Classify errors rather than blanket-retrying every exception. Each retry or reconciliation read remains within permission and resource limits.
 
 ## Stop, takeover, and return
 

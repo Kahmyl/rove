@@ -42,13 +42,35 @@ Retain existing negative cases and outcome assertions during naming cleanup. Do 
 | Portability             | Setup restores on another device while tasks/artifacts/secrets remain local; missing resources are explicit.                                                                                                      |
 | Sync conflicts/deletion | Offline edits cannot silently overwrite or resurrect deleted setup; synchronization dispatches no actions.                                                                                                        |
 | Browser groups          | Multiple task-owned groups, popups, shared resources, and human takeover behave correctly.                                                                                                                        |
-| Perception/interactions | General control families pass across variations, including icon-only and dynamic UI.                                                                                                                              |
+| Perception/interactions | General control families pass across unrelated variations; incomplete structure triggers appropriate targeted/visual escalation rather than site-specific rules.                                                     |
 | Capture/video           | Scope, actor attribution, start/stop, privacy, playable output, and failure handling are demonstrated.                                                                                                            |
 | Findings to action      | Selected records, drafts, file choice, approval, and confirmed outcomes remain linked.                                                                                                                            |
 | Interrupted side effect | Lost acknowledgement after dispatch does not lead to an automatic duplicate action.                                                                                                                               |
+| Outcome reconciliation  | A dispatched but unverified consequential effect remains replay-fenced while bounded read-only reconciliation can later settle it from authoritative evidence or leave it genuinely unresolved.                                             |
 | Profile/model switch    | Rove data ownership remains correct; credentials and engine associations do not leak between accounts.                                                                                                            |
 
 Current executable evidence for the browser-groups row covers one physical persistent host, distinct task page inventories and logical active pages, overlapping independent navigation, cross-task page denial, opener-derived popup ownership and event routing, release-time attribution races, manual-tab recovery, group-local release, verified final-host shutdown/retry, takeover presentation failure, sibling grounding invalidation on human return, and exclusive mutation admission for credential/consequential context operations. Page groups intentionally share cookies and authentication. Ordinary-navigation cookie changes, multi-step clipboard contention, and broader account-change coverage remain qualification gaps. Requested task-owned page recording has its own source-level lifecycle, privacy, failure, and real-browser WebM evidence; it does not qualify browser-window capture or packaged operating-system behavior.
+
+## Adaptive browser qualification
+
+Browser acceptance must demonstrate generalization rather than one successful site fixture. Keep deterministic fixtures centered on capability shapes and evidence limits, then supplement them with separately authorized live journeys across unrelated applications.
+
+Required browser evidence includes:
+
+- structured/semantic success when the current observation is complete;
+- a known-truncated text or target observation causing a deliberate perception change rather than an unverifiable whole-page claim;
+- targeted/scoped inspection and fresh inspection after asynchronous convergence;
+- screenshot/visual escalation for controls or state that structure does not represent adequately;
+- dynamic and virtualized list outcomes where the authoritative state may move or render outside the immediate successor view;
+- a consequential mutation whose immediate receipt is unverified and is later settled through read-only reconciliation without a second dispatch;
+- an effect proved from a different authoritative read surface than the commit surface;
+- a genuinely unresolved effect where no permitted evidence can establish what happened;
+- human takeover/return while reconciliation or further read-only investigation is pending;
+- unchanged cross-task page ownership, approval binding, consequence fencing, and service restrictions throughout those scenarios.
+
+Retain sanitized regressions for real failures such as the truncated-observation create-item case, but do not make a named website's selectors or UI structure the product contract. A live Google Drive, GitHub, LinkedIn, or other third-party journey is additional acceptance evidence only when explicitly authorized.
+
+Measure correctness together with unnecessary actions, observation size, model/context usage, latency, and reconciliation depth. Adaptive behavior is not permission for uncontrolled wandering; reads and perception escalation remain bounded.
 
 ## Fault injection and budgets
 

@@ -50,6 +50,14 @@ Control transfer is represented after the underlying ownership boundary has chan
 
 Task needs-attention badges may aggregate in the navigation UI without globally blocking other tasks. Notification count and currently selected task are not approval authority.
 
+## Outcome reconciliation
+
+A consequential operation that may have dispatched keeps its exact operation and consequence identity while evidence is incomplete. Presentation may show **Checking outcome** while the owning capability performs bounded read-only reconciliation. Those reads are correlated observations of the existing operation, not new authorization and not a replayable mutation command.
+
+Reconciliation may publish bounded progress/observation facts when useful, but durable product state changes only when authoritative evidence settles the operation or when the operation is explicitly recorded as still unresolved. A fresh page snapshot, screenshot, search result, activity view, or other external observation cannot by itself authorize another effect.
+
+Late evidence may settle an existing unverified operation only when it is correlated to the correct task, resource, operation/consequence identity, and required outcome. Unrelated observations cannot erase a replay fence. Renderer reconnection, task switching, or application restart rebuilds reconciliation presentation from authoritative local facts and never manufactures another dispatch.
+
 ## Resource and artifact events
 
 Recording-started, recording-stopped, finalizing, artifact-available, and artifact-failed are separate facts. Only artifact-available means the file can be opened. A browser crash or disk-full condition must not leave a false saved-video result.
