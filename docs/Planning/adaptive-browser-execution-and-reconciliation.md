@@ -87,20 +87,20 @@ Documents whose existing boundaries remain valid do not need speculative edits: 
 
 The read-only source audit at the current documentation baseline established the existing ownership seams before implementation work begins.
 
-| Responsibility | Current owner / path | Disposition |
-| --- | --- | --- |
-| Task-level reasoning and browser-route choice | Codex through the task-bound MCP tool surface and `browser-route-policy.ts` | **Move responsibility selectively.** Codex should keep task reasoning and grounded action choice, but should not have to program Rove-specific proof mechanics. |
-| Agent-facing browser contract | `apps/mcp/src/tools/browser.tools.ts` | **Generalize.** It currently exposes `expectedEffects` and detailed verifier advice directly to Codex, then passes those predicates through to Runtime. |
-| Structured perception | `packages/browser` inspection/perception pipeline plus `browser.inspect` | **Keep and reuse.** Observations already expose semantic hierarchy, geometry, frame provenance, page-state facts, coverage/truncation, and freshness authority. |
-| Visual perception primitive | `browser.screenshot` backed by the browser/Runtime evidence path | **Keep and orchestrate.** Viewport, full-page, target, and region capture already exist and can be bound to an observation. The missing work is automatic evidence-strategy selection, not screenshot acquisition. |
-| Target grounding and stale-observation authority | `packages/browser` observation authority, target registry/resolution, Runtime interaction policy | **Keep.** Current page/revision/mutation/viewport authority and stale-target refusal are safety foundations. |
-| Action authorization and dispatch | Runtime interaction policy, ownership/coordinator boundaries, `browser.interact` | **Keep.** Runtime remains the single mutation authority. |
-| Immediate effect verification | `apps/runtime/src/interaction/verified-interaction.ts` | **Keep as a low-level evidence mechanism.** Causal transition rules and truncation-aware refusal correctly avoid false success. |
-| Short asynchronous settlement | `RuntimeService.interact` bounded successor-reinspection loop | **Generalize rather than duplicate.** Ordinary interactions already wait and re-inspect after dispatch without redispatch, but they repeatedly evaluate the same caller-selected `expectedEffects` against essentially the same observation strategy. |
-| Durable external-effect truth / replay fencing | Runtime effect journal plus consequence replay fence | **Keep and extend only as needed.** This is already the authority that prevents duplicate consequential effects and stores outcome/evidence references. |
-| Specialized later verification | semantic transaction begin/advance/verify/store | **Reuse/converge.** Transfer transactions already support a later fresh observation and explicit verification after commit, but the model is specialized and still expected-effect driven. |
-| Generic process-cut reconciliation | task-engine command classifications, worker `execute/reconcile`, `read_truth` / `correlate_receipt` | **Reuse as an engineering pattern, not as a second browser lifecycle.** |
-| Customer action lifecycle | Companion Result/action projection and renderer | **Keep.** Prepared/authorized/dispatched/confirmed/failed/unresolved remains the product truth projection; stronger browser evidence should settle the same action rather than create another lifecycle. |
+| Responsibility                                   | Current owner / path                                                                                | Disposition                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task-level reasoning and browser-route choice    | Codex through the task-bound MCP tool surface and `browser-route-policy.ts`                         | **Move responsibility selectively.** Codex should keep task reasoning and grounded action choice, but should not have to program Rove-specific proof mechanics.                                                                                       |
+| Agent-facing browser contract                    | `apps/mcp/src/tools/browser.tools.ts`                                                               | **Generalize.** It currently exposes `expectedEffects` and detailed verifier advice directly to Codex, then passes those predicates through to Runtime.                                                                                               |
+| Structured perception                            | `packages/browser` inspection/perception pipeline plus `browser.inspect`                            | **Keep and reuse.** Observations already expose semantic hierarchy, geometry, frame provenance, page-state facts, coverage/truncation, and freshness authority.                                                                                       |
+| Visual perception primitive                      | `browser.screenshot` backed by the browser/Runtime evidence path                                    | **Keep and orchestrate.** Viewport, full-page, target, and region capture already exist and can be bound to an observation. The missing work is automatic evidence-strategy selection, not screenshot acquisition.                                    |
+| Target grounding and stale-observation authority | `packages/browser` observation authority, target registry/resolution, Runtime interaction policy    | **Keep.** Current page/revision/mutation/viewport authority and stale-target refusal are safety foundations.                                                                                                                                          |
+| Action authorization and dispatch                | Runtime interaction policy, ownership/coordinator boundaries, `browser.interact`                    | **Keep.** Runtime remains the single mutation authority.                                                                                                                                                                                              |
+| Immediate effect verification                    | `apps/runtime/src/interaction/verified-interaction.ts`                                              | **Keep as a low-level evidence mechanism.** Causal transition rules and truncation-aware refusal correctly avoid false success.                                                                                                                       |
+| Short asynchronous settlement                    | `RuntimeService.interact` bounded successor-reinspection loop                                       | **Generalize rather than duplicate.** Ordinary interactions already wait and re-inspect after dispatch without redispatch, but they repeatedly evaluate the same caller-selected `expectedEffects` against essentially the same observation strategy. |
+| Durable external-effect truth / replay fencing   | Runtime effect journal plus consequence replay fence                                                | **Keep and extend only as needed.** This is already the authority that prevents duplicate consequential effects and stores outcome/evidence references.                                                                                               |
+| Specialized later verification                   | semantic transaction begin/advance/verify/store                                                     | **Reuse/converge.** Transfer transactions already support a later fresh observation and explicit verification after commit, but the model is specialized and still expected-effect driven.                                                            |
+| Generic process-cut reconciliation               | task-engine command classifications, worker `execute/reconcile`, `read_truth` / `correlate_receipt` | **Reuse as an engineering pattern, not as a second browser lifecycle.**                                                                                                                                                                               |
+| Customer action lifecycle                        | Companion Result/action projection and renderer                                                     | **Keep.** Prepared/authorized/dispatched/confirmed/failed/unresolved remains the product truth projection; stronger browser evidence should settle the same action rather than create another lifecycle.                                              |
 
 ### Corrected diagnosis
 
@@ -185,7 +185,7 @@ No durable `reconciling` state is required for correctness. If reconciliation is
 
 ### 3. Make perception adaptive
 
-**Investigation status:** Complete for the current implementation baseline. Implementation remains open.
+**Status:** Investigation and Slice 3A are complete for the current implementation baseline. Slice 3B remains open.
 
 The audit shows that perception is not broadly missing. Existing primitives are already substantial:
 
@@ -207,11 +207,17 @@ Do not solve this by indiscriminately raising text/target limits. Larger agent-v
 
 #### Slice 3A — evidence suitability gate and canonical target verification
 
-This is the first implementation slice.
+**Implemented.** Runtime now distinguishes the bounded target presentation from an authoritative canonical-target view. `readObservation()` marks that view complete only when the canonical registry exists, target acquisition reported no errors, and every semantic interactive control is represented in the semantic outcome partition. Total registered-target count does not contribute to that semantic completeness decision, so unrelated non-semantic targets cannot conceal a semantic discovery gap. Successor verification re-reads the inspected observation through that authority, so presentation-only `targetLimit` truncation does not make exact target effects unresolved while actual acquisition uncertainty still does.
+
+Before consequential dispatch, a pure suitability assessment rejects whole-page `text_present` and `text_absent` effects when predecessor text is missing or truncated. The verifier independently treats missing or truncated predecessor/successor text as unresolved rather than authoritative absence. The existing `INSPECTION_REQUIRED` error includes the unsuitable effect, incomplete `page_text` surface, `mutationDispatched: false`, and the requirement for stronger read-only evidence. This occurs before effect-journal preparation or browser mutation dispatch; complete predecessor text continues through the existing authorization, receipt, causal-verification, and replay-fencing path.
+
+Deterministic evidence is in `packages/browser/src/playwright-browser-inspection.test.ts`, `apps/runtime/src/interaction/verified-interaction.test.ts`, and `apps/runtime/src/runtime.integration.test.ts`. It covers canonical targets behind a presentation limit, production-path semantic incompleteness remaining unresolved despite an unrelated non-semantic registered target, missing and truncated whole-page text remaining unavailable for proof, pre-dispatch refusal with zero mutation/journal/receipt effects, the complete-text path, and the existing delayed one-dispatch reconciliation behavior.
+
+The implemented slice is:
 
 1. Reuse the canonical target registry for Runtime verification. A successor returned by `inspect` may be presentation-limited, so Runtime should obtain the authoritative observation for verification rather than treating `targetsTruncated` alone as loss of canonical target truth.
 2. Represent whether the authoritative target set is complete enough for absence/presence proof separately from whether the agent-facing target presentation was truncated. Acquisition errors or unaccounted semantic controls must remain uncertainty.
-3. Add a pure expected-effect evidence-suitability assessment before consequential dispatch. At minimum, page-text effects backed by a known-truncated predecessor must be classified as requiring stronger evidence instead of being allowed to cross the mutation boundary and deterministically become unresolved.
+3. Add a pure expected-effect evidence-suitability assessment before consequential dispatch. Page-text effects backed by a missing or known-truncated predecessor must be classified as requiring stronger evidence instead of being allowed to cross the mutation boundary and deterministically become unresolved.
 4. Use the existing pre-dispatch `INSPECTION_REQUIRED` boundary with structured details for this first slice rather than inventing another error/lifecycle. It must be provably pre-dispatch and safe to follow with read-only perception work.
 5. Preserve all existing action authorization, target freshness, consequence identity, replay fencing, and effect-journal behavior.
 
@@ -219,7 +225,7 @@ Required regression evidence for Slice 3A:
 
 - a presentation-limited target list can still verify an exact target effect from canonical target evidence when target acquisition itself is complete;
 - target acquisition errors/incompleteness do not get upgraded to certainty;
-- a consequential `text_present`/`text_absent` request whose predecessor text is already truncated is refused before mutation dispatch;
+- a consequential `text_present`/`text_absent` request whose predecessor text is missing or truncated is refused before mutation dispatch;
 - the same verification remains admissible when its predecessor text is complete;
 - the motivating Drive-shaped failure therefore cannot dispatch with a proof surface Rove already knows is incapable of establishing the effect.
 
@@ -227,7 +233,7 @@ Slice 3A deliberately does **not** automate screenshot interpretation or add a n
 
 #### Slice 3B — focused read escalation
 
-After Slice 3A is proven, add only the smallest missing read capability needed to avoid pushing verifier mechanics back onto Codex. The current likely gap is a bounded focused text/proposition read that can answer a requested presence/absence proposition without materializing the entire page text. Re-evaluate the exact API after 3A rather than pre-committing to `textQuery`, a new inspect mode, or a separate tool.
+**Remaining gap.** Add only the smallest missing read capability needed to avoid pushing verifier mechanics back onto Codex. The current likely gap is a bounded focused text/proposition read that can answer a requested presence/absence proposition without materializing the entire page text. Re-evaluate the exact API rather than pre-committing to `textQuery`, a new inspect mode, or a separate tool.
 
 Existing `resolveTarget`, structural scopes, scrolling, navigation, and screenshot/vision should be composed before adding overlapping primitives.
 

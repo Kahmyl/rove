@@ -101,6 +101,54 @@ interface ObservationAuthority {
   viewport: BrowserViewport;
 }
 
+interface TargetCoverageSummary {
+  semanticInteractiveCount?: number;
+  registeredTargetCount?: number;
+  acquisitionErrors?: unknown[];
+  semanticOutcomes?: Record<string, number>;
+}
+
+function targetCoverageIncompleteReasons(
+  targetCoverage: TargetCoverageSummary | undefined,
+): Array<"target_acquisition_failed" | "semantic_targets_unaccounted"> {
+  if (targetCoverage === undefined) return [];
+
+  const accountedSemanticTargets = Object.values(
+    targetCoverage.semanticOutcomes ?? {},
+  ).reduce((sum, count) => sum + count, 0);
+  const reasons: Array<
+    "target_acquisition_failed" | "semantic_targets_unaccounted"
+  > = [];
+  if ((targetCoverage.acquisitionErrors?.length ?? 0) > 0) {
+    reasons.push("target_acquisition_failed");
+  }
+  if (
+    (targetCoverage.semanticInteractiveCount ?? 0) > accountedSemanticTargets
+  ) {
+    reasons.push("semantic_targets_unaccounted");
+  }
+  return reasons;
+}
+
+function targetAcquisitionUnstableDuringInspection(
+  targetCoverage: TargetCoverageSummary | undefined,
+): boolean {
+  if ((targetCoverage?.acquisitionErrors?.length ?? 0) > 0) return true;
+
+  // This is only a mutation-race fence for an inspection still in flight. It
+  // is deliberately separate from canonical evidence completeness, which
+  // must never let unrelated registered targets satisfy semantic demand.
+  const registeredOrExcludedTargets =
+    (targetCoverage?.registeredTargetCount ?? 0) +
+    Object.entries(targetCoverage?.semanticOutcomes ?? {})
+      .filter(([reason]) => reason !== "targeted")
+      .reduce((sum, [, count]) => sum + count, 0);
+  return (
+    (targetCoverage?.semanticInteractiveCount ?? 0) >
+    registeredOrExcludedTargets
+  );
+}
+
 export async function settleBrowserShutdownStep<T>(
   operation: () => Promise<T>,
   timeoutMs = BROWSER_SHUTDOWN_STEP_TIMEOUT_MS,
@@ -1237,21 +1285,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
     assertCurrent();
 
     const targetCoverage = inspection.metadata?.targetCoverage as
-      | {
-          semanticInteractiveCount?: number;
-          registeredTargetCount?: number;
-          acquisitionErrors?: unknown[];
-          semanticOutcomes?: Record<string, number>;
-        }
-      | undefined;
-    const accountedTargets =
-      (targetCoverage?.registeredTargetCount ?? 0) +
-      Object.entries(targetCoverage?.semanticOutcomes ?? {})
-        .filter(([reason]) => reason !== "targeted")
-        .reduce((sum, [, count]) => sum + count, 0);
+      TargetCoverageSummary | undefined;
     const targetAcquisitionUnstable =
-      (targetCoverage?.acquisitionErrors?.length ?? 0) > 0 ||
-      (targetCoverage?.semanticInteractiveCount ?? 0) > accountedTargets;
+      targetAcquisitionUnstableDuringInspection(targetCoverage);
 
     if (
       finalState.revision !== state.revision ||
@@ -1421,15 +1457,33 @@ export class PlaywrightBrowserSession implements BrowserSession {
       observation.observationId,
     );
 
-    return canonicalTargets === undefined
-      ? observation
-      : {
-          ...observation,
-          targets: canonicalTargets.map((target) => ({
-            ...target,
-            sessionId: this.id,
-          })),
-        };
+    const targetCoverage = observation.metadata?.targetCoverage as
+      TargetCoverageSummary | undefined;
+    const incompleteReasons: NonNullable<
+      BrowserObservation["targetEvidence"]
+    >["incompleteReasons"] = [];
+    if (canonicalTargets === undefined || targetCoverage === undefined) {
+      incompleteReasons.push("canonical_registry_unavailable");
+    }
+    incompleteReasons.push(...targetCoverageIncompleteReasons(targetCoverage));
+
+    return {
+      ...observation,
+      ...(canonicalTargets === undefined
+        ? {}
+        : {
+            targets: canonicalTargets.map((target) => ({
+              ...target,
+              sessionId: this.id,
+            })),
+          }),
+      targetEvidence: {
+        source: "canonical_registry",
+        completeness:
+          incompleteReasons.length === 0 ? "complete" : "incomplete",
+        ...(incompleteReasons.length === 0 ? {} : { incompleteReasons }),
+      },
+    };
   }
 
   async readTargetFiles(

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BrowserObservation } from "@rove/protocol";
 
 import {
+  assessExpectedEffectEvidenceSuitability,
   classifyActionOutcome,
   interactionActionProposal,
   verifyExpectedEffects,
@@ -131,6 +132,186 @@ describe("verified interaction semantics", () => {
       [],
     );
     expect(classifyActionOutcome(transitioned)).toBe("applied");
+  });
+
+  it("uses complete canonical target evidence behind presentation truncation", () => {
+    const predecessor = observation("before", "https://example.test", "");
+    predecessor.metadata = { targetsTruncated: true };
+    predecessor.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "complete",
+    };
+    const successor = observation("after", "https://example.test", "");
+    successor.metadata = { targetsTruncated: true };
+    successor.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "complete",
+    };
+    successor.targets = [
+      {
+        ref: "canonical-target",
+        kind: "button",
+        name: "Created item",
+        visible: true,
+        enabled: true,
+      },
+    ];
+
+    const effects = verifyExpectedEffects(
+      [
+        {
+          kind: "target_present",
+          target: { name: "Created item", kind: "button" },
+        },
+      ],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+    );
+
+    expect(effects).toEqual([expect.objectContaining({ state: "observed" })]);
+  });
+
+  it("keeps target verification unresolved when canonical acquisition is incomplete", () => {
+    const predecessor = observation("before", "https://example.test", "");
+    predecessor.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "incomplete",
+      incompleteReasons: ["target_acquisition_failed"],
+    };
+    const successor = observation("after", "https://example.test", "");
+    successor.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "incomplete",
+      incompleteReasons: ["semantic_targets_unaccounted"],
+    };
+    successor.targets = [
+      {
+        ref: "partial-target",
+        kind: "button",
+        name: "Created item",
+        visible: true,
+        enabled: true,
+      },
+    ];
+
+    const effects = verifyExpectedEffects(
+      [
+        {
+          kind: "target_present",
+          target: { name: "Created item", kind: "button" },
+        },
+      ],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+    );
+
+    expect(effects).toEqual([expect.objectContaining({ state: "unresolved" })]);
+  });
+
+  it("identifies whole-page text effects that cannot use a truncated predecessor", () => {
+    const predecessor = observation("before", "https://example.test", "Create");
+    predecessor.metadata = { textTruncated: true };
+
+    expect(
+      assessExpectedEffectEvidenceSuitability(
+        [
+          { kind: "text_present", text: "Created" },
+          { kind: "text_absent", text: "Create" },
+          { kind: "url_changed" },
+        ],
+        predecessor,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        effectIndex: 0,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_truncated",
+      }),
+      expect.objectContaining({
+        effectIndex: 1,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_truncated",
+      }),
+    ]);
+  });
+
+  it("does not turn missing predecessor or successor text into authoritative absence", () => {
+    const missingPredecessor = observation(
+      "before-missing",
+      "https://example.test",
+      "unused",
+    );
+    delete missingPredecessor.text;
+    const completeSuccessor = observation(
+      "after-complete",
+      "https://example.test",
+      "Created item",
+    );
+    const completePredecessor = observation(
+      "before-complete",
+      "https://example.test",
+      "Create item",
+    );
+    const missingSuccessor = observation(
+      "after-missing",
+      "https://example.test",
+      "unused",
+    );
+    delete missingSuccessor.text;
+
+    const effect = { kind: "text_present" as const, text: "Created item" };
+    expect(
+      verifyExpectedEffects(
+        [effect],
+        missingPredecessor,
+        completeSuccessor,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+    expect(
+      verifyExpectedEffects(
+        [effect],
+        completePredecessor,
+        missingSuccessor,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+  });
+
+  it("requires available predecessor text for whole-page effect suitability", () => {
+    const predecessor = observation("before", "https://example.test", "unused");
+    delete predecessor.text;
+
+    expect(
+      assessExpectedEffectEvidenceSuitability(
+        [
+          { kind: "text_present", text: "Created" },
+          { kind: "text_absent", text: "Create" },
+        ],
+        predecessor,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        effectIndex: 0,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_unavailable",
+      }),
+      expect.objectContaining({
+        effectIndex: 1,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_unavailable",
+      }),
+    ]);
   });
 
   it("keeps outcome unknown when successor evidence is unavailable", () => {

@@ -37,6 +37,10 @@ import { ControlService } from "./control/control.service.js";
 import { ControlWaitService } from "./control/control-wait.service.js";
 import { OwnershipTransitionService } from "./control/ownership-transition.service.js";
 import { EvidenceService } from "./evidence/evidence.service.js";
+import {
+  verifyExpectedEffects,
+  verifyExpectedTargetPresentState,
+} from "./interaction/verified-interaction.js";
 import { ObservationService } from "./observation/observation.service.js";
 import { InteractionPolicy } from "./policy/interaction-policy.js";
 import { RuntimeService } from "./runtime.service.js";
@@ -2616,6 +2620,284 @@ describe("runtime integration", () => {
       pageChanged: true,
       url: `${server.url}/consequential-result`,
     });
+  });
+
+  it("verifies a canonical target hidden behind the successor presentation limit", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: () => inspect({ targetLimit: 1 }),
+    });
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Change state"),
+        },
+        expectedEffects: [
+          {
+            kind: "target_present",
+            target: { name: "State changed", kind: "button" },
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+  });
+
+  it("keeps canonical target evidence incomplete when an unrelated non-semantic target could mask a semantic gap", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-coverage`,
+    });
+    active.push({ runtime, id: session.id });
+    const presented = await runtime.inspectBrowser(session.id);
+    const coverage = presented.metadata?.targetCoverage as {
+      semanticInteractiveCount: number;
+      registeredTargetCount: number;
+      acquisitionErrors: string[];
+      semanticOutcomes: Record<string, number>;
+    };
+
+    expect(presented.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Semantic action", kind: "button" }),
+        expect.objectContaining({
+          name: "Keyboard-only control",
+          kind: "control",
+        }),
+      ]),
+    );
+    expect(coverage).toMatchObject({
+      semanticInteractiveCount: 1,
+      registeredTargetCount: 2,
+      acquisitionErrors: [],
+    });
+    expect(
+      Object.values(coverage.semanticOutcomes).reduce(
+        (sum, count) => sum + count,
+        0,
+      ),
+    ).toBe(1);
+
+    // Simulate the accessibility layer reporting one additional semantic
+    // control that the production PageInspector coverage partition did not
+    // account for. The real canonical registry still contains the unrelated
+    // non-semantic control that previously masked this gap.
+    coverage.semanticInteractiveCount = 2;
+
+    const authoritative = await physicalBrowser(
+      browser,
+      session.id,
+    ).readObservation(presented.observationId);
+    expect(authoritative.targetEvidence).toEqual({
+      source: "canonical_registry",
+      completeness: "incomplete",
+      incompleteReasons: ["semantic_targets_unaccounted"],
+    });
+    expect(
+      verifyExpectedTargetPresentState(
+        {
+          kind: "target_present",
+          target: { name: "Semantic action", kind: "button" },
+        },
+        authoritative,
+      ),
+    ).toMatchObject({ state: "unresolved" });
+    expect(
+      verifyExpectedEffects(
+        [
+          {
+            kind: "target_present",
+            target: { name: "Semantic action", kind: "button" },
+          },
+          {
+            kind: "target_absent",
+            target: { name: "Missing semantic action", kind: "button" },
+          },
+        ],
+        authoritative,
+        authoritative,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([
+      expect.objectContaining({ state: "unresolved" }),
+      expect.objectContaining({ state: "unresolved" }),
+    ]);
+  });
+
+  it.each([
+    { kind: "text_present" as const, text: "Mutation applied" },
+    { kind: "text_absent" as const, text: "Apply consequential mutation" },
+  ])(
+    "refuses consequential $kind before dispatch when predecessor text is truncated",
+    async (expectedEffect) => {
+      const server = await fixture();
+      const { runtime, browser, effectJournal } = await harness();
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/consequential-action`,
+      });
+      active.push({ runtime, id: session.id });
+      const predecessor = await runtime.inspectBrowser(session.id, {
+        maxTextChars: 1,
+      });
+      const liveBrowser = physicalBrowser(browser, session.id);
+      const originalInteract = liveBrowser.interact.bind(liveBrowser);
+      let dispatches = 0;
+      liveBrowser.interact = async (...args) => {
+        dispatches += 1;
+        return originalInteract(...args);
+      };
+      const consequenceKey = `fixture:truncated-text:${expectedEffect.kind}`;
+
+      await expect(
+        runtime.interact(session.id, {
+          observationId: predecessor.observationId,
+          action: {
+            kind: "click",
+            target: target(predecessor, "Apply consequential mutation"),
+          },
+          expectedEffects: [expectedEffect],
+          consequential: true,
+          consequenceKey,
+        }),
+      ).rejects.toMatchObject({
+        code: "INSPECTION_REQUIRED",
+        retryable: true,
+        details: {
+          reason: "expected_effect_evidence_incomplete",
+          mutationDispatched: false,
+          requiredAction: "gather_stronger_read_only_evidence",
+          unsuitableEffects: [
+            expect.objectContaining({
+              effectIndex: 0,
+              evidenceSurface: "page_text",
+              reason: "predecessor_text_truncated",
+            }),
+          ],
+        },
+      });
+      expect(dispatches).toBe(0);
+      expect(server.mutationCount()).toBe(0);
+      await expect(
+        effectJournal.find(
+          session.bootstrapId ?? session.id,
+          session.workspace?.id ?? session.id,
+          consequenceKey,
+        ),
+      ).resolves.toBeNull();
+      expect(
+        (await runtime.getObservations(session.id)).items.some(
+          (item) => item.type === "agent_interaction_receipt",
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("admits and verifies consequential whole-page text effects when predecessor text is complete", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Apply consequential mutation"),
+        },
+        expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+        consequential: true,
+        consequenceKey: "fixture:complete-text:mutation",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(server.mutationCount()).toBe(1);
+  });
+
+  it("refuses consequential whole-page text verification when predecessor text is unavailable", async () => {
+    const server = await fixture();
+    const { runtime, browser, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id, {
+      includeText: false,
+    });
+    expect(predecessor.text).toBeUndefined();
+    expect(predecessor.metadata?.textTruncated).not.toBe(true);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalInteract = liveBrowser.interact.bind(liveBrowser);
+    let dispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      dispatches += 1;
+      return originalInteract(...args);
+    };
+    const consequenceKey = "fixture:unavailable-text:mutation";
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Apply consequential mutation"),
+        },
+        expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+        consequential: true,
+        consequenceKey,
+      }),
+    ).rejects.toMatchObject({
+      code: "INSPECTION_REQUIRED",
+      retryable: true,
+      details: {
+        reason: "expected_effect_evidence_incomplete",
+        mutationDispatched: false,
+        requiredAction: "gather_stronger_read_only_evidence",
+        unsuitableEffects: [
+          expect.objectContaining({
+            effectIndex: 0,
+            evidenceSurface: "page_text",
+            reason: "predecessor_text_unavailable",
+          }),
+        ],
+      },
+    });
+    expect(dispatches).toBe(0);
+    expect(server.mutationCount()).toBe(0);
+    await expect(
+      effectJournal.find(
+        session.bootstrapId ?? session.id,
+        session.workspace?.id ?? session.id,
+        consequenceKey,
+      ),
+    ).resolves.toBeNull();
+    expect(
+      (await runtime.getObservations(session.id)).items.some(
+        (item) => item.type === "agent_interaction_receipt",
+      ),
+    ).toBe(false);
   });
 
   it("reconciles delayed expected effects for ordinary navigation", async () => {

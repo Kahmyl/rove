@@ -131,6 +131,10 @@ const consequentialFormHtml = (churn: string) =>
   <p id="unrelated-churn">Render marker: ${churn}</p>
 </body></html>`;
 const CONSEQUENTIAL_RESULT_HTML = `<!doctype html><html><head><title>Mutation applied</title></head><body><h1>Mutation applied</h1></body></html>`;
+const SEMANTIC_COVERAGE_HTML = `<!doctype html><html><head><title>Semantic coverage</title></head><body>
+  <button>Semantic action</button>
+  <div tabindex="0">Keyboard-only control</div>
+</body></html>`;
 const DOWNLOAD_HTML = `<!doctype html><html><head><title>Download fixture</title></head><body>
   <a id="download-file" href="/download.txt">Download file</a>
   <a id="slow-download-file" href="/slow-download.txt">Slow download file</a>
@@ -661,6 +665,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/shadow-scroll": SHADOW_SCROLL_HTML,
         "/consequential-action": CONSEQUENTIAL_ACTION_HTML,
         "/consequential-result": CONSEQUENTIAL_RESULT_HTML,
+        "/semantic-coverage": SEMANTIC_COVERAGE_HTML,
         "/download": DOWNLOAD_HTML,
         "/history-a": HISTORY_A_HTML,
         "/history-b": HISTORY_B_HTML,

@@ -100,6 +100,7 @@ import {
 import { SessionService } from "./session/session.service.js";
 import { EFFECT_JOURNAL_STORE, ROVE_CONFIG } from "./tokens.js";
 import {
+  assessExpectedEffectEvidenceSuitability,
   classifyActionOutcome,
   interactionSignature,
   interactionTarget,
@@ -1239,6 +1240,27 @@ export class RuntimeService implements RoveRuntime {
 
           lease.assertCurrent();
 
+          if (input.consequential) {
+            const unsuitableEffects = assessExpectedEffectEvidenceSuitability(
+              input.expectedEffects,
+              predecessor,
+            );
+            if (unsuitableEffects.length > 0) {
+              throw new RoveError({
+                code: "INSPECTION_REQUIRED",
+                message:
+                  "The selected expected-effect proof requires stronger read-only evidence before consequential dispatch.",
+                retryable: true,
+                details: {
+                  reason: "expected_effect_evidence_incomplete",
+                  mutationDispatched: false,
+                  requiredAction: "gather_stronger_read_only_evidence",
+                  unsuitableEffects,
+                },
+              });
+            }
+          }
+
           const beforePages = await browser.pages();
 
           lease.assertCurrent();
@@ -1669,7 +1691,10 @@ export class RuntimeService implements RoveRuntime {
 
           if (!synchronizationFailed) {
             try {
-              successor = await browser.inspect();
+              const presentedSuccessor = await browser.inspect();
+              successor = await browser.readObservation(
+                presentedSuccessor.observationId,
+              );
 
               lease.assertCurrent();
             } catch (error) {
@@ -1762,7 +1787,10 @@ export class RuntimeService implements RoveRuntime {
 
               try {
                 await this.syncActivePage(sessionId, lease);
-                successor = await browser.inspect();
+                const presentedSuccessor = await browser.inspect();
+                successor = await browser.readObservation(
+                  presentedSuccessor.observationId,
+                );
                 lease.assertCurrent();
                 afterPages = await browser.pages();
                 lease.assertCurrent();
