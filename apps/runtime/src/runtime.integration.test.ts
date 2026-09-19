@@ -2618,6 +2618,134 @@ describe("runtime integration", () => {
     });
   });
 
+  it("verifies a canonical target hidden behind the successor presentation limit", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/actions`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: () => inspect({ targetLimit: 1 }),
+    });
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Change state"),
+        },
+        expectedEffects: [
+          {
+            kind: "target_present",
+            target: { name: "State changed", kind: "button" },
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+  });
+
+  it.each([
+    { kind: "text_present" as const, text: "Mutation applied" },
+    { kind: "text_absent" as const, text: "Apply consequential mutation" },
+  ])(
+    "refuses consequential $kind before dispatch when predecessor text is truncated",
+    async (expectedEffect) => {
+      const server = await fixture();
+      const { runtime, browser, effectJournal } = await harness();
+      const session = await runtime.startSession({
+        mode: "agent",
+        startUrl: `${server.url}/consequential-action`,
+      });
+      active.push({ runtime, id: session.id });
+      const predecessor = await runtime.inspectBrowser(session.id, {
+        maxTextChars: 1,
+      });
+      const liveBrowser = physicalBrowser(browser, session.id);
+      const originalInteract = liveBrowser.interact.bind(liveBrowser);
+      let dispatches = 0;
+      liveBrowser.interact = async (...args) => {
+        dispatches += 1;
+        return originalInteract(...args);
+      };
+      const consequenceKey = `fixture:truncated-text:${expectedEffect.kind}`;
+
+      await expect(
+        runtime.interact(session.id, {
+          observationId: predecessor.observationId,
+          action: {
+            kind: "click",
+            target: target(predecessor, "Apply consequential mutation"),
+          },
+          expectedEffects: [expectedEffect],
+          consequential: true,
+          consequenceKey,
+        }),
+      ).rejects.toMatchObject({
+        code: "INSPECTION_REQUIRED",
+        retryable: true,
+        details: {
+          reason: "expected_effect_evidence_incomplete",
+          mutationDispatched: false,
+          requiredAction: "gather_stronger_read_only_evidence",
+          unsuitableEffects: [
+            expect.objectContaining({
+              effectIndex: 0,
+              evidenceSurface: "page_text",
+              reason: "predecessor_text_truncated",
+            }),
+          ],
+        },
+      });
+      expect(dispatches).toBe(0);
+      expect(server.mutationCount()).toBe(0);
+      await expect(
+        effectJournal.find(
+          session.bootstrapId ?? session.id,
+          session.workspace?.id ?? session.id,
+          consequenceKey,
+        ),
+      ).resolves.toBeNull();
+      expect(
+        (await runtime.getObservations(session.id)).items.some(
+          (item) => item.type === "agent_interaction_receipt",
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("admits and verifies consequential whole-page text effects when predecessor text is complete", async () => {
+    const server = await fixture();
+    const { runtime } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Apply consequential mutation"),
+        },
+        expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+        consequential: true,
+        consequenceKey: "fixture:complete-text:mutation",
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(server.mutationCount()).toBe(1);
+  });
+
   it("reconciles delayed expected effects for ordinary navigation", async () => {
     const server = await fixture();
     const { runtime, browser } = await harness();

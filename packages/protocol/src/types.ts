@@ -254,6 +254,16 @@ export interface BrowserObservation extends PageInspection {
   viewport?: BrowserViewport;
   structure?: BrowserSemanticStructure;
   capabilities?: BrowserObservationCapabilities;
+  /** Authoritative internal target evidence, separate from presentation limits. */
+  targetEvidence?: {
+    source: "canonical_registry";
+    completeness: "complete" | "incomplete";
+    incompleteReasons?: Array<
+      | "canonical_registry_unavailable"
+      | "target_acquisition_failed"
+      | "semantic_targets_unaccounted"
+    >;
+  };
 }
 
 export type BrowserNavigationProvenance =

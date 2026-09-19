@@ -537,6 +537,10 @@ describe("semantic inspection acceptance", () => {
         }),
       ]),
     );
+    expect(authoritative.targetEvidence).toEqual({
+      source: "canonical_registry",
+      completeness: "complete",
+    });
   });
 
   it("filters inspection targets by kind", async () => {

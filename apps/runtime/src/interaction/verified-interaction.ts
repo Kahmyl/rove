@@ -35,6 +35,13 @@ function targetsTruncated(observation: BrowserObservation): boolean {
   return observation.metadata?.targetsTruncated === true;
 }
 
+function targetEvidenceIncomplete(observation: BrowserObservation): boolean {
+  if (observation.targetEvidence !== undefined) {
+    return observation.targetEvidence.completeness !== "complete";
+  }
+  return targetsTruncated(observation);
+}
+
 function textTruncated(observation: BrowserObservation): boolean {
   return observation.metadata?.textTruncated === true;
 }
@@ -196,6 +203,13 @@ function verifyEffect(
     case "target_within_scope":
     case "target_outside_scope":
     case "selected_value": {
+      if (
+        targetEvidenceIncomplete(predecessor) ||
+        targetEvidenceIncomplete(successor)
+      ) {
+        return { effect, state: "unresolved" };
+      }
+
       const beforeMatches = matchingTargets(predecessor, effect.target);
       const matches = matchingTargets(successor, effect.target);
 
@@ -210,12 +224,12 @@ function verifyEffect(
           targetWithinScope(target, effect.scope),
         );
         const predecessorKnown =
-          beforeMatches.length > 0 || !targetsTruncated(predecessor);
+          beforeMatches.length > 0 || !targetEvidenceIncomplete(predecessor);
         if (effect.kind === "target_within_scope") {
           return {
             effect,
             state:
-              !predecessorKnown || targetsTruncated(successor)
+              !predecessorKnown || targetEvidenceIncomplete(successor)
                 ? "unresolved"
                 : causalTransition(beforeWithin, within),
           };
@@ -223,7 +237,7 @@ function verifyEffect(
         return {
           effect,
           state:
-            !predecessorKnown || targetsTruncated(successor)
+            !predecessorKnown || targetEvidenceIncomplete(successor)
               ? "unresolved"
               : causalTransition(!beforeWithin, !within),
         };
@@ -233,7 +247,8 @@ function verifyEffect(
         return {
           effect,
           state:
-            targetsTruncated(predecessor) || targetsTruncated(successor)
+            targetEvidenceIncomplete(predecessor) ||
+            targetEvidenceIncomplete(successor)
               ? "unresolved"
               : causalTransition(beforeMatches.length > 0, matches.length > 0),
         };
@@ -243,7 +258,8 @@ function verifyEffect(
         return {
           effect,
           state:
-            targetsTruncated(predecessor) || targetsTruncated(successor)
+            targetEvidenceIncomplete(predecessor) ||
+            targetEvidenceIncomplete(successor)
               ? "unresolved"
               : causalTransition(
                   beforeMatches.length === 0,
@@ -256,7 +272,7 @@ function verifyEffect(
         return {
           effect,
           state:
-            matches.length === 0 && !targetsTruncated(successor)
+            matches.length === 0 && !targetEvidenceIncomplete(successor)
               ? "contradicted"
               : "unresolved",
         };
@@ -488,7 +504,7 @@ export function verifyExpectedTargetPresentState(
   const matches = matchingTargets(observation, effect.target);
   return {
     effect,
-    state: targetsTruncated(observation)
+    state: targetEvidenceIncomplete(observation)
       ? "unresolved"
       : matches.length > 0
         ? "observed"
@@ -528,7 +544,7 @@ export function verifyExpectedCurrentStates(
       );
       return {
         effect,
-        state: targetsTruncated(observation)
+        state: targetEvidenceIncomplete(observation)
           ? "unresolved"
           : effect.kind === "target_within_scope"
             ? within
@@ -546,6 +562,33 @@ export function verifyExpectedCurrentStates(
       };
     return { effect, state: "unresolved" };
   });
+}
+
+export interface ExpectedEffectEvidenceIssue {
+  effectIndex: number;
+  effect: ExpectedEffect;
+  evidenceSurface: "page_text";
+  reason: "predecessor_text_truncated";
+}
+
+export function assessExpectedEffectEvidenceSuitability(
+  expectedEffects: ExpectedEffect[],
+  predecessor: BrowserObservation,
+): ExpectedEffectEvidenceIssue[] {
+  if (!textTruncated(predecessor)) return [];
+
+  return expectedEffects.flatMap((effect, effectIndex) =>
+    effect.kind === "text_present" || effect.kind === "text_absent"
+      ? [
+          {
+            effectIndex,
+            effect,
+            evidenceSurface: "page_text" as const,
+            reason: "predecessor_text_truncated" as const,
+          },
+        ]
+      : [],
+  );
 }
 
 export function classifyActionOutcome(
