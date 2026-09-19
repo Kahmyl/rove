@@ -142,30 +142,46 @@ The output of this investigation should identify where low-level verification pl
 
 ### 2. Define the outcome/reconciliation contract
 
-Specify the smallest internal contract needed to separate:
+**Status:** Complete for the current implementation baseline.
 
-- intended outcome;
-- dispatch truth;
-- immediate evidence;
-- reconciliation state;
-- terminal outcome.
+The smallest coherent contract extends the existing authorities rather than introducing a second reconciliation entity or lifecycle.
 
-Do not commit prematurely to a public tool name or database schema. Determine whether existing `ActionReceipt`, operation records, and effect journals can carry the required truth with additive fields or projections.
+- **Intended outcome / verification basis:** consequential work must durably bind the verification basis that was in force at dispatch. Task-result plans already retain their expected effects; ordinary consequential journal records currently do not retain the full effect parameters, so this is the one missing durable input. The implementation may initially normalize the existing expected-effect contract internally, but the durable basis must be immutable for that dispatched effect so later reconciliation cannot silently change the success criteria.
+- **Dispatch truth:** the original `ActionReceipt` remains an immutable fact about the mutation attempt, its dispatch status, immediate successor evidence, and initial outcome. Later reconciliation must not rewrite that receipt.
+- **Durable consequence truth:** the versioned Runtime effect journal remains the evolving authority for the external effect. Its existing immutable version chain already preserves history and task/workspace/consequence identity; no second durable reconciliation record is required.
+- **Immediate evidence:** the initial receipt/observation/evidence records remain append-only evidence. Their failure to prove the outcome does not authorize redispatch.
+- **Reconciliation state:** an unresolved journal record is the durable safety state while bounded read-only reconciliation is permitted. Active “Checking outcome” work may be projected as live state; a crash can safely fall back to durable unresolved without implying replay authority.
+- **Terminal settlement:** add a constrained read-only settlement path that can move the same exact unresolved journal record to `applied` or `not_applied` using fresh authoritative evidence and optimistic journal versioning. Do not broaden the generic update path into arbitrary state rewriting.
+- **Replay fence:** after terminal journal settlement is durably committed, the exact in-memory consequence fence must no longer remain stale for that key. It must never be cleared before durable settlement.
+- **Customer projection:** keep the existing Result/action lifecycle. It already permits `unresolved → confirmed | failed`, and the Companion already projects Runtime effect truth into that lifecycle. Stronger later evidence should therefore settle the existing Output rather than create another customer-visible state machine.
 
-Start from the existing `browser.interact` receipt/effect-journal path and its bounded successor-reinspection loop. The next design must show why any new state or API cannot be represented by extending that authority. Do not create a second reconciliation lifecycle merely because the current proof strategy is too rigid.
+The current effect journal's immutable version files already provide settlement history, so an embedded reconciliation-history array is unnecessary by default. Additional read attempts can remain ordinary observation/evidence records; the terminal journal version needs only authoritative settlement provenance sufficient to correlate the final truth.
 
-The contract must allow:
+The original ordinary interaction receipt persists effect kinds and states but not the full expected-effect parameters. An action fingerprint alone is not a recoverable verification contract. Therefore later adaptive reconciliation must not infer success criteria from a consequence-key string, model prose, or the current page. The verification basis must be bound before the mutation crosses the dispatch boundary.
+
+The contract is:
 
 ```text
-not dispatched
-possibly/dispatched + unverified
-reconciling through read-only evidence
-confirmed
-not applied / failed
-genuinely unresolved
+immutable verification basis
+        +
+single-dispatch ActionReceipt
+        ↓
+versioned EffectJournalRecord
+        ↓
+applied | not_applied | unresolved
+                       ↓
+            bounded read-only reconciliation
+                       ↓
+          same effect record, next version
+                 applied | not_applied
+                       ↓
+             existing Result projection
+              confirmed | failed
 ```
 
-**Stop condition:** an ordinary browser mutation can remain safely non-repeatable while later read-only evidence is still allowed to settle it.
+No durable `reconciling` state is required for correctness. If reconciliation is interrupted, `unresolved` is the safe restart truth: mutation remains fenced, unrelated work remains usable, and later authorized read-only evidence may continue settlement.
+
+**Stop condition met:** an ordinary browser mutation can remain safely non-repeatable while later read-only evidence is allowed to settle the same durable external-effect identity.
 
 ### 3. Make perception adaptive
 
