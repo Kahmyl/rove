@@ -54,6 +54,8 @@ Only after permitted reconciliation cannot establish the effect should the opera
 
 Multi-step consequential work may retain specialized transaction identity where a transfer spans source and destination resources/locations. The semantic transaction owns exact source/destination/mechanism identity, prepare/commit coordination, and fresh destination verification, but commit dispatch and mutation truth remain ordinary `Runtime.interact` plus the durable EffectJournal. Late read-only settlement projects an unresolved commit to committed or not applied without redispatch. Destination verification reuses authoritative canonical targets and focused visible-text reads; incomplete read-only proof may retry from a different fresh observation without changing the applied journal or creating an unresolved-mutation fence. The transaction object remains bounded session orchestration metadata, not another durable consequence store.
 
+The adaptive browser execution architecture is implemented and deterministically generalized for the qualified capability families. This does not upgrade every browser family to complete: arbitrary off-rendered traversal, richer visual-only interpretation, exhaustive composite widgets/editors, and broader cross-origin actions remain bounded capability gaps.
+
 ## Files, dialogs, and diagnostics
 
 Uploads reference explicitly granted local files or managed artifacts, not arbitrary paths from agent text. Downloads have a task association, expected effect, managed destination, and integrity metadata. A new download event from unrelated activity is not proof of the current action's result.

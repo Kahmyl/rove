@@ -102,7 +102,18 @@
       "precise_scroll",
       "coordinate_click"
     ],
-    "expectedEffects": [
+    "agentOutcomeKinds": [
+      "url",
+      "visible_text",
+      "target",
+      "target_location",
+      "target_value",
+      "selection",
+      "target_files",
+      "page",
+      "download"
+    ],
+    "internalExpectedEffects": [
       "url_equals",
       "url_changed",
       "text_present",

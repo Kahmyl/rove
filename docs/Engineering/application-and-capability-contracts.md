@@ -82,6 +82,8 @@ Fresh authoritative contradiction can settle the effect as not applied. Fresh su
 
 A terminal unresolved state means bounded permitted reconciliation could not establish the outcome, or a hard human/security/service boundary prevents further evidence gathering. It should not be produced merely because one immediate observation format was insufficient.
 
+This adaptive execution architecture is implemented and deterministically generalized for the qualified capability families. The overall browser capability remains partial where concrete perception, traversal, visual interpretation, widget, or cross-origin action families remain incomplete. The production MCP contract is regression-protected so low-level Runtime effect fields and predicate kinds do not become normal Codex-facing inputs again.
+
 ## Attention and authorization
 
 An approval is tied to task, operation, recipient/resource scope, content/attachment digest, and live request generation. Changed content or a different target may require fresh authorization. Concrete batch approval is supported without presenting a confirmation for every ordinary navigation step.
