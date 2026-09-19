@@ -706,10 +706,21 @@ describe("browser semantic transaction MCP tools", () => {
     const advance = tools.find(
       (tool) => tool.name === "browser.transaction_advance",
     )!;
-    const effects = record(
-      record(advance.inputSchema.properties).expectedEffects,
-    );
-    expect(effects).toMatchObject({ minItems: 0, maxItems: 20 });
+    const advanceProperties = record(advance.inputSchema.properties);
+    expect(advanceProperties).not.toHaveProperty("expectedEffects");
+    expect(record(advanceProperties.outcomes)).toMatchObject({
+      minItems: 0,
+      maxItems: 20,
+    });
+
+    const verify = tools.find(
+      (tool) => tool.name === "browser.transaction_verify",
+    )!;
+    const verifyProperties = record(verify.inputSchema.properties);
+    expect(verifyProperties).not.toHaveProperty("additionalExpectedEffects");
+    expect(record(verifyProperties.destinationOutcomes)).toMatchObject({
+      maxItems: 19,
+    });
   });
 
   it("validates and forwards semantic transaction requests", async () => {
@@ -717,8 +728,13 @@ describe("browser semantic transaction MCP tools", () => {
       beginSemanticTransaction: vi.fn(async () => ({ status: "prepared" })),
       advanceSemanticTransaction: vi.fn(async () => ({
         transaction: { status: "committed" },
+        receipt: { outcome: "applied", effects: [] },
       })),
-      verifySemanticTransaction: vi.fn(async () => ({ outcome: "applied" })),
+      verifySemanticTransaction: vi.fn(async () => ({
+        transaction: { status: "verified" },
+        outcome: "applied",
+        effects: [],
+      })),
       getSemanticTransaction: vi.fn(async () => ({ status: "verified" })),
       cancelSemanticTransaction: vi.fn(async () => ({ status: "cancelled" })),
     } as unknown as RuntimeClient;
@@ -745,12 +761,33 @@ describe("browser semantic transaction MCP tools", () => {
       observationId: "bobs_2",
       phase: "commit",
       action: { kind: "click", target: sourceTarget },
-      expectedEffects: [{ kind: "text_present", text: "Moved" }],
+      outcomes: [
+        {
+          kind: "target_location",
+          target: { name: "Quarterly report", kind: "button" },
+          relation: "within",
+          scope: { kind: "list", label: "Archive" },
+        },
+      ],
+    });
+    await tools.get("browser.transaction_advance")!({
+      sessionId: "session_1",
+      transactionId: "tx_1",
+      observationId: "bobs_2b",
+      phase: "prepare",
+      action: { kind: "clipboard", operation: "cut" },
     });
     await tools.get("browser.transaction_verify")!({
       sessionId: "session_1",
       transactionId: "tx_1",
       observationId: "bobs_3",
+      destinationOutcomes: [
+        {
+          kind: "visible_text",
+          state: "present",
+          text: "Archive",
+        },
+      ],
     });
     await tools.get("browser.transaction_status")!({
       sessionId: "session_1",
@@ -767,11 +804,32 @@ describe("browser semantic transaction MCP tools", () => {
     );
     expect(runtime.advanceSemanticTransaction).toHaveBeenCalledWith(
       "session_1",
-      expect.objectContaining({ phase: "commit" }),
+      expect.objectContaining({
+        phase: "commit",
+        expectedEffects: [
+          {
+            kind: "target_within_scope",
+            target: { name: "Quarterly report", kind: "button" },
+            scope: { kind: "list", label: "Archive" },
+          },
+        ],
+      }),
+    );
+    expect(runtime.advanceSemanticTransaction).toHaveBeenCalledWith(
+      "session_1",
+      expect.objectContaining({
+        phase: "prepare",
+        expectedEffects: [],
+      }),
     );
     expect(runtime.verifySemanticTransaction).toHaveBeenCalledWith(
       "session_1",
-      expect.objectContaining({ observationId: "bobs_3" }),
+      expect.objectContaining({
+        observationId: "bobs_3",
+        additionalExpectedEffects: [
+          { kind: "text_present", text: "Archive" },
+        ],
+      }),
     );
     expect(runtime.getSemanticTransaction).toHaveBeenCalledWith(
       "session_1",
@@ -781,6 +839,99 @@ describe("browser semantic transaction MCP tools", () => {
       "session_1",
       "tx_1",
     );
+  });
+
+  it("projects private transaction verification effects out of agent results", async () => {
+    const internalEffect = {
+      effect: {
+        kind: "target_within_scope" as const,
+        target: { name: "Quarterly report" },
+        scope: { kind: "list" as const, label: "Archive" },
+      },
+      state: "observed" as const,
+    };
+    const transaction = {
+      transactionId: "tx_1",
+      status: "verified",
+      verification: {
+        observationId: "bobs_3",
+        outcome: "applied" as const,
+        effects: [internalEffect],
+      },
+    };
+    const runtime = {
+      beginSemanticTransaction: vi.fn(async () => transaction),
+      advanceSemanticTransaction: vi.fn(async () => ({
+        transaction,
+        receipt: {
+          receiptId: "receipt_1",
+          outcome: "applied",
+          effects: [internalEffect],
+        },
+      })),
+      verifySemanticTransaction: vi.fn(async () => ({
+        transaction,
+        outcome: "applied",
+        effects: [internalEffect],
+      })),
+      getSemanticTransaction: vi.fn(async () => transaction),
+    } as unknown as RuntimeClient;
+    const tools = new Map(
+      browserTools(runtime).map((tool) => [tool.name, tool.handler]),
+    );
+    const begin = await tools.get("browser.transaction_begin")!({
+      sessionId: "session_1",
+      observationId: "bobs_1",
+      kind: "transfer",
+      sourceTarget: { pageId: "page_1", revision: 1, ref: "t1" },
+      destination: {
+        verification: "within_scope",
+        scope: { kind: "list", label: "Archive" },
+      },
+      mechanism: "menu",
+      consequenceKey: "move:report:archive",
+    });
+    const advance = await tools.get("browser.transaction_advance")!({
+      sessionId: "session_1",
+      transactionId: "tx_1",
+      observationId: "bobs_2",
+      phase: "commit",
+      action: {
+        kind: "click",
+        target: { pageId: "page_1", revision: 1, ref: "t1" },
+      },
+      outcomes: [
+        {
+          kind: "target_location",
+          target: { name: "Quarterly report" },
+          relation: "within",
+          scope: { kind: "list", label: "Archive" },
+        },
+      ],
+    });
+    const verify = await tools.get("browser.transaction_verify")!({
+      sessionId: "session_1",
+      transactionId: "tx_1",
+      observationId: "bobs_3",
+    });
+    const status = await tools.get("browser.transaction_status")!({
+      sessionId: "session_1",
+      transactionId: "tx_1",
+    });
+
+    for (const result of [begin, advance, verify, status]) {
+      expect(JSON.stringify(result)).not.toMatch(
+        /target_within_scope|"effects"/,
+      );
+    }
+    expect(advance).toMatchObject({
+      transaction: { status: "verified" },
+      receipt: { receiptId: "receipt_1", outcome: "applied" },
+    });
+    expect(verify).toEqual({
+      transaction: expect.objectContaining({ status: "verified" }),
+      outcome: "applied",
+    });
   });
 });
 

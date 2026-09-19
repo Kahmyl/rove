@@ -12,7 +12,14 @@ import {
   prepareTaskResultActionRequestSchema,
   browserRecoveryAdmissionRequestSchema,
 } from "@rove/protocol";
-import type { PageInspection, TaskResultActionPlan } from "@rove/protocol";
+import type {
+  ActionReceipt,
+  PageInspection,
+  SemanticTransactionAdvanceResult,
+  SemanticTransactionSnapshot,
+  SemanticTransactionVerificationResult,
+  TaskResultActionPlan,
+} from "@rove/protocol";
 import { z } from "zod";
 import type { RuntimeClient } from "../runtime/runtime-client.types.js";
 import type { ToolDefinition } from "../server/register-tools.js";
@@ -408,152 +415,6 @@ const semanticTransactionDestinationJsonSchema = {
   ],
 } as const;
 
-const expectedEffectJsonSchema = {
-  oneOf: [
-    {
-      type: "object",
-      properties: {
-        kind: {
-          const: "url_equals",
-        },
-        url: {
-          type: "string",
-          format: "uri",
-        },
-      },
-      required: ["kind", "url"],
-      additionalProperties: false,
-    },
-    ...["target_within_scope", "target_outside_scope"].map((kind) => ({
-      type: "object",
-      properties: {
-        kind: { const: kind },
-        target: expectedTargetJsonSchema,
-        scope: structuralScopeJsonSchema,
-      },
-      required: ["kind", "target", "scope"],
-      additionalProperties: false,
-    })),
-    {
-      type: "object",
-      properties: {
-        kind: {
-          const: "url_changed",
-        },
-      },
-      required: ["kind"],
-      additionalProperties: false,
-    },
-    ...["text_present", "text_absent"].map((kind) => ({
-      type: "object",
-      description:
-        kind === "text_absent"
-          ? "Page-wide visible-text absence. Do not use this to prove an entity was renamed or removed when activity, history, toasts, or audit UI may legitimately retain the old text; use an exact target absence or scoped target effect instead."
-          : "Page-wide visible-text presence. Prefer an exact target or scoped target effect when the workflow outcome belongs to a specific entity or collection.",
-      properties: {
-        kind: {
-          const: kind,
-        },
-        text: {
-          type: "string",
-          minLength: 1,
-          maxLength: 5000,
-        },
-      },
-      required: ["kind", "text"],
-      additionalProperties: false,
-    })),
-    ...[
-      "target_present",
-      "target_absent",
-      "target_enabled",
-      "target_disabled",
-      "target_checked",
-      "target_unchecked",
-      "target_focused",
-      "target_blurred",
-      "target_expanded",
-      "target_collapsed",
-      "target_pressed",
-      "target_unpressed",
-      "target_selected",
-      "target_unselected",
-      "target_open",
-      "target_closed",
-    ].map((kind) => ({
-      type: "object",
-      description:
-        kind === "target_absent"
-          ? "Exact semantic target absence. Use this instead of page-wide text_absent when proving an old entity name is no longer present as a control or row."
-          : undefined,
-      properties: {
-        kind: {
-          const: kind,
-        },
-        target: expectedTargetJsonSchema,
-      },
-      required: ["kind", "target"],
-      additionalProperties: false,
-    })),
-    {
-      type: "object",
-      properties: {
-        kind: { const: "target_value" },
-        target: expectedTargetJsonSchema,
-        value: { type: "string", maxLength: 100000 },
-      },
-      required: ["kind", "target", "value"],
-      additionalProperties: false,
-    },
-    {
-      type: "object",
-      properties: {
-        kind: { const: "target_numeric_value" },
-        target: expectedTargetJsonSchema,
-        value: { type: "number" },
-      },
-      required: ["kind", "target", "value"],
-      additionalProperties: false,
-    },
-    {
-      type: "object",
-      properties: {
-        kind: {
-          const: "selected_value",
-        },
-        target: expectedTargetJsonSchema,
-        value: {
-          type: "string",
-          maxLength: 5000,
-        },
-      },
-      required: ["kind", "target", "value"],
-      additionalProperties: false,
-    },
-    ...["page_opened", "page_closed"].map((kind) => ({
-      type: "object",
-      properties: {
-        kind: {
-          const: kind,
-        },
-      },
-      required: ["kind"],
-      additionalProperties: false,
-    })),
-    {
-      type: "object",
-      description:
-        "A new managed download initiated by this action and persisted as Runtime file evidence. Omit filename when discovering or reporting the actual saved filename; include it only when the user explicitly requires the saved artifact to equal that exact predeclared name. Browser collision suffixes are valid completed downloads when filename is omitted, and the actual filename must come from durable evidence. An exact-name mismatch is not_applied and must never trigger a second download.",
-      properties: {
-        kind: { const: "download_completed" },
-        filename: { type: "string", minLength: 1, maxLength: 500 },
-      },
-      required: ["kind"],
-      additionalProperties: false,
-    },
-  ],
-} as const;
-
 const browserOutcomeJsonSchema = {
   oneOf: [
     {
@@ -726,6 +587,39 @@ function taskResultActionStatusForAgent(
   return {
     ...record,
     taskResultPlan: taskResultPlanForAgent(record.taskResultPlan),
+  };
+}
+
+function semanticTransactionForAgent(
+  transaction: SemanticTransactionSnapshot,
+): unknown {
+  if (!transaction.verification) return transaction;
+  const verification = { ...transaction.verification };
+  delete (verification as Partial<typeof verification>).effects;
+  return { ...transaction, verification };
+}
+
+function actionReceiptForAgent(receipt: ActionReceipt): unknown {
+  const agentReceipt: Partial<ActionReceipt> = { ...receipt };
+  delete agentReceipt.effects;
+  return agentReceipt;
+}
+
+function semanticTransactionAdvanceForAgent(
+  result: SemanticTransactionAdvanceResult,
+): unknown {
+  return {
+    transaction: semanticTransactionForAgent(result.transaction),
+    receipt: actionReceiptForAgent(result.receipt),
+  };
+}
+
+function semanticTransactionVerificationForAgent(
+  result: SemanticTransactionVerificationResult,
+): unknown {
+  return {
+    transaction: semanticTransactionForAgent(result.transaction),
+    outcome: result.outcome,
   };
 }
 
@@ -1225,7 +1119,7 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         ],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
@@ -1238,16 +1132,18 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           })
           .parse(input);
         const { sessionId, ...request } = parsed;
-        return runtime.beginSemanticTransaction(
-          sessionId,
-          beginSemanticTransactionRequestSchema.parse(request),
+        return semanticTransactionForAgent(
+          await runtime.beginSemanticTransaction(
+            sessionId,
+            beginSemanticTransactionRequestSchema.parse(request),
+          ),
         );
       },
     },
     {
       name: "browser.transaction_advance",
       description:
-        "Advance one prepare or commit phase using an action grounded in a fresh observation. Commit is the explicit consequential boundary and uses the transaction consequence key; an unknown commit is terminal and must not be replayed or replaced with a fallback. A keyboard transfer may stage a page-level clipboard copy/cut with no expectedEffects only when the exact transaction source is already selected; completed trusted dispatch advances the transaction while the receipt honestly retains outcome unknown and records evidenceBasis trusted_dispatch. A transfer commit must include a bounded expected effect for the exact transaction source: target_within_scope for a visible declared destination, target_absent or target_within_scope before later remote-destination verification, or target_present after an explicit clipboard paste. Unrelated or already-visible destination text is not commit evidence.",
+        "Advance one prepare or commit phase using an action grounded in a fresh observation. Describe desired user-visible outcomes; Runtime compiles and verifies them while preserving the transaction's exact source and destination identity. Commit is the explicit consequential boundary and uses the transaction consequence key. An unknown commit must be settled read-only with browser.reconcile_outcome and must not be replayed or replaced with a fallback. A keyboard transfer may stage a page-level clipboard copy/cut without outcomes only when the exact transaction source is already selected. Every commit requires at least one outcome materially tied to the exact transaction source and destination; unrelated or already-visible destination text is not commit evidence.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1256,11 +1152,11 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           observationId: { type: "string", minLength: 1, maxLength: 200 },
           phase: { type: "string", enum: ["prepare", "commit"] },
           action: browserInteractionActionJsonSchema,
-          expectedEffects: {
+          outcomes: {
             type: "array",
             minItems: 0,
             maxItems: 20,
-            items: expectedEffectJsonSchema,
+            items: browserOutcomeJsonSchema,
           },
           effect: {
             type: "string",
@@ -1279,11 +1175,10 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
           "observationId",
           "phase",
           "action",
-          "expectedEffects",
         ],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
@@ -1291,55 +1186,89 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
             observationId: z.string().min(1).max(200),
             phase: z.enum(["prepare", "commit"]),
             action: z.unknown(),
-            expectedEffects: z.array(z.unknown()).max(20),
+            outcomes: z
+              .array(browserOutcomeSchema)
+              .max(20)
+              .optional()
+              .default([]),
             effect: z.unknown().optional(),
           })
           .parse(input);
-        const { sessionId, ...request } = parsed;
-        return runtime.advanceSemanticTransaction(
-          sessionId,
-          advanceSemanticTransactionRequestSchema.parse(request),
+        const { sessionId, outcomes, ...request } = parsed;
+        if (request.phase === "commit" && outcomes.length === 0) {
+          throw new Error(
+            "Semantic transaction commit phases require at least one outcome.",
+          );
+        }
+        if (
+          request.phase === "prepare" &&
+          outcomes.length === 0 &&
+          !z
+            .object({
+              kind: z.literal("clipboard"),
+              operation: z.enum(["copy", "cut"]),
+            })
+            .safeParse(request.action).success
+        ) {
+          throw new Error(
+            "Only trusted clipboard copy/cut staging may prepare without a semantic outcome.",
+          );
+        }
+        return semanticTransactionAdvanceForAgent(
+          await runtime.advanceSemanticTransaction(
+            sessionId,
+            advanceSemanticTransactionRequestSchema.parse({
+              ...request,
+              expectedEffects: compileBrowserOutcomes(outcomes),
+            }),
+          ),
         );
       },
     },
     {
       name: "browser.transaction_verify",
       description:
-        "Finalize a committed semantic transaction from a fresh observation. For within_scope destinations, Runtime verifies the original source target inside the declared scope. For destination_observation transfers, first open the exact destination; Runtime verifies the exact source target is present and requires at least one additional destination-context effect such as url_equals or a breadcrumb/header target.",
+        "Verify a committed semantic transaction from a fresh destination observation, or retry an earlier inconclusive read-only verification with a different fresh observation. For within-scope destinations, Runtime derives proof that the exact source is inside the declared scope. For destination-observation transfers, open the exact destination and supply at least one independent semantic destination outcome, such as the exact URL or a breadcrumb/header target. Commit uncertainty must first be settled with browser.reconcile_outcome.",
       inputSchema: {
         type: "object",
         properties: {
           sessionId: { type: "string", minLength: 1 },
           transactionId: { type: "string", pattern: "^tx_" },
           observationId: { type: "string", minLength: 1, maxLength: 200 },
-          additionalExpectedEffects: {
+          destinationOutcomes: {
             type: "array",
             maxItems: 19,
-            items: expectedEffectJsonSchema,
+            items: browserOutcomeJsonSchema,
             description:
-              "Additional bounded evidence. Required for destination_observation verification and must independently identify the opened destination, for example with url_equals or a destination breadcrumb/header target.",
+              "Independent semantic destination context. Required for destination_observation verification and must identify the opened destination, for example with an exact URL or a destination breadcrumb/header target.",
           },
         },
         required: ["sessionId", "transactionId", "observationId"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
             transactionId: z.string().startsWith("tx_"),
             observationId: z.string().min(1).max(200),
-            additionalExpectedEffects: z
-              .array(z.unknown())
+            destinationOutcomes: z
+              .array(browserOutcomeSchema)
               .max(19)
               .optional()
               .default([]),
           })
           .parse(input);
-        const { sessionId, ...request } = parsed;
-        return runtime.verifySemanticTransaction(
-          sessionId,
-          verifySemanticTransactionRequestSchema.parse(request),
+        const { sessionId, destinationOutcomes, ...request } = parsed;
+        return semanticTransactionVerificationForAgent(
+          await runtime.verifySemanticTransaction(
+            sessionId,
+            verifySemanticTransactionRequestSchema.parse({
+              ...request,
+              additionalExpectedEffects:
+                compileBrowserOutcomes(destinationOutcomes),
+            }),
+          ),
         );
       },
     },
@@ -1356,16 +1285,18 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId", "transactionId"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
             transactionId: z.string().startsWith("tx_"),
           })
           .parse(input);
-        return runtime.getSemanticTransaction(
-          parsed.sessionId,
-          semanticTransactionReferenceSchema.parse(parsed).transactionId,
+        return semanticTransactionForAgent(
+          await runtime.getSemanticTransaction(
+            parsed.sessionId,
+            semanticTransactionReferenceSchema.parse(parsed).transactionId,
+          ),
         );
       },
     },
@@ -1382,16 +1313,18 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
         required: ["sessionId", "transactionId"],
         additionalProperties: false,
       },
-      handler: (input) => {
+      handler: async (input) => {
         const parsed = z
           .object({
             sessionId: sessionIdSchema,
             transactionId: z.string().startsWith("tx_"),
           })
           .parse(input);
-        return runtime.cancelSemanticTransaction(
-          parsed.sessionId,
-          semanticTransactionReferenceSchema.parse(parsed).transactionId,
+        return semanticTransactionForAgent(
+          await runtime.cancelSemanticTransaction(
+            parsed.sessionId,
+            semanticTransactionReferenceSchema.parse(parsed).transactionId,
+          ),
         );
       },
     },

@@ -221,7 +221,13 @@ export class SemanticTransactionStore {
     effects: EffectVerification[],
   ): SemanticTransactionSnapshot {
     const record = this.require(sessionId, transactionId);
-    if (record.inFlight || record.snapshot.status !== "committed") {
+    const retryingUnknownVerification =
+      record.snapshot.status === "uncertain" &&
+      record.snapshot.verification?.outcome === "unknown";
+    if (
+      record.inFlight ||
+      (record.snapshot.status !== "committed" && !retryingUnknownVerification)
+    ) {
       throw new RoveError({
         code: "TRANSACTION_STATE_INVALID",
         message:
@@ -229,7 +235,8 @@ export class SemanticTransactionStore {
       });
     }
     if (
-      record.snapshot.steps.at(-1)?.predecessorObservationId === observationId
+      record.snapshot.steps.at(-1)?.predecessorObservationId === observationId ||
+      record.snapshot.verification?.observationId === observationId
     ) {
       throw new RoveError({
         code: "TRANSACTION_STATE_INVALID",
@@ -246,6 +253,34 @@ export class SemanticTransactionStore {
           : "uncertain";
     record.snapshot.updatedAt = new Date().toISOString();
     record.snapshot.verification = { observationId, outcome, effects };
+    return clone(record.snapshot);
+  }
+
+  recordCommitSettlement(
+    sessionId: string,
+    consequenceKey: string,
+    outcome: "applied" | "not_applied",
+  ): SemanticTransactionSnapshot | undefined {
+    const transactionId = this.consequenceIndex.get(
+      this.consequenceIdentity(sessionId, consequenceKey),
+    );
+    if (transactionId === undefined) return undefined;
+
+    const record = this.require(sessionId, transactionId);
+    const hasCommit = record.snapshot.steps.some(
+      (step) => step.phase === "commit",
+    );
+    if (!hasCommit) return clone(record.snapshot);
+
+    if (outcome === "not_applied") {
+      record.snapshot.status = "not_applied";
+    } else if (
+      record.snapshot.status === "uncertain" &&
+      record.snapshot.verification === undefined
+    ) {
+      record.snapshot.status = "committed";
+    }
+    record.snapshot.updatedAt = new Date().toISOString();
     return clone(record.snapshot);
   }
 
@@ -305,6 +340,9 @@ export class SemanticTransactionStore {
     // but never strand an applied transaction or encourage a duplicate replay.
     if (outcome === "applied") {
       return phase === "commit" ? "committed" : "in_progress";
+    }
+    if (phase === "commit" && outcome === "not_applied") {
+      return "not_applied";
     }
     if (trustedPrepareDispatch) {
       return "in_progress";

@@ -3874,7 +3874,10 @@ describe("runtime integration", () => {
       },
     });
 
-    const verificationObservation = await runtime.inspectBrowser(session.id);
+    const verificationObservation = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+    });
+    expect(verificationObservation.metadata?.textTruncated).toBe(true);
     expect(verificationObservation.observationId).not.toBe(
       commitObservation.observationId,
     );
@@ -3929,6 +3932,119 @@ describe("runtime integration", () => {
       ]),
     );
   }, 15_000);
+
+  it("projects late durable commit settlement back into semantic transaction verification", async () => {
+    const server = await fixture();
+    const { runtime, browser, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/semantic-transfer`,
+    });
+    active.push({ runtime, id: session.id });
+
+    const initial = await runtime.inspectBrowser(session.id);
+    const begun = await runtime.beginSemanticTransaction(session.id, {
+      observationId: initial.observationId,
+      kind: "transfer",
+      sourceTarget: target(initial, "Quarterly report"),
+      destination: {
+        verification: "within_scope",
+        scope: { kind: "list", label: "Archive" },
+      },
+      mechanism: "menu",
+      consequenceKey: "fixture:move:late-semantic-settlement",
+    });
+    await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: initial.observationId,
+      phase: "prepare",
+      action: { kind: "click", target: target(initial, "Quarterly report") },
+      expectedEffects: [
+        {
+          kind: "target_present",
+          target: { name: "Move to Archive", kind: "menuitem" },
+        },
+      ],
+    });
+
+    const commitObservation = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    let dispatches = 0;
+    liveBrowser.interact = async (...args) => {
+      dispatches += 1;
+      return interact(...args);
+    };
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async () => {
+        throw new Error("withhold immediate transaction evidence");
+      },
+    });
+
+    const uncertain = await runtime.advanceSemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: commitObservation.observationId,
+      phase: "commit",
+      action: {
+        kind: "click",
+        target: target(commitObservation, "Move to Archive"),
+      },
+      expectedEffects: [
+        {
+          kind: "target_within_scope",
+          target: { name: "Quarterly report", kind: "button" },
+          scope: { kind: "list", label: "Archive" },
+        },
+      ],
+    });
+    expect(uncertain).toMatchObject({
+      transaction: { status: "uncertain" },
+      receipt: { outcome: "unknown", dispatched: true },
+    });
+    expect(uncertain.transaction).not.toHaveProperty("verification");
+    expect(dispatches).toBe(1);
+    await expect(
+      runtime.verifySemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: commitObservation.observationId,
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: inspect,
+    });
+    const destination = await runtime.inspectBrowser(session.id);
+    const unresolved = await effectJournal.find(
+      session.bootstrapId ?? session.id,
+      session.workspace?.id ?? session.id,
+      begun.consequenceKey,
+    );
+    expect(unresolved).toMatchObject({ state: "unresolved" });
+
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey: begun.consequenceKey,
+        observationId: destination.observationId,
+      }),
+    ).resolves.toMatchObject({ state: "applied", settled: true });
+    expect(dispatches).toBe(1);
+    await expect(
+      runtime.getSemanticTransaction(session.id, begun.transactionId),
+    ).resolves.toMatchObject({ status: "committed" });
+
+    const verified = await runtime.verifySemanticTransaction(session.id, {
+      transactionId: begun.transactionId,
+      observationId: destination.observationId,
+    });
+    expect(verified).toMatchObject({
+      outcome: "applied",
+      transaction: { status: "verified" },
+    });
+    expect(dispatches).toBe(1);
+  }, 20_000);
 
   it("stages trusted clipboard cut from an exactly selected transaction source", async () => {
     const server = await fixture();
@@ -4034,7 +4150,7 @@ describe("runtime integration", () => {
 
   it("verifies a remote transfer from exact source presence plus independent destination context", async () => {
     const server = await fixture();
-    const { runtime } = await harness();
+    const { runtime, browser } = await harness();
     const session = await runtime.startSession({
       mode: "agent",
       startUrl: `${server.url}/semantic-transfer`,
@@ -4086,17 +4202,83 @@ describe("runtime integration", () => {
       ],
     });
 
-    const destinationObservation = await runtime.inspectBrowser(session.id);
+    const destinationObservation = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+    });
     await expect(
       runtime.verifySemanticTransaction(session.id, {
         transactionId: begun.transactionId,
         observationId: destinationObservation.observationId,
       }),
     ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+    await expect(
+      runtime.verifySemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: destinationObservation.observationId,
+        additionalExpectedEffects: [
+          {
+            kind: "target_present",
+            target: { name: "Quarterly report", kind: "button" },
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
 
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const readPageText = liveBrowser.readPageText.bind(liveBrowser);
+    liveBrowser.readPageText = async (...args) => ({
+      ...(await readPageText(...args)),
+      state: "unknown" as const,
+      checkedFrameCount: 0,
+      failedFrames: [{ index: 0, url: destinationObservation.url }],
+    });
+    const firstVerification = await runtime.verifySemanticTransaction(
+      session.id,
+      {
+        transactionId: begun.transactionId,
+        observationId: destinationObservation.observationId,
+        additionalExpectedEffects: [
+          { kind: "text_present", text: "Moved to Archive" },
+        ],
+      },
+    );
+    expect(firstVerification).toMatchObject({
+      outcome: "unknown",
+      transaction: {
+        status: "uncertain",
+        verification: {
+          observationId: destinationObservation.observationId,
+          outcome: "unknown",
+        },
+      },
+    });
+    await expect(
+      runtime.verifySemanticTransaction(session.id, {
+        transactionId: begun.transactionId,
+        observationId: destinationObservation.observationId,
+        additionalExpectedEffects: [
+          { kind: "text_present", text: "Moved to Archive" },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "TRANSACTION_STATE_INVALID" });
+    const replayFence = (
+      runtime as unknown as {
+        consequenceReplayFence: {
+          assertAvailable(sessionId: string, consequenceKey: string): void;
+        };
+      }
+    ).consequenceReplayFence;
+    expect(() =>
+      replayFence.assertAvailable(session.id, begun.consequenceKey),
+    ).not.toThrow();
+
+    liveBrowser.readPageText = readPageText;
+    const retryObservation = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+    });
     const verified = await runtime.verifySemanticTransaction(session.id, {
       transactionId: begun.transactionId,
-      observationId: destinationObservation.observationId,
+      observationId: retryObservation.observationId,
       additionalExpectedEffects: [
         { kind: "text_present", text: "Moved to Archive" },
       ],
