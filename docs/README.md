@@ -10,6 +10,7 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | [Platform Policy](Products/platform-policy.md)                                                      | Product invariants, permission boundaries, persistence scope, and change policy.              |
 | [Product Operating Model](Products/product-operating-model.md)                                      | What users can do, task continuity, attention, modes, and representative journeys.            |
+| [Planning](Planning/README.md)                                                                       | Active implementation sequencing derived from approved Product and Engineering contracts.      |
 | [Logical Domain Model](Engineering/logical-domain-model.md)                                         | Concepts, relationships, ownership, and lifecycle distinctions.                               |
 | [System Architecture and Transactional Design](Engineering/system-architecture-and-transactions.md) | Component boundaries, consistency, action dispatch, and recovery.                             |
 | [Relational Data Model](Engineering/relational-data-model.md)                                       | Target storage responsibilities, constraints, local/portable separation, and migration rules. |
@@ -25,6 +26,8 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Implementation Status](Engineering/implementation-status.md)                                       | Evidence-backed implemented, partial, unimplemented, qualification, and authority boundaries. |
 | [Engineering Agent Environment](Engineering/engineering-agent-environment.md)                       | Repository-owned Codex guidance, safety defaults, verification, and continuation workflow.    |
 | [Repository Convergence Record](Engineering/repository-convergence.md)                              | One-time provenance for preserved worktrees, reconciled source, and final-main accounting.    |
+
+Planning documents are subordinate execution guidance. They may record evidence, open engineering questions, implementation slices, dependencies, and verification requirements, but they do not override Product or Engineering contracts and do not prove implementation status. When investigation changes an approved contract, update the responsible canonical document first and then revise the plan.
 
 There is no partner-facing platform API commitment. The usual API/Partner Integration document is therefore replaced by application and capability contracts. A separate distributed realtime platform, technical workflow engine, and product release-version documents are unnecessary. Small design rationales belong with the responsible document rather than in a second, competing architecture collection.
 
