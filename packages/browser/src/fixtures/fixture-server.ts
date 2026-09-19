@@ -551,6 +551,130 @@ const SEMANTIC_CLIPBOARD_TRANSFER_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
+const virtualizedCollectionHtml = (kind: "list" | "grid") => `<!doctype html>
+<html><head><title>Virtualized ${kind}</title></head><body>
+  <h1>Virtualized ${kind}</h1>
+  <button id="create">Create logical item</button>
+  <button id="rename">Rename logical item</button>
+  <button id="move">Move logical item</button>
+  <button id="remove">Remove logical item</button>
+  <p id="audit" role="status">No collection changes</p>
+  <div id="viewport" tabindex="0" style="height:160px;overflow:auto;border:1px solid" ${
+    kind === "grid"
+      ? 'role="grid" aria-label="Records" aria-rowcount="20"'
+      : 'role="listbox" aria-label="Records"'
+  }>
+    <div id="spacer" style="height:800px;position:relative"></div>
+  </div>
+  <script>
+    const kind = ${JSON.stringify(kind)};
+    const viewport = document.querySelector('#viewport');
+    const spacer = document.querySelector('#spacer');
+    const items = Array.from({ length: 20 }, (_, index) => 'Item ' + String(index + 1).padStart(2, '0'));
+    const rows = Array.from({ length: 4 }, () => {
+      const row = document.createElement('div');
+      row.style.cssText = 'position:absolute;height:40px;left:0;right:0';
+      row.setAttribute('role', kind === 'grid' ? 'row' : 'option');
+      if (kind === 'list') row.setAttribute('aria-setsize', String(items.length));
+      const button = document.createElement('button');
+      row.append(button);
+      spacer.append(row);
+      return row;
+    });
+    const render = () => {
+      const start = Math.min(items.length - rows.length, Math.floor(viewport.scrollTop / 40));
+      rows.forEach((row, offset) => {
+        const index = start + offset;
+        row.style.top = (index * 40) + 'px';
+        row.setAttribute('aria-posinset', String(index + 1));
+        row.setAttribute('aria-setsize', String(items.length));
+        row.querySelector('button').textContent = 'Open ' + items[index];
+      });
+    };
+    viewport.addEventListener('scroll', render, { passive: true });
+    const report = message => {
+      document.querySelector('#audit').textContent = message;
+      render();
+    };
+    document.querySelector('#create').addEventListener('click', () => {
+      items.push('Item 21');
+      spacer.style.height = (items.length * 40) + 'px';
+      viewport.setAttribute('aria-rowcount', String(items.length));
+      report('Created Item 21 outside the current render window');
+    });
+    document.querySelector('#rename').addEventListener('click', () => {
+      items[17] = 'Renamed 18';
+      report('Renamed Item 18 to Renamed 18 outside the current render window');
+    });
+    document.querySelector('#move').addEventListener('click', () => {
+      const [item] = items.splice(16, 1);
+      items.push(item);
+      report('Moved Item 17 to Archive outside the current render window');
+    });
+    document.querySelector('#remove').addEventListener('click', () => {
+      const index = items.indexOf('Item 16');
+      if (index >= 0) items.splice(index, 1);
+      spacer.style.height = (items.length * 40) + 'px';
+      viewport.setAttribute('aria-rowcount', String(items.length));
+      report('Removed Item 16 outside the current render window');
+    });
+    render();
+  </script>
+</body></html>`;
+
+const ALTERNATE_READ_COMMIT_HTML = `<!doctype html>
+<html><head><title>Commit view</title></head><body>
+  <h1>Commit view</h1>
+  <button id="commit">Commit record</button>
+  <script>
+    document.querySelector('#commit').addEventListener('click', () => {
+      localStorage.setItem('alternate-read-record', 'committed');
+      window.__alternateReadDispatches = Number(window.__alternateReadDispatches || 0) + 1;
+    });
+  </script>
+</body></html>`;
+
+const ALTERNATE_READ_HISTORY_HTML = `<!doctype html>
+<html><head><title>History view</title></head><body>
+  <h1>History view</h1>
+  <p id="record-state"></p>
+  <script>
+    document.querySelector('#record-state').textContent =
+      localStorage.getItem('alternate-read-record') === 'committed'
+        ? 'Record committed in authoritative history'
+        : 'No committed record';
+  </script>
+</body></html>`;
+
+const ADAPTIVE_CONTROLS_HTML = `<!doctype html>
+<html><head><title>Adaptive controls</title></head><body>
+  <h1>Adaptive controls</h1>
+  <button id="tools" aria-label="Open tools"><svg aria-hidden="true"><circle r="4"></circle></svg></button>
+  <div id="tools-menu" role="menu" aria-label="Tools" hidden>
+    <button id="open-settings" role="menuitem">Open settings</button>
+  </div>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <h2 id="settings-title">Settings overlay</h2>
+    <button id="apply-setting">Apply setting</button>
+  </dialog>
+  <p id="control-state">Setting unchanged</p>
+  <script>
+    const tools = document.querySelector('#tools');
+    tools.addEventListener('mouseenter', () => {
+      document.querySelector('#tools-menu').hidden = false;
+    });
+    document.querySelector('#open-settings').addEventListener('click', () => {
+      document.querySelector('#settings').showModal();
+    });
+    document.querySelector('#apply-setting').addEventListener('click', () => {
+      const replacement = tools.cloneNode(true);
+      tools.replaceWith(replacement);
+      document.querySelector('#control-state').textContent = 'Setting applied after control replacement';
+      document.querySelector('#settings').close();
+    });
+  </script>
+</body></html>`;
+
 /**
  * Tiny deterministic fixture server for tests and manual demos.
  * Binds to 127.0.0.1 on an ephemeral port and serves the inspection fixture.
@@ -691,6 +815,11 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         "/capability-waves": CAPABILITY_WAVES_HTML,
         "/semantic-transfer": SEMANTIC_TRANSFER_HTML,
         "/semantic-clipboard-transfer": SEMANTIC_CLIPBOARD_TRANSFER_HTML,
+        "/virtualized-list": virtualizedCollectionHtml("list"),
+        "/virtualized-grid": virtualizedCollectionHtml("grid"),
+        "/alternate-read-commit": ALTERNATE_READ_COMMIT_HTML,
+        "/alternate-read-history": ALTERNATE_READ_HISTORY_HTML,
+        "/adaptive-controls": ADAPTIVE_CONTROLS_HTML,
         ...LOCAL_PERCEPTION_FIXTURES,
       }[request.url ?? "/"] ?? inspectionHtml;
     response.writeHead(typeof fixture === "string" ? 200 : fixture.status, {

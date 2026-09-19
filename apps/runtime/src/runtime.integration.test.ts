@@ -3102,6 +3102,123 @@ describe("runtime integration", () => {
     });
   }, 15_000);
 
+  it("settles one dispatch from an alternate read surface after human takeover and return", async () => {
+    const server = await fixture();
+    const { runtime, browser, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/alternate-read-commit`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    const interact = liveBrowser.interact.bind(liveBrowser);
+    let dispatches = 0;
+    let reconciliationReads = 0;
+    liveBrowser.interact = async (...args) => {
+      dispatches += 1;
+      return interact(...args);
+    };
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async () => {
+        throw new Error("withhold immediate commit-surface evidence");
+      },
+    });
+    const consequenceKey = "fixture:alternate-read:committed";
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Commit record"),
+      },
+      expectedEffects: [
+        {
+          kind: "text_present",
+          text: "Record committed in authoritative history",
+        },
+      ],
+      consequential: true,
+      consequenceKey,
+    });
+    expect(receipt).toMatchObject({ outcome: "unknown", dispatched: true });
+    expect(dispatches).toBe(1);
+
+    Object.defineProperty(liveBrowser, "inspect", {
+      configurable: true,
+      value: async (...args: Parameters<typeof inspect>) => {
+        reconciliationReads += 1;
+        return inspect(...args);
+      },
+    });
+    const unresolved = await effectJournal.find(
+      session.bootstrapId ?? session.id,
+      session.workspace?.id ?? session.id,
+      consequenceKey,
+    );
+    expect(unresolved).toMatchObject({
+      state: "unresolved",
+      verificationBasis: {
+        schemaVersion: 1,
+        effects: [
+          {
+            effect: {
+              kind: "text_present",
+              text: "Record committed in authoritative history",
+            },
+            predecessorState: "contradicted",
+          },
+        ],
+      },
+    });
+
+    await runtime.openPage(session.id, {
+      url: `${server.url}/alternate-read-history`,
+    });
+    const beforeTakeover = await runtime.inspectBrowser(session.id);
+    expect(beforeTakeover.text).toContain(
+      "Record committed in authoritative history",
+    );
+    await runtime.requestHuman(session.id, {
+      reason: "Qualify reconciliation across a control transition.",
+    });
+    const taken = await runtime.takeHumanControl(
+      session.id,
+      await currentControlAuthority(runtime, session.id),
+    );
+    await runtime.returnAgentControl(session.id, controlAuthority(taken));
+
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey,
+        observationId: beforeTakeover.observationId,
+      }),
+    ).rejects.toMatchObject({
+      code: expect.stringMatching(/INSPECTION_REQUIRED|OBSERVATION_STALE/),
+    });
+
+    const fresh = await runtime.inspectBrowser(session.id);
+    await expect(
+      runtime.reconcileConsequentialEffect(session.id, {
+        consequenceKey,
+        observationId: fresh.observationId,
+      }),
+    ).resolves.toMatchObject({
+      effectId: unresolved!.effectId,
+      state: "applied",
+      settled: true,
+    });
+    expect(dispatches).toBe(1);
+    expect(reconciliationReads).toBe(3);
+    await expect(
+      effectJournal.findById(unresolved!.effectId),
+    ).resolves.toMatchObject({
+      state: "applied",
+      verificationBasis: unresolved!.verificationBasis,
+    });
+  }, 20_000);
+
   it("settles authoritative late contradiction as not applied and leaves pre-existing success unresolved", async () => {
     const server = await fixture();
     const { runtime, effectJournal } = await harness();

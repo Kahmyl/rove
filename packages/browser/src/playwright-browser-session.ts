@@ -110,18 +110,25 @@ interface TargetCoverageSummary {
   registeredTargetCount?: number;
   acquisitionErrors?: unknown[];
   semanticOutcomes?: Record<string, number>;
+  virtualizedContentIncomplete?: boolean;
 }
 
 function targetCoverageIncompleteReasons(
   targetCoverage: TargetCoverageSummary | undefined,
-): Array<"target_acquisition_failed" | "semantic_targets_unaccounted"> {
+): Array<
+  | "target_acquisition_failed"
+  | "semantic_targets_unaccounted"
+  | "virtualized_content_unrendered"
+> {
   if (targetCoverage === undefined) return [];
 
   const accountedSemanticTargets = Object.values(
     targetCoverage.semanticOutcomes ?? {},
   ).reduce((sum, count) => sum + count, 0);
   const reasons: Array<
-    "target_acquisition_failed" | "semantic_targets_unaccounted"
+    | "target_acquisition_failed"
+    | "semantic_targets_unaccounted"
+    | "virtualized_content_unrendered"
   > = [];
   if ((targetCoverage.acquisitionErrors?.length ?? 0) > 0) {
     reasons.push("target_acquisition_failed");
@@ -130,6 +137,9 @@ function targetCoverageIncompleteReasons(
     (targetCoverage.semanticInteractiveCount ?? 0) > accountedSemanticTargets
   ) {
     reasons.push("semantic_targets_unaccounted");
+  }
+  if (targetCoverage.virtualizedContentIncomplete === true) {
+    reasons.push("virtualized_content_unrendered");
   }
   return reasons;
 }
@@ -1504,7 +1514,9 @@ export class PlaywrightBrowserSession implements BrowserSession {
     }));
     const initialFrameSet = new Set(initialFrames.map(({ frame }) => frame));
     let frameNavigatedDuringRead = false;
-    const recordFrameNavigation = (frame: (typeof initialFrames)[number]["frame"]) => {
+    const recordFrameNavigation = (
+      frame: (typeof initialFrames)[number]["frame"],
+    ) => {
       if (initialFrameSet.has(frame)) frameNavigatedDuringRead = true;
     };
     page.on("framenavigated", recordFrameNavigation);

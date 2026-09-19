@@ -241,6 +241,109 @@ describe("PlaywrightBrowserSession inspection", () => {
     });
   });
 
+  it.each(["list", "grid"] as const)(
+    "tracks recycled %s content without treating the render window as complete authority",
+    async (kind) => {
+      const server = await startServer();
+      const session = await startSession();
+      await session.navigate(`${server.url}/virtualized-${kind}`);
+
+      let observation = await session.inspect();
+      const authoritative = await session.readObservation(
+        observation.observationId,
+      );
+      expect(authoritative.targetEvidence).toEqual({
+        source: "canonical_registry",
+        completeness: "incomplete",
+        incompleteReasons: ["virtualized_content_unrendered"],
+      });
+      expect(observation.metadata).toMatchObject({
+        targetCoverage: {
+          virtualizedContentIncomplete: true,
+          virtualizedLogicalItemCount: 20,
+          virtualizedRenderedItemCount: 4,
+        },
+      });
+
+      const recycled = observation.targets?.find(
+        (candidate) => candidate.name === "Open Item 01",
+      );
+      expect(recycled).toBeDefined();
+      const viewportTarget = observation.targets?.find(
+        (candidate) => candidate.name === "Records",
+      );
+      expect(viewportTarget).toBeDefined();
+      await session.interact(
+        {
+          kind: "precise_scroll",
+          target: {
+            pageId: observation.pageId,
+            revision: observation.revision,
+            ref: viewportTarget!.ref,
+          },
+          deltaX: 0,
+          deltaY: 600,
+        },
+        { observationId: observation.observationId },
+      );
+      observation = await waitForInspectionText(session, "Open Item 16");
+      expect(
+        observation.targets?.some(
+          (candidate) => candidate.name === "Open Item 16",
+        ),
+      ).toBe(true);
+      await expect(
+        session.interact(
+          {
+            kind: "click",
+            target: {
+              pageId: authoritative.pageId,
+              revision: authoritative.revision,
+              ref: recycled!.ref,
+            },
+          },
+          { observationId: authoritative.observationId },
+        ),
+      ).rejects.toMatchObject({
+        code: expect.stringMatching(/TARGET_STALE|OBSERVATION_STALE/),
+      });
+
+      for (const [action, proposition] of [
+        [
+          "Create logical item",
+          "Created Item 21 outside the current render window",
+        ],
+        [
+          "Rename logical item",
+          "Renamed Item 18 to Renamed 18 outside the current render window",
+        ],
+        [
+          "Move logical item",
+          "Moved Item 17 to Archive outside the current render window",
+        ],
+        [
+          "Remove logical item",
+          "Removed Item 16 outside the current render window",
+        ],
+      ] as const) {
+        observation = await session.inspect();
+        const control = observation.targets?.find(
+          (candidate) => candidate.name === action,
+        );
+        expect(control).toBeDefined();
+        await session.click({
+          pageId: observation.pageId,
+          revision: observation.revision,
+          ref: control!.ref,
+        });
+        const successor = await session.inspect({ maxTextChars: 1 });
+        await expect(
+          session.readPageText(successor.observationId, proposition),
+        ).resolves.toMatchObject({ state: "present" });
+      }
+    },
+  );
+
   it("fences an aborted inspection before it can publish late target authority", async () => {
     const server = await startServer();
     const session = await startSession();
@@ -349,7 +452,10 @@ describe("PlaywrightBrowserSession inspection", () => {
     );
 
     await expect(
-      session.readPageText(observation.observationId, "cross origin frame loaded"),
+      session.readPageText(
+        observation.observationId,
+        "cross origin frame loaded",
+      ),
     ).resolves.toMatchObject({
       observationId: observation.observationId,
       query: "cross origin frame loaded",

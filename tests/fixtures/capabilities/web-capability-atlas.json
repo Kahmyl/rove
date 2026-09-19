@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-09-07",
+  "reviewedAt": "2026-09-19",
   "scope": "Desktop Chromium web interaction through Rove-owned Playwright authority. The atlas covers standardized browser primitives and common ARIA widget contracts; site-specific business workflows remain compositions of these capabilities.",
   "pipelineDimensions": [
     "perception",
@@ -396,9 +396,9 @@
       "name": "Virtualized and recycled collections",
       "priority": "P0",
       "risk": "observe",
-      "pipeline": "PPPPPPP",
+      "pipeline": "PPPPPPC",
       "disposition": "upgrade",
-      "experiment": "Recycled rows, duplicate labels, delayed materialization, and list reordering.",
+      "experiment": "Recycled listbox and grid rows, duplicate labels, delayed materialization, and list reordering.",
       "acceptance": "A recycled DOM node cannot retain the identity of its previous logical item.",
       "sources": ["aria", "cssom-view"]
     },

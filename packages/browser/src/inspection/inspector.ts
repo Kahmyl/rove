@@ -64,6 +64,68 @@ interface ResolvedInspectOptions {
   targetKinds?: TargetKind[];
 }
 
+interface VirtualizedContentCoverage {
+  incomplete: boolean;
+  logicalItemCount: number;
+  renderedItemCount: number;
+}
+
+async function readVirtualizedContentCoverage(
+  frame: Frame,
+): Promise<VirtualizedContentCoverage> {
+  return frame.evaluate(() => {
+    const partialCollections: Array<{
+      logicalItemCount: number;
+      renderedItemCount: number;
+    }> = [];
+
+    for (const item of Array.from(
+      document.querySelectorAll<HTMLElement>("[aria-setsize]"),
+    )) {
+      const logicalItemCount = Number(item.getAttribute("aria-setsize"));
+      if (!Number.isInteger(logicalItemCount) || logicalItemCount < 1) continue;
+      const parent = item.parentElement;
+      if (parent === null) continue;
+      const role = item.getAttribute("role");
+      const renderedItemCount = Array.from(parent.children).filter(
+        (candidate) =>
+          candidate instanceof HTMLElement &&
+          candidate.getAttribute("aria-setsize") === String(logicalItemCount) &&
+          candidate.getAttribute("role") === role,
+      ).length;
+      if (renderedItemCount < logicalItemCount) {
+        partialCollections.push({ logicalItemCount, renderedItemCount });
+      }
+    }
+
+    for (const grid of Array.from(
+      document.querySelectorAll<HTMLElement>('[role="grid"][aria-rowcount]'),
+    )) {
+      const logicalItemCount = Number(grid.getAttribute("aria-rowcount"));
+      if (!Number.isInteger(logicalItemCount) || logicalItemCount < 1) continue;
+      const renderedItemCount = grid.querySelectorAll('[role="row"]').length;
+      if (renderedItemCount < logicalItemCount) {
+        partialCollections.push({ logicalItemCount, renderedItemCount });
+      }
+    }
+
+    return partialCollections.reduce<VirtualizedContentCoverage>(
+      (summary, collection) => ({
+        incomplete: true,
+        logicalItemCount: Math.max(
+          summary.logicalItemCount,
+          collection.logicalItemCount,
+        ),
+        renderedItemCount: Math.max(
+          summary.renderedItemCount,
+          collection.renderedItemCount,
+        ),
+      }),
+      { incomplete: false, logicalItemCount: 0, renderedItemCount: 0 },
+    );
+  });
+}
+
 export function resolveInspectOptions(
   options: InspectOptions = {},
 ): ResolvedInspectOptions {
@@ -161,9 +223,7 @@ export class PageInspector {
     return {
       state: classifyFocusedTextRead(
         query,
-        succeeded
-          .map((part) => part.text)
-          .filter((text) => text.length > 0),
+        succeeded.map((part) => part.text).filter((text) => text.length > 0),
         failed.length,
       ),
       frameCount: frames.length,
@@ -266,6 +326,15 @@ export class PageInspector {
             acquisitionErrors.push("accessibility_recovery_failed");
           }
 
+          const virtualizedContent = await readVirtualizedContentCoverage(
+            frame.frame,
+          ).catch(() => ({
+            incomplete: false,
+            logicalItemCount: 0,
+            renderedItemCount: 0,
+          }));
+          assertCurrent();
+
           const discoveredCandidates = [...primary, ...recovery.recovered];
           const targetSnapshots = await readTargetSnapshots(
             frame.frame,
@@ -310,6 +379,7 @@ export class PageInspector {
             excludedByReason,
             acquisitionErrors,
             semanticMarkers,
+            virtualizedContent,
             targetSnapshots: targetSnapshots ?? new Map(),
           };
         }),
@@ -508,6 +578,20 @@ export class PageInspector {
           semanticAmbiguous -
           semanticNoDomBinding,
       );
+      const virtualizedCoverage = acquired.reduce<VirtualizedContentCoverage>(
+        (summary, frame) => ({
+          incomplete: summary.incomplete || frame.virtualizedContent.incomplete,
+          logicalItemCount: Math.max(
+            summary.logicalItemCount,
+            frame.virtualizedContent.logicalItemCount,
+          ),
+          renderedItemCount: Math.max(
+            summary.renderedItemCount,
+            frame.virtualizedContent.renderedItemCount,
+          ),
+        }),
+        { incomplete: false, logicalItemCount: 0, renderedItemCount: 0 },
+      );
 
       metadata.targetsTruncated = targetsTruncated;
       metadata.targetCoverage = {
@@ -529,6 +613,14 @@ export class PageInspector {
         exposedTargetCount: result.targets.length,
         excludedByReason,
         acquisitionErrors: acquired.flatMap((frame) => frame.acquisitionErrors),
+        ...(virtualizedCoverage.incomplete
+          ? {
+              virtualizedContentIncomplete: true,
+              virtualizedLogicalItemCount: virtualizedCoverage.logicalItemCount,
+              virtualizedRenderedItemCount:
+                virtualizedCoverage.renderedItemCount,
+            }
+          : {}),
         semanticOutcomes: {
           targeted: semanticTargeted,
           hidden: semanticHidden,
