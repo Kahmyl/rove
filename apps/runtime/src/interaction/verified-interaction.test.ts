@@ -288,6 +288,36 @@ describe("verified interaction semantics", () => {
     ).toEqual([expect.objectContaining({ state: "unresolved" })]);
   });
 
+  it("does not accept pre-existing focused text as causal proof", () => {
+    const predecessor = observation(
+      "before-focused",
+      "https://example.test",
+      "R",
+    );
+    predecessor.metadata = { textTruncated: true };
+    const successor = observation(
+      "after-focused",
+      "https://example.test",
+      "R",
+    );
+    successor.metadata = { textTruncated: true };
+    const query = "Rove Action Fixture";
+
+    const effects = verifyExpectedEffects(
+      [{ kind: "text_present", text: query }],
+      predecessor,
+      successor,
+      undefined,
+      [],
+      [],
+      new Map([[query, { state: "present" as const }]]),
+      new Map([[query, { state: "present" as const }]]),
+    );
+
+    expect(effects).toEqual([expect.objectContaining({ state: "unresolved" })]);
+    expect(classifyActionOutcome(effects)).toBe("unknown");
+  });
+
   it("requires available predecessor text for whole-page effect suitability", () => {
     const predecessor = observation("before", "https://example.test", "unused");
     delete predecessor.text;

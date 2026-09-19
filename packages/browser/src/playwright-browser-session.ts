@@ -30,7 +30,11 @@ import {
   type DialogDirective,
   type ActionPhaseRecord,
 } from "@rove/protocol";
-import type { BrowserInteractionContext, BrowserSession } from "./engine.js";
+import type {
+  BrowserInteractionContext,
+  BrowserSession,
+  FocusedPageTextRead,
+} from "./engine.js";
 import {
   InteractionDispatchError,
   InteractionNotDispatchedError,
@@ -1483,6 +1487,62 @@ export class PlaywrightBrowserSession implements BrowserSession {
           incompleteReasons.length === 0 ? "complete" : "incomplete",
         ...(incompleteReasons.length === 0 ? {} : { incompleteReasons }),
       },
+    };
+  }
+
+  async readPageText(
+    observationId: string,
+    query: string,
+  ): Promise<FocusedPageTextRead> {
+    this.ensureOpen();
+    const authority = await this.assertObservationCurrent(observationId);
+    const page = this.pageRegistry.pageFor(authority.pageId);
+    const initialFrames = page.frames().map((frame) => ({
+      frame,
+      url: frame.url(),
+      name: frame.name(),
+    }));
+    const initialFrameSet = new Set(initialFrames.map(({ frame }) => frame));
+    let frameNavigatedDuringRead = false;
+    const recordFrameNavigation = (frame: (typeof initialFrames)[number]["frame"]) => {
+      if (initialFrameSet.has(frame)) frameNavigatedDuringRead = true;
+    };
+    page.on("framenavigated", recordFrameNavigation);
+
+    let result;
+    try {
+      result = await this.inspector.readTextProposition(page, query);
+    } finally {
+      page.off("framenavigated", recordFrameNavigation);
+    }
+
+    const finalFrames = page.frames();
+    const framesChanged =
+      initialFrames.length !== finalFrames.length ||
+      initialFrames.some(
+        (initial, index) =>
+          finalFrames[index] !== initial.frame ||
+          initial.frame.url() !== initial.url ||
+          initial.frame.name() !== initial.name,
+      );
+    if (frameNavigatedDuringRead || framesChanged) {
+      throw new RoveError({
+        code: "PAGE_CHANGED",
+        message: "The browser frames changed during the focused text read.",
+        retryable: true,
+      });
+    }
+
+    await this.assertObservationCurrent(observationId);
+
+    return {
+      observationId,
+      pageId: authority.pageId,
+      revision: authority.revision,
+      mutationVersion: authority.mutationVersion,
+      url: authority.url,
+      query,
+      ...result,
     };
   }
 

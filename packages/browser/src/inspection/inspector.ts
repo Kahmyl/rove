@@ -35,7 +35,11 @@ import {
 
 import { readTargetSnapshots } from "./perceived-control.js";
 
-import { extractVisibleText } from "./text-extractor.js";
+import {
+  classifyFocusedTextRead,
+  extractCompleteVisibleText,
+  extractVisibleText,
+} from "./text-extractor.js";
 
 const DEFAULT_MAX_TEXT_CHARS = 20_000;
 const DEFAULT_TARGET_LIMIT = 200;
@@ -117,6 +121,58 @@ export class PageInspector {
   clear(): void {
     this.registries.clear();
     this.canonicalTargets.clear();
+  }
+
+  async readTextProposition(
+    page: Page,
+    query: string,
+    assertCurrent: () => void = () => undefined,
+  ): Promise<{
+    state: "present" | "absent" | "unknown";
+    frameCount: number;
+    checkedFrameCount: number;
+    failedFrames: Array<{ index: number; url: string }>;
+  }> {
+    assertCurrent();
+    const frames = inspectableFrames(page);
+    const parts = await Promise.all(
+      frames.map(async (frame) => {
+        try {
+          const extracted = await extractCompleteVisibleText(frame.frame);
+          assertCurrent();
+          return {
+            frame,
+            text: decorateFrameText(frame, extracted.text),
+            succeeded: true as const,
+          };
+        } catch {
+          assertCurrent();
+          return { frame, text: "", succeeded: false as const };
+        }
+      }),
+    );
+    assertCurrent();
+
+    const succeeded = parts.filter((part) => part.succeeded);
+    const failed = parts.filter((part) => !part.succeeded);
+
+    // A match in any successfully-read frame is sound even when an unrelated
+    // frame could not be inspected. Absence requires every relevant frame.
+    return {
+      state: classifyFocusedTextRead(
+        query,
+        succeeded
+          .map((part) => part.text)
+          .filter((text) => text.length > 0),
+        failed.length,
+      ),
+      frameCount: frames.length,
+      checkedFrameCount: succeeded.length,
+      failedFrames: failed.map(({ frame }) => ({
+        index: frame.index,
+        url: frame.url,
+      })),
+    };
   }
 
   async inspect(
@@ -568,21 +624,8 @@ async function extractFrameText(
         truncated: false,
       }));
 
-      if (extracted.text.length === 0) {
-        return extracted;
-      }
-
-      if (frame.main) {
-        return extracted;
-      }
-
-      const label =
-        frame.name.length > 0
-          ? `Frame ${frame.index}: ${frame.name}`
-          : `Frame ${frame.index}`;
-
       return {
-        text: `[${label}]\n${extracted.text}`,
+        text: decorateFrameText(frame, extracted.text),
         truncated: extracted.truncated,
       };
     }),
@@ -600,4 +643,15 @@ async function extractFrameText(
     text: truncated ? text.slice(0, maxTextChars) : text,
     truncated,
   };
+}
+
+function decorateFrameText(frame: InspectableFrame, text: string): string {
+  if (text.length === 0 || frame.main) return text;
+
+  const label =
+    frame.name.length > 0
+      ? `Frame ${frame.index}: ${frame.name}`
+      : `Frame ${frame.index}`;
+
+  return `[${label}]\n${text}`;
 }

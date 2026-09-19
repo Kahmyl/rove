@@ -774,6 +774,13 @@ class GroupBrowserSession implements BrowserSession {
     this.assertPage(result.pageId);
     return result;
   }
+  async readPageText(observationId: string, query: string) {
+    const result = await this.read(() =>
+      this.host.browser.readPageText(observationId, query),
+    );
+    this.assertPage(result.pageId);
+    return result;
+  }
   readTargetFiles(target: TargetReference) {
     this.assertPage(target.pageId);
     return this.read(() => this.host.browser.readTargetFiles(target));

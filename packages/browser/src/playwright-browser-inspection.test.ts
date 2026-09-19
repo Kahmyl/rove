@@ -337,6 +337,36 @@ describe("PlaywrightBrowserSession inspection", () => {
 
     expect((await session.inspect()).text).toContain("Same frame clicked");
   });
+
+  it("reads an observation-bound exact text proposition across inspected frames", async () => {
+    const server = await startServer();
+    const session = await startSession();
+
+    await session.navigate(`${server.url}/iframes`);
+    const observation = await waitForInspectionText(
+      session,
+      "cross origin frame loaded",
+    );
+
+    await expect(
+      session.readPageText(observation.observationId, "cross origin frame loaded"),
+    ).resolves.toMatchObject({
+      observationId: observation.observationId,
+      query: "cross origin frame loaded",
+      state: "present",
+      frameCount: 3,
+      checkedFrameCount: 3,
+      failedFrames: [],
+    });
+    await expect(
+      session.readPageText(observation.observationId, "not rendered anywhere"),
+    ).resolves.toMatchObject({ state: "absent" });
+
+    await session.navigate(`${server.url}/history-a`);
+    await expect(
+      session.readPageText(observation.observationId, "Iframe fixture"),
+    ).rejects.toMatchObject({ code: "OBSERVATION_STALE" });
+  });
 });
 
 describe("semantic inspection acceptance", () => {
