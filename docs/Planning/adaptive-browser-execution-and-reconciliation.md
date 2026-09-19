@@ -185,9 +185,55 @@ No durable `reconciling` state is required for correctness. If reconciliation is
 
 ### 3. Make perception adaptive
 
+**Investigation status:** Complete for the current implementation baseline. Implementation remains open.
+
+The audit shows that perception is not broadly missing. Existing primitives are already substantial:
+
+- inspections expose text/target truncation and detailed target-coverage metadata;
+- the browser retains a canonical registered target set behind presentation-limited `targetLimit` output;
+- `resolveTarget` and `readObservation` can use those canonical targets even when the agent-facing inspection exposes only a subset;
+- page-state perception already distinguishes readiness, instability, authentication, human verification, access restrictions, and other hard boundaries;
+- bounded scroll/history/navigation reads already exist;
+- screenshot capture already supports viewport, full-page, target, and region modes, can bind to an exact observation authority, persists durable evidence, and is returned through an image-capable MCP tool result.
+
+The missing capability is **evidence suitability and read-strategy selection**. Runtime currently learns that text or target evidence was inadequate only inside post-dispatch expected-effect verification. There is no general pre-dispatch check that asks whether the selected proof surface can authoritatively establish the intended effect.
+
+The audit also establishes an important distinction:
+
+- **target presentation truncation is not necessarily target-evidence loss.** The PageInspector registers the full canonical eligible target set before slicing the agent-facing presentation. Internal `readObservation`/target resolution can therefore recover target truth without increasing the model-visible target list.
+- **text truncation is actual observation loss.** The stored observation contains the bounded extracted text, and there is no focused text-query/read primitive today. Raising the global text budget can help only until its hard bound and is not a scalable replacement for focused evidence.
+
+Do not solve this by indiscriminately raising text/target limits. Larger agent-visible observations increase context cost and still fail on sufficiently large or virtualized surfaces.
+
+#### Slice 3A — evidence suitability gate and canonical target verification
+
+This is the first implementation slice.
+
+1. Reuse the canonical target registry for Runtime verification. A successor returned by `inspect` may be presentation-limited, so Runtime should obtain the authoritative observation for verification rather than treating `targetsTruncated` alone as loss of canonical target truth.
+2. Represent whether the authoritative target set is complete enough for absence/presence proof separately from whether the agent-facing target presentation was truncated. Acquisition errors or unaccounted semantic controls must remain uncertainty.
+3. Add a pure expected-effect evidence-suitability assessment before consequential dispatch. At minimum, page-text effects backed by a known-truncated predecessor must be classified as requiring stronger evidence instead of being allowed to cross the mutation boundary and deterministically become unresolved.
+4. Use the existing pre-dispatch `INSPECTION_REQUIRED` boundary with structured details for this first slice rather than inventing another error/lifecycle. It must be provably pre-dispatch and safe to follow with read-only perception work.
+5. Preserve all existing action authorization, target freshness, consequence identity, replay fencing, and effect-journal behavior.
+
+Required regression evidence for Slice 3A:
+
+- a presentation-limited target list can still verify an exact target effect from canonical target evidence when target acquisition itself is complete;
+- target acquisition errors/incompleteness do not get upgraded to certainty;
+- a consequential `text_present`/`text_absent` request whose predecessor text is already truncated is refused before mutation dispatch;
+- the same verification remains admissible when its predecessor text is complete;
+- the motivating Drive-shaped failure therefore cannot dispatch with a proof surface Rove already knows is incapable of establishing the effect.
+
+Slice 3A deliberately does **not** automate screenshot interpretation or add a new browser planner.
+
+#### Slice 3B — focused read escalation
+
+After Slice 3A is proven, add only the smallest missing read capability needed to avoid pushing verifier mechanics back onto Codex. The current likely gap is a bounded focused text/proposition read that can answer a requested presence/absence proposition without materializing the entire page text. Re-evaluate the exact API after 3A rather than pre-committing to `textQuery`, a new inspect mode, or a separate tool.
+
+Existing `resolveTarget`, structural scopes, scrolling, navigation, and screenshot/vision should be composed before adding overlapping primitives.
+
 Use observation metadata as control input rather than diagnostics only.
 
-At minimum, the browser capability must be able to respond to:
+At minimum, the browser capability must ultimately be able to respond to:
 
 - truncated text;
 - truncated/excluded targets;
@@ -197,7 +243,7 @@ At minimum, the browser capability must be able to respond to:
 - state visible only in another page region or view;
 - structural evidence insufficient for visual-only controls.
 
-Candidate escalation mechanisms include targeted/scoped inspection, higher or differently bounded observation, scroll/search, fresh observation after settling, screenshot/vision, and read-only navigation to an authoritative view.
+Candidate escalation mechanisms include canonical target reads, focused inspection, scroll/search, fresh observation after settling, screenshot/vision, and read-only navigation to an authoritative view.
 
 The implementation should choose the cheapest reliable evidence route; no mandatory paid perception service is introduced.
 
