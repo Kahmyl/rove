@@ -121,6 +121,21 @@ export interface TaskCompletedHandoff {
   attention: NativeAttentionTruth;
 }
 
+export interface TaskCodexReconciliationDiagnostic {
+  trigger:
+    | "event_delivery_failure"
+    | "reconnect"
+    | "startup"
+    | "authority_contradiction"
+    | "explicit_read";
+  outcome: "scheduled" | "succeeded" | "unresolved";
+  threadId: string;
+  attempt: number;
+  observedAt: string;
+  eventFamily?: string;
+  errorCategory?: string;
+}
+
 export interface TaskMessageDeliveryEvidence {
   operationId: string;
   threadId: string;
@@ -221,6 +236,10 @@ export type TaskEvent =
       delivery: TaskMessageDeliveryEvidence;
     })
   | (TaskEventBase & {
+      type: "codex_reconciliation_observed";
+      diagnostic: TaskCodexReconciliationDiagnostic;
+    })
+  | (TaskEventBase & {
       type: "runtime_inventory_observed";
       runtime: NativeRuntimeTruth;
     })
@@ -300,6 +319,9 @@ export interface TaskAggregate {
   conversation: {
     items: Readonly<Record<string, TaskConversationItem>>;
     turnOrder: readonly string[];
+    terminalTurns?: Readonly<
+      Record<string, "completed" | "failed" | "interrupted">
+    >;
   };
   messageDeliveries: Readonly<Record<string, TaskMessageDeliveryEvidence>>;
   requestedOperation: NativeRequestedOperation;
@@ -308,6 +330,7 @@ export interface TaskAggregate {
     Record<string, { generation: number; position: number }>
   >;
   recoveryRequired: string | null;
+  codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
 }
 
 export interface TaskProjection {
@@ -324,6 +347,7 @@ export interface TaskProjection {
   conversation: TaskAggregate["conversation"];
   messageDeliveries: TaskAggregate["messageDeliveries"];
   recoveryRequired: string | null;
+  codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
 }
 
 export type TaskCommandExecutionClass =
@@ -555,12 +579,13 @@ export function emptyTaskAggregate(taskId: string): TaskAggregate {
     freshInspection: null,
     attachment: { ready: true, attachmentIds: [] },
     capabilityFingerprint: null,
-    conversation: { items: {}, turnOrder: [] },
+    conversation: { items: {}, turnOrder: [], terminalTurns: {} },
     messageDeliveries: {},
     requestedOperation: { type: "observe", taskId },
     processorGeneration: 1,
     sourcePositions: {},
     recoveryRequired: null,
+    codexReconciliation: [],
   };
 }
 
@@ -1106,6 +1131,8 @@ export function foldTaskEvent(
     current ?? emptyTaskAggregate(event.taskId),
   );
   aggregate.messageDeliveries ??= {};
+  aggregate.conversation.terminalTurns ??= {};
+  aggregate.codexReconciliation ??= [];
   if (aggregate.taskId !== event.taskId)
     throw new Error("Task event targets a different aggregate.");
   const sourceKey = `${event.source.kind}:${event.source.id}`;
@@ -1155,12 +1182,42 @@ export function foldTaskEvent(
       aggregate.codex = structuredClone(event.thread);
       if (event.codexSessionId) aggregate.codexSessionId = event.codexSessionId;
       break;
-    case "codex_turn_observed":
+    case "codex_turn_observed": {
       if (
         aggregate.codex.threadId &&
         event.threadId !== aggregate.codex.threadId
       )
         throw new Error("Codex turn targets a different thread.");
+      if (
+        event.turn.turn === "active" &&
+        event.turn.turnId &&
+        aggregate.conversation.terminalTurns?.[event.turn.turnId]
+      )
+        break;
+      const terminalTurn =
+        event.turn.turn === "completed" ||
+        event.turn.turn === "failed" ||
+        event.turn.turn === "interrupted"
+          ? event.turn.turn
+          : undefined;
+      const latestTurnId = aggregate.conversation.turnOrder.at(-1);
+      if (
+        terminalTurn !== undefined &&
+        event.turn.turnId &&
+        ((aggregate.codex.turnId &&
+          aggregate.codex.turnId !== event.turn.turnId) ||
+          (latestTurnId && latestTurnId !== event.turn.turnId))
+      ) {
+        aggregate.conversation.terminalTurns = {
+          ...aggregate.conversation.terminalTurns,
+          [event.turn.turnId]: terminalTurn,
+        };
+        break;
+      }
+      if (event.turn.turn === "active" && event.turn.turnId)
+        aggregate.conversation.turnOrder = [
+          ...new Set([...aggregate.conversation.turnOrder, event.turn.turnId]),
+        ].slice(-64);
       aggregate.codex = {
         availability: aggregate.codex.availability,
         threadExists: true,
@@ -1172,9 +1229,17 @@ export function foldTaskEvent(
         runtimeStatus: event.turn.runtimeStatus,
         archived: aggregate.codex.archived,
         turn: event.turn.turn,
-        ...(event.turn.turnId ? { turnId: event.turn.turnId } : {}),
+        ...(event.turn.turn === "active" && event.turn.turnId
+          ? { turnId: event.turn.turnId }
+          : {}),
       };
+      if (terminalTurn !== undefined && event.turn.turnId)
+        aggregate.conversation.terminalTurns = {
+          ...aggregate.conversation.terminalTurns,
+          [event.turn.turnId]: terminalTurn,
+        };
       break;
+    }
     case "codex_item_observed":
       if (
         aggregate.codex.threadId &&
@@ -1183,15 +1248,33 @@ export function foldTaskEvent(
         throw new Error("Codex item targets a different thread.");
       if (event.item) {
         const existingItem = aggregate.conversation.items[event.item.id];
-        const timedItem: TaskConversationItem = {
-          ...structuredClone(event.item),
-          startedAt: existingItem?.startedAt ?? event.observedAt,
-          ...(event.terminal || event.item.status === "completed"
-            ? { completedAt: event.observedAt }
-            : existingItem?.completedAt
-              ? { completedAt: existingItem.completedAt }
-              : {}),
-        };
+        if (existingItem?.status === "completed") {
+          if (event.item.status === "started") {
+            if (!event.completedHandoff) break;
+          }
+          const stable = (item: TaskConversationItem) => {
+            const value = { ...item };
+            delete value.startedAt;
+            delete value.completedAt;
+            return canonical(value);
+          };
+          if (stable(existingItem) !== stable(event.item))
+            throw new Error(
+              "Conflicting completed Codex item content for one identity.",
+            );
+        }
+        const timedItem: TaskConversationItem =
+          existingItem?.status === "completed"
+            ? existingItem
+            : {
+                ...structuredClone(event.item),
+                startedAt: existingItem?.startedAt ?? event.observedAt,
+                ...(event.terminal || event.item.status === "completed"
+                  ? { completedAt: event.observedAt }
+                  : existingItem?.completedAt
+                    ? { completedAt: existingItem.completedAt }
+                    : {}),
+              };
         const items = {
           ...aggregate.conversation.items,
           [event.item.id]: timedItem,
@@ -1204,6 +1287,7 @@ export function foldTaskEvent(
           turnOrder: [
             ...new Set([...aggregate.conversation.turnOrder, event.turnId]),
           ].slice(-64),
+          terminalTurns: aggregate.conversation.terminalTurns ?? {},
         };
         if (
           event.source.kind === "codex" &&
@@ -1220,6 +1304,22 @@ export function foldTaskEvent(
           });
       }
       if (event.completedHandoff) {
+        const existingGeneration = aggregate.continuation.generation ?? -1;
+        if (existingGeneration > event.completedHandoff.handoffGeneration)
+          break;
+        if (
+          existingGeneration === event.completedHandoff.handoffGeneration &&
+          aggregate.continuation.status !== "none"
+        ) {
+          if (
+            aggregate.continuation.handoffId !==
+              event.completedHandoff.handoffId ||
+            aggregate.continuation.sessionId !==
+              event.completedHandoff.sessionId
+          )
+            throw new Error("Conflicting completed handoff identity.");
+          if (aggregate.continuation.status !== "pending") break;
+        }
         aggregate.runtime = {
           ...aggregate.runtime,
           sessionExists: true,
@@ -1240,6 +1340,29 @@ export function foldTaskEvent(
           structuredClone(event.completedHandoff.attention),
         ];
       }
+      break;
+    case "codex_reconciliation_observed":
+      if (
+        aggregate.record?.identity.threadId &&
+        event.diagnostic.threadId !== aggregate.record.identity.threadId
+      )
+        throw new Error("Codex reconciliation targets a different thread.");
+      aggregate.codexReconciliation = [
+        ...(aggregate.codexReconciliation ?? []),
+        structuredClone(event.diagnostic),
+      ].slice(-32);
+      if (
+        event.diagnostic.outcome === "unresolved" &&
+        aggregate.recoveryRequired === null
+      )
+        aggregate.recoveryRequired =
+          "Codex history reconciliation could not establish current durable task truth.";
+      else if (
+        event.diagnostic.outcome === "succeeded" &&
+        aggregate.recoveryRequired ===
+          "Codex history reconciliation could not establish current durable task truth."
+      )
+        aggregate.recoveryRequired = null;
       break;
     case "codex_request_observed":
       aggregate.attentions = upsertCodexAttentions(
@@ -1740,6 +1863,7 @@ export function projectTaskAggregate(aggregate: TaskAggregate): TaskProjection {
     conversation: structuredClone(aggregate.conversation),
     messageDeliveries: structuredClone(aggregate.messageDeliveries),
     recoveryRequired: aggregate.recoveryRequired,
+    codexReconciliation: structuredClone(aggregate.codexReconciliation ?? []),
   };
 }
 

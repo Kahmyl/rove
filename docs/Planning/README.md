@@ -45,3 +45,4 @@ Use descriptive filenames based on the work itself. Remove or archive obsolete p
 ## Active plans
 
 - [Adaptive Browser Execution and Reconciliation](adaptive-browser-execution-and-reconciliation.md)
+- [Codex Event Ingestion and Task-State Reconciliation](codex-event-ingestion-and-task-state-reconciliation.md)

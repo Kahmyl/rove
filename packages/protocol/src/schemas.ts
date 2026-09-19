@@ -172,6 +172,8 @@ export const sessionSchema = z
     // Stable request-time identity. Unlike ownershipGeneration, this value
     // does not advance when the human takes browser ownership.
     activeHandoffGeneration: z.number().int().positive().optional(),
+    durableHandoffId: z.string().startsWith("handoff_").optional(),
+    durableHandoffGeneration: z.number().int().positive().optional(),
     lastReturnedHandoffId: z.string().startsWith("handoff_").optional(),
     profile: browserProfileSchema,
     workspace: browserWorkspaceSchema.optional(),
@@ -206,6 +208,16 @@ export const sessionSchema = z
         code: z.ZodIssueCode.custom,
         path: ["activeHandoffGeneration"],
         message: "Active handoff generation requires an active handoff ID.",
+      });
+    if (
+      (value.durableHandoffId === undefined) !==
+      (value.durableHandoffGeneration === undefined)
+    )
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["durableHandoffId"],
+        message:
+          "Durable handoff acknowledgement requires a complete identity.",
       });
   });
 

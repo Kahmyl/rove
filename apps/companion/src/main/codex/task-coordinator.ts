@@ -905,6 +905,10 @@ export interface TaskRuntimePort {
   endSession(sessionId: string): Promise<unknown>;
   inspect?(sessionId: string): Promise<unknown>;
   getControlStatus?(sessionId: string): Promise<ControlStatus>;
+  acknowledgeDurableHandoff?(
+    sessionId: string,
+    identity: { handoffId: string; handoffGeneration: number },
+  ): Promise<ControlStatus>;
   returnControlForSession?(
     sessionId: string,
     authority: {

@@ -75,6 +75,8 @@ function normalizeAggregate(value: string): TaskAggregate {
   )
     throw new Error("Persisted task aggregate is invalid.");
   aggregate.messageDeliveries ??= {};
+  aggregate.conversation.terminalTurns ??= {};
+  aggregate.codexReconciliation ??= [];
   return aggregate;
 }
 
@@ -88,6 +90,8 @@ function normalizeProjection(value: string): TaskProjection {
   )
     throw new Error("Persisted task projection is invalid.");
   projection.messageDeliveries ??= {};
+  projection.conversation.terminalTurns ??= {};
+  projection.codexReconciliation ??= [];
   return projection;
 }
 

@@ -47,7 +47,9 @@ describe("ordered task ingress", () => {
       failures.push(error.message);
     });
     ingress.replaceGeneration(1);
-    await ingress.enqueue(1, observed("failure"));
+    await expect(ingress.enqueue(1, observed("failure"))).rejects.toThrow(
+      "durability unavailable",
+    );
     expect(failures).toEqual(["durability unavailable"]);
     expect(ingress.state().recoveryRequired).toBe("durability unavailable");
   });

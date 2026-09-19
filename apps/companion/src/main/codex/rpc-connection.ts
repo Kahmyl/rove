@@ -35,7 +35,7 @@ export interface CodexRpcConnectionOptions {
   connectionId: string;
   defaultTimeoutMs?: number;
   onProtocolFailure?: (error: CodexProtocolError) => void;
-  onEventFailure?: (error: Error) => void;
+  onEventFailure?: (error: Error, event: CodexServerEvent) => void;
 }
 
 function isId(value: unknown): value is JsonRpcId {
@@ -303,7 +303,7 @@ export class CodexRpcConnection implements CodexRpcPort {
     this.eventDelivery = delivery.catch((error) => {
       const failure = error instanceof Error ? error : new Error(String(error));
       try {
-        this.options.onEventFailure?.(failure);
+        this.options.onEventFailure?.(failure, event);
       } catch {
         // Event-delivery failures are already terminal diagnostics here.
       }

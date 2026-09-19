@@ -14,6 +14,7 @@ import type {
   CodexRequestMap,
   CodexRpcPort,
   CodexServerEventListener,
+  CodexServerEvent,
   JsonRpcError,
   JsonRpcId,
   InitializeResponse,
@@ -104,6 +105,9 @@ export class CodexAppServerHost implements CodexRpcPort {
   private readonly stderrTail: string[] = [];
   private readonly listeners = new Set<(health: CodexHostHealth) => void>();
   private readonly rpcListeners = new Set<CodexServerEventListener>();
+  private readonly eventFailureListeners = new Set<
+    (error: Error, event: CodexServerEvent) => void
+  >();
   private negotiated: InitializeResponse | undefined;
   private connectionReplacement: Promise<void> | undefined;
 
@@ -180,6 +184,13 @@ export class CodexAppServerHost implements CodexRpcPort {
   onEvent(listener: CodexServerEventListener): () => void {
     this.rpcListeners.add(listener);
     return () => this.rpcListeners.delete(listener);
+  }
+
+  onEventDeliveryFailure(
+    listener: (error: Error, event: CodexServerEvent) => void,
+  ): () => void {
+    this.eventFailureListeners.add(listener);
+    return () => this.eventFailureListeners.delete(listener);
   }
 
   drainEvents(): Promise<void> {
@@ -276,10 +287,12 @@ export class CodexAppServerHost implements CodexRpcPort {
         this.lastError = error.message;
         child.kill("SIGTERM");
       },
-      onEventFailure: (error) => {
+      onEventFailure: (error, event) => {
         if (this.connection !== connection) return;
         this.lastError = `Codex event delivery failed: ${error.message}`;
         this.emit();
+        for (const listener of [...this.eventFailureListeners])
+          listener(error, event);
       },
     });
     this.connection = connection;

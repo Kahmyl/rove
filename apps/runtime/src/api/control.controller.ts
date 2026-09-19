@@ -43,6 +43,22 @@ export class ControlController {
     return this.runtime.requestHuman(id, requestHumanRequestSchema.parse(body));
   }
 
+  @Post("acknowledge-durable-handoff")
+  acknowledgeDurableHandoff(@Param("id") id: string, @Body() body: unknown) {
+    const value = body as Record<string, unknown>;
+    if (
+      typeof value?.handoffId !== "string" ||
+      !value.handoffId.startsWith("handoff_") ||
+      !Number.isSafeInteger(value.handoffGeneration) ||
+      (value.handoffGeneration as number) < 1
+    )
+      throw new Error("Invalid durable handoff acknowledgement.");
+    return this.runtime.acknowledgeDurableHandoff(id, {
+      handoffId: value.handoffId,
+      handoffGeneration: value.handoffGeneration as number,
+    });
+  }
+
   @Post("take") take(@Param("id") id: string, @Body() body: unknown) {
     return this.runtime.takeHumanControl(
       id,

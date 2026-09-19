@@ -233,6 +233,8 @@ describe("MCP control tools", () => {
       generation: 8,
       activeHandoffId: "handoff_m7",
       activeHandoffGeneration: 8,
+      durableHandoffId: "handoff_m7",
+      durableHandoffGeneration: 8,
       observationSeq: 11,
       handoff: {
         reason: "Authenticate",
@@ -388,7 +390,14 @@ function createFakeRuntimeClient(): RuntimeClient {
   let current = controlStatus("active", "agent");
   return {
     healthCheck: async () => undefined,
-    getControlStatus: async () => current,
+    getControlStatus: async () =>
+      current.activeHandoffId
+        ? {
+            ...current,
+            durableHandoffId: current.activeHandoffId,
+            durableHandoffGeneration: current.activeHandoffGeneration,
+          }
+        : current,
     requestHuman: async (_sessionId, reason) => {
       current = {
         ...controlStatus("awaiting_human", null),

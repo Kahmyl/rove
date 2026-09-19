@@ -7,6 +7,7 @@ import { controlTools } from "./control.tools.js";
 function awaitingStatus(
   handoffId = "handoff_exact",
   handoffGeneration = 8,
+  durable = false,
 ): ControlStatus {
   return {
     sessionId: "ses_1",
@@ -15,6 +16,12 @@ function awaitingStatus(
     controller: null,
     activeHandoffId: handoffId,
     activeHandoffGeneration: handoffGeneration,
+    ...(durable
+      ? {
+          durableHandoffId: handoffId,
+          durableHandoffGeneration: handoffGeneration,
+        }
+      : {}),
     observationSeq: 40,
     updatedAt: "2026-09-19T00:00:00.000Z",
     handoff: {
@@ -49,7 +56,7 @@ describe("control handoff tools", () => {
     });
 
     await expect(tools.wait.handler({ sessionId: "ses_1" })).rejects.toThrow(
-      /successful control\.request_human for the exact active handoff/,
+      /Companion durable acknowledgement/,
     );
     expect(waitForControl).not.toHaveBeenCalled();
   });
@@ -58,7 +65,9 @@ describe("control handoff tools", () => {
     const status = awaitingStatus();
     const waitResult = { event: "human_requested", status };
     const requestHuman = vi.fn(async () => status);
-    const getControlStatus = vi.fn(async () => status);
+    const getControlStatus = vi.fn(async () =>
+      awaitingStatus(undefined, undefined, true),
+    );
     const waitForControl = vi.fn(async () => waitResult as never);
     const tools = definitions({
       requestHuman,
@@ -85,6 +94,22 @@ describe("control handoff tools", () => {
     );
   });
 
+  it("returns a bounded retry state until Companion acknowledges durability", async () => {
+    const status = awaitingStatus();
+    const waitForControl = vi.fn();
+    const tools = definitions({
+      requestHuman: vi.fn(async () => status),
+      getControlStatus: vi.fn(async () => status),
+      waitForControl,
+    });
+
+    await tools.requestHuman.handler(requestInput);
+    await expect(tools.wait.handler({ sessionId: "ses_1" })).rejects.toThrow(
+      /durable acknowledgement.*bounded reconciliation/,
+    );
+    expect(waitForControl).not.toHaveBeenCalled();
+  });
+
   it("refuses to wait when Runtime moves to a different handoff identity", async () => {
     const requestHuman = vi.fn(async () => awaitingStatus());
     const waitForControl = vi.fn();
@@ -96,7 +121,7 @@ describe("control handoff tools", () => {
 
     await tools.requestHuman.handler(requestInput);
     await expect(tools.wait.handler({ sessionId: "ses_1" })).rejects.toThrow(
-      /exact active handoff/,
+      /durable acknowledgement/,
     );
     expect(waitForControl).not.toHaveBeenCalled();
   });
@@ -105,6 +130,8 @@ describe("control handoff tools", () => {
     const requested = awaitingStatus();
     const humanOwned: ControlStatus = {
       ...requested,
+      durableHandoffId: requested.activeHandoffId,
+      durableHandoffGeneration: requested.activeHandoffGeneration,
       status: "active",
       controller: "human",
       generation: 9,

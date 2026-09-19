@@ -63,6 +63,28 @@ export class OwnershipTransitionService {
     return this.toControlStatus(next, observationSeq);
   }
 
+  async acknowledgeDurableHandoff(
+    sessionId: string,
+    identity: { handoffId: string; handoffGeneration: number },
+  ): Promise<ControlStatus> {
+    const session = await this.sessions.get(sessionId);
+    if (
+      session.activeHandoffId !== identity.handoffId ||
+      session.activeHandoffGeneration !== identity.handoffGeneration
+    )
+      throw new RoveError({
+        code: "CONTROL_NOT_OWNED",
+        message:
+          "Durable handoff acknowledgement does not match active Runtime truth.",
+      });
+    const next = await this.sessions.update({
+      ...session,
+      durableHandoffId: identity.handoffId,
+      durableHandoffGeneration: identity.handoffGeneration,
+    });
+    return this.toControlStatus(next);
+  }
+
   async requestHumanForPolicy(
     sessionId: string,
     request: AutomaticHumanRequest,
@@ -393,7 +415,7 @@ export class OwnershipTransitionService {
     let next: Session;
 
     try {
-      next = await this.sessions.update({
+      const awaiting: Session = {
         ...session,
         status: "awaiting_human",
         controller: null,
@@ -404,7 +426,10 @@ export class OwnershipTransitionService {
           reason,
           requestedAt,
         },
-      });
+      };
+      delete awaiting.durableHandoffId;
+      delete awaiting.durableHandoffGeneration;
+      next = await this.sessions.update(awaiting);
     } catch (error) {
       this.ownershipFence.completeTransition(transition, session.controller);
 
@@ -474,6 +499,12 @@ export class OwnershipTransitionService {
       ...(session.activeHandoffGeneration === undefined
         ? {}
         : { activeHandoffGeneration: session.activeHandoffGeneration }),
+      ...(session.durableHandoffId === undefined
+        ? {}
+        : { durableHandoffId: session.durableHandoffId }),
+      ...(session.durableHandoffGeneration === undefined
+        ? {}
+        : { durableHandoffGeneration: session.durableHandoffGeneration }),
       ...(session.lastReturnedHandoffId === undefined
         ? {}
         : { lastReturnedHandoffId: session.lastReturnedHandoffId }),
