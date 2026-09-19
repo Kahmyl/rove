@@ -267,6 +267,26 @@ export const expectedEffectSchema = z.discriminatedUnion("kind", [
 
 export type ExpectedEffect = z.infer<typeof expectedEffectSchema>;
 
+export const reconcileConsequentialEffectRequestSchema = z
+  .object({
+    consequenceKey: z.string().trim().min(1).max(500),
+    observationId: z.string().min(1).max(200),
+  })
+  .strict();
+
+export type ReconcileConsequentialEffectRequest = z.infer<
+  typeof reconcileConsequentialEffectRequestSchema
+>;
+
+export interface ConsequentialEffectReconciliationResult {
+  effectId: string;
+  consequenceKey: string;
+  state: "applied" | "not_applied" | "unresolved";
+  version: number;
+  observationId?: string;
+  settled: boolean;
+}
+
 const targetActionBase = {
   target: targetReferenceSchema,
   dialog: dialogDirectiveSchema.optional(),

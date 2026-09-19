@@ -43,6 +43,8 @@ import type {
   LocalFileGrantResult,
   PrepareTaskResultActionRequest,
   TaskResultActionPlan,
+  ConsequentialEffectReconciliationResult,
+  ReconcileConsequentialEffectRequest,
 } from "@rove/protocol";
 
 import { RuntimeClientError } from "./runtime-client.error.js";
@@ -138,6 +140,13 @@ export class ControlPlaneRuntimeClient implements RuntimeClient {
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt> {
     return this.call("browser.interact", { sessionId, input });
+  }
+
+  reconcileConsequentialEffect(
+    sessionId: string,
+    input: ReconcileConsequentialEffectRequest,
+  ): Promise<ConsequentialEffectReconciliationResult> {
+    return this.call("browser.reconcile_outcome", { sessionId, input });
   }
 
   prepareTaskResultAction(

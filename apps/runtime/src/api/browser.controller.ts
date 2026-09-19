@@ -27,6 +27,7 @@ import {
   typeRequestSchema,
   targetResolutionRequestSchema,
   verifiedInteractionRequestSchema,
+  reconcileConsequentialEffectRequestSchema,
   advanceSemanticTransactionRequestSchema,
   beginSemanticTransactionRequestSchema,
   controlMutationAuthoritySchema,
@@ -158,6 +159,14 @@ export class BrowserController {
     return this.runtime.interact(
       id,
       verifiedInteractionRequestSchema.parse(body),
+    );
+  }
+
+  @Post("reconcile-outcome")
+  reconcileOutcome(@Param("id") id: string, @Body() body: unknown) {
+    return this.runtime.reconcileConsequentialEffect(
+      id,
+      reconcileConsequentialEffectRequestSchema.parse(body),
     );
   }
 

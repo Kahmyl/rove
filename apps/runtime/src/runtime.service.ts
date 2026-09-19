@@ -71,6 +71,8 @@ import {
   type TaskResultActionPlan,
   type Recording,
   type StartRecordingRequest,
+  type ConsequentialEffectReconciliationResult,
+  type ReconcileConsequentialEffectRequest,
 } from "@rove/protocol";
 import {
   BrowserWorkspaceRegistry,
@@ -106,11 +108,14 @@ import { EFFECT_JOURNAL_STORE, ROVE_CONFIG } from "./tokens.js";
 import {
   assessExpectedEffectEvidenceSuitability,
   classifyActionOutcome,
+  createExpectedEffectVerificationBasis,
   interactionSignature,
   interactionTarget,
   interactionActionProposal,
   verifyExpectedEffects,
   verifyExpectedCurrentStates,
+  verifyExpectedEffectsFromBasis,
+  sameExpectedEffectVerificationBasis,
   type FocusedPageTextEvidence,
 } from "./interaction/verified-interaction.js";
 import { ConsequenceReplayFence } from "./interaction/consequence-replay-fence.js";
@@ -1274,12 +1279,19 @@ export class RuntimeService implements RoveRuntime {
 
           lease.assertCurrent();
 
-          const predecessorTextEvidence =
-            await readFocusedPageTextEvidence(
-              browser,
-              predecessor,
-              input.expectedEffects,
-            );
+          const predecessorTextEvidence = await readFocusedPageTextEvidence(
+            browser,
+            predecessor,
+            input.expectedEffects,
+          );
+
+          const verificationBasis = input.consequential
+            ? createExpectedEffectVerificationBasis(
+                input.expectedEffects,
+                predecessor,
+                predecessorTextEvidence,
+              )
+            : undefined;
 
           lease.assertCurrent();
 
@@ -1561,11 +1573,18 @@ export class RuntimeService implements RoveRuntime {
                     updatedAt: new Date().toISOString(),
                     observationId: input.observationId,
                     ownershipGeneration: lease.token.generation,
+                    verificationBasis: verificationBasis!,
                   },
                 );
               } else if (
                 existing.state === "not_applied" &&
-                existing.actionFingerprint === actionFingerprint
+                existing.actionFingerprint === actionFingerprint &&
+                existing.verificationBasis !== undefined &&
+                verificationBasis !== undefined &&
+                sameExpectedEffectVerificationBasis(
+                  existing.verificationBasis,
+                  verificationBasis,
+                )
               ) {
                 journalRecord = await this.effectJournal.update(
                   existing.effectId,
@@ -1575,8 +1594,15 @@ export class RuntimeService implements RoveRuntime {
                     updatedAt: new Date().toISOString(),
                     observationId: input.observationId,
                     ownershipGeneration: lease.token.generation,
+                    verificationBasis: verificationBasis!,
                   },
                 );
+              } else if (existing.state === "not_applied") {
+                throw new RoveError({
+                  code: "ACTION_NOT_AUTHORIZED",
+                  message:
+                    "This consequence key is bound to a different immutable verification basis.",
+                });
               } else {
                 this.consequenceReplayFence.recordUnknown(
                   sessionId,
@@ -1595,6 +1621,7 @@ export class RuntimeService implements RoveRuntime {
                 browserWorkspaceScope,
                 consequenceKey: input.consequenceKey,
                 actionFingerprint,
+                verificationBasis: verificationBasis!,
                 ...(authorizedAttemptId === undefined
                   ? {}
                   : { attemptId: authorizedAttemptId }),
@@ -2232,6 +2259,112 @@ export class RuntimeService implements RoveRuntime {
       }
       throw error;
     }
+  }
+
+  async reconcileConsequentialEffect(
+    sessionId: string,
+    input: ReconcileConsequentialEffectRequest,
+  ): Promise<ConsequentialEffectReconciliationResult> {
+    await this.effectJournalReady;
+    const session = await this.sessions.get(sessionId);
+    const taskScope = session.bootstrapId ?? session.id;
+    const browserWorkspaceScope = session.workspace?.id ?? session.id;
+    const record = await this.effectJournal.find(
+      taskScope,
+      browserWorkspaceScope,
+      input.consequenceKey,
+    );
+    if (!record)
+      throw new RoveError({
+        code: "ACTION_NOT_AUTHORIZED",
+        message:
+          "No consequential effect with this key belongs to the task and browser workspace.",
+      });
+    if (record.state === "applied" || record.state === "not_applied") {
+      this.consequenceReplayFence.clear(sessionId, input.consequenceKey);
+      return {
+        effectId: record.effectId,
+        consequenceKey: record.consequenceKey,
+        state: record.state,
+        version: record.version,
+        ...(record.observationId
+          ? { observationId: record.observationId }
+          : {}),
+        settled: false,
+      };
+    }
+    if (record.state !== "unresolved")
+      throw new RoveError({
+        code: "ACTION_NOT_AUTHORIZED",
+        message:
+          "Only an unresolved or already terminal consequential effect can be reconciled.",
+      });
+    this.consequenceReplayFence.recordUnknown(sessionId, input.consequenceKey);
+    if (!record.verificationBasis) {
+      return {
+        effectId: record.effectId,
+        consequenceKey: record.consequenceKey,
+        state: "unresolved",
+        version: record.version,
+        ...(record.observationId
+          ? { observationId: record.observationId }
+          : {}),
+        settled: false,
+      };
+    }
+
+    return this.ownershipFence.runAgentBrowserOperation(
+      sessionId,
+      async (lease) => {
+        const browser = this.browser.get(sessionId);
+        const observation = await browser.readObservation(input.observationId);
+        lease.assertCurrent();
+        const focusedTextEvidence = await readFocusedPageTextEvidence(
+          browser,
+          observation,
+          record.verificationBasis!.effects.map(({ effect }) => effect),
+        );
+        lease.assertCurrent();
+        const effects = verifyExpectedEffectsFromBasis(
+          record.verificationBasis!,
+          observation,
+          focusedTextEvidence,
+        );
+        const outcome = classifyActionOutcome(effects);
+        if (outcome === "unknown") {
+          this.consequenceReplayFence.recordUnknown(
+            sessionId,
+            input.consequenceKey,
+          );
+          return {
+            effectId: record.effectId,
+            consequenceKey: record.consequenceKey,
+            state: "unresolved" as const,
+            version: record.version,
+            observationId: observation.observationId,
+            settled: false,
+          };
+        }
+        const settled = await this.effectJournal.settleUnresolved(
+          record.effectId,
+          record.version,
+          {
+            state: outcome === "applied" ? "applied" : "not_applied",
+            updatedAt: new Date().toISOString(),
+            observationId: observation.observationId,
+          },
+        );
+        this.consequenceReplayFence.clear(sessionId, input.consequenceKey);
+        return {
+          effectId: settled.effectId,
+          consequenceKey: settled.consequenceKey,
+          state: settled.state as "applied" | "not_applied",
+          version: settled.version,
+          observationId: observation.observationId,
+          settled: true,
+        };
+      },
+    );
   }
 
   async acknowledgeLegacyEffectScope(sessionId: string): Promise<void> {

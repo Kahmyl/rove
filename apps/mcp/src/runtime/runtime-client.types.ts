@@ -33,6 +33,8 @@ import type {
   PrepareTaskResultActionRequest,
   TaskResultActionPlan,
   BrowserRecoveryAdmissionRequest,
+  ConsequentialEffectReconciliationResult,
+  ReconcileConsequentialEffectRequest,
 } from "@rove/protocol";
 
 export interface ScrollInput {
@@ -72,6 +74,10 @@ export interface RuntimeClient {
     sessionId: string,
     input: VerifiedInteractionRequest,
   ): Promise<ActionReceipt>;
+  reconcileConsequentialEffect(
+    sessionId: string,
+    input: ReconcileConsequentialEffectRequest,
+  ): Promise<ConsequentialEffectReconciliationResult>;
   prepareTaskResultAction(
     sessionId: string,
     input: PrepareTaskResultActionRequest,

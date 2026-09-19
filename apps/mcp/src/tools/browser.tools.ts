@@ -1170,6 +1170,33 @@ export function browserTools(runtime: RuntimeClient): ToolDefinition[] {
       },
     },
     {
+      name: "browser.reconcile_outcome",
+      description:
+        "Use fresh read-only browser evidence to reconcile one previously dispatched consequential effect whose outcome is still unknown. This never redispatches the original action; its original receipt and immediate outcome remain immutable, and replacement outcomes or effects are never accepted. If the fresh evidence is still insufficient, the same effect remains unresolved and replay-fenced.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", minLength: 1 },
+          consequenceKey: { type: "string", minLength: 1, maxLength: 500 },
+          observationId: { type: "string", minLength: 1, maxLength: 200 },
+        },
+        required: ["sessionId", "consequenceKey", "observationId"],
+        additionalProperties: false,
+      },
+      handler: async (input) => {
+        const parsed = z
+          .object({
+            sessionId: sessionIdSchema,
+            consequenceKey: z.string().min(1).max(500),
+            observationId: z.string().min(1).max(200),
+          })
+          .strict()
+          .parse(input);
+        const { sessionId, ...request } = parsed;
+        return runtime.reconcileConsequentialEffect(sessionId, request);
+      },
+    },
+    {
       name: "browser.transaction_begin",
       description:
         "Begin an exactly-once semantic transfer from a source grounded in the supplied fresh observation. Declare whether the destination remains a visible semantic scope or must be verified later from an independently opened destination observation. The destination identity and consequenceKey remain stable while later phases are grounded from new observations.",

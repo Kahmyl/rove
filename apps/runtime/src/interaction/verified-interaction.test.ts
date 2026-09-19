@@ -6,7 +6,9 @@ import {
   assessExpectedEffectEvidenceSuitability,
   classifyActionOutcome,
   interactionActionProposal,
+  createExpectedEffectVerificationBasis,
   verifyExpectedEffects,
+  verifyExpectedEffectsFromBasis,
 } from "./verified-interaction.js";
 
 function observation(
@@ -32,6 +34,66 @@ function observation(
 }
 
 describe("verified interaction semantics", () => {
+  it("settles late current-state evidence only when it is causal", () => {
+    const before = observation("before", "https://example.test", "Create");
+    const applied = observation("applied", "https://example.test", "Created");
+    const contradicted = observation(
+      "contradicted",
+      "https://example.test",
+      "Create",
+    );
+    const effects = [{ kind: "text_present" as const, text: "Created" }];
+    const basis = createExpectedEffectVerificationBasis(effects, before);
+
+    expect(verifyExpectedEffectsFromBasis(basis, applied)).toEqual([
+      expect.objectContaining({ state: "observed" }),
+    ]);
+    expect(verifyExpectedEffectsFromBasis(basis, contradicted)).toEqual([
+      expect.objectContaining({ state: "contradicted" }),
+    ]);
+
+    const preExistingBasis = createExpectedEffectVerificationBasis(
+      effects,
+      applied,
+    );
+    expect(verifyExpectedEffectsFromBasis(preExistingBasis, applied)).toEqual([
+      expect.objectContaining({ state: "unresolved" }),
+    ]);
+  });
+
+  it("supports target presence and absence in a late verification basis", () => {
+    const before = observation("before", "https://example.test", "");
+    before.targetEvidence = {
+      source: "canonical_registry",
+      completeness: "complete",
+    };
+    const after = observation("after", "https://example.test", "");
+    after.targetEvidence = before.targetEvidence;
+    after.targets = [
+      {
+        ref: "created",
+        kind: "button",
+        name: "Created item",
+        visible: true,
+        enabled: true,
+      },
+    ];
+    const effects = [
+      {
+        kind: "target_present" as const,
+        target: { name: "Created item", kind: "button" as const },
+      },
+      {
+        kind: "target_absent" as const,
+        target: { name: "Removed item", kind: "button" as const },
+      },
+    ];
+    const basis = createExpectedEffectVerificationBasis(effects, before);
+
+    expect(
+      verifyExpectedEffectsFromBasis(basis, after).map(({ state }) => state),
+    ).toEqual(["observed", "unresolved"]);
+  });
   it("requires positive successor evidence for applied", () => {
     const predecessor = observation(
       "before",
@@ -295,11 +357,7 @@ describe("verified interaction semantics", () => {
       "R",
     );
     predecessor.metadata = { textTruncated: true };
-    const successor = observation(
-      "after-focused",
-      "https://example.test",
-      "R",
-    );
+    const successor = observation("after-focused", "https://example.test", "R");
     successor.metadata = { textTruncated: true };
     const query = "Rove Action Fixture";
 

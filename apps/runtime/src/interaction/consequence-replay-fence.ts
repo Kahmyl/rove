@@ -22,6 +22,13 @@ export class ConsequenceReplayFence {
     this.unresolved.set(sessionId, current);
   }
 
+  clear(sessionId: string, consequenceKey: string): void {
+    const current = this.unresolved.get(sessionId);
+    if (!current) return;
+    current.delete(consequenceKey);
+    if (current.size === 0) this.unresolved.delete(sessionId);
+  }
+
   clearSession(sessionId: string): void {
     this.unresolved.delete(sessionId);
   }
