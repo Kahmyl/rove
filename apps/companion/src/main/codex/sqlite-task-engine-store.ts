@@ -8,6 +8,7 @@ import type {
   TaskAcceptance,
   TaskAggregate,
   TaskCommand,
+  TaskCodexRecoveryBlocker,
   TaskEngineStore,
   TaskEngineTransaction,
   TaskEvent,
@@ -45,6 +46,7 @@ import {
   validatePortableWorkflowSnapshot,
   type PortableWorkflowSnapshot,
 } from "./workflow-portability.js";
+import { threadHistoryBlockerId } from "./codex-event-recovery.js";
 
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
@@ -75,6 +77,9 @@ function normalizeAggregate(value: string): TaskAggregate {
   )
     throw new Error("Persisted task aggregate is invalid.");
   aggregate.messageDeliveries ??= {};
+  aggregate.conversation.terminalTurns ??= {};
+  aggregate.codexReconciliation ??= [];
+  aggregate.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(aggregate);
   return aggregate;
 }
 
@@ -88,7 +93,58 @@ function normalizeProjection(value: string): TaskProjection {
   )
     throw new Error("Persisted task projection is invalid.");
   projection.messageDeliveries ??= {};
+  projection.conversation.terminalTurns ??= {};
+  projection.codexReconciliation ??= [];
+  projection.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(projection);
   return projection;
+}
+
+function legacyCodexRecoveryBlockers(value: {
+  recoveryRequired: string | null;
+  codexReconciliation?: TaskAggregate["codexReconciliation"];
+}): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
+  if (
+    value.recoveryRequired !==
+    "Codex history reconciliation could not establish current durable task truth."
+  )
+    return {};
+  const diagnostic = [...(value.codexReconciliation ?? [])]
+    .reverse()
+    .find((entry) => entry.outcome === "unresolved");
+  if (!diagnostic) return {};
+  const recoveryClass =
+    diagnostic.recoveryClass ??
+    (diagnostic.eventFamily === "live_attention"
+      ? "live_attention"
+      : "thread_history_reconstructible");
+  const blockerId =
+    diagnostic.blockerId ??
+    (recoveryClass === "thread_history_reconstructible"
+      ? threadHistoryBlockerId(diagnostic.threadId)
+      : `codex-recovery:legacy:${createHash("sha256")
+          .update(
+            JSON.stringify([
+              recoveryClass,
+              diagnostic.threadId,
+              diagnostic.eventFamily ?? "unknown",
+              diagnostic.observedAt,
+            ]),
+          )
+          .digest("hex")
+          .slice(0, 24)}`);
+  return {
+    [blockerId]: {
+      blockerId,
+      recoveryClass,
+      family: diagnostic.eventFamily ?? "legacy",
+      threadId: diagnostic.threadId,
+      ...(diagnostic.correlationId
+        ? { correlationId: diagnostic.correlationId }
+        : {}),
+      unresolvedAt: diagnostic.observedAt,
+      lastObservedAt: diagnostic.observedAt,
+    },
+  };
 }
 
 function normalizeAcceptance(value: string): TaskAcceptance {

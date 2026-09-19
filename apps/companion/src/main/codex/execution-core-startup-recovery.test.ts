@@ -461,7 +461,10 @@ describe("CodexExecutionCore cold-start recovery", () => {
         controller: returned ? ("agent" as const) : ("human" as const),
         ...(returned
           ? { lastReturnedHandoffId: ledgerHandoffId }
-          : { activeHandoffId: ledgerHandoffId }),
+          : {
+              activeHandoffId: ledgerHandoffId,
+              activeHandoffGeneration: 4,
+            }),
         observationSeq: inspected ? 12 : returned ? 11 : 10,
         updatedAt: "2026-09-08T00:01:00Z",
       })),
@@ -541,6 +544,7 @@ describe("CodexExecutionCore cold-start recovery", () => {
     });
 
     const api = await core.start();
+    expect((await api.readSnapshot()).recoveryWarnings).toEqual([]);
     await expect(api.readSnapshot()).resolves.toMatchObject({
       tasks: expect.arrayContaining([
         expect.objectContaining({ taskId: ledgerTaskId }),

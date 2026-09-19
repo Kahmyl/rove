@@ -102,10 +102,13 @@ export function controlTools(runtime: RuntimeClient): ToolDefinition[] {
         if (
           requestedHandoff === undefined ||
           status.activeHandoffId !== requestedHandoff.handoffId ||
-          status.activeHandoffGeneration !== requestedHandoff.handoffGeneration
+          status.activeHandoffGeneration !==
+            requestedHandoff.handoffGeneration ||
+          status.durableHandoffId !== requestedHandoff.handoffId ||
+          status.durableHandoffGeneration !== requestedHandoff.handoffGeneration
         ) {
           throw new Error(
-            "control.wait requires a successful control.request_human for the exact active handoff",
+            "control.wait requires Companion durable acknowledgement of the exact successful control.request_human handoff; retry after bounded reconciliation",
           );
         }
         return runtime.waitForControl(

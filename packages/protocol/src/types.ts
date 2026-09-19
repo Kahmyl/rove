@@ -97,6 +97,8 @@ export interface ControlStatus {
   handoff?: HumanHandoff;
   activeHandoffId?: string;
   activeHandoffGeneration?: number;
+  durableHandoffId?: string;
+  durableHandoffGeneration?: number;
   lastReturnedHandoffId?: string;
   updatedAt: string;
   observationSeq?: number;

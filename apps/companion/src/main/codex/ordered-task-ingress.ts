@@ -53,6 +53,7 @@ export class OrderedTaskIngress {
           error instanceof Error ? error : new Error(String(error));
         this.recoveryRequired = failure.message.slice(0, 240);
         await this.onFailure(failure);
+        throw failure;
       }
     });
     this.chain = work

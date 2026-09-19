@@ -222,6 +222,32 @@ describe("OwnershipTransitionService", () => {
     expect(test.publish).toHaveBeenCalledTimes(1);
   });
 
+  it("records Companion durability only for the exact active handoff", async () => {
+    const test = harness(makeSession());
+    const requested = await test.service.requestHuman("ses_test", "Sign in");
+
+    await expect(
+      test.service.acknowledgeDurableHandoff("ses_test", {
+        handoffId: "handoff_other",
+        handoffGeneration: requested.activeHandoffGeneration!,
+      }),
+    ).rejects.toMatchObject({ code: "CONTROL_NOT_OWNED" });
+
+    await expect(
+      test.service.acknowledgeDurableHandoff("ses_test", {
+        handoffId: requested.activeHandoffId!,
+        handoffGeneration: requested.activeHandoffGeneration!,
+      }),
+    ).resolves.toMatchObject({
+      durableHandoffId: requested.activeHandoffId,
+      durableHandoffGeneration: requested.activeHandoffGeneration,
+    });
+    expect(test.current()).toMatchObject({
+      durableHandoffId: requested.activeHandoffId,
+      durableHandoffGeneration: requested.activeHandoffGeneration,
+    });
+  });
+
   it("persists one stable handoff identity and every ownership generation across restart cuts", async () => {
     const requested = harness(makeSession({ ownershipGeneration: 7 }));
     const awaiting = await requested.service.requestHuman(

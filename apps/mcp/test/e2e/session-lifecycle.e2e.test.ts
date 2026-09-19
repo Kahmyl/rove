@@ -461,6 +461,8 @@ async function runAgentScenario(client: Client): Promise<void> {
       status: string;
       controller: unknown;
       observationSeq?: number;
+      activeHandoffId?: string;
+      activeHandoffGeneration?: number;
       handoff?: {
         reason: string;
       };
@@ -482,6 +484,33 @@ async function runAgentScenario(client: Client): Promise<void> {
     if (requested.observationSeq === undefined) {
       throw new Error("control.request_human did not return observationSeq.");
     }
+    if (
+      requested.activeHandoffId === undefined ||
+      requested.activeHandoffGeneration === undefined
+    )
+      throw new Error("control.request_human did not return handoff identity.");
+
+    // This process-level MCP fixture has no Companion. Model the exact
+    // commit acknowledgement that Companion sends only after its Task ledger
+    // has durably accepted the completed request-human observation.
+    const acknowledgement = await fetch(
+      `http://127.0.0.1:${runtimePort}/sessions/${encodeURIComponent(sessionId)}/control/acknowledge-durable-handoff`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${RUNTIME_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          handoffId: requested.activeHandoffId,
+          handoffGeneration: requested.activeHandoffGeneration,
+        }),
+      },
+    );
+    if (!acknowledgement.ok)
+      throw new Error(
+        `Unable to acknowledge the durable E2E handoff (${acknowledgement.status}).`,
+      );
 
     const controlStatus = await callJson<{
       status: string;

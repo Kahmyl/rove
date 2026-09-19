@@ -3321,6 +3321,15 @@ export class RuntimeService implements RoveRuntime {
     );
   }
 
+  async acknowledgeDurableHandoff(
+    sessionId: string,
+    identity: { handoffId: string; handoffGeneration: number },
+  ): Promise<ControlStatus> {
+    return this.coordinator.execute(sessionId, () =>
+      this.ownershipTransitions.acknowledgeDurableHandoff(sessionId, identity),
+    );
+  }
+
   async takeHumanControl(
     sessionId: string,
     authority: ControlMutationAuthority,
@@ -4167,6 +4176,12 @@ export class RuntimeService implements RoveRuntime {
       ...(session.activeHandoffGeneration === undefined
         ? {}
         : { activeHandoffGeneration: session.activeHandoffGeneration }),
+      ...(session.durableHandoffId === undefined
+        ? {}
+        : { durableHandoffId: session.durableHandoffId }),
+      ...(session.durableHandoffGeneration === undefined
+        ? {}
+        : { durableHandoffGeneration: session.durableHandoffGeneration }),
       ...(session.lastReturnedHandoffId === undefined
         ? {}
         : { lastReturnedHandoffId: session.lastReturnedHandoffId }),

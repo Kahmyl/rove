@@ -1,4 +1,3 @@
-import { authoritativePreHandoffObservationSeq } from "./handoff-observation.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -6,7 +5,6 @@ import { join } from "node:path";
 import {
   TaskEngine,
   type NativeRuntimeTruth,
-  type TaskConversationItem,
   type TaskEvent,
 } from "@rove/protocol";
 import {
@@ -17,8 +15,20 @@ import {
 import { CodexAppServerHost, readCodexVersion } from "./app-server-host.js";
 import { CodexRuntimeTaskAdapter } from "./codex-runtime-task-adapter.js";
 import { CodexThreadSessionSupervisor } from "./codex-thread-session-supervisor.js";
+import {
+  classifyCodexEventRecovery,
+  type CodexEventRecoveryDescriptor,
+} from "./codex-event-recovery.js";
+import {
+  CodexThreadTruthReconciler,
+  type CodexReconciliationFailureHint,
+  type CodexReconciliationTrigger,
+} from "./codex-thread-truth-reconciler.js";
 import { CodexExecutableResolver } from "./compatibility.js";
-import { projectUserInputAttachments } from "./conversations.js";
+import {
+  composeCompletedRequestHumanHandoff,
+  projectedItem,
+} from "./codex-task-observations.js";
 import { LedgerAttentionView } from "./ledger-attention-view.js";
 import { LocalProductApi } from "./local-product-api.js";
 import { OrderedTaskIngress } from "./ordered-task-ingress.js";
@@ -35,7 +45,7 @@ import type {
 import type { LocalFileGrantSelection } from "../host/hub-command-executor.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
 import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
-import { normalizeCompletedRequestHumanToolItem } from "./request-human-tool-item.js";
+export { composeCompletedRequestHumanHandoff } from "./codex-task-observations.js";
 
 export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   task: "sqlite",
@@ -45,75 +55,6 @@ export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   projection: "sqlite",
   command: "sqlite",
 } as const);
-
-type CompletedHandoff = NonNullable<
-  Extract<TaskEvent, { type: "codex_item_observed" }>["completedHandoff"]
->;
-
-export async function composeCompletedRequestHumanHandoff(input: {
-  taskId: string;
-  threadId: string;
-  turnId: string | undefined;
-  item: Record<string, unknown>;
-  boundRuntimeSessionId: string | undefined;
-  getControlStatus?: TaskRuntimePort["getControlStatus"];
-}): Promise<CompletedHandoff | undefined> {
-  if (!input.turnId) return undefined;
-  const normalized = normalizeCompletedRequestHumanToolItem(input.item);
-  if (!normalized) return undefined;
-  const result = normalized.returnedControlStatus;
-  const sessionId = normalized.sessionId;
-  if (
-    !input.boundRuntimeSessionId ||
-    sessionId !== input.boundRuntimeSessionId ||
-    result.sessionId !== sessionId ||
-    !input.getControlStatus
-  )
-    throw new Error("Completed handoff item lacks exact trusted bindings.");
-  const control = await input.getControlStatus(sessionId);
-  const preHandoffObservationSeq = authoritativePreHandoffObservationSeq({
-    result: {
-      handoffId: result.handoffId,
-      generation: result.generation,
-      ...(result.observationSeq === undefined
-        ? {}
-        : { observationSeq: result.observationSeq }),
-    },
-    runtime: control,
-  });
-  return {
-    sessionId,
-    handoffId: result.handoffId,
-    handoffGeneration: result.generation,
-    ownershipGeneration: control.generation,
-    controller: control.controller,
-    status: control.status,
-    continuation: {
-      status: "pending",
-      id: `continuation:${input.taskId}:${result.generation}`,
-      taskId: input.taskId,
-      sessionId,
-      threadId: input.threadId,
-      handoffId: result.handoffId,
-      generation: result.generation,
-      policy: normalized.continuationPolicy,
-      freshInspectionRequired: true,
-      preHandoffObservationSeq,
-    },
-    attention: {
-      authority: "rove_control",
-      kind: "control_handoff",
-      requestId: `control:${normalized.itemId}`,
-      taskId: input.taskId,
-      sessionId,
-      threadId: input.threadId,
-      turnId: input.turnId,
-      handoffId: result.handoffId,
-      generation: result.generation,
-      status: "pending",
-    },
-  };
-}
 
 export function requiresRuntimeGenerationReconciliation(input: {
   sessionId?: string;
@@ -199,6 +140,8 @@ export class CodexExecutionCore {
   private ingress: OrderedTaskIngress | undefined;
   private detachEvents: (() => void) | undefined;
   private detachHealth: (() => void) | undefined;
+  private reconciler: CodexThreadTruthReconciler | undefined;
+  private readonly reconciliationByTask = new Map<string, Promise<void>>();
   private recoveryWarnings: string[] = [];
   private connectionGeneration = 0;
   private connectionId: string | undefined;
@@ -401,6 +344,13 @@ export class CodexExecutionCore {
       },
     );
     this.ingress = ingress;
+    this.reconciler = new CodexThreadTruthReconciler(
+      sessionSupervisor,
+      store,
+      ingress,
+      this.options.runtime,
+      () => this.connectionGeneration,
+    );
     const initial = this.host.getHealth().connectionId;
     if (initial) {
       this.connectionId = initial;
@@ -420,8 +370,35 @@ export class CodexExecutionCore {
       void this.recover("App Server");
     });
     this.detachEvents = rpc.onEvent(async (event) => {
-      const mapped = await this.mapCodexEvent(event);
-      if (mapped) await ingress.enqueue(this.connectionGeneration, mapped);
+      const recovery = classifyCodexEventRecovery(
+        event,
+        this.connectionGeneration,
+      );
+      try {
+        const mapped = await this.mapCodexEvent(event);
+        if (mapped) {
+          await ingress.enqueue(this.connectionGeneration, mapped);
+          if (
+            mapped.type === "codex_item_observed" &&
+            mapped.completedHandoff &&
+            this.options.runtime.acknowledgeDurableHandoff
+          )
+            await this.options.runtime.acknowledgeDurableHandoff(
+              mapped.completedHandoff.sessionId,
+              {
+                handoffId: mapped.completedHandoff.handoffId,
+                handoffGeneration: mapped.completedHandoff.handoffGeneration,
+              },
+            );
+        }
+        await this.clearObservedRecoveryBlocker(recovery);
+      } catch (error) {
+        await this.recoverFailedCodexEvent(
+          error instanceof Error ? error : new Error(String(error)),
+          event,
+          recovery,
+        );
+      }
     });
     await this.options.onTaskProcessRecoveryPoint?.("contexts_restored");
     await this.recover("Desktop startup");
@@ -572,7 +549,7 @@ export class CodexExecutionCore {
         threadId,
         turn: {
           turn,
-          ...(turn === "active" && turnId ? { turnId } : {}),
+          ...(turnId ? { turnId } : {}),
           runtimeStatus: turn === "active" ? "active" : "idle",
         },
       };
@@ -858,7 +835,176 @@ export class CodexExecutionCore {
         this.store?.nextHostGeneration("runtime") ?? this.runtimeGeneration + 1;
       await this.enqueueGenerationFacts("runtime", this.runtimeGeneration);
     }
+    if (source === "Desktop startup" || source.includes("App Server"))
+      await this.reconcileOpenTasks(
+        source === "Desktop startup" ? "startup" : "reconnect",
+      );
     await this.pollRuntimeTruth();
+  }
+
+  private async taskIdForThread(threadId: string): Promise<string | undefined> {
+    if (!this.store) return undefined;
+    for (const projection of await this.store.projections()) {
+      const aggregate = await this.store.aggregate(projection.taskId);
+      if (aggregate?.record?.identity.threadId === threadId)
+        return projection.taskId;
+    }
+    return undefined;
+  }
+
+  private async recoverFailedCodexEvent(
+    error: Error,
+    event: CodexServerEvent,
+    recovery: CodexEventRecoveryDescriptor,
+  ): Promise<void> {
+    if (recovery.recoveryClass === "expendable_presentation") {
+      this.recoveryWarnings = [
+        ...this.recoveryWarnings,
+        `Codex expendable presentation event failed: ${event.method}`,
+      ].slice(-64);
+      return;
+    }
+    const threadId = recovery.threadId;
+    const taskId = threadId ? await this.taskIdForThread(threadId) : undefined;
+    const hint = {
+      eventFamily: recovery.family,
+      errorCategory: error.name || "Error",
+    };
+    if (!taskId) {
+      if (recovery.recoveryClass === "thread_history_reconstructible")
+        await this.reconcileOpenTasks("event_delivery_failure", hint);
+      else
+        this.recoveryWarnings = [
+          ...this.recoveryWarnings,
+          `Codex ${recovery.recoveryClass} failure lacked an exact Task binding.`,
+        ].slice(-64);
+      return;
+    }
+    if (
+      recovery.recoveryClass === "live_attention" ||
+      recovery.recoveryClass === "provider_other_authority"
+    ) {
+      await this.observeEventRecovery(taskId, recovery, "unresolved", hint);
+      return;
+    }
+    await this.observeEventRecovery(taskId, recovery, "unresolved", hint);
+    await this.scheduleReconciliation(taskId, "event_delivery_failure", hint);
+  }
+
+  private async clearObservedRecoveryBlocker(
+    recovery: CodexEventRecoveryDescriptor,
+  ): Promise<void> {
+    if (
+      !this.store ||
+      !recovery.threadId ||
+      !recovery.blockerId ||
+      (recovery.recoveryClass !== "live_attention" &&
+        recovery.recoveryClass !== "provider_other_authority")
+    )
+      return;
+    const taskId = await this.taskIdForThread(recovery.threadId);
+    if (!taskId) return;
+    const aggregate = await this.store.aggregate(taskId);
+    if (!aggregate?.codexRecoveryBlockers?.[recovery.blockerId]) return;
+    await this.observeEventRecovery(taskId, recovery, "succeeded", {
+      eventFamily: recovery.family,
+    });
+  }
+
+  private async observeEventRecovery(
+    taskId: string,
+    recovery: CodexEventRecoveryDescriptor,
+    outcome: "succeeded" | "unresolved",
+    hint: CodexReconciliationFailureHint,
+  ): Promise<void> {
+    if (
+      !this.ingress ||
+      !recovery.threadId ||
+      !recovery.blockerId ||
+      recovery.recoveryClass === "expendable_presentation"
+    )
+      return;
+    const observedAt = new Date().toISOString();
+    const diagnosticId = randomUUID();
+    await this.ingress.enqueue(this.connectionGeneration, {
+      schemaVersion: 1,
+      type: "codex_reconciliation_observed",
+      eventId: `codex-recovery:${taskId}:${diagnosticId}`,
+      taskId,
+      source: {
+        kind: "host",
+        id: `codex-event-recovery:${recovery.threadId}:${diagnosticId}`,
+        generation: Math.max(1, this.connectionGeneration),
+        position: 1,
+      },
+      observedAt,
+      diagnostic: {
+        trigger: "event_delivery_failure",
+        outcome,
+        recoveryClass: recovery.recoveryClass,
+        blockerId: recovery.blockerId,
+        threadId: recovery.threadId,
+        attempt: 1,
+        observedAt,
+        eventFamily: recovery.family,
+        ...(recovery.correlationId
+          ? { correlationId: recovery.correlationId }
+          : {}),
+        ...hint,
+      },
+    });
+  }
+
+  private async reconcileOpenTasks(
+    trigger: CodexReconciliationTrigger,
+    hint: CodexReconciliationFailureHint = {},
+  ): Promise<void> {
+    if (!this.store) return;
+    const tasks: string[] = [];
+    for (const projection of await this.store.projections()) {
+      if (projection.phase === "closed") continue;
+      const aggregate = await this.store.aggregate(projection.taskId);
+      if (aggregate?.record?.identity.threadId) tasks.push(projection.taskId);
+    }
+    await Promise.all(
+      tasks.map((taskId) => this.scheduleReconciliation(taskId, trigger, hint)),
+    );
+  }
+
+  private scheduleReconciliation(
+    taskId: string,
+    trigger: CodexReconciliationTrigger,
+    hint: CodexReconciliationFailureHint = {},
+  ): Promise<void> {
+    const existing = this.reconciliationByTask.get(taskId);
+    if (existing) return existing;
+    const work = (async () => {
+      let lastError: Error | undefined;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          await this.reconciler?.reconcile(taskId, trigger, attempt, hint);
+          return;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          if (attempt < 3)
+            await new Promise((resolve) =>
+              setTimeout(resolve, attempt === 1 ? 50 : 250),
+            );
+        }
+      }
+      const failureHint = {
+        ...hint,
+        errorCategory: lastError?.name ?? hint.errorCategory ?? "Error",
+      };
+      await this.reconciler?.unresolved(taskId, trigger, 3, failureHint);
+      this.recoveryWarnings = [
+        ...this.recoveryWarnings,
+        `Codex history reconciliation: ${lastError?.message ?? "unresolved"}`,
+      ].slice(-64);
+      await this.options.onProductStateChanged?.();
+    })().finally(() => this.reconciliationByTask.delete(taskId));
+    this.reconciliationByTask.set(taskId, work);
+    return work;
   }
 
   private async enqueueGenerationFacts(
@@ -1028,6 +1174,19 @@ export class CodexExecutionCore {
           observedAt,
           runtime,
         });
+        const refreshed = await this.store.aggregate(projection.taskId);
+        if (
+          refreshed?.runtime.status === "awaiting_human" &&
+          refreshed.runtime.handoffId &&
+          (refreshed.continuation.status !== "pending" ||
+            refreshed.continuation.handoffId !== refreshed.runtime.handoffId) &&
+          !refreshed.recoveryRequired
+        )
+          void this.scheduleReconciliation(
+            projection.taskId,
+            "authority_contradiction",
+            { eventFamily: "control.request_human" },
+          );
       }
     } catch (error) {
       this.recoveryWarnings = [
@@ -1045,6 +1204,7 @@ export class CodexExecutionCore {
     this.runtimePoll = undefined;
     this.detachEvents?.();
     this.detachHealth?.();
+    await Promise.allSettled(this.reconciliationByTask.values());
     await this.ingress?.drain();
     await this.host.drainEvents();
     this.account?.stop();
@@ -1052,6 +1212,7 @@ export class CodexExecutionCore {
     this.account = undefined;
     this.taskPort = undefined;
     this.ingress = undefined;
+    this.reconciler = undefined;
     this.store?.close();
     this.store = undefined;
     await this.host.stop();
@@ -1189,65 +1350,6 @@ function attentionResponseFields(
   if (JSON.stringify(result).length > 65_536)
     throw new Error("Codex attention response descriptor exceeds its bound.");
   return result;
-}
-
-function projectedItem(
-  value: Record<string, unknown>,
-  turnId: string | undefined,
-  itemId: string | undefined,
-  completed: boolean,
-): TaskConversationItem | undefined {
-  if (!turnId || !itemId) return undefined;
-  const type = text(value.type);
-  const kind: TaskConversationItem["kind"] =
-    type === "userMessage"
-      ? "user_message"
-      : type === "agentMessage"
-        ? "assistant_message"
-        : type === "plan"
-          ? "plan"
-          : type === "commandExecution"
-            ? "command"
-            : type === "fileChange"
-              ? "file_change"
-              : type === "mcpToolCall" || type === "dynamicToolCall"
-                ? "tool"
-                : "other";
-  const content = Array.isArray(value.content)
-    ? value.content
-        .map((part) => text(object(part)?.text))
-        .filter((part): part is string => Boolean(part))
-        .join("\n")
-    : undefined;
-  const attachments = projectUserInputAttachments(value.content);
-  const phase: TaskConversationItem["phase"] =
-    value.phase === "commentary" || value.phase === "final_answer"
-      ? value.phase
-      : undefined;
-  const item = {
-    id: itemId,
-    turnId,
-    ...(type === "userMessage" && text(value.clientId)
-      ? { clientId: text(value.clientId)! }
-      : {}),
-    ...(type === "userMessage" && attachments.length ? { attachments } : {}),
-    kind,
-    status: completed ? ("completed" as const) : ("started" as const),
-    ...(phase === undefined ? {} : { phase }),
-    ...(text(value.text) || content
-      ? { text: (text(value.text) ?? content)!.slice(0, 16_000) }
-      : {}),
-    ...(text(value.command) || text(value.tool)
-      ? { title: (text(value.command) ?? text(value.tool))!.slice(0, 500) }
-      : {}),
-    ...(text(value.aggregatedOutput) || text(value.message)
-      ? {
-          progress: (text(value.aggregatedOutput) ??
-            text(value.message))!.slice(0, 8_000),
-        }
-      : {}),
-  };
-  return item;
 }
 
 function nativeBrowserIdentity(value: {

@@ -182,6 +182,16 @@ export class CompanionRuntimeClient {
     return this.request(`/sessions/${encodeURIComponent(sessionId)}/control`);
   }
 
+  acknowledgeDurableHandoff(
+    sessionId: string,
+    identity: { handoffId: string; handoffGeneration: number },
+  ): Promise<ControlStatus> {
+    return this.request(
+      `/sessions/${encodeURIComponent(sessionId)}/control/acknowledge-durable-handoff`,
+      { method: "POST", body: JSON.stringify(identity) },
+    );
+  }
+
   endSession(sessionId: string): Promise<Session> {
     return this.request<Session>(
       `/sessions/${encodeURIComponent(sessionId)}/end`,
