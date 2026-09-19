@@ -34,6 +34,8 @@ Routine reversible navigation should not require repetitive approvals. Sending, 
 
 A generated draft is not a sent message. Dispatched input is not necessarily a verified result. Rove preserves uncertainty when evidence is insufficient and allows unrelated conversation to continue while the uncertain action is reconciled.
 
+An uncertain consequential outcome fences re-dispatch of that consequence across browser, integration, API, plugin, CLI, or other routes. It does not prohibit bounded read-only evidence gathering. Rove may continue to inspect, search, navigate to an authoritative read surface, wait for state convergence, or correlate existing receipts/evidence while the mutation itself remains non-repeatable. Read-only reconciliation cannot expand authorization or turn incomplete evidence into confirmed success.
+
 ## Capture, recording, and privacy
 
 Capture observes the intended task scope, not unrelated browsing. Recording is requested explicitly, is available in all participation modes, and has visible start/stop controls. Explain whether it covers a page or a browser window. Do not imply retroactive video or automatically masked continuous recording. Store recordings locally and show failures to finalize a playable file.
