@@ -113,21 +113,40 @@ function targetCoverageIncompleteReasons(
 ): Array<"target_acquisition_failed" | "semantic_targets_unaccounted"> {
   if (targetCoverage === undefined) return [];
 
-  const accountedTargets =
-    (targetCoverage.registeredTargetCount ?? 0) +
-    Object.entries(targetCoverage.semanticOutcomes ?? {})
-      .filter(([reason]) => reason !== "targeted")
-      .reduce((sum, [, count]) => sum + count, 0);
+  const accountedSemanticTargets = Object.values(
+    targetCoverage.semanticOutcomes ?? {},
+  ).reduce((sum, count) => sum + count, 0);
   const reasons: Array<
     "target_acquisition_failed" | "semantic_targets_unaccounted"
   > = [];
   if ((targetCoverage.acquisitionErrors?.length ?? 0) > 0) {
     reasons.push("target_acquisition_failed");
   }
-  if ((targetCoverage.semanticInteractiveCount ?? 0) > accountedTargets) {
+  if (
+    (targetCoverage.semanticInteractiveCount ?? 0) > accountedSemanticTargets
+  ) {
     reasons.push("semantic_targets_unaccounted");
   }
   return reasons;
+}
+
+function targetAcquisitionUnstableDuringInspection(
+  targetCoverage: TargetCoverageSummary | undefined,
+): boolean {
+  if ((targetCoverage?.acquisitionErrors?.length ?? 0) > 0) return true;
+
+  // This is only a mutation-race fence for an inspection still in flight. It
+  // is deliberately separate from canonical evidence completeness, which
+  // must never let unrelated registered targets satisfy semantic demand.
+  const registeredOrExcludedTargets =
+    (targetCoverage?.registeredTargetCount ?? 0) +
+    Object.entries(targetCoverage?.semanticOutcomes ?? {})
+      .filter(([reason]) => reason !== "targeted")
+      .reduce((sum, [, count]) => sum + count, 0);
+  return (
+    (targetCoverage?.semanticInteractiveCount ?? 0) >
+    registeredOrExcludedTargets
+  );
 }
 
 export async function settleBrowserShutdownStep<T>(
@@ -1268,7 +1287,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
     const targetCoverage = inspection.metadata?.targetCoverage as
       TargetCoverageSummary | undefined;
     const targetAcquisitionUnstable =
-      targetCoverageIncompleteReasons(targetCoverage).length > 0;
+      targetAcquisitionUnstableDuringInspection(targetCoverage);
 
     if (
       finalState.revision !== state.revision ||

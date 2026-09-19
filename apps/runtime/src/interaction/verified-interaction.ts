@@ -42,8 +42,17 @@ function targetEvidenceIncomplete(observation: BrowserObservation): boolean {
   return targetsTruncated(observation);
 }
 
-function textTruncated(observation: BrowserObservation): boolean {
-  return observation.metadata?.textTruncated === true;
+type PageTextEvidence =
+  | { state: "unavailable" }
+  | { state: "incomplete"; text: string }
+  | { state: "complete"; text: string };
+
+function pageTextEvidence(observation: BrowserObservation): PageTextEvidence {
+  if (observation.text === undefined) return { state: "unavailable" };
+  if (observation.metadata?.textTruncated === true) {
+    return { state: "incomplete", text: observation.text };
+  }
+  return { state: "complete", text: observation.text };
 }
 
 function causalTransition(
@@ -156,28 +165,42 @@ function verifyEffect(
       };
 
     case "text_present": {
-      const beforePresent = predecessor.text?.includes(effect.text) === true;
-      const present = successor.text?.includes(effect.text) === true;
+      const beforeEvidence = pageTextEvidence(predecessor);
+      const successorEvidence = pageTextEvidence(successor);
+
+      if (
+        beforeEvidence.state !== "complete" ||
+        successorEvidence.state !== "complete"
+      ) {
+        return { effect, state: "unresolved" };
+      }
 
       return {
         effect,
-        state:
-          textTruncated(predecessor) || textTruncated(successor)
-            ? "unresolved"
-            : causalTransition(beforePresent, present),
+        state: causalTransition(
+          beforeEvidence.text.includes(effect.text),
+          successorEvidence.text.includes(effect.text),
+        ),
       };
     }
 
     case "text_absent": {
-      const beforePresent = predecessor.text?.includes(effect.text) === true;
-      const present = successor.text?.includes(effect.text) === true;
+      const beforeEvidence = pageTextEvidence(predecessor);
+      const successorEvidence = pageTextEvidence(successor);
+
+      if (
+        beforeEvidence.state !== "complete" ||
+        successorEvidence.state !== "complete"
+      ) {
+        return { effect, state: "unresolved" };
+      }
 
       return {
         effect,
-        state:
-          textTruncated(predecessor) || textTruncated(successor)
-            ? "unresolved"
-            : causalTransition(!beforePresent, !present),
+        state: causalTransition(
+          !beforeEvidence.text.includes(effect.text),
+          !successorEvidence.text.includes(effect.text),
+        ),
       };
     }
 
@@ -520,12 +543,15 @@ export function verifyExpectedCurrentStates(
     if (effect.kind === "target_present")
       return verifyExpectedTargetPresentState(effect, observation);
     if (effect.kind === "text_present" || effect.kind === "text_absent") {
-      const present = observation.text?.includes(effect.text) === true;
+      const evidence = pageTextEvidence(observation);
+      if (evidence.state !== "complete") {
+        return { effect, state: "unresolved" };
+      }
+      const present = evidence.text.includes(effect.text);
       return {
         effect,
-        state: textTruncated(observation)
-          ? "unresolved"
-          : effect.kind === "text_present"
+        state:
+          effect.kind === "text_present"
             ? present
               ? "observed"
               : "contradicted"
@@ -568,14 +594,15 @@ export interface ExpectedEffectEvidenceIssue {
   effectIndex: number;
   effect: ExpectedEffect;
   evidenceSurface: "page_text";
-  reason: "predecessor_text_truncated";
+  reason: "predecessor_text_unavailable" | "predecessor_text_truncated";
 }
 
 export function assessExpectedEffectEvidenceSuitability(
   expectedEffects: ExpectedEffect[],
   predecessor: BrowserObservation,
 ): ExpectedEffectEvidenceIssue[] {
-  if (!textTruncated(predecessor)) return [];
+  const evidence = pageTextEvidence(predecessor);
+  if (evidence.state === "complete") return [];
 
   return expectedEffects.flatMap((effect, effectIndex) =>
     effect.kind === "text_present" || effect.kind === "text_absent"
@@ -584,7 +611,10 @@ export function assessExpectedEffectEvidenceSuitability(
             effectIndex,
             effect,
             evidenceSurface: "page_text" as const,
-            reason: "predecessor_text_truncated" as const,
+            reason:
+              evidence.state === "unavailable"
+                ? ("predecessor_text_unavailable" as const)
+                : ("predecessor_text_truncated" as const),
           },
         ]
       : [],

@@ -241,6 +241,79 @@ describe("verified interaction semantics", () => {
     ]);
   });
 
+  it("does not turn missing predecessor or successor text into authoritative absence", () => {
+    const missingPredecessor = observation(
+      "before-missing",
+      "https://example.test",
+      "unused",
+    );
+    delete missingPredecessor.text;
+    const completeSuccessor = observation(
+      "after-complete",
+      "https://example.test",
+      "Created item",
+    );
+    const completePredecessor = observation(
+      "before-complete",
+      "https://example.test",
+      "Create item",
+    );
+    const missingSuccessor = observation(
+      "after-missing",
+      "https://example.test",
+      "unused",
+    );
+    delete missingSuccessor.text;
+
+    const effect = { kind: "text_present" as const, text: "Created item" };
+    expect(
+      verifyExpectedEffects(
+        [effect],
+        missingPredecessor,
+        completeSuccessor,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+    expect(
+      verifyExpectedEffects(
+        [effect],
+        completePredecessor,
+        missingSuccessor,
+        undefined,
+        [],
+        [],
+      ),
+    ).toEqual([expect.objectContaining({ state: "unresolved" })]);
+  });
+
+  it("requires available predecessor text for whole-page effect suitability", () => {
+    const predecessor = observation("before", "https://example.test", "unused");
+    delete predecessor.text;
+
+    expect(
+      assessExpectedEffectEvidenceSuitability(
+        [
+          { kind: "text_present", text: "Created" },
+          { kind: "text_absent", text: "Create" },
+        ],
+        predecessor,
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        effectIndex: 0,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_unavailable",
+      }),
+      expect.objectContaining({
+        effectIndex: 1,
+        evidenceSurface: "page_text",
+        reason: "predecessor_text_unavailable",
+      }),
+    ]);
+  });
+
   it("keeps outcome unknown when successor evidence is unavailable", () => {
     const effects = verifyExpectedEffects(
       [

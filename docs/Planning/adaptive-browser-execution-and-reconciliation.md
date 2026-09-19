@@ -207,17 +207,17 @@ Do not solve this by indiscriminately raising text/target limits. Larger agent-v
 
 #### Slice 3A — evidence suitability gate and canonical target verification
 
-**Implemented.** Runtime now distinguishes the bounded target presentation from an authoritative canonical-target view. `readObservation()` marks that view complete only when the canonical registry exists, target acquisition reported no errors, and the semantic-control accounting has no unexplained gap. Successor verification re-reads the inspected observation through that authority, so presentation-only `targetLimit` truncation does not make exact target effects unresolved while actual acquisition uncertainty still does.
+**Implemented.** Runtime now distinguishes the bounded target presentation from an authoritative canonical-target view. `readObservation()` marks that view complete only when the canonical registry exists, target acquisition reported no errors, and every semantic interactive control is represented in the semantic outcome partition. Total registered-target count does not contribute to that semantic completeness decision, so unrelated non-semantic targets cannot conceal a semantic discovery gap. Successor verification re-reads the inspected observation through that authority, so presentation-only `targetLimit` truncation does not make exact target effects unresolved while actual acquisition uncertainty still does.
 
-Before consequential dispatch, a pure suitability assessment rejects whole-page `text_present` and `text_absent` effects when the predecessor reports truncated text. The existing `INSPECTION_REQUIRED` error includes the unsuitable effect, incomplete `page_text` surface, `mutationDispatched: false`, and the requirement for stronger read-only evidence. This occurs before effect-journal preparation or browser mutation dispatch; complete predecessor text continues through the existing authorization, receipt, causal-verification, and replay-fencing path.
+Before consequential dispatch, a pure suitability assessment rejects whole-page `text_present` and `text_absent` effects when predecessor text is missing or truncated. The verifier independently treats missing or truncated predecessor/successor text as unresolved rather than authoritative absence. The existing `INSPECTION_REQUIRED` error includes the unsuitable effect, incomplete `page_text` surface, `mutationDispatched: false`, and the requirement for stronger read-only evidence. This occurs before effect-journal preparation or browser mutation dispatch; complete predecessor text continues through the existing authorization, receipt, causal-verification, and replay-fencing path.
 
-Deterministic evidence is in `packages/browser/src/playwright-browser-inspection.test.ts`, `apps/runtime/src/interaction/verified-interaction.test.ts`, and `apps/runtime/src/runtime.integration.test.ts`. It covers canonical targets behind a presentation limit, incomplete canonical acquisition remaining unresolved, both truncated whole-page text predicates refusing with zero dispatch and no journal record, the complete-text path, and the existing delayed one-dispatch reconciliation behavior.
+Deterministic evidence is in `packages/browser/src/playwright-browser-inspection.test.ts`, `apps/runtime/src/interaction/verified-interaction.test.ts`, and `apps/runtime/src/runtime.integration.test.ts`. It covers canonical targets behind a presentation limit, production-path semantic incompleteness remaining unresolved despite an unrelated non-semantic registered target, missing and truncated whole-page text remaining unavailable for proof, pre-dispatch refusal with zero mutation/journal/receipt effects, the complete-text path, and the existing delayed one-dispatch reconciliation behavior.
 
 The implemented slice is:
 
 1. Reuse the canonical target registry for Runtime verification. A successor returned by `inspect` may be presentation-limited, so Runtime should obtain the authoritative observation for verification rather than treating `targetsTruncated` alone as loss of canonical target truth.
 2. Represent whether the authoritative target set is complete enough for absence/presence proof separately from whether the agent-facing target presentation was truncated. Acquisition errors or unaccounted semantic controls must remain uncertainty.
-3. Add a pure expected-effect evidence-suitability assessment before consequential dispatch. At minimum, page-text effects backed by a known-truncated predecessor must be classified as requiring stronger evidence instead of being allowed to cross the mutation boundary and deterministically become unresolved.
+3. Add a pure expected-effect evidence-suitability assessment before consequential dispatch. Page-text effects backed by a missing or known-truncated predecessor must be classified as requiring stronger evidence instead of being allowed to cross the mutation boundary and deterministically become unresolved.
 4. Use the existing pre-dispatch `INSPECTION_REQUIRED` boundary with structured details for this first slice rather than inventing another error/lifecycle. It must be provably pre-dispatch and safe to follow with read-only perception work.
 5. Preserve all existing action authorization, target freshness, consequence identity, replay fencing, and effect-journal behavior.
 
@@ -225,7 +225,7 @@ Required regression evidence for Slice 3A:
 
 - a presentation-limited target list can still verify an exact target effect from canonical target evidence when target acquisition itself is complete;
 - target acquisition errors/incompleteness do not get upgraded to certainty;
-- a consequential `text_present`/`text_absent` request whose predecessor text is already truncated is refused before mutation dispatch;
+- a consequential `text_present`/`text_absent` request whose predecessor text is missing or truncated is refused before mutation dispatch;
 - the same verification remains admissible when its predecessor text is complete;
 - the motivating Drive-shaped failure therefore cannot dispatch with a proof surface Rove already knows is incapable of establishing the effect.
 
