@@ -16,6 +16,10 @@ import { CodexAppServerHost, readCodexVersion } from "./app-server-host.js";
 import { CodexRuntimeTaskAdapter } from "./codex-runtime-task-adapter.js";
 import { CodexThreadSessionSupervisor } from "./codex-thread-session-supervisor.js";
 import {
+  classifyCodexEventRecovery,
+  type CodexEventRecoveryDescriptor,
+} from "./codex-event-recovery.js";
+import {
   CodexThreadTruthReconciler,
   type CodexReconciliationFailureHint,
   type CodexReconciliationTrigger,
@@ -136,7 +140,6 @@ export class CodexExecutionCore {
   private ingress: OrderedTaskIngress | undefined;
   private detachEvents: (() => void) | undefined;
   private detachHealth: (() => void) | undefined;
-  private detachEventFailures: (() => void) | undefined;
   private reconciler: CodexThreadTruthReconciler | undefined;
   private readonly reconciliationByTask = new Map<string, Promise<void>>();
   private recoveryWarnings: string[] = [];
@@ -367,35 +370,36 @@ export class CodexExecutionCore {
       void this.recover("App Server");
     });
     this.detachEvents = rpc.onEvent(async (event) => {
-      const mapped = await this.mapCodexEvent(event);
-      if (mapped) {
-        await ingress.enqueue(this.connectionGeneration, mapped);
-        if (
-          mapped.type === "codex_item_observed" &&
-          mapped.completedHandoff &&
-          this.options.runtime.acknowledgeDurableHandoff
-        )
-          await this.options.runtime.acknowledgeDurableHandoff(
-            mapped.completedHandoff.sessionId,
-            {
-              handoffId: mapped.completedHandoff.handoffId,
-              handoffGeneration: mapped.completedHandoff.handoffGeneration,
-            },
-          );
+      const recovery = classifyCodexEventRecovery(
+        event,
+        this.connectionGeneration,
+      );
+      try {
+        const mapped = await this.mapCodexEvent(event);
+        if (mapped) {
+          await ingress.enqueue(this.connectionGeneration, mapped);
+          if (
+            mapped.type === "codex_item_observed" &&
+            mapped.completedHandoff &&
+            this.options.runtime.acknowledgeDurableHandoff
+          )
+            await this.options.runtime.acknowledgeDurableHandoff(
+              mapped.completedHandoff.sessionId,
+              {
+                handoffId: mapped.completedHandoff.handoffId,
+                handoffGeneration: mapped.completedHandoff.handoffGeneration,
+              },
+            );
+        }
+        await this.clearObservedRecoveryBlocker(recovery);
+      } catch (error) {
+        await this.recoverFailedCodexEvent(
+          error instanceof Error ? error : new Error(String(error)),
+          event,
+          recovery,
+        );
       }
     });
-    this.detachEventFailures = this.host.onEventDeliveryFailure(
-      (error, event) => {
-        void this.recoverFailedCodexEvent(error, event).catch((failure) => {
-          const message =
-            failure instanceof Error ? failure.message : String(failure);
-          this.recoveryWarnings = [
-            ...this.recoveryWarnings,
-            `Codex event reconciliation scheduling: ${message}`,
-          ].slice(-64);
-        });
-      },
-    );
     await this.options.onTaskProcessRecoveryPoint?.("contexts_restored");
     await this.recover("Desktop startup");
     await this.options.onTaskProcessRecoveryPoint?.("outbox_recovery_started");
@@ -851,32 +855,104 @@ export class CodexExecutionCore {
   private async recoverFailedCodexEvent(
     error: Error,
     event: CodexServerEvent,
+    recovery: CodexEventRecoveryDescriptor,
   ): Promise<void> {
-    const params = event.params;
-    const threadId =
-      text(params.threadId) ??
-      text(object(params.thread)?.id) ??
-      text(params.conversationId);
+    if (recovery.recoveryClass === "expendable_presentation") {
+      this.recoveryWarnings = [
+        ...this.recoveryWarnings,
+        `Codex expendable presentation event failed: ${event.method}`,
+      ].slice(-64);
+      return;
+    }
+    const threadId = recovery.threadId;
     const taskId = threadId ? await this.taskIdForThread(threadId) : undefined;
     const hint = {
-      eventFamily:
-        event.requestId === undefined ? event.method : "live_attention",
+      eventFamily: recovery.family,
       errorCategory: error.name || "Error",
     };
     if (!taskId) {
-      await this.reconcileOpenTasks("event_delivery_failure", hint);
+      if (recovery.recoveryClass === "thread_history_reconstructible")
+        await this.reconcileOpenTasks("event_delivery_failure", hint);
+      else
+        this.recoveryWarnings = [
+          ...this.recoveryWarnings,
+          `Codex ${recovery.recoveryClass} failure lacked an exact Task binding.`,
+        ].slice(-64);
       return;
     }
-    if (event.requestId !== undefined) {
-      await this.reconciler?.unresolved(
-        taskId,
-        "event_delivery_failure",
-        1,
-        hint,
-      );
+    if (
+      recovery.recoveryClass === "live_attention" ||
+      recovery.recoveryClass === "provider_other_authority"
+    ) {
+      await this.observeEventRecovery(taskId, recovery, "unresolved", hint);
       return;
     }
+    await this.observeEventRecovery(taskId, recovery, "unresolved", hint);
     await this.scheduleReconciliation(taskId, "event_delivery_failure", hint);
+  }
+
+  private async clearObservedRecoveryBlocker(
+    recovery: CodexEventRecoveryDescriptor,
+  ): Promise<void> {
+    if (
+      !this.store ||
+      !recovery.threadId ||
+      !recovery.blockerId ||
+      (recovery.recoveryClass !== "live_attention" &&
+        recovery.recoveryClass !== "provider_other_authority")
+    )
+      return;
+    const taskId = await this.taskIdForThread(recovery.threadId);
+    if (!taskId) return;
+    const aggregate = await this.store.aggregate(taskId);
+    if (!aggregate?.codexRecoveryBlockers?.[recovery.blockerId]) return;
+    await this.observeEventRecovery(taskId, recovery, "succeeded", {
+      eventFamily: recovery.family,
+    });
+  }
+
+  private async observeEventRecovery(
+    taskId: string,
+    recovery: CodexEventRecoveryDescriptor,
+    outcome: "succeeded" | "unresolved",
+    hint: CodexReconciliationFailureHint,
+  ): Promise<void> {
+    if (
+      !this.ingress ||
+      !recovery.threadId ||
+      !recovery.blockerId ||
+      recovery.recoveryClass === "expendable_presentation"
+    )
+      return;
+    const observedAt = new Date().toISOString();
+    const diagnosticId = randomUUID();
+    await this.ingress.enqueue(this.connectionGeneration, {
+      schemaVersion: 1,
+      type: "codex_reconciliation_observed",
+      eventId: `codex-recovery:${taskId}:${diagnosticId}`,
+      taskId,
+      source: {
+        kind: "host",
+        id: `codex-event-recovery:${recovery.threadId}:${diagnosticId}`,
+        generation: Math.max(1, this.connectionGeneration),
+        position: 1,
+      },
+      observedAt,
+      diagnostic: {
+        trigger: "event_delivery_failure",
+        outcome,
+        recoveryClass: recovery.recoveryClass,
+        blockerId: recovery.blockerId,
+        threadId: recovery.threadId,
+        attempt: 1,
+        observedAt,
+        eventFamily: recovery.family,
+        ...(recovery.correlationId
+          ? { correlationId: recovery.correlationId }
+          : {}),
+        ...hint,
+      },
+    });
   }
 
   private async reconcileOpenTasks(
@@ -1128,7 +1204,6 @@ export class CodexExecutionCore {
     this.runtimePoll = undefined;
     this.detachEvents?.();
     this.detachHealth?.();
-    this.detachEventFailures?.();
     await Promise.allSettled(this.reconciliationByTask.values());
     await this.ingress?.drain();
     await this.host.drainEvents();

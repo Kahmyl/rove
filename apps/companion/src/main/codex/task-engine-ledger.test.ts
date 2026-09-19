@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   projectTaskAggregate,
   TaskEngine,
+  type TaskAggregate,
   type TaskEvent,
 } from "@rove/protocol";
 
@@ -75,6 +76,59 @@ describe("SQLite task engine ledger", () => {
     expect(await store.projection(accepted.aggregate.taskId)).toEqual(
       accepted.projection,
     );
+    store.close();
+  });
+
+  it("normalizes a legacy generic Codex recovery marker into a typed blocker", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const aggregate = structuredClone(accepted.aggregate) as TaskAggregate & {
+      codexRecoveryBlockers?: unknown;
+    };
+    const projection = structuredClone(
+      accepted.projection,
+    ) as typeof accepted.projection & {
+      codexRecoveryBlockers?: unknown;
+    };
+    delete aggregate.codexRecoveryBlockers;
+    delete projection.codexRecoveryBlockers;
+    aggregate.recoveryRequired =
+      "Codex history reconciliation could not establish current durable task truth.";
+    projection.recoveryRequired = aggregate.recoveryRequired;
+    const legacyDiagnostic = {
+      trigger: "event_delivery_failure" as const,
+      outcome: "unresolved" as const,
+      threadId: "thread_legacy",
+      attempt: 1,
+      observedAt: "2026-09-09T12:00:01.000Z",
+      eventFamily: "live_attention",
+    };
+    aggregate.codexReconciliation = [legacyDiagnostic as never];
+    projection.codexReconciliation = [legacyDiagnostic as never];
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        "UPDATE task_engine_projection SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(projection), aggregate.taskId);
+    database.close();
+
+    expect(
+      Object.values(
+        (await store.aggregate(aggregate.taskId))?.codexRecoveryBlockers ?? {},
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        recoveryClass: "live_attention",
+        family: "live_attention",
+        threadId: "thread_legacy",
+      }),
+    ]);
     store.close();
   });
 
@@ -152,7 +206,10 @@ describe("SQLite task engine ledger", () => {
         status: "pending",
       },
     ];
-    aggregate.requestedOperation = { type: "observe", taskId: aggregate.taskId };
+    aggregate.requestedOperation = {
+      type: "observe",
+      taskId: aggregate.taskId,
+    };
     const projection = projectTaskAggregate(aggregate);
     const database = new Database(path);
     database

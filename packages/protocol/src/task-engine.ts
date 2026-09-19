@@ -129,11 +129,29 @@ export interface TaskCodexReconciliationDiagnostic {
     | "authority_contradiction"
     | "explicit_read";
   outcome: "scheduled" | "succeeded" | "unresolved";
+  recoveryClass: TaskCodexRecoveryClass;
+  blockerId: string;
   threadId: string;
   attempt: number;
   observedAt: string;
   eventFamily?: string;
   errorCategory?: string;
+  correlationId?: string;
+}
+
+export type TaskCodexRecoveryClass =
+  | "thread_history_reconstructible"
+  | "live_attention"
+  | "provider_other_authority";
+
+export interface TaskCodexRecoveryBlocker {
+  blockerId: string;
+  recoveryClass: TaskCodexRecoveryClass;
+  family: string;
+  threadId: string;
+  correlationId?: string;
+  unresolvedAt: string;
+  lastObservedAt: string;
 }
 
 export interface TaskMessageDeliveryEvidence {
@@ -331,6 +349,7 @@ export interface TaskAggregate {
   >;
   recoveryRequired: string | null;
   codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
+  codexRecoveryBlockers?: Readonly<Record<string, TaskCodexRecoveryBlocker>>;
 }
 
 export interface TaskProjection {
@@ -348,6 +367,7 @@ export interface TaskProjection {
   messageDeliveries: TaskAggregate["messageDeliveries"];
   recoveryRequired: string | null;
   codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
+  codexRecoveryBlockers?: Readonly<Record<string, TaskCodexRecoveryBlocker>>;
 }
 
 export type TaskCommandExecutionClass =
@@ -586,7 +606,67 @@ export function emptyTaskAggregate(taskId: string): TaskAggregate {
     sourcePositions: {},
     recoveryRequired: null,
     codexReconciliation: [],
+    codexRecoveryBlockers: {},
   };
+}
+
+const CODEX_RECOVERY_REQUIRED =
+  "Codex external truth requires authoritative reconciliation.";
+const LEGACY_CODEX_RECOVERY_REQUIRED =
+  "Codex history reconciliation could not establish current durable task truth.";
+const MAX_CODEX_RECOVERY_BLOCKERS_PER_CLASS = 32;
+
+function addCodexRecoveryBlocker(
+  current: Readonly<Record<string, TaskCodexRecoveryBlocker>>,
+  blocker: TaskCodexRecoveryBlocker,
+): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
+  const next = { ...current };
+  const existing = next[blocker.blockerId];
+  if (existing) {
+    next[blocker.blockerId] = {
+      ...blocker,
+      unresolvedAt: existing.unresolvedAt,
+    };
+    return next;
+  }
+  const sameClass = Object.values(next).filter(
+    (entry) => entry.recoveryClass === blocker.recoveryClass,
+  );
+  if (sameClass.length < MAX_CODEX_RECOVERY_BLOCKERS_PER_CLASS) {
+    next[blocker.blockerId] = blocker;
+    return next;
+  }
+  const overflowId = `codex-recovery:${blocker.recoveryClass}:overflow`;
+  if (!next[overflowId]) {
+    const oldest = sameClass.find((entry) => entry.blockerId !== overflowId);
+    if (oldest) delete next[oldest.blockerId];
+    next[overflowId] = {
+      blockerId: overflowId,
+      recoveryClass: blocker.recoveryClass,
+      family: "overflow",
+      threadId: blocker.threadId,
+      unresolvedAt: blocker.unresolvedAt,
+      lastObservedAt: blocker.lastObservedAt,
+    };
+  } else {
+    next[overflowId] = {
+      ...next[overflowId],
+      lastObservedAt: blocker.lastObservedAt,
+    };
+  }
+  return next;
+}
+
+function synchronizeCodexRecoveryRequired(aggregate: TaskAggregate): void {
+  const hasCodexBlocker =
+    Object.keys(aggregate.codexRecoveryBlockers ?? {}).length > 0;
+  const ownsRecoveryString =
+    aggregate.recoveryRequired === CODEX_RECOVERY_REQUIRED ||
+    aggregate.recoveryRequired === LEGACY_CODEX_RECOVERY_REQUIRED;
+  if (hasCodexBlocker) {
+    if (aggregate.recoveryRequired === null || ownsRecoveryString)
+      aggregate.recoveryRequired = CODEX_RECOVERY_REQUIRED;
+  } else if (ownsRecoveryString) aggregate.recoveryRequired = null;
 }
 
 function canonical(value: unknown): string {
@@ -1133,6 +1213,7 @@ export function foldTaskEvent(
   aggregate.messageDeliveries ??= {};
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
+  aggregate.codexRecoveryBlockers ??= {};
   if (aggregate.taskId !== event.taskId)
     throw new Error("Task event targets a different aggregate.");
   const sourceKey = `${event.source.kind}:${event.source.id}`;
@@ -1351,18 +1432,29 @@ export function foldTaskEvent(
         ...(aggregate.codexReconciliation ?? []),
         structuredClone(event.diagnostic),
       ].slice(-32);
-      if (
-        event.diagnostic.outcome === "unresolved" &&
-        aggregate.recoveryRequired === null
-      )
-        aggregate.recoveryRequired =
-          "Codex history reconciliation could not establish current durable task truth.";
-      else if (
-        event.diagnostic.outcome === "succeeded" &&
-        aggregate.recoveryRequired ===
-          "Codex history reconciliation could not establish current durable task truth."
-      )
-        aggregate.recoveryRequired = null;
+      if (event.diagnostic.outcome === "unresolved")
+        aggregate.codexRecoveryBlockers = addCodexRecoveryBlocker(
+          aggregate.codexRecoveryBlockers ?? {},
+          {
+            blockerId: event.diagnostic.blockerId,
+            recoveryClass: event.diagnostic.recoveryClass,
+            family:
+              event.diagnostic.eventFamily ?? event.diagnostic.recoveryClass,
+            threadId: event.diagnostic.threadId,
+            ...(event.diagnostic.correlationId
+              ? { correlationId: event.diagnostic.correlationId }
+              : {}),
+            unresolvedAt:
+              aggregate.codexRecoveryBlockers?.[event.diagnostic.blockerId]
+                ?.unresolvedAt ?? event.diagnostic.observedAt,
+            lastObservedAt: event.diagnostic.observedAt,
+          },
+        );
+      else if (event.diagnostic.outcome === "succeeded") {
+        const blockers = { ...(aggregate.codexRecoveryBlockers ?? {}) };
+        delete blockers[event.diagnostic.blockerId];
+        aggregate.codexRecoveryBlockers = blockers;
+      }
       break;
     case "codex_request_observed":
       aggregate.attentions = upsertCodexAttentions(
@@ -1525,6 +1617,7 @@ export function foldTaskEvent(
     default:
       break;
   }
+  synchronizeCodexRecoveryRequired(aggregate);
   assertBindings(aggregate);
   return aggregate;
 }
@@ -1864,6 +1957,9 @@ export function projectTaskAggregate(aggregate: TaskAggregate): TaskProjection {
     messageDeliveries: structuredClone(aggregate.messageDeliveries),
     recoveryRequired: aggregate.recoveryRequired,
     codexReconciliation: structuredClone(aggregate.codexReconciliation ?? []),
+    codexRecoveryBlockers: structuredClone(
+      aggregate.codexRecoveryBlockers ?? {},
+    ),
   };
 }
 
@@ -2021,6 +2117,7 @@ export class TaskEngine {
                 : `Command ${priorCommand.type} failed.`;
         }
       }
+      synchronizeCodexRecoveryRequired(aggregate);
       const output = outputFor(aggregate);
       const outcomeReleasesActive =
         event.type === "command_outcome_observed" &&

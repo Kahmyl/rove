@@ -40,6 +40,10 @@ Before this correction, ordered ingress provided generation fencing, serialized 
 
 The implemented boundary adds a task-bound thread-truth reconciler, shared item/handoff normalization, bounded durable reconciliation diagnostics, and triggers for delivery failure, reconnect, startup, and exact Runtime/continuation contradiction. Acceptance failures now reject the ingress caller after recording recovery state, allowing the owning layer to schedule reconstruction.
 
+Task-ingestion recovery is owned by the ExecutionCore listener that maps and commits the event. A generic host listener failure remains visible in host health but cannot create a Task blocker after the Task listener already committed. Failed events cross one semantic classification boundary: `THREAD_HISTORY_RECONSTRUCTIBLE`, `LIVE_ATTENTION`, `PROVIDER_OTHER_AUTHORITY`, or `EXPENDABLE_PRESENTATION`.
+
+Unresolved durable blockers are keyed by recovery class and exact semantic correlation. Thread history has one exact thread-bound blocker; live attention uses connection generation plus typed wire request identity; provider archive membership uses the exact bound thread membership identity. Success deletes only its matching blocker. Per-class bounds collapse excess uncertainty into a class-specific overflow blocker that stays fail-closed.
+
 ## Implementation slices and dependencies
 
 The reconciler depends on the existing qualified history reader, exact persisted Task bindings, shared Codex item normalization, Runtime corroboration for handoffs, and ordered `TaskEngine` acceptance. Each later slice relies on those authority checks; none introduces an alternate write path.
@@ -71,7 +75,12 @@ No SQL migration or destructive data rewrite is required. Existing aggregate JSO
 | Reconnect                                              | Open bound Tasks are scheduled after connection replacement                                                                   | Execution-core trigger and generation-fence tests |
 | Restart                                                | Open bound Tasks reconcile before normal recovery publication                                                                 | Execution-core startup recovery test              |
 | Multi-Task shared connection                           | Repairing Task A leaves Task B unchanged                                                                                      | Production reconciler SQLite test                 |
-| Lost live-only attention                               | No approval is fabricated; affected Task enters bounded recovery-required state                                               | Production reconciler SQLite test                 |
+| Lost live-only attention                               | No approval is fabricated; history success cannot clear its exact blocker; matching live authority can                        | ExecutionCore recovery ownership test             |
+| Lost `serverRequest/resolved`                          | Exact live-attention blocker persists across history reconciliation and clears only on matching resolution                    | ExecutionCore recovery ownership test             |
+| Lost provider archive notification                     | Conversation history does not claim membership repair; a later exact provider notification clears its blocker                 | ExecutionCore recovery ownership test             |
+| Failed progress/delta                                  | No durable recovery blocker; terminal history remains authoritative                                                           | ExecutionCore recovery ownership test             |
+| Unrelated listener failure                             | Task commit remains accepted and no false Task blocker is created                                                             | RPC and ExecutionCore listener-isolation tests    |
+| Multiple blocker classes                               | Resolving one authority leaves every unrelated blocker intact                                                                 | Task aggregate recovery-class test                |
 
 ## Acceptance conditions
 

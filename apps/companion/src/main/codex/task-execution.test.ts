@@ -546,6 +546,50 @@ describe("generated boundary", () => {
     ]);
     await rpc.closeUncertain("test complete");
   });
+  it("reports one listener failure after unrelated listeners have committed", async () => {
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const committed: CodexServerEvent[] = [];
+    const failures: Array<{ error: Error; event: CodexServerEvent }> = [];
+    const rpc = new CodexRpcConnection({
+      stdin,
+      stdout,
+      connectionId: "listener-ownership",
+      onEventFailure: (error, event) => failures.push({ error, event }),
+    });
+    rpc.onEvent((event) => {
+      committed.push(event);
+    });
+    rpc.onEvent(() => {
+      throw new Error("unrelated listener failed");
+    });
+    stdout.write(
+      `${JSON.stringify({
+        id: 17,
+        method: "item/fileChange/requestApproval",
+        params: {
+          threadId: "thread_1",
+          turnId: "turn_1",
+          itemId: "item_1",
+          startedAtMs: 1,
+        },
+      })}\n`,
+    );
+    await rpc.drainEvents();
+    expect(committed).toHaveLength(1);
+    expect(failures).toEqual([
+      {
+        error: expect.objectContaining({
+          message: "unrelated listener failed",
+        }),
+        event: expect.objectContaining({
+          method: "item/fileChange/requestApproval",
+          wireRequestId: 17,
+        }),
+      },
+    ]);
+    await rpc.closeUncertain("test complete");
+  });
   it("records negotiated initialize identity in the supervised host", async () => {
     const stdin = new PassThrough();
     const stdout = new PassThrough();

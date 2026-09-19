@@ -10,6 +10,7 @@ import type { CodexThreadSessionSupervisor } from "./codex-thread-session-superv
 import type { OrderedTaskIngress } from "./ordered-task-ingress.js";
 import type { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 import type { TaskRuntimePort } from "./task-coordinator.js";
+import { threadHistoryBlockerId } from "./codex-event-recovery.js";
 import {
   composeCompletedRequestHumanHandoff,
   projectedItem,
@@ -252,7 +253,16 @@ export class CodexThreadTruthReconciler {
         position: 1,
       },
       observedAt,
-      diagnostic: { trigger, outcome, threadId, attempt, observedAt, ...hint },
+      diagnostic: {
+        trigger,
+        outcome,
+        recoveryClass: "thread_history_reconstructible",
+        blockerId: threadHistoryBlockerId(threadId),
+        threadId,
+        attempt,
+        observedAt,
+        ...hint,
+      },
     };
     return this.accept(event);
   }

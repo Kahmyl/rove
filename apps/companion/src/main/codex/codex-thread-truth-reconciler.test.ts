@@ -47,7 +47,8 @@ describe("Codex thread truth reconciliation", () => {
       respond: vi.fn(),
       onEvent: vi.fn(() => () => undefined),
     } as unknown as CodexRpcPort;
-    const ingress = new OrderedTaskIngress(new TaskEngine(store), (error) => {
+    const engine = new TaskEngine(store);
+    const ingress = new OrderedTaskIngress(engine, (error) => {
       throw error;
     });
     ingress.replaceGeneration(1);
@@ -71,6 +72,31 @@ describe("Codex thread truth reconciliation", () => {
       } as never,
       () => 1,
     );
+
+    const liveAttentionBlocker = "codex-recovery:live-attention:lost-request";
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_reconciliation_observed",
+      eventId: "lost-live-attention",
+      taskId,
+      source: {
+        kind: "host",
+        id: "failure-router",
+        generation: 1,
+        position: 1,
+      },
+      observedAt: "2026-09-19T00:00:00.000Z",
+      diagnostic: {
+        trigger: "event_delivery_failure",
+        outcome: "unresolved",
+        recoveryClass: "live_attention",
+        blockerId: liveAttentionBlocker,
+        threadId: "thread_a",
+        attempt: 1,
+        observedAt: "2026-09-19T00:00:00.000Z",
+        eventFamily: "item/fileChange/requestApproval",
+      },
+    });
 
     await reconciler.reconcile(taskId, "authority_contradiction", 1);
     await reconciler.reconcile(taskId, "authority_contradiction", 1);
@@ -104,6 +130,12 @@ describe("Codex thread truth reconciliation", () => {
       codexReconciliation: expect.arrayContaining([
         expect.objectContaining({ outcome: "succeeded" }),
       ]),
+      codexRecoveryBlockers: {
+        [liveAttentionBlocker]: expect.objectContaining({
+          recoveryClass: "live_attention",
+        }),
+      },
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
     });
     expect(acknowledgeDurableHandoff).toHaveBeenCalledWith(sessionId, {
       handoffId,
@@ -111,7 +143,7 @@ describe("Codex thread truth reconciliation", () => {
     });
     expect((await store.aggregate(otherTaskId))?.revision).toBe(0);
 
-    await new TaskEngine(store).accept({
+    await engine.accept({
       schemaVersion: 1,
       type: "codex_item_observed",
       eventId: "late-live-assistant-start",
@@ -141,7 +173,7 @@ describe("Codex thread truth reconciliation", () => {
       status: "completed",
       text: "Final answer",
     });
-    await new TaskEngine(store).accept({
+    await engine.accept({
       schemaVersion: 1,
       type: "codex_turn_observed",
       eventId: "late-live-turn-start",
@@ -157,7 +189,7 @@ describe("Codex thread truth reconciliation", () => {
       turn: { turn: "active", turnId: "turn_a", runtimeStatus: "active" },
     });
     expect((await store.aggregate(taskId))?.codex.turn).toBe("completed");
-    await new TaskEngine(store).accept({
+    await engine.accept({
       schemaVersion: 1,
       type: "codex_turn_observed",
       eventId: "late-live-prior-turn-terminal",
@@ -186,10 +218,11 @@ describe("Codex thread truth reconciliation", () => {
     });
     expect(await store.aggregate(otherTaskId)).toMatchObject({
       attentions: [],
-      recoveryRequired: expect.stringContaining("could not establish"),
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
       codexReconciliation: [
         expect.objectContaining({
           outcome: "unresolved",
+          recoveryClass: "thread_history_reconstructible",
           eventFamily: "live_attention",
         }),
       ],

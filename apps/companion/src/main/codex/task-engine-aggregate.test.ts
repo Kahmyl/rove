@@ -88,6 +88,121 @@ function event(position: number, patch: Partial<TaskEvent>): TaskEvent {
 }
 
 describe("TaskAggregate exact event fold", () => {
+  it("clears only the exact recovery blocker owned by the successful authority", () => {
+    const threadBlocker = "codex-recovery:thread-history:test";
+    const liveBlocker = "codex-recovery:live-attention:test";
+    const otherLiveBlocker = "codex-recovery:live-attention:other";
+    const providerBlocker = "codex-recovery:provider:test";
+    let value = aggregate();
+    const observe = (
+      position: number,
+      recoveryClass:
+        | "thread_history_reconstructible"
+        | "live_attention"
+        | "provider_other_authority",
+      blockerId: string,
+      outcome: "unresolved" | "succeeded",
+    ) =>
+      event(position, {
+        type: "codex_reconciliation_observed",
+        diagnostic: {
+          trigger: "event_delivery_failure",
+          outcome,
+          recoveryClass,
+          blockerId,
+          threadId,
+          attempt: 1,
+          observedAt: `2026-09-09T12:00:${String(position).padStart(2, "0")}.000Z`,
+          eventFamily: recoveryClass,
+        },
+      });
+
+    value = foldTaskEvent(
+      value,
+      observe(1, "live_attention", liveBlocker, "unresolved"),
+    );
+    value = foldTaskEvent(
+      value,
+      observe(2, "provider_other_authority", providerBlocker, "unresolved"),
+    );
+    value = foldTaskEvent(
+      value,
+      observe(3, "thread_history_reconstructible", threadBlocker, "succeeded"),
+    );
+    expect(value.codexRecoveryBlockers).toEqual({
+      [liveBlocker]: expect.objectContaining({
+        recoveryClass: "live_attention",
+      }),
+      [providerBlocker]: expect.objectContaining({
+        recoveryClass: "provider_other_authority",
+      }),
+    });
+    expect(value.recoveryRequired).toContain("authoritative reconciliation");
+
+    value = foldTaskEvent(
+      value,
+      observe(4, "live_attention", otherLiveBlocker, "succeeded"),
+    );
+    expect(value.codexRecoveryBlockers?.[liveBlocker]).toBeDefined();
+    value = foldTaskEvent(
+      value,
+      observe(5, "live_attention", liveBlocker, "succeeded"),
+    );
+    expect(value.codexRecoveryBlockers?.[liveBlocker]).toBeUndefined();
+    expect(value.codexRecoveryBlockers?.[providerBlocker]).toBeDefined();
+
+    value = foldTaskEvent(
+      value,
+      observe(6, "thread_history_reconstructible", threadBlocker, "unresolved"),
+    );
+    value = foldTaskEvent(
+      value,
+      observe(7, "thread_history_reconstructible", threadBlocker, "succeeded"),
+    );
+    expect(value.codexRecoveryBlockers?.[threadBlocker]).toBeUndefined();
+    expect(value.codexRecoveryBlockers?.[providerBlocker]).toBeDefined();
+    value = foldTaskEvent(
+      value,
+      observe(8, "provider_other_authority", providerBlocker, "succeeded"),
+    );
+    expect(value.codexRecoveryBlockers).toEqual({});
+    expect(value.recoveryRequired).toBeNull();
+  });
+
+  it("bounds recovery blockers per authority without dropping overflow uncertainty", () => {
+    let value = aggregate();
+    for (let position = 1; position <= 34; position += 1)
+      value = foldTaskEvent(
+        value,
+        event(position, {
+          type: "codex_reconciliation_observed",
+          diagnostic: {
+            trigger: "event_delivery_failure",
+            outcome: "unresolved",
+            recoveryClass: "live_attention",
+            blockerId: `live-blocker-${position}`,
+            threadId,
+            attempt: 1,
+            observedAt: `2026-09-09T12:01:${String(position).padStart(2, "0")}.000Z`,
+            eventFamily: "item/fileChange/requestApproval",
+          },
+        }),
+      );
+
+    const blockers = Object.values(value.codexRecoveryBlockers ?? {});
+    expect(blockers).toHaveLength(32);
+    expect(blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          blockerId: "codex-recovery:live_attention:overflow",
+          recoveryClass: "live_attention",
+          family: "overflow",
+        }),
+      ]),
+    );
+    expect(value.recoveryRequired).toContain("authoritative reconciliation");
+  });
+
   it("records materialized message delivery from the authoritative user item", () => {
     const operationId = "intent_52345678-1234-4123-8123-123456789abc";
     const folded = foldTaskEvent(

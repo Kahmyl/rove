@@ -10,7 +10,7 @@ Ephemeral presentation includes token deltas, temporary progress text, cursor po
 
 External observations are facts from Codex, the browser, or an integration. Validate and correlate them before using them to change product state. An external event is not an authorization to execute a new action.
 
-For the Codex adapter, qualified exact `thread/read` history is the resnapshot source for reconstructible turn, item, message-correlation, tool, and completed request-human facts. Live notifications and history observations enter the same Task reducer with stable semantic identities. Normal thread history does not reconstruct outstanding server-request attention, so that family remains generation-fenced and fail-closed rather than inferred from nearby prose.
+For the Codex adapter, qualified exact `thread/read` history is the resnapshot source for reconstructible turn, item, message-correlation, tool, and completed request-human facts. Live notifications and history observations enter the same Task reducer with stable semantic identities. Durable recovery blockers retain their authority class and exact correlation: a history success clears only thread-history uncertainty. Normal thread history does not reconstruct outstanding server-request attention or provider archive membership, so those families remain independently generation-fenced and fail-closed rather than inferred from nearby prose. Intermediate progress/delta delivery is presentation-only when terminal history is sufficient.
 
 ## Logical event shape
 
