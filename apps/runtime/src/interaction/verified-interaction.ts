@@ -12,6 +12,12 @@ import type {
   TargetReference,
   VerifiedInteractionRequest,
 } from "@rove/protocol";
+import type { FocusedPageTextRead } from "@rove/browser";
+
+export type FocusedPageTextEvidence = ReadonlyMap<
+  string,
+  Pick<FocusedPageTextRead, "state">
+>;
 
 function normalize(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -53,6 +59,20 @@ function pageTextEvidence(observation: BrowserObservation): PageTextEvidence {
     return { state: "incomplete", text: observation.text };
   }
   return { state: "complete", text: observation.text };
+}
+
+function pageTextProposition(
+  observation: BrowserObservation,
+  query: string,
+  focusedEvidence?: FocusedPageTextEvidence,
+): boolean | undefined {
+  const evidence = pageTextEvidence(observation);
+  if (evidence.state === "complete") return evidence.text.includes(query);
+
+  const focused = focusedEvidence?.get(query)?.state;
+  if (focused === "present") return true;
+  if (focused === "absent") return false;
+  return undefined;
 }
 
 function causalTransition(
@@ -132,6 +152,8 @@ function verifyEffect(
   result: ActionResult | undefined,
   beforePages: PageSummary[],
   afterPages: PageSummary[] | undefined,
+  predecessorTextEvidence?: FocusedPageTextEvidence,
+  successorTextEvidence?: FocusedPageTextEvidence,
 ): EffectVerification {
   if (effect.kind === "download_completed") {
     return { effect, state: "unresolved" };
@@ -165,41 +187,38 @@ function verifyEffect(
       };
 
     case "text_present": {
-      const beforeEvidence = pageTextEvidence(predecessor);
-      const successorEvidence = pageTextEvidence(successor);
-
-      if (
-        beforeEvidence.state !== "complete" ||
-        successorEvidence.state !== "complete"
-      ) {
-        return { effect, state: "unresolved" };
-      }
-
       return {
         effect,
         state: causalTransition(
-          beforeEvidence.text.includes(effect.text),
-          successorEvidence.text.includes(effect.text),
+          pageTextProposition(
+            predecessor,
+            effect.text,
+            predecessorTextEvidence,
+          ),
+          pageTextProposition(successor, effect.text, successorTextEvidence),
         ),
       };
     }
 
     case "text_absent": {
-      const beforeEvidence = pageTextEvidence(predecessor);
-      const successorEvidence = pageTextEvidence(successor);
-
-      if (
-        beforeEvidence.state !== "complete" ||
-        successorEvidence.state !== "complete"
-      ) {
-        return { effect, state: "unresolved" };
-      }
+      const predecessorPresent = pageTextProposition(
+        predecessor,
+        effect.text,
+        predecessorTextEvidence,
+      );
+      const successorPresent = pageTextProposition(
+        successor,
+        effect.text,
+        successorTextEvidence,
+      );
 
       return {
         effect,
         state: causalTransition(
-          !beforeEvidence.text.includes(effect.text),
-          !successorEvidence.text.includes(effect.text),
+          predecessorPresent === undefined
+            ? undefined
+            : !predecessorPresent,
+          successorPresent === undefined ? undefined : !successorPresent,
         ),
       };
     }
@@ -507,6 +526,8 @@ export function verifyExpectedEffects(
   result: ActionResult | undefined,
   beforePages: PageSummary[],
   afterPages: PageSummary[] | undefined,
+  predecessorTextEvidence?: FocusedPageTextEvidence,
+  successorTextEvidence?: FocusedPageTextEvidence,
 ): EffectVerification[] {
   return expectedEffects.map((effect) =>
     verifyEffect(
@@ -516,6 +537,8 @@ export function verifyExpectedEffects(
       result,
       beforePages,
       afterPages,
+      predecessorTextEvidence,
+      successorTextEvidence,
     ),
   );
 }
@@ -538,16 +561,20 @@ export function verifyExpectedTargetPresentState(
 export function verifyExpectedCurrentStates(
   expectedEffects: ExpectedEffect[],
   observation: BrowserObservation,
+  focusedTextEvidence?: FocusedPageTextEvidence,
 ): EffectVerification[] {
   return expectedEffects.map((effect) => {
     if (effect.kind === "target_present")
       return verifyExpectedTargetPresentState(effect, observation);
     if (effect.kind === "text_present" || effect.kind === "text_absent") {
-      const evidence = pageTextEvidence(observation);
-      if (evidence.state !== "complete") {
+      const present = pageTextProposition(
+        observation,
+        effect.text,
+        focusedTextEvidence,
+      );
+      if (present === undefined) {
         return { effect, state: "unresolved" };
       }
-      const present = evidence.text.includes(effect.text);
       return {
         effect,
         state:

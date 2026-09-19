@@ -19,6 +19,7 @@ import {
   type FixtureServer,
 } from "../fixtures/fixture-server.js";
 import {
+  classifyFocusedTextRead,
   extractVisibleText,
   normalizeVisibleText,
 } from "./text-extractor.js";
@@ -83,5 +84,25 @@ describe("extractVisibleText", () => {
 
     expect(result.text.length).toBe(50);
     expect(result.truncated).toBe(true);
+  });
+});
+
+describe("classifyFocusedTextRead", () => {
+  it("keeps a failed negative read unknown", () => {
+    expect(classifyFocusedTextRead("Created", ["Unrelated text"], 1)).toBe(
+      "unknown",
+    );
+  });
+
+  it("preserves positive evidence despite an unrelated frame failure", () => {
+    expect(classifyFocusedTextRead("Created", ["Item Created"], 1)).toBe(
+      "present",
+    );
+  });
+
+  it("reports absence only after every relevant frame was read", () => {
+    expect(classifyFocusedTextRead("Created", ["Unrelated text", "More"], 0)).toBe(
+      "absent",
+    );
   });
 });

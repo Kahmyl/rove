@@ -29,6 +29,19 @@ export interface BrowserTargetFileState {
   sha256: string;
 }
 
+export interface FocusedPageTextRead {
+  observationId: string;
+  pageId: string;
+  revision: number;
+  mutationVersion: number;
+  url: string;
+  query: string;
+  state: "present" | "absent" | "unknown";
+  frameCount: number;
+  checkedFrameCount: number;
+  failedFrames: Array<{ index: number; url: string }>;
+}
+
 export interface PageRecordingStartRequest {
   recordingId: string;
   pageId: string;
@@ -65,6 +78,10 @@ export interface BrowserSession {
   ): Promise<BrowserObservation>;
   resolveTarget(request: TargetResolutionRequest): Promise<TargetResolution>;
   readObservation(observationId: string): Promise<BrowserObservation>;
+  readPageText(
+    observationId: string,
+    query: string,
+  ): Promise<FocusedPageTextRead>;
   readTargetFiles(target: TargetReference): Promise<BrowserTargetFileState[]>;
   readTargetValue(target: TargetReference): Promise<string>;
   interact(

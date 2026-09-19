@@ -78,7 +78,11 @@ import {
   InteractionDispatchError,
   InteractionNotDispatchedError,
 } from "@rove/browser";
-import type { BrowserActivity } from "@rove/browser";
+import type {
+  BrowserActivity,
+  BrowserSession,
+  FocusedPageTextRead,
+} from "@rove/browser";
 import { BrowserService } from "./browser/browser.service.js";
 import { BrowserCommandCoordinator } from "./control/command-coordinator.js";
 import {
@@ -107,6 +111,7 @@ import {
   interactionActionProposal,
   verifyExpectedEffects,
   verifyExpectedCurrentStates,
+  type FocusedPageTextEvidence,
 } from "./interaction/verified-interaction.js";
 import { ConsequenceReplayFence } from "./interaction/consequence-replay-fence.js";
 import { SemanticTransactionStore } from "./interaction/semantic-transaction-store.js";
@@ -114,6 +119,35 @@ import { RUNTIME_PROVENANCE } from "./runtime-provenance.js";
 
 function normalizedIdentity(value: string | undefined): string {
   return (value ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+async function readFocusedPageTextEvidence(
+  browser: BrowserSession,
+  observation: BrowserObservation,
+  expectedEffects: ExpectedEffect[],
+): Promise<Map<string, FocusedPageTextRead>> {
+  if (
+    observation.text !== undefined &&
+    observation.metadata?.textTruncated !== true
+  ) {
+    return new Map();
+  }
+
+  const queries = new Set(
+    expectedEffects.flatMap((effect) =>
+      effect.kind === "text_present" || effect.kind === "text_absent"
+        ? [effect.text]
+        : [],
+    ),
+  );
+  const evidence = new Map<string, FocusedPageTextRead>();
+  for (const query of queries) {
+    evidence.set(
+      query,
+      await browser.readPageText(observation.observationId, query),
+    );
+  }
+  return evidence;
 }
 
 function taskResultPlanActionFingerprint(input: {
@@ -1240,11 +1274,27 @@ export class RuntimeService implements RoveRuntime {
 
           lease.assertCurrent();
 
+          const predecessorTextEvidence =
+            await readFocusedPageTextEvidence(
+              browser,
+              predecessor,
+              input.expectedEffects,
+            );
+
+          lease.assertCurrent();
+
           if (input.consequential) {
             const unsuitableEffects = assessExpectedEffectEvidenceSuitability(
               input.expectedEffects,
               predecessor,
-            );
+            ).filter((issue) => {
+              const effect = issue.effect;
+              return (
+                (effect.kind === "text_present" ||
+                  effect.kind === "text_absent") &&
+                predecessorTextEvidence.get(effect.text)?.state === "unknown"
+              );
+            });
             if (unsuitableEffects.length > 0) {
               throw new RoveError({
                 code: "INSPECTION_REQUIRED",
@@ -1688,12 +1738,18 @@ export class RuntimeService implements RoveRuntime {
           lease.assertCurrent();
 
           let successor: BrowserObservation | undefined;
+          let successorTextEvidence: FocusedPageTextEvidence | undefined;
 
           if (!synchronizationFailed) {
             try {
               const presentedSuccessor = await browser.inspect();
               successor = await browser.readObservation(
                 presentedSuccessor.observationId,
+              );
+              successorTextEvidence = await readFocusedPageTextEvidence(
+                browser,
+                successor,
+                input.expectedEffects,
               );
 
               lease.assertCurrent();
@@ -1733,6 +1789,8 @@ export class RuntimeService implements RoveRuntime {
             result,
             beforePages,
             afterPages,
+            predecessorTextEvidence,
+            successorTextEvidence,
           );
 
           if (downloadEffect !== undefined && downloadSignal !== undefined) {
@@ -1791,6 +1849,11 @@ export class RuntimeService implements RoveRuntime {
                 successor = await browser.readObservation(
                   presentedSuccessor.observationId,
                 );
+                successorTextEvidence = await readFocusedPageTextEvidence(
+                  browser,
+                  successor,
+                  input.expectedEffects,
+                );
                 lease.assertCurrent();
                 afterPages = await browser.pages();
                 lease.assertCurrent();
@@ -1802,6 +1865,8 @@ export class RuntimeService implements RoveRuntime {
                   result,
                   beforePages,
                   afterPages,
+                  predecessorTextEvidence,
+                  successorTextEvidence,
                 );
                 if (
                   downloadEffect !== undefined &&

@@ -2745,7 +2745,7 @@ describe("runtime integration", () => {
     { kind: "text_present" as const, text: "Mutation applied" },
     { kind: "text_absent" as const, text: "Apply consequential mutation" },
   ])(
-    "refuses consequential $kind before dispatch when predecessor text is truncated",
+    "automatically focuses truncated predecessor text for consequential $kind",
     async (expectedEffect) => {
       const server = await fixture();
       const { runtime, browser, effectJournal } = await harness();
@@ -2777,48 +2777,40 @@ describe("runtime integration", () => {
           consequential: true,
           consequenceKey,
         }),
-      ).rejects.toMatchObject({
-        code: "INSPECTION_REQUIRED",
-        retryable: true,
-        details: {
-          reason: "expected_effect_evidence_incomplete",
-          mutationDispatched: false,
-          requiredAction: "gather_stronger_read_only_evidence",
-          unsuitableEffects: [
-            expect.objectContaining({
-              effectIndex: 0,
-              evidenceSurface: "page_text",
-              reason: "predecessor_text_truncated",
-            }),
-          ],
-        },
-      });
-      expect(dispatches).toBe(0);
-      expect(server.mutationCount()).toBe(0);
+      ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+      expect(dispatches).toBe(1);
+      expect(server.mutationCount()).toBe(1);
       await expect(
         effectJournal.find(
           session.bootstrapId ?? session.id,
           session.workspace?.id ?? session.id,
           consequenceKey,
         ),
-      ).resolves.toBeNull();
+      ).resolves.toMatchObject({ state: "applied" });
       expect(
         (await runtime.getObservations(session.id)).items.some(
           (item) => item.type === "agent_interaction_receipt",
         ),
-      ).toBe(false);
+      ).toBe(true);
     },
   );
 
   it("admits and verifies consequential whole-page text effects when predecessor text is complete", async () => {
     const server = await fixture();
-    const { runtime } = await harness();
+    const { runtime, browser } = await harness();
     const session = await runtime.startSession({
       mode: "agent",
       startUrl: `${server.url}/consequential-action`,
     });
     active.push({ runtime, id: session.id });
     const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalReadPageText = liveBrowser.readPageText.bind(liveBrowser);
+    let focusedReads = 0;
+    liveBrowser.readPageText = async (...args) => {
+      focusedReads += 1;
+      return originalReadPageText(...args);
+    };
 
     await expect(
       runtime.interact(session.id, {
@@ -2833,9 +2825,10 @@ describe("runtime integration", () => {
       }),
     ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
     expect(server.mutationCount()).toBe(1);
+    expect(focusedReads).toBe(0);
   });
 
-  it("refuses consequential whole-page text verification when predecessor text is unavailable", async () => {
+  it("automatically focuses unavailable predecessor text without fabricating complete page text", async () => {
     const server = await fixture();
     const { runtime, browser, effectJournal } = await harness();
     const session = await runtime.startSession({
@@ -2850,12 +2843,78 @@ describe("runtime integration", () => {
     expect(predecessor.metadata?.textTruncated).not.toBe(true);
     const liveBrowser = physicalBrowser(browser, session.id);
     const originalInteract = liveBrowser.interact.bind(liveBrowser);
+    const originalReadPageText = liveBrowser.readPageText.bind(liveBrowser);
+    let dispatches = 0;
+    let focusedReads = 0;
+    liveBrowser.interact = async (...args) => {
+      dispatches += 1;
+      return originalInteract(...args);
+    };
+    liveBrowser.readPageText = async (...args) => {
+      focusedReads += 1;
+      return originalReadPageText(...args);
+    };
+    const consequenceKey = "fixture:unavailable-text:mutation";
+
+    await expect(
+      runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Apply consequential mutation"),
+        },
+        expectedEffects: [
+          { kind: "text_present", text: "Mutation applied" },
+          { kind: "text_present", text: "Mutation applied" },
+        ],
+        consequential: true,
+        consequenceKey,
+      }),
+    ).resolves.toMatchObject({ outcome: "applied", dispatched: true });
+    expect(predecessor.text).toBeUndefined();
+    expect(dispatches).toBe(1);
+    expect(focusedReads).toBe(1);
+    expect(server.mutationCount()).toBe(1);
+    await expect(
+      effectJournal.find(
+        session.bootstrapId ?? session.id,
+        session.workspace?.id ?? session.id,
+        consequenceKey,
+      ),
+    ).resolves.toMatchObject({ state: "applied" });
+    expect(
+      (await runtime.getObservations(session.id)).items.some(
+        (item) => item.type === "agent_interaction_receipt",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses consequential dispatch when focused predecessor text remains unknown", async () => {
+    const server = await fixture();
+    const { runtime, browser, effectJournal } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id, {
+      maxTextChars: 1,
+    });
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const originalInteract = liveBrowser.interact.bind(liveBrowser);
     let dispatches = 0;
     liveBrowser.interact = async (...args) => {
       dispatches += 1;
       return originalInteract(...args);
     };
-    const consequenceKey = "fixture:unavailable-text:mutation";
+    const originalReadPageText = liveBrowser.readPageText.bind(liveBrowser);
+    liveBrowser.readPageText = async (...args) => ({
+      ...(await originalReadPageText(...args)),
+      state: "unknown" as const,
+      checkedFrameCount: 0,
+      failedFrames: [{ index: 0, url: predecessor.url }],
+    });
+    const consequenceKey = "fixture:unknown-focused-text:mutation";
 
     await expect(
       runtime.interact(session.id, {
@@ -2870,19 +2929,7 @@ describe("runtime integration", () => {
       }),
     ).rejects.toMatchObject({
       code: "INSPECTION_REQUIRED",
-      retryable: true,
-      details: {
-        reason: "expected_effect_evidence_incomplete",
-        mutationDispatched: false,
-        requiredAction: "gather_stronger_read_only_evidence",
-        unsuitableEffects: [
-          expect.objectContaining({
-            effectIndex: 0,
-            evidenceSurface: "page_text",
-            reason: "predecessor_text_unavailable",
-          }),
-        ],
-      },
+      details: { mutationDispatched: false },
     });
     expect(dispatches).toBe(0);
     expect(server.mutationCount()).toBe(0);
@@ -2898,6 +2945,79 @@ describe("runtime integration", () => {
         (item) => item.type === "agent_interaction_receipt",
       ),
     ).toBe(false);
+  });
+
+  it("verifies a truncated successor with focused causal text evidence", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    liveBrowser.inspect = (options = {}, signal) =>
+      inspect({ ...options, maxTextChars: 1 }, signal);
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+      consequential: true,
+      consequenceKey: "fixture:focused-successor:mutation",
+    });
+
+    expect(server.mutationCount()).toBe(1);
+    expect(receipt).toMatchObject({
+      outcome: "applied",
+      dispatched: true,
+      effects: [expect.objectContaining({ state: "observed" })],
+    });
+  });
+
+  it("reconciles later focused successor evidence without redispatch", async () => {
+    const server = await fixture();
+    const { runtime, browser } = await harness();
+    const session = await runtime.startSession({
+      mode: "agent",
+      startUrl: `${server.url}/consequential-action`,
+    });
+    active.push({ runtime, id: session.id });
+    const predecessor = await runtime.inspectBrowser(session.id);
+    const liveBrowser = physicalBrowser(browser, session.id);
+    const inspect = liveBrowser.inspect.bind(liveBrowser);
+    liveBrowser.inspect = (options = {}, signal) =>
+      inspect({ ...options, maxTextChars: 1 }, signal);
+    const readPageText = liveBrowser.readPageText.bind(liveBrowser);
+    let successorReads = 0;
+    liveBrowser.readPageText = async (...args) => {
+      const result = await readPageText(...args);
+      if (args[0] !== predecessor.observationId) {
+        successorReads += 1;
+        if (successorReads === 1) return { ...result, state: "unknown" };
+      }
+      return result;
+    };
+
+    const receipt = await runtime.interact(session.id, {
+      observationId: predecessor.observationId,
+      action: {
+        kind: "click",
+        target: target(predecessor, "Apply consequential mutation"),
+      },
+      expectedEffects: [{ kind: "text_present", text: "Mutation applied" }],
+      consequential: true,
+      consequenceKey: "fixture:delayed-focused-successor",
+    });
+
+    expect(server.mutationCount()).toBe(1);
+    expect(successorReads).toBeGreaterThan(1);
+    expect(receipt).toMatchObject({ outcome: "applied", dispatched: true });
   });
 
   it("reconciles delayed expected effects for ordinary navigation", async () => {
