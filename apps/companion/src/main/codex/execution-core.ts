@@ -35,6 +35,7 @@ import type {
 import type { LocalFileGrantSelection } from "../host/hub-command-executor.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
 import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
+import { normalizeCompletedRequestHumanToolItem } from "./request-human-tool-item.js";
 
 export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   task: "sqlite",
@@ -44,6 +45,75 @@ export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   projection: "sqlite",
   command: "sqlite",
 } as const);
+
+type CompletedHandoff = NonNullable<
+  Extract<TaskEvent, { type: "codex_item_observed" }>["completedHandoff"]
+>;
+
+export async function composeCompletedRequestHumanHandoff(input: {
+  taskId: string;
+  threadId: string;
+  turnId: string | undefined;
+  item: Record<string, unknown>;
+  boundRuntimeSessionId: string | undefined;
+  getControlStatus?: TaskRuntimePort["getControlStatus"];
+}): Promise<CompletedHandoff | undefined> {
+  if (!input.turnId) return undefined;
+  const normalized = normalizeCompletedRequestHumanToolItem(input.item);
+  if (!normalized) return undefined;
+  const result = normalized.returnedControlStatus;
+  const sessionId = normalized.sessionId;
+  if (
+    !input.boundRuntimeSessionId ||
+    sessionId !== input.boundRuntimeSessionId ||
+    result.sessionId !== sessionId ||
+    !input.getControlStatus
+  )
+    throw new Error("Completed handoff item lacks exact trusted bindings.");
+  const control = await input.getControlStatus(sessionId);
+  const preHandoffObservationSeq = authoritativePreHandoffObservationSeq({
+    result: {
+      handoffId: result.handoffId,
+      generation: result.generation,
+      ...(result.observationSeq === undefined
+        ? {}
+        : { observationSeq: result.observationSeq }),
+    },
+    runtime: control,
+  });
+  return {
+    sessionId,
+    handoffId: result.handoffId,
+    handoffGeneration: result.generation,
+    ownershipGeneration: control.generation,
+    controller: control.controller,
+    status: control.status,
+    continuation: {
+      status: "pending",
+      id: `continuation:${input.taskId}:${result.generation}`,
+      taskId: input.taskId,
+      sessionId,
+      threadId: input.threadId,
+      handoffId: result.handoffId,
+      generation: result.generation,
+      policy: normalized.continuationPolicy,
+      freshInspectionRequired: true,
+      preHandoffObservationSeq,
+    },
+    attention: {
+      authority: "rove_control",
+      kind: "control_handoff",
+      requestId: `control:${normalized.itemId}`,
+      taskId: input.taskId,
+      sessionId,
+      threadId: input.threadId,
+      turnId: input.turnId,
+      handoffId: result.handoffId,
+      generation: result.generation,
+      status: "pending",
+    },
+  };
+}
 
 export function requiresRuntimeGenerationReconciliation(input: {
   sessionId?: string;
@@ -626,76 +696,15 @@ export class CodexExecutionCore {
       >
     | undefined
   > {
-    if (
-      !turnId ||
-      item.type !== "mcpToolCall" ||
-      item.server !== "rove" ||
-      item.tool !== "control.request_human" ||
-      item.status !== "completed" ||
-      item.error !== null
-    )
-      return undefined;
-    const args = object(item.arguments);
-    const result = handoffResult(item.result);
     const aggregate = await this.store?.aggregate(taskId);
-    const sessionId = text(args?.sessionId);
-    const instruction = text(args?.instruction);
-    const policy = args?.continuationPolicy;
-    if (
-      !aggregate ||
-      !sessionId ||
-      sessionId !== aggregate.record?.identity.sessionId ||
-      !instruction ||
-      (policy !== "resume_after_control_return" &&
-        policy !== "explicit_user_response") ||
-      !result ||
-      result.sessionId !== sessionId ||
-      !this.options.runtime.getControlStatus
-    )
-      throw new Error("Completed handoff item lacks exact trusted bindings.");
-    const control = await this.options.runtime.getControlStatus(sessionId);
-    const preHandoffObservationSeq = authoritativePreHandoffObservationSeq({
-      result: {
-        handoffId: result.handoffId,
-        generation: result.generation,
-        ...(result.observationSeq === undefined
-          ? {}
-          : { observationSeq: result.observationSeq }),
-      },
-      runtime: control,
+    return composeCompletedRequestHumanHandoff({
+      taskId,
+      threadId,
+      turnId,
+      item,
+      boundRuntimeSessionId: aggregate?.record?.identity.sessionId,
+      getControlStatus: this.options.runtime.getControlStatus,
     });
-    return {
-      sessionId,
-      handoffId: result.handoffId,
-      handoffGeneration: result.generation,
-      ownershipGeneration: control.generation,
-      controller: control.controller,
-      status: control.status,
-      continuation: {
-        status: "pending",
-        id: `continuation:${taskId}:${result.generation}`,
-        taskId,
-        sessionId,
-        threadId,
-        handoffId: result.handoffId,
-        generation: result.generation,
-        policy,
-        freshInspectionRequired: true,
-        preHandoffObservationSeq,
-      },
-      attention: {
-        authority: "rove_control",
-        kind: "control_handoff",
-        requestId: `control:${String(item.id)}`,
-        taskId,
-        sessionId,
-        threadId,
-        turnId,
-        handoffId: result.handoffId,
-        generation: result.generation,
-        status: "pending",
-      },
-    };
   }
 
   api(): LocalProductApi {
@@ -1239,41 +1248,6 @@ function projectedItem(
       : {}),
   };
   return item;
-}
-
-function handoffResult(value: unknown):
-  | {
-      sessionId: string;
-      handoffId: string;
-      generation: number;
-      observationSeq?: number;
-    }
-  | undefined {
-  let payload = object(value);
-  if (Array.isArray(payload?.content)) {
-    const block = payload.content.find((entry) => text(object(entry)?.text));
-    try {
-      payload = JSON.parse(text(object(block)?.text) ?? "") as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      return undefined;
-    }
-  }
-  const sessionId = text(payload?.sessionId);
-  const handoffId = text(payload?.activeHandoffId);
-  const generation = payload?.generation;
-  if (!sessionId || !handoffId || !Number.isSafeInteger(generation))
-    return undefined;
-  return {
-    sessionId,
-    handoffId,
-    generation: Number(generation),
-    ...(Number.isSafeInteger(payload?.observationSeq)
-      ? { observationSeq: Number(payload?.observationSeq) }
-      : {}),
-  };
 }
 
 function nativeBrowserIdentity(value: {

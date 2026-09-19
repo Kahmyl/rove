@@ -228,9 +228,20 @@ describe("MCP control tools", () => {
   it("cancels a Streamable HTTP control.wait on client disconnect without changing ownership", async () => {
     const port = await availablePort();
     let waiters = 0;
-    const controller: ControlStatus["controller"] = "agent";
+    const status: ControlStatus = {
+      ...controlStatus("awaiting_human", null),
+      generation: 8,
+      activeHandoffId: "handoff_m7",
+      activeHandoffGeneration: 8,
+      observationSeq: 11,
+      handoff: {
+        reason: "Authenticate",
+        requestedAt: "2026-01-01T00:00:01.000Z",
+      },
+    };
     const runtime = {
       ...createFakeRuntimeClient(),
+      requestHuman: async () => status,
       waitForControl: async (
         _sessionId: string,
         _input: unknown,
@@ -251,7 +262,7 @@ describe("MCP control tools", () => {
           waiters -= 1;
         }
       },
-      getControlStatus: async () => controlStatus("active", controller),
+      getControlStatus: async () => status,
     } as RuntimeClient;
     const server = await startStreamableHttpServer({
       host: "127.0.0.1",
@@ -276,6 +287,12 @@ describe("MCP control tools", () => {
     });
     openClients.push(client);
     await client.connect(transport);
+    await callJson(client, "control.request_human", {
+      sessionId: "ses_m7",
+      reason: "Authenticate",
+      instruction: "Inspect the authenticated page and continue.",
+      continuationPolicy: "resume_after_control_return",
+    });
 
     const abort = new AbortController();
     const pending = client.callTool(
@@ -292,7 +309,12 @@ describe("MCP control tools", () => {
     await expect(pending).rejects.toThrow();
     while (waiters !== 0)
       await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(controller).toBe("agent");
+    expect(status).toMatchObject({
+      status: "awaiting_human",
+      controller: null,
+      activeHandoffId: "handoff_m7",
+      activeHandoffGeneration: 8,
+    });
   });
 });
 
@@ -333,6 +355,7 @@ async function assertControlWorkflow(client: Client): Promise<void> {
     status: "awaiting_human",
     controller: null,
     activeHandoffId: "handoff_m7",
+    activeHandoffGeneration: 8,
     observationSeq: 11,
     handoff: { reason: "Authenticate" },
   });
@@ -362,17 +385,21 @@ async function callJson(
 }
 
 function createFakeRuntimeClient(): RuntimeClient {
-  const active = controlStatus("active", "agent");
+  let current = controlStatus("active", "agent");
   return {
     healthCheck: async () => undefined,
-    getControlStatus: async () => active,
-    requestHuman: async (_sessionId, reason) => ({
-      ...controlStatus("awaiting_human", null),
-      generation: 8,
-      activeHandoffId: "handoff_m7",
-      handoff: { reason, requestedAt: "2026-01-01T00:00:01.000Z" },
-      observationSeq: 11,
-    }),
+    getControlStatus: async () => current,
+    requestHuman: async (_sessionId, reason) => {
+      current = {
+        ...controlStatus("awaiting_human", null),
+        generation: 8,
+        activeHandoffId: "handoff_m7",
+        activeHandoffGeneration: 8,
+        handoff: { reason, requestedAt: "2026-01-01T00:00:01.000Z" },
+        observationSeq: 11,
+      };
+      return current;
+    },
     waitForControl: async (): Promise<ControlWaitResult> => ({
       event: "human_took_control",
       sessionId: "ses_m7",

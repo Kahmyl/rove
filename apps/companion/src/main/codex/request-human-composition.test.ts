@@ -554,9 +554,9 @@ describe("request-human production composition", () => {
         },
       });
       const item = {
-        type: "mcpToolCall" as const,
+        type: "dynamicToolCall" as const,
         id: "item_cut",
-        server: "rove",
+        namespace: "rove",
         tool: "control.request_human",
         status: "completed",
         arguments: {
@@ -565,27 +565,20 @@ describe("request-human production composition", () => {
           instruction: "Inspect the authenticated page and continue.",
           continuationPolicy: "resume_after_control_return",
         },
-        appContext: null,
-        pluginId: null,
-        readOnlyHint: false,
-        result: {
-          _meta: null,
-          structuredContent: null,
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                sessionId: "ses_cut",
-                generation: 10,
-                status: "awaiting_human",
-                controller: null,
-                activeHandoffId: "handoff_cut",
-                observationSeq: 30,
-              }),
-            },
-          ],
-        },
-        error: null,
+        contentItems: [
+          {
+            type: "inputText" as const,
+            text: JSON.stringify({
+              sessionId: "ses_cut",
+              generation: 10,
+              status: "awaiting_human",
+              controller: null,
+              activeHandoffId: "handoff_cut",
+              observationSeq: 30,
+            }),
+          },
+        ],
+        success: true,
         durationMs: 1,
       };
       const cutThread: CodexThread = {
@@ -662,7 +655,17 @@ describe("request-human production composition", () => {
         );
 
       const firstStore = new DurableContinuationStore(repository);
-      await create(firstStore).readTaskProjection("task_cut");
+      const firstCoordinator = create(firstStore);
+      if (_label === "awaiting-human persistence")
+        await firstCoordinator.reconcileHandoffEvent({
+          method: "item/completed",
+          params: {
+            threadId: "thread_cut",
+            turnId: "turn_cut",
+            item,
+          },
+        } as never);
+      else await firstCoordinator.readTaskProjection("task_cut");
       expect(await firstStore.pending()).toEqual([
         expect.objectContaining({
           handoffId: "handoff_cut",

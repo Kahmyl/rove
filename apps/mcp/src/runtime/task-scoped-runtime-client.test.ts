@@ -249,6 +249,7 @@ describe("task-scoped Runtime client", () => {
       status: "awaiting_human" as const,
       controller: null,
       activeHandoffId: "handoff_exact",
+      activeHandoffGeneration: 8,
       observationSeq: 40,
       updatedAt: "2026-09-08T00:00:00Z",
       handoff: {

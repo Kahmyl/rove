@@ -95,6 +95,7 @@ import type {
   TaskAttachmentDescriptor,
 } from "./task-attachments.js";
 import { browserRouteDeveloperInstructions } from "./browser-route-policy.js";
+import { normalizeCompletedRequestHumanToolItem } from "./request-human-tool-item.js";
 import type {
   DurableContinuationStore,
   PendingContinuation,
@@ -4208,47 +4209,6 @@ export class RoveTaskCoordinator {
         );
   }
 
-  private parseHandoffToolResult(result: JsonValue | null):
-    | {
-        sessionId: string;
-        generation: number;
-        handoffId: string;
-        observationSeq?: number;
-      }
-    | undefined {
-    if (!isRecord(result)) return undefined;
-    let payload: Record<string, unknown> = result;
-    if (Array.isArray(result.content)) {
-      const text = result.content.find(
-        (entry) => isRecord(entry) && entry.type === "text",
-      );
-      if (!isRecord(text) || typeof text.text !== "string") return undefined;
-      try {
-        const parsed: unknown = JSON.parse(text.text);
-        if (!isRecord(parsed)) return undefined;
-        payload = parsed;
-      } catch {
-        return undefined;
-      }
-    }
-    if (
-      typeof payload.sessionId !== "string" ||
-      typeof payload.activeHandoffId !== "string" ||
-      !Number.isInteger(payload.generation) ||
-      Number(payload.generation) <= 0
-    )
-      return undefined;
-    return {
-      sessionId: payload.sessionId,
-      generation: Number(payload.generation),
-      handoffId: payload.activeHandoffId,
-      ...(Number.isInteger(payload.observationSeq) &&
-      Number(payload.observationSeq) >= 0
-        ? { observationSeq: Number(payload.observationSeq) }
-        : {}),
-    };
-  }
-
   private async registerCompletedHandoff(
     threadId: string,
     turnId: string,
@@ -4256,41 +4216,21 @@ export class RoveTaskCoordinator {
   ): Promise<boolean> {
     if (!this.continuations || !this.runtime.getControlStatus) return false;
     const item = rawItem as Record<string, unknown>;
-    if (
-      item.type !== "mcpToolCall" ||
-      item.server !== "rove" ||
-      item.tool !== "control.request_human" ||
-      item.status !== "completed" ||
-      item.error !== null ||
-      !isRecord(item.arguments)
-    )
-      return false;
-    const args = item.arguments;
-    exactKeys(
-      args,
-      ["sessionId", "reason", "instruction", "continuationPolicy"],
-      "request-human tool arguments",
-    );
+    const normalized = normalizeCompletedRequestHumanToolItem(item);
+    if (!normalized) return false;
     const context = this.authority.findByThread(threadId);
     if (!context || context.bootstrap.stage !== "complete")
       throw new Error("Completed handoff tool call is not task-bound.");
     const sessionId = boundedIdentity(
-      args.sessionId,
+      normalized.sessionId,
       "request-human session",
       /^ses_[A-Za-z0-9][A-Za-z0-9_-]*$/,
     );
     if (sessionId !== context.roveSessionId)
       throw new Error("Completed handoff tool call changed session identity.");
-    const policy = args.continuationPolicy;
-    if (
-      policy !== "resume_after_control_return" &&
-      policy !== "explicit_user_response"
-    )
-      throw new Error("Completed handoff tool call has invalid policy.");
-    const result = this.parseHandoffToolResult(
-      (item.result as JsonValue | null | undefined) ?? null,
-    );
-    if (!result || result.sessionId !== sessionId)
+    const policy = normalized.continuationPolicy;
+    const result = normalized.returnedControlStatus;
+    if (result.sessionId !== sessionId)
       throw new Error(
         "Completed handoff tool call lacks trusted Runtime result.",
       );
@@ -4304,7 +4244,7 @@ export class RoveTaskCoordinator {
       /^handoff_[A-Za-z0-9][A-Za-z0-9_-]*$/,
     );
     const requestedInstruction = requiredString(
-      args.instruction,
+      normalized.instruction,
       "continuation instruction",
     );
     if (
