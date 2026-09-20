@@ -32,6 +32,7 @@ import {
   type TaskResultActionPlan,
 } from "@rove/protocol";
 import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
+import { customerTaskCapabilities } from "./customer-task-capabilities.js";
 
 export type ProductionLifecycleCommandClass =
   | "internal_durable_transition"
@@ -1062,6 +1063,17 @@ export interface RoveMcpLaunch {
 export interface StartedTask {
   context: Required<ResolvedTaskContext>;
 }
+export interface ProductTaskCapabilities {
+  canSubmit: boolean;
+  canQueue: boolean;
+  canSteer: boolean;
+  canStop: boolean;
+  canRespond: boolean;
+  canTakeControl: boolean;
+  canReturnToRove: boolean;
+  canRetry: boolean;
+  canArchive: boolean;
+}
 export interface ProductTaskSnapshot {
   context: Omit<ResolvedTaskContext, "browserIdentity"> & {
     browserIdentity?: BrowserIdentity;
@@ -1075,6 +1087,7 @@ export interface ProductTaskSnapshot {
   };
   lifecycle: { phase: ProductLifecyclePhase; reason: string };
   availableActions: ProductLifecycleAction[];
+  capabilities: ProductTaskCapabilities;
   runtime?: {
     status: NativeRuntimeTruth["status"];
     controller: NativeRuntimeTruth["controller"];
@@ -2354,7 +2367,7 @@ export class RoveTaskCoordinator {
               : undefined;
           let projection: Pick<
             ProductTaskSnapshot,
-            "lifecycle" | "availableActions" | "runtime"
+            "lifecycle" | "availableActions" | "capabilities" | "runtime"
           >;
           try {
             projection = (
@@ -2389,6 +2402,15 @@ export class RoveTaskCoordinator {
                       : "Initial task launch is still converging.",
                 },
                 availableActions: ["finish"],
+                capabilities: customerTaskCapabilities({
+                  canSubmit: false,
+                  canStop: context.executionMode !== "capture",
+                  canRespond: false,
+                  canTakeControl: false,
+                  canReturnToRove: false,
+                  canRetry: false,
+                  canArchive: false,
+                }),
               };
           } catch (error) {
             projection = {
@@ -2401,6 +2423,15 @@ export class RoveTaskCoordinator {
                   ),
               },
               availableActions: ["retry_cleanup"],
+              capabilities: customerTaskCapabilities({
+                canSubmit: false,
+                canStop: false,
+                canRespond: false,
+                canTakeControl: false,
+                canReturnToRove: false,
+                canRetry: true,
+                canArchive: false,
+              }),
               ...(runtime === undefined
                 ? {}
                 : {
@@ -4891,7 +4922,7 @@ export class RoveTaskCoordinator {
   ): Promise<{
     projection: Pick<
       ProductTaskSnapshot,
-      "lifecycle" | "availableActions" | "runtime"
+      "lifecycle" | "availableActions" | "capabilities" | "runtime"
     >;
     output: NativeLifecycleOutput;
     commandId: string | null;
@@ -5280,6 +5311,35 @@ export class RoveTaskCoordinator {
             ? (["acknowledge_legacy_effects"] as const)
             : []),
         ],
+        capabilities: customerTaskCapabilities({
+          canSubmit:
+            authoritativeOutput.allowedActions.includes("message") &&
+            conversation?.turnStatus !== "in_progress" &&
+            authoritativeOutput.phase !== "recovering",
+          canStop:
+            context.executionMode !== "capture" &&
+            (authoritativeOutput.allowedActions.includes("interrupt") ||
+              (context.initialLaunch !== undefined &&
+                context.initialLaunch.stage !== "turn_started")),
+          canRespond:
+            authoritativeOutput.phase !== "recovering" &&
+            attentions.some(
+              (attention) =>
+                attention.authority === "codex" &&
+                [
+                  "pending",
+                  "responding",
+                  "awaiting_confirmation",
+                  "resolution_unknown",
+                ].includes(attention.status),
+            ),
+          canTakeControl: false,
+          canReturnToRove:
+            authoritativeOutput.allowedActions.includes("return_control"),
+          canRetry:
+            authoritativeOutput.allowedActions.includes("retry_cleanup"),
+          canArchive: authoritativeOutput.allowedActions.includes("archive"),
+        }),
         ...(runtime === undefined ? {} : { runtime }),
       },
     };

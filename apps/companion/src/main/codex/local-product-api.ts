@@ -393,6 +393,9 @@ export interface ProductTaskProjection {
   recordings?: readonly Recording[];
   lifecycle: ProductTaskSnapshot["lifecycle"];
   availableActions: ProductTaskSnapshot["availableActions"];
+  /** Present on every current production projection. Optional only while
+   * decoding older in-memory bridge fixtures during rolling startup. */
+  capabilities?: ProductTaskSnapshot["capabilities"];
   runtime?: ProductTaskSnapshot["runtime"];
   attachments?: readonly TaskAttachmentDescriptor[];
   workflowContext?: NonNullable<
@@ -1313,6 +1316,7 @@ function projectTask(
       reason: "Lifecycle projection is unavailable.",
     },
     availableActions: [...(task.availableActions ?? [])],
+    capabilities: structuredClone(task.capabilities),
     attachments,
     ...(task.runtime === undefined ? {} : { runtime: task.runtime }),
     ...(context.lifecycle?.closeOperation === undefined
@@ -2363,8 +2367,11 @@ export class LocalProductApi {
       });
     }
     if (value.type === "task.stop") {
-      const task = await this.taskProjection(taskId);
-      if (!task.availableActions.includes("interrupt"))
+      if (
+        !(await this.taskProjection(taskId)).availableActions.includes(
+          "interrupt",
+        )
+      )
         throw new Error("Stop is available only while this task is executing.");
       return this.tasks.submit({
         type: "interrupt",

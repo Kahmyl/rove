@@ -1703,6 +1703,44 @@ describe("LocalProductApi native product seam", () => {
     });
   });
 
+  it("keeps customer capabilities out of lifecycle operation authorization", async () => {
+    const { api, tasks } = fixture();
+    const task = (await tasks.productTasks())[0]!;
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...task,
+        availableActions: [],
+        capabilities: {
+          canSubmit: false,
+          canQueue: false,
+          canSteer: false,
+          canStop: true,
+          canRespond: false,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: true,
+          canArchive: true,
+        },
+      },
+    ] as never);
+
+    await expect(
+      api.executeRendererIntent({
+        type: "task.stop",
+        taskId: "task_existing",
+        operationId: "intent_45222222-2222-4222-8222-222222222221",
+      }),
+    ).rejects.toThrow(/only while.*executing/);
+    await expect(
+      api.executeRendererIntent({
+        type: "task.cleanup.retry",
+        taskId: "task_existing",
+        operationId: "intent_45222222-2222-4222-8222-222222222222",
+      }),
+    ).rejects.toThrow(/retry cleanup is not available/);
+    expect(tasks.submit).not.toHaveBeenCalled();
+  });
+
   it("passes exact archive and restore retries through despite the current organization action", async () => {
     const { api, tasks } = fixture();
     const task = (await tasks.productTasks())[0]!;

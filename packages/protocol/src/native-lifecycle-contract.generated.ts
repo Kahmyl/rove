@@ -2370,58 +2370,28 @@ export function reduceLifecycleInventory(input) {
     .sort((a, b) => a.taskId.localeCompare(b.taskId));
   if (new Set(tasks.map((task) => task.taskId)).size !== tasks.length)
     throw new Error("Duplicate task inventory identity.");
-  const blockers = tasks.filter(
-    (task) => !["closed", "failed"].includes(task.phase),
-  );
-  const launchAllowed = blockers.length === 0;
-  const launch = launchAllowed;
-  const deferred = blockers.length === 1 && blockers[0].nextCommand !== null;
+  // Task lifecycle is task-scoped. Shared Runtime/profile/page conflicts are
+  // admitted and fenced by their owning authorities, not by this inventory.
+  const launchAllowed = true;
   const disposition = {
     type: "launch",
     operationId: input.requestedOperation.operationId,
-    status: launch
-      ? "accepted"
-      : deferred
-        ? "deferred-for-convergence"
-        : "rejected",
-    reason: launch
-      ? "Launch intent can be persisted."
-      : deferred
-        ? "Stable launch identity is retained while one task converges."
-        : "Launch is blocked by unresolved or conflicting task state.",
+    status: "accepted",
+    reason: "Launch intent can be persisted.",
   };
   const result = {
     tasks,
     launchAllowed,
     operationDisposition: disposition,
-    nextCommand: launch
-      ? {
-          type: "persist_bootstrap_intent",
-          operationId: input.requestedOperation.operationId,
-        }
-      : deferred
-        ? blockers[0].nextCommand
-        : null,
-    confirmation: launch
-      ? {
-          type: "durable_bootstrap_intent",
-          operationId: input.requestedOperation.operationId,
-        }
-      : deferred
-        ? blockers[0].confirmation
-        : null,
-    attention:
-      blockers.length > 1
-        ? {
-            code: "multiple_tasks_require_convergence",
-            taskIds: blockers.map((task) => task.taskId),
-          }
-        : blockers.length === 1 && !deferred
-          ? {
-              code: "task_requires_manual_resolution",
-              taskIds: [blockers[0].taskId],
-            }
-          : null,
+    nextCommand: {
+      type: "persist_bootstrap_intent",
+      operationId: input.requestedOperation.operationId,
+    },
+    confirmation: {
+      type: "durable_bootstrap_intent",
+      operationId: input.requestedOperation.operationId,
+    },
+    attention: null,
   };
   object(
     result.operationDisposition,

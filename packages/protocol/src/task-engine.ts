@@ -1740,18 +1740,99 @@ export function aggregateLifecycleInput(
   };
 }
 
+function hasInterruptibleAcceptedWork(aggregate: TaskAggregate): boolean {
+  if (aggregate.launch?.executionMode === "capture") return false;
+  if (aggregate.desiredState !== "open") return false;
+  if (aggregate.codex.turn === "active") return true;
+  if (aggregate.record?.bootstrap.stage !== "complete" && aggregate.launch)
+    return true;
+  if (
+    ["completed", "failed", "interrupted"].includes(aggregate.codex.turn) &&
+    aggregate.recoveryRequired === null
+  )
+    return false;
+  return Object.values(aggregate.conversation.items).some((item) => {
+    if (item.kind !== "user_message" || !item.acceptedAt || !item.clientId)
+      return false;
+    if (
+      item.turnId &&
+      aggregate.conversation.terminalTurns?.[item.turnId] !== undefined
+    )
+      return false;
+    return (
+      aggregate.messageDeliveries[item.clientId]?.state !==
+      "non_submission_established"
+    );
+  });
+}
+
+function withInterruptCapability(
+  output: NativeLifecycleOutput,
+  aggregate: TaskAggregate,
+): NativeLifecycleOutput {
+  if (!hasInterruptibleAcceptedWork(aggregate)) return output;
+  const allowedActions = output.allowedActions.includes("interrupt")
+    ? output.allowedActions
+    : [...output.allowedActions, "interrupt" as const];
+  if (aggregate.requestedOperation.type !== "interrupt")
+    return { ...output, allowedActions };
+  const interruptCommand =
+    output.nextCommand?.type === "interrupt_codex_turn"
+      ? output.nextCommand
+      : null;
+  const prerequisiteCommand =
+    output.nextCommand !== null && interruptCommand === null
+      ? output.nextCommand
+      : null;
+  return {
+    ...output,
+    allowedActions,
+    nextCommand: interruptCommand ?? prerequisiteCommand,
+    confirmation:
+      interruptCommand !== null || prerequisiteCommand !== null
+        ? output.confirmation
+        : null,
+    operationDisposition: {
+      type: "interrupt",
+      operationId: aggregate.requestedOperation.operationId ?? null,
+      status: prerequisiteCommand ? "deferred-for-convergence" : "accepted",
+      reason: prerequisiteCommand
+        ? "Stop is retained while current task truth converges."
+        : interruptCommand
+          ? "Current accepted work will be interrupted."
+          : "Future dispatch for current accepted work is prevented.",
+    },
+  };
+}
+
 function outputFor(aggregate: TaskAggregate): NativeLifecycleOutput {
   if (aggregate.recoveryRequired) {
-    return {
+    let underlying: NativeLifecycleOutput | null = null;
+    if (aggregate.record !== null)
+      try {
+        underlying = reduceTaskLifecycle(aggregateLifecycleInput(aggregate));
+      } catch {
+        // The blocker remains authoritative when contradictory facts cannot
+        // form a valid lifecycle input. Recovery must not manufacture actions.
+      }
+    const safeActions = (underlying?.allowedActions ?? []).filter((action) =>
+      ["interrupt", "return_control"].includes(action),
+    );
+    const recoveryOutput: NativeLifecycleOutput = {
       taskId: aggregate.taskId,
       phase: "recovering",
-      allowedActions: [],
-      nextCommand: null,
-      confirmation: null,
-      attention: {
-        code: "recovery_required",
-        message: aggregate.recoveryRequired,
-      },
+      allowedActions: safeActions,
+      nextCommand:
+        aggregate.requestedOperation.type === "interrupt" &&
+        underlying?.nextCommand?.type === "interrupt_codex_turn"
+          ? underlying.nextCommand
+          : null,
+      confirmation:
+        aggregate.requestedOperation.type === "interrupt" &&
+        underlying?.nextCommand?.type === "interrupt_codex_turn"
+          ? underlying.confirmation
+          : null,
+      attention: null,
       operationDisposition: {
         type: aggregate.requestedOperation.type,
         operationId: aggregate.requestedOperation.operationId ?? null,
@@ -1759,7 +1840,29 @@ function outputFor(aggregate: TaskAggregate): NativeLifecycleOutput {
         reason: "The affected operation requires truth-based recovery.",
       },
     };
+    return withInterruptCapability(recoveryOutput, aggregate);
   }
+  if (
+    aggregate.record === null &&
+    aggregate.requestedOperation.type === "interrupt"
+  )
+    return withInterruptCapability(
+      {
+        taskId: aggregate.taskId,
+        phase: "starting",
+        allowedActions: [],
+        nextCommand: null,
+        confirmation: null,
+        attention: null,
+        operationDisposition: {
+          type: "interrupt",
+          operationId: aggregate.requestedOperation.operationId ?? null,
+          status: "deferred-for-convergence",
+          reason: "Stop is retained while durable task startup converges.",
+        },
+      },
+      aggregate,
+    );
   if (
     aggregate.requestedOperation.type === "launch" &&
     aggregate.record === null
@@ -1775,17 +1878,23 @@ function outputFor(aggregate: TaskAggregate): NativeLifecycleOutput {
       nextCommand: NativeLifecycleOutput["nextCommand"];
       attention: NativeLifecycleOutput["attention"];
     };
-    return {
-      taskId: aggregate.taskId,
-      phase: "starting",
-      allowedActions: ["finish"],
-      nextCommand: inventory.nextCommand,
-      confirmation: null,
-      attention: inventory.attention,
-      operationDisposition: inventory.operationDisposition,
-    };
+    return withInterruptCapability(
+      {
+        taskId: aggregate.taskId,
+        phase: "starting",
+        allowedActions: ["finish"],
+        nextCommand: inventory.nextCommand,
+        confirmation: null,
+        attention: inventory.attention,
+        operationDisposition: inventory.operationDisposition,
+      },
+      aggregate,
+    );
   }
-  return reduceTaskLifecycle(aggregateLifecycleInput(aggregate));
+  return withInterruptCapability(
+    reduceTaskLifecycle(aggregateLifecycleInput(aggregate)),
+    aggregate,
+  );
 }
 
 export function applySuccessfulTaskCommand(
@@ -2241,6 +2350,7 @@ export class TaskEngine {
         current.requestedOperation.operationId !==
           incomingOperation.operationId &&
         event.type !== "task_finish_requested" &&
+        event.type !== "task_interrupt_requested" &&
         event.type !== "task_cleanup_retry_requested" &&
         event.type !== "task_return_requested" &&
         currentDisposition?.status !== "rejected" &&

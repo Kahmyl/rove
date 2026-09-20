@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import type { ProductTaskCapabilities } from "../main/codex/task-coordinator.js";
 import {
   ArchivedTaskSettings,
   LocalBackupSettings,
@@ -37,6 +38,23 @@ import {
 } from "./product-surface.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
+
+function taskCapabilities(
+  overrides: Partial<ProductTaskCapabilities> = {},
+): ProductTaskCapabilities {
+  return {
+    canSubmit: false,
+    canQueue: false,
+    canSteer: false,
+    canStop: false,
+    canRespond: false,
+    canTakeControl: false,
+    canReturnToRove: false,
+    canRetry: false,
+    canArchive: false,
+    ...overrides,
+  };
+}
 
 function snapshot(
   presentation: "chip" | "expanded" | "full" = "full",
@@ -392,7 +410,18 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           turnOrder: [],
         },
         lifecycle: { phase: "starting", reason: "Starting this task." },
-        availableActions: ["finish"],
+        availableActions: [],
+        capabilities: {
+          canSubmit: false,
+          canQueue: false,
+          canSteer: false,
+          canStop: true,
+          canRespond: false,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
       },
     ];
     value.product!.currentTaskId = "task_accepted_local";
@@ -748,7 +777,18 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           ],
           roveSessionId: `ses_${"b".repeat(32)}`,
           lifecycle: { phase: "working", reason: "Active." },
-          availableActions: ["finish"],
+          availableActions: [],
+          capabilities: {
+            canSubmit: mode !== "capture",
+            canQueue: false,
+            canSteer: false,
+            canStop: false,
+            canRespond: false,
+            canTakeControl: false,
+            canReturnToRove: false,
+            canRetry: false,
+            canArchive: false,
+          },
         },
       ];
       value.product!.currentTaskId = `task_${mode}`;
@@ -1163,7 +1203,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         bootstrapStage: "complete",
         results: [],
         lifecycle: { phase: "closed", reason: "Closed." },
-        availableActions: ["archive"],
+        availableActions: [],
+        capabilities: taskCapabilities({ canArchive: true }),
       },
     ];
 
@@ -1184,6 +1225,22 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain(">Clear</button>");
     expect(html).not.toContain("Back to new task");
     expect(html).not.toContain("New task blocked");
+
+    value.product!.tasks[0]!.availableActions = ["archive"];
+    value.product!.tasks[0]!.capabilities = taskCapabilities({
+      canArchive: false,
+    });
+    const internalArchiveOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalArchiveOnly).not.toContain(
+      'aria-label="Archive Untitled task"',
+    );
   });
 
   it("keeps first launch task-focused and places Codex access in execution status", () => {
@@ -1381,6 +1438,17 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         codexThreadId: "thread_active",
         lifecycle: { phase: "working", reason: "Codex is working." },
         availableActions: ["interrupt", "finish", "return_control"],
+        capabilities: {
+          canSubmit: false,
+          canQueue: false,
+          canSteer: false,
+          canStop: true,
+          canRespond: true,
+          canTakeControl: true,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
         runtime: {
           status: "awaiting_human",
           controller: null,
@@ -1459,6 +1527,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain("Approve / Send");
     expect(html).toContain("Browser control handoff");
     expect(html).toContain("Take Over");
+    expect(html).toContain('aria-label="Stop current work"');
     expect(html).toContain("Personal");
     expect(html).toContain('aria-label="Browser status"');
     expect(html).toContain(">View Browser</button>");
@@ -1532,7 +1601,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           phase: "waiting_for_human",
           reason,
         },
-        availableActions: ["finish", "return_control"],
+        availableActions: ["return_control"],
+        capabilities: {
+          ...value.product!.tasks[0]!.capabilities!,
+          canTakeControl: false,
+          canReturnToRove: true,
+        },
         runtime: {
           status: "active",
           controller: "human",
@@ -1590,6 +1664,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           reason: "Choose the audience.",
         },
         availableActions: [],
+        capabilities: taskCapabilities({ canRespond: true }),
         conversation: {
           turnStatus: "in_progress",
           archived: false,
@@ -1655,6 +1730,20 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("task-composer-shell");
     expect(html).not.toContain("composer-ambient-controls");
     expect(html).not.toContain('aria-label="Commands"');
+
+    value.product!.tasks[0]!.capabilities = taskCapabilities({
+      canRespond: false,
+    });
+    const internalAttentionOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalAttentionOnly).not.toContain("task-choice-response");
+    expect(internalAttentionOnly).not.toContain(">Send</button>");
   });
 
   it("renders bounded keyboard-scroll regions for long task content", () => {
@@ -1794,7 +1883,18 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           },
         ],
         lifecycle: { phase: "working", reason: "Working." },
-        availableActions: ["message", "finish"],
+        availableActions: ["message"],
+        capabilities: {
+          canSubmit: true,
+          canQueue: false,
+          canSteer: false,
+          canStop: true,
+          canRespond: false,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
         attachments: [
           {
             id: `att_${"b".repeat(32)}`,
@@ -2007,7 +2107,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-label="Participation mode: Agent"');
     expect(html).toContain('aria-label="Approval policy: Approve for me"');
     expect(html).toContain('aria-label="Model and reasoning effort:');
-    expect(html).toContain('aria-label="Stop task"');
+    expect(html).toContain('aria-label="Stop current work"');
     expect(html).not.toContain(">Pause</button>");
     expect(html).not.toContain("Finish task");
   });
@@ -2053,7 +2153,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         phase: "cleanup_required" as const,
         reason: `Cleanup remains for ${suffix}.`,
       },
-      availableActions: ["retry_cleanup" as const],
+      availableActions: [],
+      capabilities: taskCapabilities({ canRetry: true }),
     }));
     value.product!.currentTaskId = "task_blocker_new";
 
@@ -2069,6 +2170,37 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain("Cleanup remains for new.");
     expect(html).not.toContain("must finish or converge");
     expect(html.match(/>Retry cleanup<\/button>/g)).toHaveLength(1);
+
+    value.product!.tasks[1]!.availableActions = ["retry_cleanup"];
+    value.product!.tasks[1]!.capabilities = taskCapabilities({
+      canRetry: false,
+    });
+    const internalRetryOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalRetryOnly).not.toContain("Task needs attention");
+    expect(internalRetryOnly).not.toContain(">Retry cleanup</button>");
+  });
+
+  it("uses lifecycle actions only for restoration and bounded legacy controls", () => {
+    const source = readFileSync(
+      new URL("./product-surface.tsx", import.meta.url),
+      "utf8",
+    );
+    const interpretedActions = [
+      ...source.matchAll(/availableActions\.includes\(\s*"([^"]+)"/g),
+    ].map((match) => match[1]);
+    expect(new Set(interpretedActions)).toEqual(
+      new Set(["resume", "acknowledge_legacy_effects"]),
+    );
+    expect(source).toMatch(/capabilities\?\.canArchive/);
+    expect(source).toMatch(/capabilities\?\.canRetry/);
+    expect(source).toMatch(/capabilities\?\.canRespond/);
   });
 
   it("exposes explicit acknowledgement when previous-work uncertainty blocks fresh effects", () => {
@@ -2088,7 +2220,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         bootstrapStage: "complete",
         results: [],
         lifecycle: { phase: "ready", reason: "Ready." },
-        availableActions: ["finish", "acknowledge_legacy_effects"],
+        availableActions: ["acknowledge_legacy_effects"],
         runtime: {
           status: "active",
           controller: "agent",
@@ -2145,7 +2277,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
             phase: "waiting_for_human",
             reason: "Your response is needed.",
           },
-          availableActions: ["message", "finish"],
+          availableActions: ["message"],
+          capabilities: taskCapabilities({ canRespond: true }),
           runtime: {
             status: "active",
             controller: "agent",

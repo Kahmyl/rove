@@ -655,11 +655,11 @@ const one = reduceLifecycleInventory({
     operationId: "intent_44444444-4444-4444-8444-444444444444",
   },
 });
-check(one.launchAllowed, false, "one cleanup task blocks launch");
+check(one.launchAllowed, true, "one unrelated converging task allows launch");
 check(
   one.operationDisposition.status,
-  "deferred-for-convergence",
-  "one actionable blocker defers launch",
+  "accepted",
+  "one unrelated converging task does not defer launch",
 );
 check(
   one.operationDisposition.operationId,
@@ -668,8 +668,8 @@ check(
 );
 check(
   one.nextCommand?.type,
-  "end_runtime_session",
-  "deferred launch emits only the blocker convergence command",
+  "persist_bootstrap_intent",
+  "new launch persists its own bootstrap intent",
 );
 const resumedLaunch = reduceLifecycleInventory({
   tasks: [],
@@ -700,13 +700,13 @@ const unresolvedOne = reduceLifecycleInventory({
 });
 check(
   unresolvedOne.operationDisposition.status,
-  "rejected",
-  "one non-actionable blocker rejects launch",
+  "accepted",
+  "one unrelated unresolved task does not reject launch",
 );
 check(
-  unresolvedOne.nextCommand,
-  null,
-  "rejected launch emits no unrelated command",
+  unresolvedOne.nextCommand?.type,
+  "persist_bootstrap_intent",
+  "unrelated recovery cannot replace the new launch command",
 );
 const multiple = reduceLifecycleInventory({
   tasks: [secondCleanup, cleanupTask],
@@ -715,24 +715,21 @@ const multiple = reduceLifecycleInventory({
     operationId: "intent_44444444-4444-4444-8444-444444444444",
   },
 });
-check(multiple.launchAllowed, false, "multiple cleanup tasks block launch");
+check(multiple.launchAllowed, true, "multiple unrelated tasks allow launch");
 check(
   multiple.operationDisposition.status,
-  "rejected",
-  "multiple blockers reject launch explicitly",
+  "accepted",
+  "multiple unrelated tasks do not reject launch",
 );
 check(
-  multiple.nextCommand,
+  multiple.nextCommand?.type,
+  "persist_bootstrap_intent",
+  "multiple unrelated tasks cannot redirect the launch command",
+);
+check(
+  multiple.attention,
   null,
-  "multiple cleanup tasks are not chosen by recency",
-);
-check(
-  multiple.attention.taskIds,
-  [
-    "task_11111111-1111-4111-8111-111111111111",
-    "task_22222222-2222-4222-8222-222222222222",
-  ],
-  "multiple cleanup tasks are stable and visible",
+  "unrelated task recovery does not manufacture launch attention",
 );
 
 const mismatch = inputFor(
@@ -779,13 +776,13 @@ for (const name of [
   });
   check(
     admission.operationDisposition.status,
-    "rejected",
-    `${name} rejects launch admission`,
+    "accepted",
+    `${name} remains task-scoped during launch admission`,
   );
   check(
-    admission.nextCommand,
-    null,
-    `${name} emits no unrelated launch-blocker command`,
+    admission.nextCommand?.type,
+    "persist_bootstrap_intent",
+    `${name} cannot replace the new task's launch command`,
   );
 }
 const nonComponentCommands = new Set([

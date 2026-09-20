@@ -468,8 +468,9 @@ describe("ledger-only lifecycle authority", () => {
             taskId,
             lifecycle: {
               phase: "recovering",
-              reason: expect.stringContaining("Legacy active task"),
+              reason: "Checking task state.",
             },
+            capabilities: expect.objectContaining({ canRespond: false }),
           }),
         ]),
       });
