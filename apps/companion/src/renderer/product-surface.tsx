@@ -36,6 +36,7 @@ import type {
 } from "../main/codex/task-coordinator.js";
 import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
 import { customerTaskCollaboration } from "../main/codex/customer-task-collaboration.js";
+import { customerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
@@ -52,7 +53,6 @@ import {
   taskHistoryTitle,
   taskControlProjection,
   taskHasAttachedBrowserWorkspace,
-  terminalProductTask,
 } from "./product-surface-state.js";
 
 export interface ProductSurfaceProps {
@@ -2359,6 +2359,36 @@ export function ProductSurface({
     ? (viewedTask.customerCollaboration ??
       customerTaskCollaboration(viewedTask, product?.attention ?? []))
     : undefined;
+  const presentationForTask = (task: NonNullable<typeof viewedTask>) => {
+    const execution =
+      task.customerExecution ??
+      (task.conversation
+        ? legacyCustomerTaskExecution(task.conversation)
+        : { state: "idle" as const, queue: [], segments: [] });
+    const collaboration =
+      task.customerCollaboration ??
+      customerTaskCollaboration(task, product?.attention ?? []);
+    const latestInputId = execution.segments.at(-1)?.inputItemId;
+    return (
+      task.customerPresentation ??
+      customerTaskPresentation({
+        execution,
+        collaboration,
+        ...(task.capabilities ? { capabilities: task.capabilities } : {}),
+        ...(latestInputId &&
+        task.conversation?.items[latestInputId]?.deliveryState
+          ? {
+              latestDelivery:
+                task.conversation.items[latestInputId]!.deliveryState!,
+            }
+          : {}),
+        ...(task.recordings ? { recordings: task.recordings } : {}),
+      })
+    );
+  };
+  const viewedPresentation = viewedTask
+    ? presentationForTask(viewedTask)
+    : undefined;
   const respondableCodexAttention = viewedCollaboration?.request
     ? product?.attention.find(
         (entry) =>
@@ -2401,7 +2431,9 @@ export function ProductSurface({
         return exact ? [attentionStateKey(exact)] : [];
       }),
     );
-    setAttentionAnswers((current) => retainCurrentAttentionState(current, live));
+    setAttentionAnswers((current) =>
+      retainCurrentAttentionState(current, live),
+    );
     setAttentionForms((current) => retainCurrentAttentionState(current, live));
   }, [product?.attention, product?.tasks]);
   const browserAttached = viewedTask?.runtime?.attachment === "attached";
@@ -3495,9 +3527,7 @@ export function ProductSurface({
                       action.decision === "accept" ? "primary" : undefined
                     }
                     disabled={busy}
-                    onClick={() =>
-                      void answerAttention(entry, action.decision)
-                    }
+                    onClick={() => void answerAttention(entry, action.decision)}
                   >
                     {action.label}
                   </button>
@@ -3585,7 +3615,7 @@ export function ProductSurface({
                 : "Rove is ready"}
           </strong>
           {activeCollaboration?.browser.canReturnToRove && (
-            <small>{activeTask?.lifecycle.reason}</small>
+            <small>{activeCollaboration.browser.description}</small>
           )}
           <small>
             {unmatchedSession
@@ -5109,16 +5139,11 @@ export function ProductSurface({
                             >
                               <span>
                                 <strong>{displayTaskTitle(task)}</strong>
-                                <small>
-                                  {task.customerExecution?.state === "working"
-                                    ? "Working"
-                                    : terminalProductTask(task)
-                                      ? "Completed"
-                                      : task.lifecycle.phase.replaceAll(
-                                          "_",
-                                          " ",
-                                        )}
-                                </small>
+                                {presentationForTask(task).sidebar && (
+                                  <small>
+                                    {presentationForTask(task).sidebar!.label}
+                                  </small>
+                                )}
                               </span>
                               <span aria-hidden="true">›</span>
                             </button>
@@ -6150,12 +6175,13 @@ export function ProductSurface({
                   setShowLatest(!atBottom);
                 }}
               >
-                {timeline.length === 0 && (
-                  <div className="timeline-empty">
-                    <span className="activity-spinner" aria-hidden="true" />
-                    <p>{viewedTask.lifecycle.reason}</p>
-                  </div>
-                )}
+                {timeline.length === 0 &&
+                  viewedPresentation?.conversationStatus && (
+                    <div className="timeline-empty">
+                      <span className="activity-spinner" aria-hidden="true" />
+                      <p>{viewedPresentation.conversationStatus.title}</p>
+                    </div>
+                  )}
                 {timelineSegments.map((segment) => (
                   <section className="timeline-turn" key={segment.id}>
                     {segment.input && (
@@ -6278,19 +6304,27 @@ export function ProductSurface({
                             })}
                           </div>
                         );
-                        if (segment.status === "active")
+                        const currentStopping =
+                          segment.id ===
+                            viewedTaskExecution?.segments.at(-1)?.id &&
+                          viewedPresentation?.state === "stopping";
+                        if (segment.status === "active" || currentStopping)
                           return (
                             <section
                               className="timeline-work timeline-work-active"
-                              aria-label="Active work"
+                              aria-label={
+                                currentStopping ? "Stopping work" : "Active work"
+                              }
                             >
                               <header className="timeline-work-heading">
-                                <span
-                                  className="activity-spinner"
-                                  aria-hidden="true"
-                                />
+                                {!currentStopping && (
+                                  <span
+                                    className="activity-spinner"
+                                    aria-hidden="true"
+                                  />
+                                )}
                                 <strong>
-                                  Working
+                                  {currentStopping ? "Stopping…" : "Working"}
                                   {segment.elapsed
                                     ? ` for ${segment.elapsed}`
                                     : ""}
@@ -6321,7 +6355,11 @@ export function ProductSurface({
                                 ✓
                               </span>
                               <strong>
-                                Worked
+                                {segment.id ===
+                                viewedTaskExecution?.segments.at(-1)?.id
+                                  ? (viewedPresentation?.terminalWorkLabel ??
+                                    "Worked")
+                                  : "Worked"}
                                 {segment.elapsed
                                   ? ` for ${segment.elapsed}`
                                   : ""}
@@ -6440,18 +6478,20 @@ export function ProductSurface({
                   </button>
                 )}
               </section>
-              {!gate.ready && viewedTask.lifecycle.phase === "recovering" && (
-                <div className="product-warning" role="status">
-                  <strong>Checking task state</strong>
-                  <span>Rove is confirming the latest task activity.</span>
-                </div>
-              )}
-              {!gate.ready &&
-                viewedTask.lifecycle.phase !== "recovering" &&
-                viewedTask.capabilities?.canRetry && (
-                  <div className="product-warning" role="status">
-                    <strong>Task needs attention</strong>
-                    <span>{viewedTask.lifecycle.reason}</span>
+              {viewedPresentation?.conversationStatus &&
+                viewedCollaboration?.browser.state !==
+                  "checking_after_return" &&
+                timeline.length > 0 && (
+                  <div
+                    className={`product-warning status-${viewedPresentation.conversationStatus.tone}`}
+                    role="status"
+                  >
+                    <strong>
+                      {viewedPresentation.conversationStatus.title}
+                    </strong>
+                    <span>
+                      {viewedPresentation.conversationStatus.description}
+                    </span>
                   </div>
                 )}
               <footer className="task-detail-dock">
@@ -6984,7 +7024,7 @@ export function ProductSurface({
                     entry.taskId === viewedTask?.taskId ? "true" : undefined
                   }
                   data-needs-input={
-                    taskNeedsCustomerInput(product, entry.taskId)
+                    presentationForTask(entry).state === "needs_input"
                       ? "true"
                       : undefined
                   }
@@ -7004,19 +7044,13 @@ export function ProductSurface({
                     }}
                   >
                     <strong>{displayTaskTitle(entry)}</strong>
-                    <span>
-                      {entry.workflowAssociation
-                        ? `${entry.workflowAssociation.workflowName} · `
-                        : "Standalone · "}
-                      {taskNeedsCustomerInput(product, entry.taskId)
-                        ? "Needs input"
-                        : entry.customerExecution?.state === "working"
-                          ? "Working"
-                          : terminalProductTask(entry)
-                            ? "Completed"
-                            : entry.lifecycle.phase.replaceAll("_", " ")}
-                      {` · ${entry.executionMode === "agent" ? "Agent" : entry.executionMode === "companion" ? "Companion" : "Capture"}`}
-                    </span>
+                    {presentationForTask(entry).sidebar && (
+                      <span
+                        data-tone={presentationForTask(entry).sidebar!.tone}
+                      >
+                        {presentationForTask(entry).sidebar!.label}
+                      </span>
+                    )}
                   </button>
                   {entry.capabilities?.canArchive && (
                     <button
@@ -7148,19 +7182,6 @@ export function ProductSurface({
                     <small>{viewedTaskControl.controllerLabel}</small>
                   )}
                 </span>
-              </div>
-              <div className="inspector-section">
-                <span className="inspector-section-title">Activity</span>
-                <div className="browser-metrics">
-                  <div>
-                    <strong>{viewedCompanion?.observationCount ?? 0}</strong>
-                    <small>Observations</small>
-                  </div>
-                  <div>
-                    <strong>{viewedCompanion?.evidenceCount ?? 0}</strong>
-                    <small>Evidence</small>
-                  </div>
-                </div>
               </div>
               <div className="control-actions">
                 <button

@@ -314,7 +314,15 @@ describe("five process-backed production-composition lifecycle traces", () => {
         items.some((item) => (item as ProductValue).clientId === ids.handoff)
       );
     });
-    const before = await current.request({ type: "external.actions" });
+    const before = await current.untilResult(
+      { type: "external.actions" },
+      (value) =>
+        (value.appServer as ProductValue[]).filter(
+          (action) =>
+            action.method === "turn/start" &&
+            action.correlation === ids.handoff,
+        ).length === 1,
+    );
     expect(
       (before.appServer as ProductValue[]).filter(
         (action) =>
@@ -372,7 +380,15 @@ describe("five process-backed production-composition lifecycle traces", () => {
           request.status === "pending",
       ),
     ).toBe(false);
-    const after = await current.request({ type: "external.actions" });
+    const after = await current.untilResult(
+      { type: "external.actions" },
+      (value) =>
+        (value.appServer as ProductValue[]).filter(
+          (action) =>
+            action.method === "turn/start" &&
+            action.correlation === continuationCommandId,
+        ).length === 1,
+    );
     const turnsBefore = (before.appServer as ProductValue[]).filter(
       (action) => action.method === "turn/start",
     ).length;
