@@ -706,6 +706,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
           (item) =>
             (item as ProductValue).kind === "user_message" &&
             (item as ProductValue).clientId === secondIntent &&
+            typeof (item as ProductValue).providerItemId === "string" &&
             (item as ProductValue).text ===
               "Continue exactly once after Desktop restart.",
         )

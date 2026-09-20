@@ -79,6 +79,41 @@ describe("SQLite task engine ledger", () => {
     store.close();
   });
 
+  it("commits the initial customer instruction as the transcript item before dispatch and preserves it across restart", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const operationId = accepted.aggregate.launch!.operationId;
+    const itemId = `user:${operationId}`;
+    expect(accepted.aggregate.conversation).toMatchObject({
+      itemOrder: [itemId],
+      turnOrder: [],
+      items: {
+        [itemId]: {
+          id: itemId,
+          clientId: operationId,
+          acceptedAt: "2026-09-09T12:00:00.000Z",
+          kind: "user_message",
+          status: "completed",
+          text: "Open the example",
+        },
+      },
+    });
+    expect(
+      accepted.aggregate.conversation.items[itemId]?.turnId,
+    ).toBeUndefined();
+    expect((await store.claimDueCommands("worker", 1, 1))[0]).toBeDefined();
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(
+      (await reopened.aggregate(accepted.aggregate.taskId))?.conversation,
+    ).toMatchObject({
+      itemOrder: [itemId],
+      items: { [itemId]: { text: "Open the example" } },
+    });
+    reopened.close();
+  });
+
   it("normalizes a legacy generic Codex recovery marker into a typed blocker", async () => {
     const { path, store, engine } = await fixture();
     const accepted = await engine.accept(launch());

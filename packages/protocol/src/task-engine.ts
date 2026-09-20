@@ -50,6 +50,7 @@ export interface TaskLaunchConfiguration {
   model?: string;
   reasoningEffort?: string;
   attachmentIds: readonly string[];
+  attachmentMetadata?: TaskConversationItem["attachments"];
   workflowAssociation?: {
     workflowId: string;
     workflowName: string;
@@ -87,8 +88,10 @@ export interface TaskSelectedResultContextSnapshot {
 
 export interface TaskConversationItem {
   id: string;
-  turnId: string;
+  turnId?: string;
   clientId?: string;
+  acceptedAt?: string;
+  providerItemId?: string;
   attachments?: readonly {
     filename: string;
     kind: "file" | "image" | "audio";
@@ -181,6 +184,7 @@ export type TaskEvent =
       message: string;
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskWorkflowContextSnapshot;
       selectedResultContext?: TaskSelectedResultContextSnapshot;
     })
@@ -212,6 +216,7 @@ export type TaskEvent =
       operationId: string;
       message: string;
       attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskWorkflowContextSnapshot;
       selectedResultContext?: TaskSelectedResultContextSnapshot;
     })
@@ -336,6 +341,7 @@ export interface TaskAggregate {
   capabilityFingerprint: string | null;
   conversation: {
     items: Readonly<Record<string, TaskConversationItem>>;
+    itemOrder?: readonly string[];
     turnOrder: readonly string[];
     terminalTurns?: Readonly<
       Record<string, "completed" | "failed" | "interrupted">
@@ -599,7 +605,12 @@ export function emptyTaskAggregate(taskId: string): TaskAggregate {
     freshInspection: null,
     attachment: { ready: true, attachmentIds: [] },
     capabilityFingerprint: null,
-    conversation: { items: {}, turnOrder: [], terminalTurns: {} },
+    conversation: {
+      items: {},
+      itemOrder: [],
+      turnOrder: [],
+      terminalTurns: {},
+    },
     messageDeliveries: {},
     requestedOperation: { type: "observe", taskId },
     processorGeneration: 1,
@@ -823,6 +834,32 @@ export function validateTaskEvent(event: TaskEvent): void {
     )
       throw new Error("Codex item attachments are invalid.");
   }
+  const acceptedAttachments =
+    event.type === "task_launch_requested"
+      ? event.launch.attachmentMetadata
+      : event.type === "task_message_requested" ||
+          event.type === "explicit_continuation_response_requested"
+        ? event.attachmentMetadata
+        : undefined;
+  const acceptedAttachmentIds =
+    event.type === "task_launch_requested"
+      ? event.launch.attachmentIds
+      : event.type === "task_message_requested" ||
+          event.type === "explicit_continuation_response_requested"
+        ? (event.attachmentIds ?? [])
+        : [];
+  if (
+    acceptedAttachments &&
+    (acceptedAttachments.length !== acceptedAttachmentIds.length ||
+      acceptedAttachments.length > 100 ||
+      acceptedAttachments.some(
+        (attachment) =>
+          attachment.filename.length < 1 ||
+          attachment.filename.length > 255 ||
+          !["file", "image", "audio"].includes(attachment.kind),
+      ))
+  )
+    throw new Error("Accepted message attachments are invalid.");
 }
 
 function recordMessageDelivery(
@@ -1211,6 +1248,19 @@ export function foldTaskEvent(
     current ?? emptyTaskAggregate(event.taskId),
   );
   aggregate.messageDeliveries ??= {};
+  aggregate.conversation.itemOrder ??= [
+    ...aggregate.conversation.turnOrder.flatMap((turnId) =>
+      Object.values(aggregate.conversation.items)
+        .filter((item) => item.turnId === turnId)
+        .map((item) => item.id),
+    ),
+    ...Object.keys(aggregate.conversation.items).filter(
+      (id) =>
+        !aggregate.conversation.turnOrder.includes(
+          aggregate.conversation.items[id]?.turnId ?? "",
+        ),
+    ),
+  ];
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
   aggregate.codexRecoveryBlockers ??= {};
@@ -1328,6 +1378,54 @@ export function foldTaskEvent(
       )
         throw new Error("Codex item targets a different thread.");
       if (event.item) {
+        const correlatedAcceptedItems = Object.values(
+          aggregate.conversation.items,
+        ).filter(
+          (item) =>
+            item.kind === "user_message" &&
+            item.acceptedAt !== undefined &&
+            event.item?.kind === "user_message" &&
+            event.item.clientId !== undefined &&
+            item.clientId === event.item.clientId,
+        );
+        if (correlatedAcceptedItems.length > 1)
+          throw new Error("Accepted user message identity is ambiguous.");
+        const correlatedAcceptedItem = correlatedAcceptedItems[0];
+        if (correlatedAcceptedItem) {
+          if (
+            correlatedAcceptedItem.turnId &&
+            correlatedAcceptedItem.turnId !== event.turnId
+          )
+            throw new Error("Accepted user message turn identity changed.");
+          if (
+            correlatedAcceptedItem.providerItemId &&
+            correlatedAcceptedItem.providerItemId !== event.item.id
+          )
+            throw new Error("Accepted user message provider identity changed.");
+          aggregate.conversation = {
+            ...aggregate.conversation,
+            items: {
+              ...aggregate.conversation.items,
+              [correlatedAcceptedItem.id]: {
+                ...correlatedAcceptedItem,
+                turnId: event.turnId,
+                providerItemId: event.item.id,
+              },
+            },
+            turnOrder: [
+              ...new Set([...aggregate.conversation.turnOrder, event.turnId]),
+            ].slice(-64),
+          };
+          recordMessageDelivery(aggregate, {
+            operationId: event.item.clientId!,
+            threadId: event.threadId,
+            turnId: event.turnId,
+            state: "message_materialized",
+            connectionGeneration: event.source.generation,
+            observedAt: event.observedAt,
+          });
+          break;
+        }
         const existingItem = aggregate.conversation.items[event.item.id];
         if (existingItem?.status === "completed") {
           if (event.item.status === "started") {
@@ -1365,6 +1463,12 @@ export function foldTaskEvent(
           items: Object.fromEntries(
             retainedIds.map((id) => [id, items[id]!] as const),
           ),
+          itemOrder: [
+            ...new Set([
+              ...(aggregate.conversation.itemOrder ?? []),
+              event.item.id,
+            ]),
+          ].filter((id) => retainedIds.includes(id)),
           turnOrder: [
             ...new Set([...aggregate.conversation.turnOrder, event.turnId]),
           ].slice(-64),
@@ -2007,6 +2111,83 @@ function boundedHash(value: string): string {
   return `${left.toString(16).padStart(8, "0")}${right.toString(16).padStart(8, "0")}`;
 }
 
+function recordAcceptedUserItem(
+  aggregate: TaskAggregate,
+  event: Extract<
+    TaskEvent,
+    {
+      type:
+        | "task_launch_requested"
+        | "task_message_requested"
+        | "explicit_continuation_response_requested";
+    }
+  >,
+): void {
+  const operationId = event.operationId;
+  const id = `user:${operationId}`;
+  const text =
+    event.type === "task_launch_requested"
+      ? event.launch.outcome
+      : event.message;
+  const attachments =
+    event.type === "task_launch_requested"
+      ? event.launch.attachmentMetadata
+      : event.attachmentMetadata;
+  const matchingItems = Object.entries(aggregate.conversation.items).filter(
+    ([, item]) => item.kind === "user_message" && item.clientId === operationId,
+  );
+  if (matchingItems.length > 1)
+    throw new Error("Accepted user message identity is ambiguous.");
+  const [providerKey, providerItem] = matchingItems[0] ?? [];
+  const existing = aggregate.conversation.items[id];
+  if (
+    existing &&
+    (existing.kind !== "user_message" ||
+      existing.clientId !== operationId ||
+      existing.text !== text)
+  )
+    throw new Error(
+      "Accepted user message identity conflicts with transcript.",
+    );
+  const accepted: TaskConversationItem = {
+    id,
+    kind: "user_message",
+    status: "completed",
+    clientId: operationId,
+    acceptedAt: existing?.acceptedAt ?? event.observedAt,
+    startedAt: existing?.startedAt ?? event.observedAt,
+    completedAt: existing?.completedAt ?? event.observedAt,
+    text,
+    ...(attachments?.length
+      ? { attachments: structuredClone(attachments) }
+      : {}),
+    ...(providerItem?.turnId ? { turnId: providerItem.turnId } : {}),
+    ...(providerItem ? { providerItemId: providerItem.id } : {}),
+  };
+  const items = { ...aggregate.conversation.items };
+  if (providerKey && providerKey !== id) delete items[providerKey];
+  items[id] = accepted;
+  const previousOrder =
+    aggregate.conversation.itemOrder ??
+    Object.keys(aggregate.conversation.items);
+  const itemOrder = [
+    ...new Set([
+      ...previousOrder.map((itemId) => (itemId === providerKey ? id : itemId)),
+      id,
+    ]),
+  ].slice(-256);
+  aggregate.conversation = {
+    ...aggregate.conversation,
+    items: Object.fromEntries(
+      itemOrder.flatMap((itemId) => {
+        const item = items[itemId];
+        return item ? [[itemId, item] as const] : [];
+      }),
+    ),
+    itemOrder,
+  };
+}
+
 export class TaskEngine {
   constructor(private readonly store: TaskEngineStore) {}
 
@@ -2119,6 +2300,13 @@ export class TaskEngine {
       }
       synchronizeCodexRecoveryRequired(aggregate);
       const output = outputFor(aggregate);
+      if (
+        (event.type === "task_launch_requested" ||
+          event.type === "task_message_requested" ||
+          event.type === "explicit_continuation_response_requested") &&
+        output.operationDisposition.status !== "rejected"
+      )
+        recordAcceptedUserItem(aggregate, event);
       const outcomeReleasesActive =
         event.type === "command_outcome_observed" &&
         active?.commandId === event.commandId;

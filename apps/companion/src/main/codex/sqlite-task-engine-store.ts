@@ -77,6 +77,9 @@ function normalizeAggregate(value: string): TaskAggregate {
   )
     throw new Error("Persisted task aggregate is invalid.");
   aggregate.messageDeliveries ??= {};
+  aggregate.conversation.itemOrder ??= legacyConversationItemOrder(
+    aggregate.conversation,
+  );
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
   aggregate.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(aggregate);
@@ -93,10 +96,27 @@ function normalizeProjection(value: string): TaskProjection {
   )
     throw new Error("Persisted task projection is invalid.");
   projection.messageDeliveries ??= {};
+  projection.conversation.itemOrder ??= legacyConversationItemOrder(
+    projection.conversation,
+  );
   projection.conversation.terminalTurns ??= {};
   projection.codexReconciliation ??= [];
   projection.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(projection);
   return projection;
+}
+
+function legacyConversationItemOrder(
+  conversation: TaskAggregate["conversation"],
+): string[] {
+  const ordered = conversation.turnOrder.flatMap((turnId) =>
+    Object.values(conversation.items)
+      .filter((item) => item.turnId === turnId)
+      .map((item) => item.id),
+  );
+  return [
+    ...ordered,
+    ...Object.keys(conversation.items).filter((id) => !ordered.includes(id)),
+  ].slice(-256);
 }
 
 function legacyCodexRecoveryBlockers(value: {

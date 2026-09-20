@@ -359,6 +359,55 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(styles).toContain("scrollbar-color: transparent transparent;");
   });
 
+  it("renders an accepted customer message before any provider turn exists", () => {
+    const value = snapshot();
+    value.product!.tasks = [
+      {
+        taskId: "task_accepted_local",
+        executionMode: "agent",
+        browserIdentity: { mode: "temporary" },
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-20T00:00:00.000Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "intent_persisted",
+        results: [],
+        conversation: {
+          turnStatus: "unknown",
+          archived: false,
+          items: {
+            "user:intent_local": {
+              id: "user:intent_local",
+              kind: "user_message",
+              status: "completed",
+              acceptedAt: "2026-09-20T00:00:00.000Z",
+              completedAt: "2026-09-20T00:00:00.000Z",
+              clientId: "intent_local",
+              deliveryState: "pending",
+              text: "Keep this exact instruction visible.",
+            },
+          },
+          itemOrder: ["user:intent_local"],
+          turnOrder: [],
+        },
+        lifecycle: { phase: "starting", reason: "Starting this task." },
+        availableActions: ["finish"],
+      },
+    ];
+    value.product!.currentTaskId = "task_accepted_local";
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Keep this exact instruction visible.");
+    expect(html).toContain("Sending…");
+    expect(html).not.toContain("Starting this task.");
+  });
+
   it("derives the restrained renderer accent from the canonical Rove mark", () => {
     const logo = readFileSync(
       new URL("./assets/rove-mark.png", import.meta.url),

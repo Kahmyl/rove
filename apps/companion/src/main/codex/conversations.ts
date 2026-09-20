@@ -29,7 +29,7 @@ export interface ProjectedInputAttachment {
 }
 export interface ProjectedConversationItem {
   id: string;
-  turnId: string;
+  turnId?: string;
   kind:
     | "user_message"
     | "assistant_message"
@@ -44,6 +44,9 @@ export interface ProjectedConversationItem {
   completedAt?: string;
   authoredBy?: "user" | "assistant" | "host";
   clientId?: string;
+  acceptedAt?: string;
+  providerItemId?: string;
+  deliveryState?: "pending" | "materialized" | "not_sent" | "uncertain";
   attachments?: readonly ProjectedInputAttachment[];
   text?: string;
   title?: string;
@@ -60,6 +63,7 @@ export interface ConversationAssociation {
   archived: boolean;
   lastEventSequence: number;
   items: Record<string, ProjectedConversationItem>;
+  itemOrder?: string[];
   turnOrder: string[];
 }
 export interface NormalizedConversationEvent {
@@ -433,6 +437,8 @@ export function reduceConversationEvent(
     (event.type === "item_started" || event.type === "item_completed") &&
     event.item
   ) {
+    if (!event.item.turnId)
+      throw new Error("Provider conversation item lacks a turn identity.");
     if (!next.turnOrder.includes(event.item.turnId))
       next.turnOrder.push(event.item.turnId);
     const existing = next.items[event.item.id];
@@ -451,7 +457,7 @@ export function reduceConversationEvent(
   next.turnOrder = next.turnOrder.slice(-MAX_TURNS);
   const retainedTurnIds = new Set(next.turnOrder);
   const itemEntries = Object.entries(next.items)
-    .filter(([, item]) => retainedTurnIds.has(item.turnId))
+    .filter(([, item]) => item.turnId && retainedTurnIds.has(item.turnId))
     .slice(-MAX_ITEMS);
   next.items = Object.fromEntries(itemEntries);
   next.lastEventSequence = Math.max(next.lastEventSequence, event.sequence);
@@ -765,7 +771,7 @@ function validateAssociation(
   for (const [itemId, raw] of Object.entries(items)) {
     const item = validateProjectedItem(raw);
     if (itemId !== item.id) throw new Error("Projected item key mismatch.");
-    if (!turnIds.has(item.turnId))
+    if (!item.turnId || !turnIds.has(item.turnId))
       throw new Error("Projected item references an unordered turn.");
   }
 }
