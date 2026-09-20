@@ -44,17 +44,8 @@ export interface CustomerTaskPresentationFacts {
   collaboration?: CustomerTaskCollaborationProjection;
   capabilities?: ProductTaskCapabilities;
   latestDelivery?: "pending" | "materialized" | "not_sent" | "uncertain";
+  consequentialOutcomeUnclear?: boolean;
   recordings?: readonly Recording[];
-}
-
-function latestActivityOutcomes(
-  execution: CustomerTaskExecutionProjection,
-): ReadonlySet<string> {
-  return new Set(
-    (execution.segments.at(-1)?.activities ?? []).map(
-      (activity) => activity.state,
-    ),
-  );
 }
 
 /**
@@ -64,7 +55,6 @@ function latestActivityOutcomes(
 export function customerTaskPresentation(
   facts: CustomerTaskPresentationFacts,
 ): CustomerTaskPresentation {
-  const outcomes = latestActivityOutcomes(facts.execution);
   const retry = facts.capabilities?.canRetry
     ? ({ kind: "cleanup", label: "Retry cleanup" } as const)
     : undefined;
@@ -125,7 +115,10 @@ export function customerTaskPresentation(
     return result("working", {
       sidebar: { label: "Working", tone: "neutral" },
     });
-  if (outcomes.has("unresolved") || facts.latestDelivery === "uncertain")
+  if (
+    facts.consequentialOutcomeUnclear === true ||
+    facts.latestDelivery === "uncertain"
+  )
     return result("outcome_unclear", {
       conversationStatus: {
         title: "Outcome unclear",
@@ -142,7 +135,6 @@ export function customerTaskPresentation(
     });
   if (
     facts.execution.state === "failed" ||
-    outcomes.has("failed") ||
     facts.latestDelivery === "not_sent"
   )
     return result("failed", {

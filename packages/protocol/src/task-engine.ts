@@ -1724,6 +1724,11 @@ export function foldTaskEvent(
             observedAt: event.observedAt,
           });
       }
+      if (
+        event.completedHandoff &&
+        aggregate.conversation.terminalTurns?.[event.turnId] === "interrupted"
+      )
+        break;
       if (event.completedHandoff) {
         const existingGeneration = aggregate.continuation.generation ?? -1;
         if (existingGeneration > event.completedHandoff.handoffGeneration)

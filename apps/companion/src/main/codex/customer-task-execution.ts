@@ -215,7 +215,12 @@ export function customerTaskExecution(
       raw.push({ id: item.id, input: item, items: [] });
       continue;
     }
-    const segment = raw.at(-1);
+    const segment =
+      (item.turnId
+        ? [...raw]
+            .reverse()
+            .find((candidate) => candidate.input?.turnId === item.turnId)
+        : undefined) ?? raw.at(-1);
     if (segment) segment.items.push(item);
     else raw.push({ id: `work:${item.id}`, items: [item] });
   }

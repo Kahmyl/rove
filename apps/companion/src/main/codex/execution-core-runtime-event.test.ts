@@ -151,6 +151,13 @@ describe("request-human live event composition", () => {
       turnId: "turn_live",
       itemId: "item_live_handoff",
       terminal: true,
+      item: {
+        id: "item_live_handoff",
+        kind: "tool",
+        status: "completed",
+        turnId: "turn_live",
+        title: "control.request_human",
+      },
       completedHandoff: completedHandoff!,
     });
 
@@ -176,6 +183,48 @@ describe("request-human live event composition", () => {
       status: "awaiting_human",
       controller: null,
     });
+
+    const interrupted = structuredClone(seeded);
+    interrupted.codex = {
+      ...interrupted.codex,
+      runtimeStatus: "idle",
+      turn: "interrupted",
+    };
+    interrupted.conversation.terminalTurns = {
+      turn_live: "interrupted",
+    };
+    const afterLateHandoff = foldTaskEvent(interrupted, {
+      schemaVersion: 1,
+      type: "codex_item_observed",
+      eventId: "codex:late:item:item_live_handoff:completed",
+      taskId,
+      source: {
+        kind: "codex",
+        id: "connection_late",
+        generation: 2,
+        position: 1,
+      },
+      observedAt: "2026-09-19T00:00:01.000Z",
+      threadId,
+      turnId: "turn_live",
+      itemId: "item_live_handoff",
+      terminal: true,
+      item: {
+        id: "item_live_handoff",
+        kind: "tool",
+        status: "completed",
+        turnId: "turn_live",
+        title: "control.request_human",
+      },
+      completedHandoff: completedHandoff!,
+    });
+    expect(afterLateHandoff.conversation.itemOrder).toContain(
+      "item_live_handoff",
+    );
+    expect(afterLateHandoff.codex.turn).toBe("interrupted");
+    expect(afterLateHandoff.runtime.status).toBe("active");
+    expect(afterLateHandoff.continuation).toEqual({ status: "none" });
+    expect(afterLateHandoff.attentions).toEqual([]);
   });
 
   it("refuses composition when Runtime reports a different handoff", async () => {

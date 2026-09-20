@@ -78,12 +78,13 @@ describe("customer Task presentation", () => {
     ).toBeUndefined();
   });
 
-  it("distinguishes confirmed failure from an uncertain consequential outcome", () => {
+  it("uses turn and consequential-effect authority instead of activity-row outcomes", () => {
     const failed = customerTaskPresentation({
       execution: execution("failed", "failed"),
     });
     const uncertain = customerTaskPresentation({
-      execution: execution("failed", "unresolved"),
+      execution: execution("idle", "unresolved"),
+      consequentialOutcomeUnclear: true,
       capabilities: {
         canSubmit: true,
         canQueue: false,
@@ -107,6 +108,22 @@ describe("customer Task presentation", () => {
     });
     expect(uncertain.sidebar).toBeUndefined();
     expect(uncertain.retry).toBeUndefined();
+    expect(
+      customerTaskPresentation({ execution: execution("idle", "failed") }),
+    ).toMatchObject({ state: "ready", terminalWorkLabel: "Worked" });
+    expect(
+      customerTaskPresentation({ execution: execution("idle", "unresolved") }),
+    ).toMatchObject({ state: "ready", terminalWorkLabel: "Worked" });
+    const recoveredAfterFailedCommand = execution("idle", "failed");
+    recoveredAfterFailedCommand.segments = [
+      {
+        ...recoveredAfterFailedCommand.segments[0]!,
+        finalAnswerItemIds: ["assistant:successful-final"],
+      },
+    ];
+    expect(
+      customerTaskPresentation({ execution: recoveredAfterFailedCommand }),
+    ).toMatchObject({ state: "ready", terminalWorkLabel: "Worked" });
   });
 
   it("exposes only the exact cleanup retry already granted by capability authority", () => {

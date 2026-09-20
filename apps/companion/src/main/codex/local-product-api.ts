@@ -1946,6 +1946,9 @@ export class LocalProductApi {
                 task.conversation.items[latestInputId]!.deliveryState!,
             }
           : {}),
+        consequentialOutcomeUnclear: task.results.some(
+          (result) => result.lifecycle === "unresolved",
+        ),
         recordings: task.recordings,
       });
     }
