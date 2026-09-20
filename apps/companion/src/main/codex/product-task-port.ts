@@ -2,16 +2,14 @@ import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import {
-  hasActionableTaskHandoff,
-  projectTaskAggregate,
-} from "@rove/protocol";
+import { hasActionableTaskHandoff, projectTaskAggregate } from "@rove/protocol";
 import type {
   TaskEngine,
   TaskAcceptance,
   TaskEngineStore,
   TaskIntent,
   TaskLaunchConfiguration,
+  TaskConversationItem,
   TaskPortableValue,
   TaskSelectedResultContextSnapshot,
 } from "@rove/protocol";
@@ -43,6 +41,7 @@ export type ProductTaskIntent =
       model?: string;
       reasoningEffort?: string;
       attachmentIds: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
       workflowAssociation?: TaskLaunchConfiguration["workflowAssociation"];
     }
@@ -53,6 +52,7 @@ export type ProductTaskIntent =
       message: string;
       expectedTurnId?: string;
       attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
       selectedResultContext?: TaskSelectedResultContextSnapshot;
     }
@@ -75,6 +75,7 @@ export type ProductTaskIntent =
       operationId: string;
       message: string;
       attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
       selectedResultContext?: TaskSelectedResultContextSnapshot;
     };
@@ -138,6 +139,24 @@ function productLifecycleReason(
   return fallback === "Observation reduced from authoritative facts."
     ? "Task state is up to date."
     : fallback;
+}
+
+function customerDeliveryState(
+  item: TaskConversationItem,
+  aggregate: Awaited<ReturnType<TaskEngineStore["aggregate"]>>,
+): "pending" | "materialized" | "not_sent" | "uncertain" | undefined {
+  if (!item.acceptedAt || !item.clientId || !aggregate) return undefined;
+  const state = aggregate.messageDeliveries[item.clientId]?.state;
+  if (state === "message_materialized" || state === "acceptance_observed")
+    return "materialized";
+  if (
+    state === "dispatch_not_started" ||
+    state === "non_submission_established"
+  )
+    return "not_sent";
+  if (state === "transport_may_have_received" || state === "unresolved")
+    return "uncertain";
+  return "pending";
 }
 
 /** Production product boundary. It accepts one typed intent and exposes only
@@ -277,6 +296,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               ? { reasoningEffort: intent.reasoningEffort }
               : {}),
             attachmentIds: [...intent.attachmentIds],
+            ...(intent.attachmentMetadata?.length
+              ? {
+                  attachmentMetadata: structuredClone(
+                    intent.attachmentMetadata,
+                  ),
+                }
+              : {}),
             ...(intent.workflowContext
               ? { workflowContext: structuredClone(intent.workflowContext) }
               : {}),
@@ -301,6 +327,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             : {}),
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
+            : {}),
+          ...(intent.attachmentMetadata?.length
+            ? { attachmentMetadata: structuredClone(intent.attachmentMetadata) }
             : {}),
           ...(intent.workflowContext
             ? { workflowContext: structuredClone(intent.workflowContext) }
@@ -360,6 +389,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           message: intent.message,
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
+            : {}),
+          ...(intent.attachmentMetadata?.length
+            ? { attachmentMetadata: structuredClone(intent.attachmentMetadata) }
             : {}),
           ...(intent.workflowContext
             ? { workflowContext: structuredClone(intent.workflowContext) }
@@ -564,7 +596,33 @@ export class LedgerProductTaskPort implements ProductTaskPort {
                       : "unknown",
             archived,
             lastEventSequence: aggregate.revision,
-            items: structuredClone(aggregate.conversation.items),
+            items: Object.fromEntries(
+              Object.entries(aggregate.conversation.items).map(([id, item]) => {
+                const deliveryState = customerDeliveryState(item, aggregate);
+                return [
+                  id,
+                  {
+                    ...structuredClone(item),
+                    ...(deliveryState ? { deliveryState } : {}),
+                  },
+                ];
+              }),
+            ),
+            itemOrder: [
+              ...(aggregate.conversation.itemOrder ?? [
+                ...aggregate.conversation.turnOrder.flatMap((turnId) =>
+                  Object.values(aggregate.conversation.items)
+                    .filter((item) => item.turnId === turnId)
+                    .map((item) => item.id),
+                ),
+                ...Object.keys(aggregate.conversation.items).filter(
+                  (id) =>
+                    !aggregate.conversation.turnOrder.includes(
+                      aggregate.conversation.items[id]?.turnId ?? "",
+                    ),
+                ),
+              ]),
+            ],
             turnOrder: [...aggregate.conversation.turnOrder],
           },
         } as ProductTaskSnapshot;

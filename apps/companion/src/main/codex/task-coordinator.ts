@@ -1861,6 +1861,10 @@ export class RoveTaskCoordinator {
         if (matches.length > 1)
           throw new Error("Initial launch operation produced duplicate turns.");
         if (matches[0]) {
+          if (!matches[0].turnId)
+            throw new Error(
+              "Initial launch provider item lacks a turn identity.",
+            );
           context = await this.updateContext(context, {
             initialLaunch: {
               ...launch,

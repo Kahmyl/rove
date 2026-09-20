@@ -3541,19 +3541,15 @@ export function ProductSurface({
   }
 
   const timeline = Object.values(viewedTask?.conversation?.items ?? {});
-  const orderedTurnIds = [
-    ...(viewedTask?.conversation?.turnOrder ?? []),
-    ...timeline
-      .map((item) => item.turnId)
-      .filter(
-        (turnId, index, all) =>
-          !viewedTask?.conversation?.turnOrder.includes(turnId) &&
-          all.indexOf(turnId) === index,
-      ),
+  const itemOrder = viewedTask?.conversation?.itemOrder ?? [];
+  const itemsById = new Map(timeline.map((item) => [item.id, item]));
+  const orderedTimeline = [
+    ...itemOrder.flatMap((id) => {
+      const item = itemsById.get(id);
+      return item ? [item] : [];
+    }),
+    ...timeline.filter((item) => !itemOrder.includes(item.id)),
   ];
-  const orderedTimeline = orderedTurnIds.flatMap((turnId) =>
-    timeline.filter((item) => item.turnId === turnId),
-  );
   const rawSegments: Array<{
     id: string;
     input?: ProjectedConversationItem;
@@ -3568,7 +3564,7 @@ export function ProductSurface({
     if (current) current.items.push(item);
     else
       rawSegments.push({
-        id: `work:${item.turnId}:${item.id}`,
+        id: `work:${item.turnId ?? "unassociated"}:${item.id}`,
         items: [item],
       });
   }
@@ -6123,6 +6119,15 @@ export function ProductSurface({
                         )}
                         <MessageBody text={messageText(segment.input)} />
                         <footer className="message-meta message-meta-user">
+                          {segment.input.deliveryState === "pending" && (
+                            <span>Sending…</span>
+                          )}
+                          {segment.input.deliveryState === "not_sent" && (
+                            <span>Not sent</span>
+                          )}
+                          {segment.input.deliveryState === "uncertain" && (
+                            <span>Delivery unconfirmed</span>
+                          )}
                           {formatMessageTime(
                             segment.input.completedAt ??
                               segment.input.startedAt,

@@ -62,6 +62,7 @@ async function seedReadyTask(
     legacyEffects?:
       "not_applicable" | "acknowledgement_required" | "acknowledged";
     command?: TaskCommand;
+    mutate?: (aggregate: ReturnType<typeof emptyTaskAggregate>) => void;
   } = {},
 ) {
   const aggregate = emptyTaskAggregate(seededTaskId);
@@ -119,6 +120,7 @@ async function seedReadyTask(
       ? {}
       : { legacyEffects: options.legacyEffects }),
   };
+  options.mutate?.(aggregate);
   const event: TaskEvent = {
     schemaVersion: 1,
     type: "runtime_inventory_observed",
@@ -149,6 +151,404 @@ async function seedReadyTask(
 }
 
 describe("LedgerProductTaskPort protected workspace boundary", () => {
+  it("does not manufacture a transcript item for a rejected customer message", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-rejected-message-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.desiredState = "closed";
+        aggregate.record!.desiredState = "closed";
+        aggregate.record!.closeOperation = {
+          operationId: "intent_11345678-1234-4123-8123-123456789abc",
+          requestedAt: "2026-09-09T12:00:00.000Z",
+          stage: "complete",
+        };
+        aggregate.codex.archived = true;
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const rejected = await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId: "intent_22345678-1234-4123-8123-123456789abc",
+      message: "This must not look sent",
+    });
+    expect(rejected.projection.operationDisposition.status).toBe("rejected");
+    expect(rejected.aggregate.conversation.items).toEqual({});
+    store.close();
+  });
+
+  it("creates the same immediate local item for an explicit customer continuation response", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-explicit-response-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const engine = new TaskEngine(store);
+    await engine.accept({
+      schemaVersion: 1,
+      type: "runtime_handoff_observed",
+      eventId: "runtime:explicit-response",
+      taskId: seededTaskId,
+      source: { kind: "runtime", id: "runtime", generation: 2, position: 1 },
+      observedAt: "2026-09-09T12:01:00.000Z",
+      sessionId: seededSessionId,
+      handoffId: `handoff_${"e".repeat(32)}`,
+      handoffGeneration: 2,
+      ownershipGeneration: 3,
+      controller: "human",
+      status: "active",
+      continuation: {
+        status: "pending",
+        id: "continuation_explicit",
+        taskId: seededTaskId,
+        sessionId: seededSessionId,
+        threadId: "thread_seeded",
+        handoffId: `handoff_${"e".repeat(32)}`,
+        generation: 2,
+        policy: "explicit_user_response",
+        freshInspectionRequired: false,
+        preHandoffObservationSeq: 1,
+      },
+      attention: {
+        authority: "rove_control",
+        kind: "control_handoff",
+        requestId: "control_explicit",
+        taskId: seededTaskId,
+        sessionId: seededSessionId,
+        threadId: "thread_seeded",
+        handoffId: `handoff_${"e".repeat(32)}`,
+        generation: 2,
+        status: "pending",
+      },
+    });
+    await engine.accept({
+      schemaVersion: 1,
+      type: "runtime_inventory_observed",
+      eventId: "runtime:explicit-response:return",
+      taskId: seededTaskId,
+      source: { kind: "runtime", id: "runtime", generation: 2, position: 2 },
+      observedAt: "2026-09-09T12:01:01.000Z",
+      runtime: {
+        availability: "available",
+        sessionExists: true,
+        sessionId: seededSessionId,
+        bootstrapId: seededBootstrapId,
+        bootstrapLookup: "exact",
+        status: "active",
+        controller: "agent",
+        attachment: "attached",
+        profileLock: "released",
+        browserIdentity: { mode: "temporary" },
+        recovery: "not_needed",
+        ownershipGeneration: 4,
+        lastReturnedHandoffId: `handoff_${"e".repeat(32)}`,
+        observationSeq: 2,
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const operationId = "intent_25345678-1234-4123-8123-123456789abc";
+    const accepted = await port.submit({
+      type: "explicit_continuation_response",
+      taskId: seededTaskId,
+      operationId,
+      message: "Use the confirmed address.",
+    });
+    expect(accepted.projection.operationDisposition).toMatchObject({
+      status: "accepted",
+    });
+    expect(
+      accepted.aggregate.conversation.items[`user:${operationId}`],
+    ).toMatchObject({
+      clientId: operationId,
+      text: "Use the confirmed address.",
+    });
+    store.close();
+  });
+
+  it("keeps uncertain delivery on the same item and retains the redispatch fence", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-uncertain-message-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store);
+    const engine = new TaskEngine(store);
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const operationId = "intent_26345678-1234-4123-8123-123456789abc";
+    const accepted = await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId,
+      message: "Send this only once.",
+    });
+    const [claimed] = await store.claimDueCommands("worker", 1, 1);
+    expect(claimed?.commandId).toBe(accepted.command?.commandId);
+    await store.markPossiblyStarted(claimed!.commandId);
+    await engine.accept({
+      schemaVersion: 1,
+      type: "command_outcome_observed",
+      eventId: "worker:uncertain-message",
+      taskId: seededTaskId,
+      source: { kind: "worker", id: "worker", generation: 1, position: 1 },
+      observedAt: "2026-09-09T12:01:01.000Z",
+      commandId: accepted.command!.commandId,
+      status: "unresolved",
+      facts: [
+        {
+          schemaVersion: 1,
+          type: "codex_message_delivery_observed",
+          eventId: "delivery:may-have-received",
+          taskId: seededTaskId,
+          source: {
+            kind: "worker",
+            id: "delivery",
+            generation: 1,
+            position: 1,
+          },
+          observedAt: "2026-09-09T12:01:01.000Z",
+          delivery: {
+            operationId,
+            threadId: "thread_seeded",
+            state: "transport_may_have_received",
+            connectionGeneration: 1,
+            observedAt: "2026-09-09T12:01:01.000Z",
+          },
+        },
+      ],
+    });
+    const itemId = `user:${operationId}`;
+    expect(
+      (await port.readTask(seededTaskId))?.conversation?.items[itemId],
+    ).toMatchObject({
+      text: "Send this only once.",
+      deliveryState: "uncertain",
+    });
+    expect((await store.aggregate(seededTaskId))?.recoveryRequired).toContain(
+      "reconciliation",
+    );
+    expect(await store.claimDueCommands("worker-retry", 2, 1)).toEqual([
+      expect.objectContaining({
+        commandId: accepted.command!.commandId,
+        claimedFrom: "reconcile_required",
+      }),
+    ]);
+    store.close();
+  });
+
+  it("keeps one full 16,000-character accepted follow-up through customer projection and provider materialization", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-accepted-message-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store);
+    const engine = new TaskEngine(store);
+    const port = new LedgerProductTaskPort({
+      engine,
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+      now: () => "2026-09-09T12:01:00.000Z",
+    });
+    const operationId = "intent_32345678-1234-4123-8123-123456789abc";
+    const itemId = `user:${operationId}`;
+    const tail = "accepted-message-boundary-tail";
+    const longMessage = `${"x".repeat(16_000 - tail.length)}${tail}`;
+    const accepted = await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId,
+      message: longMessage,
+      attachmentIds: ["attachment-safe"],
+      attachmentMetadata: [{ filename: "reference.png", kind: "image" }],
+    });
+    expect(accepted.aggregate.conversation.items[itemId]).toMatchObject({
+      id: itemId,
+      clientId: operationId,
+      text: longMessage,
+      attachments: [{ filename: "reference.png", kind: "image" }],
+    });
+    expect(accepted.aggregate.conversation.items[itemId]?.text).toHaveLength(
+      16_000,
+    );
+    expect(
+      accepted.aggregate.conversation.items[itemId]?.turnId,
+    ).toBeUndefined();
+    const api = new LocalProductApi(
+      () => ({
+        state: "ready",
+        ready: true,
+        restartAttempt: 0,
+        stderrTail: [],
+      }),
+      {
+        snapshot: () => ({
+          account: { status: "logged_in", authMode: "chatgpt" },
+          models: [],
+          rateLimits: null,
+          usage: null,
+          refreshedAt: "2026-09-09T12:00:00.000Z",
+        }),
+      } as never,
+      port,
+      {},
+      new OrderedAttentionQueue(),
+      "/isolated/task-workspace",
+      () => [],
+    );
+    const beforeMaterialization = (await api.readSnapshot()).tasks.find(
+      (task) => task.taskId === seededTaskId,
+    )!;
+    expect(beforeMaterialization.conversation?.items[itemId]?.text).toBe(
+      longMessage,
+    );
+    expect(
+      Object.values(beforeMaterialization.conversation!.items).filter(
+        (item) => item.kind === "user_message",
+      ),
+    ).toHaveLength(1);
+
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_message_delivery_observed",
+      eventId: "codex-delivery:not-submitted",
+      taskId: seededTaskId,
+      source: { kind: "worker", id: "delivery", generation: 1, position: 1 },
+      observedAt: "2026-09-09T12:01:00.500Z",
+      delivery: {
+        operationId,
+        threadId: "thread_seeded",
+        state: "non_submission_established",
+        connectionGeneration: 1,
+        observedAt: "2026-09-09T12:01:00.500Z",
+      },
+    });
+    expect(
+      (await port.readTask(seededTaskId))?.conversation?.items[itemId],
+    ).toMatchObject({
+      text: longMessage,
+      deliveryState: "not_sent",
+    });
+
+    const duplicate = await port.submit({
+      type: "message",
+      taskId: seededTaskId,
+      operationId,
+      message: longMessage,
+      attachmentIds: ["attachment-safe"],
+      attachmentMetadata: [{ filename: "reference.png", kind: "image" }],
+    });
+    expect(duplicate.duplicate).toBe(true);
+    expect(Object.values(duplicate.aggregate.conversation.items)).toHaveLength(
+      1,
+    );
+
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_item_observed",
+      eventId: "codex-live:user-materialized",
+      taskId: seededTaskId,
+      source: { kind: "codex", id: "connection", generation: 2, position: 1 },
+      observedAt: "2026-09-09T12:01:01.000Z",
+      threadId: "thread_seeded",
+      turnId: "turn_provider",
+      itemId: "provider-item-1",
+      terminal: true,
+      item: {
+        id: "provider-item-1",
+        turnId: "turn_provider",
+        clientId: operationId,
+        kind: "user_message",
+        status: "completed",
+        text: `Provider-only selected result context\n${longMessage}`,
+        attachments: [
+          { filename: "/private/path/reference.png", kind: "image" },
+        ],
+      },
+    });
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_item_observed",
+      eventId: "codex-history:user-materialized",
+      taskId: seededTaskId,
+      source: {
+        kind: "codex",
+        id: "history:thread_seeded:provider-item-1",
+        generation: 1,
+        position: 1,
+      },
+      observedAt: "2026-09-09T12:01:02.000Z",
+      threadId: "thread_seeded",
+      turnId: "turn_provider",
+      itemId: "provider-item-1",
+      terminal: true,
+      item: {
+        id: "provider-item-1",
+        turnId: "turn_provider",
+        clientId: operationId,
+        kind: "user_message",
+        status: "completed",
+        text: `Provider-only selected result context\n${longMessage}`,
+      },
+    });
+    const afterMaterialization = await store.aggregate(seededTaskId);
+    expect(afterMaterialization?.conversation.items[itemId]).toMatchObject({
+      id: itemId,
+      providerItemId: "provider-item-1",
+      turnId: "turn_provider",
+      text: longMessage,
+      attachments: [{ filename: "reference.png", kind: "image" }],
+    });
+    expect(
+      Object.values(afterMaterialization!.conversation.items),
+    ).toHaveLength(1);
+    expect(afterMaterialization?.messageDeliveries[operationId]?.state).toBe(
+      "message_materialized",
+    );
+    const materializedProjection = (await api.readSnapshot()).tasks.find(
+      (task) => task.taskId === seededTaskId,
+    )!;
+    expect(materializedProjection.conversation?.items[itemId]).toMatchObject({
+      id: itemId,
+      providerItemId: "provider-item-1",
+      turnId: "turn_provider",
+      text: longMessage,
+      attachments: [{ filename: "reference.png", kind: "image" }],
+      deliveryState: "materialized",
+    });
+    expect(
+      Object.values(materializedProjection.conversation!.items).filter(
+        (item) => item.kind === "user_message",
+      ),
+    ).toHaveLength(1);
+    store.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(
+      (await reopened.aggregate(seededTaskId))?.conversation.items[itemId],
+    ).toMatchObject({
+      id: itemId,
+      providerItemId: "provider-item-1",
+      text: longMessage,
+    });
+    reopened.close();
+  });
+
   it("persists the exact applied Workflow revision with a later turn across restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-workflow-turn-"));
     roots.push(root);
@@ -772,11 +1172,17 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       projection: { operationDisposition: { status: "accepted" } },
       command: { type: "prepare_codex_reassociation" },
     });
-    expect(later.aggregate.conversation).toEqual(
-      task!.conversation
-        ? expect.objectContaining({ items: task!.conversation.items })
-        : expect.anything(),
-    );
+    expect(later.aggregate.conversation.items).toEqual({
+      "user:intent_62345678-1234-4123-8123-123456789abc":
+        expect.objectContaining({
+          text: "Continue with a new provider association if needed.",
+        }),
+    });
+    expect(
+      later.aggregate.conversation.items[
+        "user:intent_62345678-1234-4123-8123-123456789abc"
+      ]?.turnId,
+    ).toBeUndefined();
     store.close();
   });
 
@@ -1205,6 +1611,15 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const expected = join(taskWorkspaceRoot, accepted.aggregate.taskId);
     expect(accepted.aggregate.launch?.cwd).toBe(expected);
     expect((await stat(expected)).mode & 0o777).toBe(0o700);
+    expect(
+      accepted.aggregate.conversation.items[`user:${operationId}`],
+    ).toMatchObject({
+      text: "Use the protected task workspace.",
+      clientId: operationId,
+    });
+    expect(
+      accepted.aggregate.conversation.items[`user:${operationId}`]?.turnId,
+    ).toBeUndefined();
 
     await engine.accept({
       schemaVersion: 1,

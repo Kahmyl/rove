@@ -365,6 +365,7 @@ export interface ProductConversationProjection {
   explicitSummary?: string;
   archived: boolean;
   items: Readonly<Record<string, ProjectedConversationItem>>;
+  itemOrder?: readonly string[];
   turnOrder: readonly string[];
 }
 export interface ProductTaskProjection {
@@ -1158,7 +1159,7 @@ function projectConversation(
         id,
         {
           id: item.id,
-          turnId: item.turnId,
+          ...(item.turnId === undefined ? {} : { turnId: item.turnId }),
           kind: item.kind,
           status: item.status,
           ...(item.phase === undefined ? {} : { phase: item.phase }),
@@ -1169,6 +1170,15 @@ function projectConversation(
             ? {}
             : { completedAt: item.completedAt }),
           ...(item.clientId === undefined ? {} : { clientId: item.clientId }),
+          ...(item.acceptedAt === undefined
+            ? {}
+            : { acceptedAt: item.acceptedAt }),
+          ...(item.providerItemId === undefined
+            ? {}
+            : { providerItemId: item.providerItemId }),
+          ...(item.deliveryState === undefined
+            ? {}
+            : { deliveryState: item.deliveryState }),
           ...(item.attachments?.length
             ? {
                 attachments: item.attachments
@@ -1182,9 +1192,17 @@ function projectConversation(
           ...(item.authoredBy === undefined
             ? {}
             : { authoredBy: item.authoredBy }),
-          ...(safeText(item.text, 2_000) === undefined
+          ...(safeText(
+            item.text,
+            item.kind === "user_message" ? 16_000 : 2_000,
+          ) === undefined
             ? {}
-            : { text: safeText(item.text, 2_000) }),
+            : {
+                text: safeText(
+                  item.text,
+                  item.kind === "user_message" ? 16_000 : 2_000,
+                ),
+              }),
           ...(safeText(item.title, 500) === undefined
             ? {}
             : { title: safeText(item.title, 500) }),
@@ -1203,8 +1221,34 @@ function projectConversation(
     ...(explicitSummary === undefined ? {} : { explicitSummary }),
     archived: conversation.archived,
     items,
+    ...(conversation.itemOrder === undefined
+      ? {}
+      : { itemOrder: conversation.itemOrder.slice(-128) }),
     turnOrder: conversation.turnOrder.slice(-64),
   };
+}
+
+function conversationAttachmentMetadata(
+  attachments: readonly TaskAttachmentDescriptor[],
+  attachmentIds: readonly string[],
+): ProjectedConversationItem["attachments"] {
+  const byId = new Map(
+    attachments.map((attachment) => [attachment.id, attachment]),
+  );
+  return attachmentIds.map((id) => {
+    const attachment = byId.get(id);
+    if (!attachment)
+      throw new Error("Task attachment metadata is unavailable.");
+    const mimeType = attachment.mimeType ?? "";
+    return {
+      filename: attachment.filename,
+      kind: mimeType.startsWith("image/")
+        ? ("image" as const)
+        : mimeType.startsWith("audio/")
+          ? ("audio" as const)
+          : ("file" as const),
+    };
+  });
 }
 function projectTask(
   task: ProductTaskSnapshot,
@@ -2044,7 +2088,7 @@ export class LocalProductApi {
         const createBase = {
           operationId,
           taskId,
-          turnId: sourceItem.turnId,
+          ...(sourceItem.turnId ? { turnId: sourceItem.turnId } : {}),
           title: nonempty(value.title, "result title"),
           body: nonempty(value.body, "result body"),
           source: {
@@ -2725,6 +2769,10 @@ export class LocalProductApi {
             ? {}
             : { reasoningEffort: input.reasoningEffort }),
           attachmentIds: [...attachmentIds],
+          attachmentMetadata: conversationAttachmentMetadata(
+            this.attachments?.listDrafts() ?? [],
+            attachmentIds,
+          ),
           ...(workflowContext ? { workflowContext } : {}),
           ...(workflow
             ? {
@@ -2832,6 +2880,10 @@ export class LocalProductApi {
           taskId,
           message: outcome,
           attachmentIds: [...attachmentIds],
+          attachmentMetadata: conversationAttachmentMetadata(
+            this.attachments?.listDrafts() ?? [],
+            attachmentIds,
+          ),
           ...(workflowContext ? { workflowContext } : {}),
           ...(selectedResultContext ? { selectedResultContext } : {}),
           operationId,
