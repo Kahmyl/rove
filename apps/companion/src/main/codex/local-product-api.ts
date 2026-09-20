@@ -19,6 +19,10 @@ import {
   customerTaskCollaboration,
   type CustomerTaskCollaborationProjection,
 } from "./customer-task-collaboration.js";
+import {
+  customerTaskPresentation,
+  type CustomerTaskPresentation,
+} from "./customer-task-presentation.js";
 import type {
   CodexTurnStatus,
   ProjectedConversationItem,
@@ -443,6 +447,7 @@ export interface ProductTaskProjection {
   capabilities?: ProductTaskSnapshot["capabilities"];
   customerExecution?: ProductTaskSnapshot["customerExecution"];
   customerCollaboration?: CustomerTaskCollaborationProjection;
+  customerPresentation?: CustomerTaskPresentation;
   runtime?: ProductTaskSnapshot["runtime"];
   attachments?: readonly TaskAttachmentDescriptor[];
   workflowContext?: NonNullable<
@@ -1911,11 +1916,31 @@ export class LocalProductApi {
         };
       }),
     );
-    for (const task of tasks)
+    for (const task of tasks) {
       task.customerCollaboration = customerTaskCollaboration(
         task,
         projectedAttention,
       );
+      const latestInputId =
+        task.customerExecution?.segments.at(-1)?.inputItemId;
+      task.customerPresentation = customerTaskPresentation({
+        execution: task.customerExecution ?? {
+          state: "idle",
+          queue: [],
+          segments: [],
+        },
+        collaboration: task.customerCollaboration,
+        ...(task.capabilities ? { capabilities: task.capabilities } : {}),
+        ...(latestInputId &&
+        task.conversation?.items[latestInputId]?.deliveryState
+          ? {
+              latestDelivery:
+                task.conversation.items[latestInputId]!.deliveryState!,
+            }
+          : {}),
+        recordings: task.recordings,
+      });
+    }
     const current = tasks.find((task) => task.taskId === this.currentTaskId);
     const blockers = [...tasks]
       .reverse()

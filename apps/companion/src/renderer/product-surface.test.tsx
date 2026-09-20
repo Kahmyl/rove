@@ -368,6 +368,28 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain(">Send now</button>");
     expect(html).toContain('aria-label="Queue follow-up"');
     expect(html).not.toContain("private/browser");
+
+    const stopping = value.product!.tasks[0]!;
+    stopping.customerExecution = {
+      ...stopping.customerExecution!,
+      state: "stopping",
+      segments: stopping.customerExecution!.segments.map(
+        ({ activeSince: _activeSince, ...segment }) => ({
+          ...segment,
+          status: "terminal",
+        }),
+      ),
+    };
+    const stoppingHtml = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(stoppingHtml).toContain('aria-label="Stopping work"');
+    expect(stoppingHtml).toContain("Stopping… for 0s");
   });
 
   it("discloses optional Workflow synchronization without broadening its data boundary", () => {
@@ -1264,7 +1286,77 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain("Archived · 0 tasks");
     expect(html).toContain('aria-label="Workflow environment"');
     expect(html).toContain("Standalone task");
-    expect(html).toContain("Job search · Completed");
+    expect(html).not.toContain("Job search · Completed");
+    expect(html).not.toContain(">Completed<");
+  });
+
+  it("keeps Task titles dominant while several sidebar states coexist", () => {
+    const value = snapshot();
+    const presentations = [
+      ["working", "Working", "neutral"],
+      ["needs_input", "Needs input", "attention"],
+      ["ready", undefined, undefined],
+      ["human_control", "You're in control", "attention"],
+      ["checking", "Checking state", "neutral"],
+    ] as const;
+    value.product!.tasks = presentations.map(([state, label, tone], index) => ({
+      taskId: `task_sidebar_${index}`,
+      executionMode: index % 2 === 0 ? "agent" : "companion",
+      selectionSource: "user_selected" as const,
+      selectedAt: `2026-09-20T10:0${index}:00.000Z`,
+      approvalsReviewer: "auto_review" as const,
+      bootstrapStage: "complete" as const,
+      results: [],
+      lifecycle: {
+        phase: "ready" as const,
+        reason: `RAW_INTERNAL_PHASE_${index}`,
+      },
+      availableActions: ["message" as const],
+      conversation: {
+        turnStatus: "completed" as const,
+        archived: false,
+        items: {
+          [`user_${index}`]: {
+            id: `user_${index}`,
+            kind: "user_message" as const,
+            status: "completed" as const,
+            authoredBy: "user" as const,
+            text: `Sidebar task ${index + 1}`,
+          },
+        },
+        itemOrder: [`user_${index}`],
+        turnOrder: [],
+      },
+      customerPresentation: {
+        state,
+        terminalWorkLabel: "Worked" as const,
+        ...(label && tone ? { sidebar: { label, tone } } : {}),
+      },
+    }));
+    value.product!.currentTaskId = "task_sidebar_0";
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    for (let index = 1; index <= 5; index += 1)
+      expect(html).toContain(`Sidebar task ${index}`);
+    for (const label of [
+      "Working",
+      "Needs input",
+      "You&#x27;re in control",
+      "Checking state",
+    ])
+      expect(html).toContain(label);
+    expect(html).not.toContain("RAW_INTERNAL_PHASE");
+    expect(html).not.toContain("Standalone ·");
+    expect(html).not.toContain(" · Agent");
+    expect(html).not.toContain(" · Companion");
+    expect(html).not.toContain(">Completed<");
   });
 
   it("projects only exact Workflow tasks, outputs, and attention", () => {
@@ -1879,7 +1971,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(humanOwnedFull).toContain(reason);
+    expect(humanOwnedFull).toContain("You&#x27;re in control");
+    expect(humanOwnedFull).not.toContain(reason);
     expect(humanOwnedFull).toContain("Return control");
     expect(humanOwnedFull).not.toContain("Retry cleanup");
 
@@ -1892,7 +1985,10 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(humanOwnedCompact).toContain(reason);
+    expect(humanOwnedCompact).toContain(
+      "Complete the browser step, then return control so Rove can continue.",
+    );
+    expect(humanOwnedCompact).not.toContain(reason);
     expect(humanOwnedCompact).toContain("Return Control");
     expect(humanOwnedCompact).not.toContain("Retry cleanup");
   });
@@ -2420,8 +2516,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain("Task needs attention");
-    expect(html).toContain("Cleanup remains for new.");
+    expect(html).not.toContain("Task needs attention");
+    expect(html).not.toContain("Cleanup remains for new.");
     expect(html).not.toContain("must finish or converge");
     expect(html.match(/>Retry cleanup<\/button>/g)).toHaveLength(1);
 
@@ -2606,7 +2702,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(chip).toContain("Your response is needed");
     expect(render("expanded")).toContain("Your response is needed");
     const full = render("full");
-    expect(full).toContain("Your response is needed");
+    expect(full).toContain("Tool needs information");
     expect(full).not.toContain("No action is needed from you right now.");
     expect(full).toContain('aria-label="Current task request"');
     expect(full).not.toContain('placeholder="Reply so the task can continue…"');

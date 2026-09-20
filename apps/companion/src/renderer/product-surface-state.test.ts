@@ -279,6 +279,55 @@ describe("native product composer state", () => {
     );
   });
 
+  it.each([
+    ["activity", { phase: "working", reason: "Working." }, "task_a"],
+    ["attention", { phase: "waiting_for_human", reason: "Input." }, "task_a"],
+    ["completion", { phase: "ready", reason: "Ready." }, null],
+    ["recovery", { phase: "recovering", reason: "Diagnostic." }, "task_a"],
+    [
+      "browser control",
+      { phase: "waiting_for_human", reason: "Control." },
+      "task_a",
+    ],
+  ] as const)(
+    "does not let background %s steal an explicit Task selection",
+    (_label, lifecycle, currentTaskId) => {
+      const selected = {
+        taskId: "task_b",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-12T00:00:00.000Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [],
+        lifecycle: { phase: "ready", reason: "Ready." },
+        availableActions: ["message"],
+      } satisfies ProductTaskProjection;
+      const background = {
+        ...selected,
+        taskId: "task_a",
+        lifecycle,
+        ...(lifecycle.phase === "waiting_for_human"
+          ? {
+              runtime: {
+                status: "active" as const,
+                controller: "human" as const,
+                attachment: "attached" as const,
+                recovery: "not_needed" as const,
+                profileOwnership: "owned" as const,
+              },
+            }
+          : {}),
+      } satisfies ProductTaskProjection;
+      const state = product();
+      state.tasks = [background, selected];
+      if (currentTaskId) state.currentTaskId = currentTaskId;
+      expect(reconcileSelectedTaskId(selected.taskId, "task_a", state)).toBe(
+        selected.taskId,
+      );
+    },
+  );
+
   it("derives concise task names from the first meaningful user request", () => {
     const task: ProductTaskProjection = {
       taskId: "task_named",
@@ -599,14 +648,16 @@ describe("native product composer state", () => {
     } satisfies ProductTaskProjection;
     state.tasks = [terminal, blocker];
     state.currentTaskId = blocker.taskId;
-    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBeNull();
+    expect(reconcileSelectedTaskId("task_terminal", null, state)).toBe(
+      "task_terminal",
+    );
     expect(activeProductTask(state)?.taskId).toBe(blocker.taskId);
 
     delete state.currentTaskId;
     state.tasks = [terminal];
     expect(
       reconcileSelectedTaskId("task_terminal", blocker.taskId, state),
-    ).toBeNull();
+    ).toBe("task_terminal");
   });
 
   it("projects exact customer Codex states without exposing technical failures", () => {

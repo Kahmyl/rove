@@ -201,15 +201,14 @@ export function terminalProductTask(task: ProductTaskProjection): boolean {
 
 export function reconcileSelectedTaskId(
   selectedTaskId: string | null,
-  previousCurrentTaskId: string | null,
+  _previousCurrentTaskId: string | null,
   product: LocalProductSnapshot | null,
 ): string | null {
   if (selectedTaskId === null) return null;
   const selectable = selectableProductTasks(product);
   if (!selectable.some((task) => task.taskId === selectedTaskId))
     return selectable[0]?.taskId ?? null;
-  const currentTaskId = activeProductTask(product)?.taskId ?? null;
-  return currentTaskId === previousCurrentTaskId ? selectedTaskId : null;
+  return selectedTaskId;
 }
 
 export function selectableProductTasks(

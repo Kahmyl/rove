@@ -2567,24 +2567,27 @@ describe("LocalProductApi native product seam", () => {
       },
     });
 
-    expect((await api.readSnapshot()).tasks[0]!.customerCollaboration).toMatchObject(
-      {
-        taskId: "task_existing",
-        needsCustomerAction: true,
-        request: {
-          state: "answer_required",
-          identity: {
-            requestId: "question_current",
-            taskId: "task_existing",
-            threadId: "thread_existing",
-            turnId: "turn_1",
-            itemId: "item_1",
-            generation: 5,
-          },
+    const projected = (await api.readSnapshot()).tasks[0]!;
+    expect(projected.customerCollaboration).toMatchObject({
+      taskId: "task_existing",
+      needsCustomerAction: true,
+      request: {
+        state: "answer_required",
+        identity: {
+          requestId: "question_current",
+          taskId: "task_existing",
+          threadId: "thread_existing",
+          turnId: "turn_1",
+          itemId: "item_1",
+          generation: 5,
         },
-        browser: { state: "agent_control" },
       },
-    );
+      browser: { state: "agent_control" },
+    });
+    expect(projected.customerPresentation).toMatchObject({
+      state: "needs_input",
+      sidebar: { label: "Needs input", tone: "attention" },
+    });
   });
 
   it("does not alias opaque attention identities sharing the first 200 characters", async () => {
