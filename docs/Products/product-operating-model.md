@@ -35,6 +35,62 @@ When the selected task cannot continue without conversational input, its exact r
 
 The implementation may bound simultaneous execution for memory or account limits. It must identify the affected resource and must not make all other tasks inaccessible. A user request rejected because of model unavailability is not a draft task queued for later dispatch.
 
+### Conversation acceptance and startup
+
+Submitting a new task or follow-up is one conversation action. Durable local acceptance creates exactly one user-authored conversation item in its final transcript position while bootstrap and provider delivery continue asynchronously. That item is the accepted instruction and owns its operation/client identity and delivery state. A later exactly correlated provider `userMessage` corroborates or updates the same item rather than replacing or duplicating it. Rejection before durable acceptance preserves the draft and creates no false running task. Definite dispatch failure changes that accepted item's customer-safe not-sent or failed state; uncertain delivery changes the state of that same item while Rove reconciles existing delivery truth and never blindly redispatches.
+
+Ordinary internal startup is hidden. Brief starts should not flash a separate lifecycle row; an anti-flicker delay around 200–300 ms is a reasonable value to qualify, not execution authority. Customer surfaces do not narrate bootstrap, Runtime or thread binding, capability issuance, dispatch intent, database commits, or reconciliation mechanics.
+
+### Active and historical work
+
+While Rove is genuinely working, the current work group is expanded and cannot be collapsed. It separates assistant commentary about intention from semantic activity describing concrete work. Long activity uses a bounded internal scroll area. When the user remains at its bottom, new activity follows; if the user scrolls upward, position is preserved and a subtle **Latest** affordance returns them to auto-follow.
+
+Activity uses a small customer vocabulary such as read, search, navigate, inspect, change, create, run, transfer, capture, verify, and compare, with a meaningful target or detail. The projection preserves outcome truth: an action may be started, dispatched, checking, confirmed, failed, or unresolved, and is not phrased as completed before authoritative evidence supports that claim. Repeated safe reads may coalesce when the summary remains truthful; consequential operations, failures, approvals, transfers, state changes, uncertainty, and evidence needed to understand an outcome do not disappear into a summary.
+
+After a turn completes, stops, or fails, its work group automatically compacts to a summary such as **Worked for 1m 18s** or **Stopped after 52s** and becomes manually expandable. A user's decision to reopen historical work is retained for the current rendered session; a fresh render may default terminal work to collapsed. Compaction preserves the final answer's scroll anchor.
+
+Displayed duration is accumulated Rove-active working time. It pauses while waiting for the user or approval, while the human owns the browser, during return-control page checking, during internal state checking, and while stopping or stopped. A provider `in_progress` value alone cannot keep the timer running.
+
+Ordinary completion adds no generic completion banner: final activity settles, the final assistant answer appears, historical work compacts, and the composer remains ready. Confirmed failure, uncertain consequential outcome, model unavailability, and inability to establish current state remain distinct. Generic retry is unavailable when it could duplicate a consequential effect.
+
+### Queue, steer, and keyboard behavior
+
+During active work, the default submit action adds a durable, ordered follow-up to that exact task. Queued instructions appear immediately above the composer, survive ordinary restart, and may be edited or removed; reordering should be supported where practical. They are not conversation items or provider input and are not automatically dispatched after restart. At the committed execution boundary, promotion atomically turns that exact queued instruction into the accepted user conversation item once.
+
+**Send now** explicitly steers active work at the next safe Codex boundary and immediately creates the accepted user conversation item for that intervention. Customer work grouping follows meaningful interventions rather than assuming one group for every provider turn identifier. Target keyboard behavior is Enter for the state-default action, Command/Ctrl+Enter for Send now while active, and Shift+Enter for a newline, subject to platform and accessibility qualification.
+
+### Stop and interaction capabilities
+
+**Stop** always means interrupt current work. It remains a separate, stable hit target before a provider turn identifier exists, during active model work, and during waiting or safe checking states where accepted work remains nonterminal. Internally this may cancel pre-dispatch work, interrupt an exact turn, or prevent future work while preserving uncertainty around an operation that may already have dispatched.
+
+On activation, the label becomes **Stopping…**, the control disables immediately, and duplicate stop intent is refused. Once authoritative interruption arrives, the work group becomes **Stopped**, the ordinary composer returns, and queued instructions remain queued. Stopping does not unexpectedly take browser ownership from a human.
+
+Customer interaction capabilities are projected separately: submitting, queueing, steering, stopping, responding, taking control, returning to Rove, retrying a safe operation, and archiving must not be inferred as one interchangeable `allowedActions` list. A blocked composer does not imply Stop is unavailable.
+
+### Attention, approval, and browser collaboration
+
+Attention exists only when the customer must answer, approve or deny, select something, complete secure input, or take browser control. Automatic checking and recovery are not attention. Request presentation names the decision—such as **Allow this command?**, **Review proposed file changes**, or **Which account should I use?**—and keeps the exact material and scope visible. Actions use matching verbs such as Allow/Deny, Approve/Decline, Send, Open secure page, or Cancel. Internal request statuses are translated to their customer consequence.
+
+Conversational input may temporarily replace the owning selected task's composer. Approvals generally sit immediately above it while the conversation and Stop remain usable. A request remains spatially stable while a response is committed; controls may show submitting or checking instead of disappearing under the pointer. Background attention labels only its owning task and never replaces another task's composer.
+
+An Agent-requested browser handoff is **Waiting for you**, not an error. It explains the exact step, directs credentials to the browser rather than chat, freezes working duration, and offers one **Take Over** action that both presents the exact task-owned browser and safely transfers ownership. Agent work does not otherwise offer voluntary takeover. Companion work offers **Take Over** while the agent owns its browser, and emphasizes it for a requested handoff. Capture Mode is human-controlled by definition.
+
+While the human owns the browser, the Task says **You're in control** and the primary action is **Return to Rove**. Stop remains available. Return begins **Checking the page…** without active-work timing, invalidates stale grounding, and performs fresh inspection before returning to Working or a terminal/ready state. If return fails, Rove says it could not take back browser control, offers a safe retry, and keeps ownership truthfully human.
+
+Runtime may retain a browser-mutation pause primitive, but the main Task has no generic whole-Task Pause. The customer concepts are Stop, Take Over, and Return to Rove. A future whole-Task Pause requires a separate contract.
+
+### Checking state, task history, and shared surfaces
+
+Internal recovery projects as the subdued state **Checking task state…**, with safe controls retained and no attention styling unless the user must act. It transitions to Working, terminal work, Stopped, or the bounded message **Rove couldn't confirm the latest task activity.** Internal terminology such as Runtime, TaskEngine, bootstrap, thread/read, authoritative reconciliation, generation, continuation, dispatch intent, recovery flags, or source positions does not appear in ordinary customer copy.
+
+Task-history rows emphasize the task title. A second line appears only for useful live state using a bounded vocabulary: Working, Needs input, You're in control, Checking state, Stopping, Stopped, Capturing, or Couldn't continue when genuinely useful. Ready and completed conversations need no permanent label. Mode suffixes are configuration, not default history status. Working and checking are neutral, Stopped is muted, Needs input uses the attention accent, and danger is reserved for genuine failure.
+
+Each task remains selectable according to its own authority while other tasks work or need input. Background state never steals selection. The compact browser follower is a smaller presentation of the same task-control projection, not an independent lifecycle. It distinguishes Working, Your turn, and You're in control with the same Take Over and Return to Rove semantics as the main Task.
+
+The customer Browser panel focuses on the actual attached identity, current owner/state, a safe site or page label, View/Open Browser, Take Over, Return to Rove, and recording. Engineering counters such as observation or evidence counts belong in developer diagnostics, not the normal panel. A large handoff card is not duplicated across the transcript and inspector.
+
+Across normal and narrow windows, control placement and hit targets remain stable; long task titles, long messages, attachments, and many activities do not displace critical controls. Focus, hover, disabled and submitting states, keyboard behavior, transitions, reduced motion, scroll anchoring, and accessible labels are part of acceptance rather than polish after backend completion.
+
 ## Workflow workspace and progressive context
 
 Creating a workflow asks only for a name, then immediately enters its Home. A sparse workflow is useful and valid: the user can start an ordinary associated task without first defining purpose, scope, preferences, criteria, procedures, resources, knowledge, or result presentation.
