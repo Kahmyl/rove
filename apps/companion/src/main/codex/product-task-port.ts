@@ -7,7 +7,7 @@ import type {
   TaskEngine,
   TaskAcceptance,
   TaskEngineStore,
-  TaskIntent,
+  TaskEvent,
   TaskLaunchConfiguration,
   TaskConversationItem,
   TaskPortableValue,
@@ -21,6 +21,7 @@ import type {
   ProductTaskSnapshot,
 } from "./task-coordinator.js";
 import { customerTaskCapabilities } from "./customer-task-capabilities.js";
+import { customerTaskExecution } from "./customer-task-execution.js";
 import type { TaskEngineWorker } from "./task-engine-worker.js";
 
 export type {
@@ -56,6 +57,44 @@ export type ProductTaskIntent =
       attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskLaunchConfiguration["workflowContext"];
       selectedResultContext?: TaskSelectedResultContextSnapshot;
+    }
+  | {
+      type: "steer";
+      taskId: string;
+      operationId: string;
+      message: string;
+      expectedTurnId: string;
+      attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
+    }
+  | {
+      type: "queue_add";
+      taskId: string;
+      operationId: string;
+      message: string;
+      attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
+      workflowContext?: TaskLaunchConfiguration["workflowContext"];
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
+    }
+  | {
+      type: "queue_edit";
+      taskId: string;
+      operationId: string;
+      entryId: string;
+      message: string;
+    }
+  | {
+      type: "queue_remove";
+      taskId: string;
+      operationId: string;
+      entryId: string;
+    }
+  | {
+      type: "queue_reorder";
+      taskId: string;
+      operationId: string;
+      entryIds: readonly string[];
     }
   | { type: "interrupt"; taskId: string; operationId: string }
   | { type: "finish"; taskId: string; operationId: string }
@@ -222,12 +261,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
     if (!read) return null;
     const records = (
       await Promise.all(
-        (["message", "explicit_continuation_response"] as const).map((type) =>
-          read.call(
-            this.options.store,
-            input.taskId,
-            `product:v2:${type}:${input.operationId}`,
-          ),
+        (["message", "steer", "explicit_continuation_response"] as const).map(
+          (type) =>
+            read.call(
+              this.options.store,
+              input.taskId,
+              `product:v2:${type}:${input.operationId}`,
+            ),
         ),
       )
     ).filter((record) => record !== null);
@@ -311,7 +351,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       },
       observedAt: this.now(),
     };
-    let event: TaskIntent;
+    let event: TaskEvent;
     switch (intent.type) {
       case "launch":
         event = {
@@ -355,14 +395,39 @@ export class LedgerProductTaskPort implements ProductTaskPort {
         };
         break;
       case "message":
+      case "steer":
         event = {
           ...base,
           type: "task_message_requested",
           operationId: intent.operationId,
           message: intent.message,
-          ...(intent.expectedTurnId
+          ...(intent.type === "steer" || intent.expectedTurnId
             ? { expectedTurnId: intent.expectedTurnId }
             : {}),
+          ...(intent.attachmentIds?.length
+            ? { attachmentIds: [...intent.attachmentIds] }
+            : {}),
+          ...(intent.attachmentMetadata?.length
+            ? { attachmentMetadata: structuredClone(intent.attachmentMetadata) }
+            : {}),
+          ...(intent.type === "message" && intent.workflowContext
+            ? { workflowContext: structuredClone(intent.workflowContext) }
+            : {}),
+          ...(intent.type === "message" && intent.selectedResultContext
+            ? {
+                selectedResultContext: structuredClone(
+                  intent.selectedResultContext,
+                ),
+              }
+            : {}),
+        };
+        break;
+      case "queue_add":
+        event = {
+          ...base,
+          type: "task_queue_added",
+          operationId: intent.operationId,
+          message: intent.message,
           ...(intent.attachmentIds?.length
             ? { attachmentIds: [...intent.attachmentIds] }
             : {}),
@@ -379,6 +444,31 @@ export class LedgerProductTaskPort implements ProductTaskPort {
                 ),
               }
             : {}),
+        };
+        break;
+      case "queue_edit":
+        event = {
+          ...base,
+          type: "task_queue_edited",
+          operationId: intent.operationId,
+          entryId: intent.entryId,
+          message: intent.message,
+        };
+        break;
+      case "queue_remove":
+        event = {
+          ...base,
+          type: "task_queue_removed",
+          operationId: intent.operationId,
+          entryId: intent.entryId,
+        };
+        break;
+      case "queue_reorder":
+        event = {
+          ...base,
+          type: "task_queue_reordered",
+          operationId: intent.operationId,
+          entryIds: [...intent.entryIds],
         };
         break;
       case "interrupt":
@@ -513,6 +603,16 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           aggregate.desiredState === "open" &&
           aggregate.requestedOperation.type !== "interrupt" &&
           hasAcceptedWork;
+        const hasExactActiveTurn =
+          aggregate.desiredState === "open" &&
+          aggregate.record?.bootstrap.stage === "complete" &&
+          aggregate.codex.turn === "active" &&
+          aggregate.codex.turnId !== undefined &&
+          aggregate.requestedOperation.type === "observe" &&
+          aggregate.recoveryRequired === null &&
+          !genuineAttention &&
+          aggregate.runtime.controller !== "human" &&
+          aggregate.runtime.status !== "awaiting_human";
         return {
           context: {
             roveTaskId: aggregate.taskId,
@@ -608,6 +708,11 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               aggregate.recoveryRequired === null &&
               !genuineAttention &&
               !hasAcceptedWork,
+            canQueue:
+              !archived &&
+              hasExactActiveTurn &&
+              aggregate.queue.order.length < 16,
+            canSteer: !archived && hasExactActiveTurn,
             canStop,
             canRespond: genuineAttention && aggregate.recoveryRequired === null,
             canTakeControl:
@@ -618,6 +723,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             canRetry: executionActions.includes("retry_cleanup"),
             canArchive: !archived && aggregate.codex.turn !== "active",
           }),
+          customerExecution: customerTaskExecution(aggregate),
           runtime: {
             status: aggregate.runtime.status,
             controller: aggregate.runtime.controller,

@@ -18,6 +18,7 @@ import {
   currentOwnerWorkflowSyncBinding,
   deriveOutputTitle,
   followupDraftForTask,
+  followupKeyboardAction,
   localBackupExportStatus,
   outputBodyForPresentation,
   outputKindForMessage,
@@ -29,6 +30,7 @@ import {
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   taskNeedsCustomerInput,
+  timelineIsAtBottom,
   workflowConfigurationFromDraft,
   workflowDraft,
   workflowSynchronizationBadge,
@@ -158,6 +160,215 @@ function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("qualifies Queue, Send now, newline, IME, and respectful timeline following", () => {
+    const active = { canSubmit: false, canQueue: true, canSteer: true };
+    expect(
+      followupKeyboardAction(
+        {
+          key: "Enter",
+          shiftKey: false,
+          metaKey: false,
+          ctrlKey: false,
+          isComposing: false,
+        },
+        active,
+      ),
+    ).toBe("queue");
+    expect(
+      followupKeyboardAction(
+        {
+          key: "Enter",
+          shiftKey: false,
+          metaKey: true,
+          ctrlKey: false,
+          isComposing: false,
+        },
+        active,
+      ),
+    ).toBe("steer");
+    expect(
+      followupKeyboardAction(
+        {
+          key: "Enter",
+          shiftKey: true,
+          metaKey: false,
+          ctrlKey: false,
+          isComposing: false,
+        },
+        active,
+      ),
+    ).toBe("newline");
+    expect(
+      followupKeyboardAction(
+        {
+          key: "Enter",
+          shiftKey: false,
+          metaKey: false,
+          ctrlKey: true,
+          isComposing: true,
+        },
+        active,
+      ),
+    ).toBe("none");
+    expect(
+      followupKeyboardAction(
+        {
+          key: "Enter",
+          shiftKey: false,
+          metaKey: false,
+          ctrlKey: true,
+          isComposing: false,
+        },
+        { ...active, canSteer: false },
+      ),
+    ).toBe("none");
+    expect(
+      timelineIsAtBottom({
+        scrollHeight: 1_000,
+        scrollTop: 776,
+        clientHeight: 200,
+      }),
+    ).toBe(true);
+    expect(
+      timelineIsAtBottom({
+        scrollHeight: 1_000,
+        scrollTop: 500,
+        clientHeight: 200,
+      }),
+    ).toBe(false);
+  });
+
+  it("forces active work open, compacts terminal work, and renders queue management", () => {
+    const value = snapshot();
+    value.product!.tasks = [
+      {
+        taskId: "task_queue_surface",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-20T10:00:00.000Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [],
+        lifecycle: { phase: "working", reason: "Working." },
+        availableActions: ["message", "interrupt"],
+        capabilities: taskCapabilities({
+          canQueue: true,
+          canSteer: true,
+          canStop: true,
+        }),
+        conversation: {
+          activeTurnId: "turn_active",
+          turnStatus: "in_progress",
+          archived: false,
+          items: {
+            old_user: {
+              id: "old_user",
+              kind: "user_message",
+              status: "completed",
+              acceptedAt: "2026-09-20T09:59:00.000Z",
+              text: "Earlier work",
+            },
+            old_tool: {
+              id: "old_tool",
+              kind: "tool",
+              status: "completed",
+              title: "private/browser.inspect",
+            },
+            active_user: {
+              id: "active_user",
+              kind: "user_message",
+              status: "completed",
+              acceptedAt: "2026-09-20T10:00:00.000Z",
+              text: "Current work",
+            },
+            active_tool: {
+              id: "active_tool",
+              kind: "tool",
+              status: "started",
+              title: "private/browser.transaction_verify",
+            },
+          },
+          itemOrder: ["old_user", "old_tool", "active_user", "active_tool"],
+          turnOrder: ["turn_old", "turn_active"],
+        },
+        customerExecution: {
+          state: "working",
+          workingVisibleAfter: "2026-09-20T10:00:00.250Z",
+          queue: [
+            {
+              id: "queue:intent_1",
+              operationId: "intent_1",
+              message: "Queued follow-up",
+              createdAt: "2026-09-20T10:00:01.000Z",
+              updatedAt: "2026-09-20T10:00:01.000Z",
+              attachmentIds: [],
+            },
+          ],
+          segments: [
+            {
+              id: "old_user",
+              inputItemId: "old_user",
+              commentaryItemIds: [],
+              finalAnswerItemIds: [],
+              activities: [
+                {
+                  id: "activity:old_tool",
+                  itemId: "old_tool",
+                  kind: "read",
+                  state: "confirmed",
+                  label: "Reading information",
+                },
+              ],
+              workOrder: [{ type: "activity", id: "activity:old_tool" }],
+              status: "terminal",
+              accumulatedActiveMs: 1_000,
+            },
+            {
+              id: "active_user",
+              inputItemId: "active_user",
+              commentaryItemIds: [],
+              finalAnswerItemIds: [],
+              activities: [
+                {
+                  id: "activity:active_tool",
+                  itemId: "active_tool",
+                  kind: "verify",
+                  state: "started",
+                  label: "Verifying the result",
+                },
+              ],
+              workOrder: [{ type: "activity", id: "activity:active_tool" }],
+              status: "active",
+              accumulatedActiveMs: 0,
+              activeSince: "2026-09-20T10:00:00.000Z",
+            },
+          ],
+        },
+      },
+    ] as never;
+    value.product!.currentTaskId = "task_queue_surface";
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain(
+      '<section class="timeline-work timeline-work-active" aria-label="Active work">',
+    );
+    expect(html).toContain('<details class="timeline-work">');
+    expect(html).not.toContain(
+      '<details class="timeline-work" open=""><summary><span class="activity-spinner"',
+    );
+    expect(html).toContain('aria-label="Queued follow-ups"');
+    expect(html).toContain("Queued follow-up");
+    expect(html).toContain(">Send now</button>");
+    expect(html).toContain('aria-label="Queue follow-up"');
+    expect(html).not.toContain("private/browser");
+  });
+
   it("discloses optional Workflow synchronization without broadening its data boundary", () => {
     expect(workflowSynchronizationDisclosure(null, "editor")).toContain(
       "Stored on this device",
@@ -2045,12 +2256,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
     expect(html).toContain('aria-label="Conversation and activity"');
-    expect(html).toContain("Reading the current page");
-    expect(html).toContain("Interacting with the page");
+    expect(html).toContain("Read information");
+    expect(html).toContain("Made a change");
     expect(html).not.toContain("Structured progress");
     expect(html).not.toContain(">CODEX<");
-    expect(html).toContain("Worked for 1s");
-    expect(html).toContain(">Working for ");
+    expect(html).toContain("Worked for 0s");
+    expect(html).not.toContain(">Working for ");
     expect(html).toContain("The Drive folder is organized.");
     expect(html).toContain("<h2>Result</h2>");
     expect(html).toContain("<li>The Drive folder is organized.</li>");
@@ -2086,13 +2297,13 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       html.indexOf("Organize the Drive folder."),
     );
     expect(html.indexOf("Organize the Drive folder.")).toBeLessThan(
-      html.indexOf("Reading the current page"),
+      html.indexOf("Read information"),
     );
-    expect(html.indexOf("Reading the current page")).toBeLessThan(
+    expect(html.indexOf("Read information")).toBeLessThan(
       html.indexOf("I found the requested folder."),
     );
     expect(html.indexOf("I found the requested folder.")).toBeLessThan(
-      html.indexOf("Interacting with the page"),
+      html.indexOf("Made a change"),
     );
     expect(html.indexOf("Interacting with the page")).toBeLessThan(
       html.indexOf("Continue after human control returned."),

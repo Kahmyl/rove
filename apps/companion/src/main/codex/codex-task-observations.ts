@@ -107,6 +107,23 @@ export function projectedItem(
     value.phase === "commentary" || value.phase === "final_answer"
       ? value.phase
       : undefined;
+  const mechanismStatus = text(value.status);
+  const activityOutcome: TaskConversationItem["activityOutcome"] = ![
+    "command",
+    "file_change",
+    "tool",
+  ].includes(kind)
+    ? undefined
+    : mechanismStatus === "failed" ||
+        mechanismStatus === "declined" ||
+        value.success === false ||
+        (value.error !== null && value.error !== undefined)
+      ? "failed"
+      : mechanismStatus === "unresolved"
+        ? "unresolved"
+        : !completed || mechanismStatus === "inProgress"
+          ? "started"
+          : "confirmed";
   return {
     id: itemId,
     turnId,
@@ -116,6 +133,7 @@ export function projectedItem(
     ...(type === "userMessage" && attachments.length ? { attachments } : {}),
     kind,
     status: completed ? "completed" : "started",
+    ...(activityOutcome ? { activityOutcome } : {}),
     ...(phase === undefined ? {} : { phase }),
     ...(text(value.text) || content
       ? { text: (text(value.text) ?? content)!.slice(0, 16_000) }

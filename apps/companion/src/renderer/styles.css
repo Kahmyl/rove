@@ -4518,6 +4518,20 @@ span.composer-control-icon {
   list-style: none;
 }
 
+.timeline-work-heading {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+}
+
+.timeline-work-heading strong {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 540;
+}
+
 .timeline-work > summary::-webkit-details-marker {
   display: none;
 }
@@ -4563,6 +4577,21 @@ span.composer-control-icon {
   gap: 12px;
   padding: 7px 0 4px 24px;
   border-left: 1px solid var(--border-soft);
+}
+
+.timeline-work-active .timeline-work-items {
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.timeline-latest {
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  margin: 0 auto;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
 .work-commentary {
@@ -4743,6 +4772,60 @@ span.composer-control-icon {
   padding: 0;
   border-radius: 22px;
   background: var(--surface-raised);
+}
+
+.task-queue {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.task-queue-entry {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.task-queue-entry > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-queue-entry form {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+}
+
+.task-queue-entry form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-queue-actions {
+  display: flex;
+  flex: none;
+  gap: 3px;
+}
+
+.product-app .task-queue-actions button,
+.product-app .task-queue-entry form button,
+.product-app button.composer-send-now {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .followup.composer-input-shell textarea {

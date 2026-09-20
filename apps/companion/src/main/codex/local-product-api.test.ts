@@ -143,6 +143,12 @@ function fixture(
         taskId = started.context.roveTaskId;
       } else if (input.type === "message") {
         await steerTurn({ taskId, text: input.message });
+      } else if (input.type === "steer") {
+        await steerTurn({
+          taskId,
+          text: input.message,
+          expectedTurnId: input.expectedTurnId,
+        });
       } else if (input.type === "interrupt") {
         await interruptTurn(taskId, input.operationId);
       } else if (input.type === "explicit_continuation_response") {
@@ -1241,15 +1247,21 @@ describe("LocalProductApi native product seam", () => {
       undefined,
       results,
     );
-    await expect(
-      api.executeRendererIntent({
-        type: "task.message",
-        taskId: "task_existing",
-        operationId: "intent_29345678-1234-4123-8123-123456789abc",
-        outcome: "Do not inject mid-turn",
-        selectedResultIds: [result.resultId],
+    await api.executeRendererIntent({
+      type: "task.message",
+      taskId: "task_existing",
+      operationId: "intent_29345678-1234-4123-8123-123456789abc",
+      outcome: "Use this after the current work",
+      selectedResultIds: [result.resultId],
+    });
+    expect(tasks.submit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: "queue_add",
+        selectedResultContext: expect.objectContaining({
+          resultIds: [result.resultId],
+        }),
       }),
-    ).rejects.toThrow(/after the current turn finishes/i);
+    );
     const [existing] = await tasks.productTasks();
     tasks.productTasks.mockResolvedValue([
       {
@@ -1608,7 +1620,7 @@ describe("LocalProductApi native product seam", () => {
     });
     expect(tasks.submit).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        type: "message",
+        type: "queue_add",
         attachmentIds: [attachmentId],
       }),
     );
@@ -1738,6 +1750,50 @@ describe("LocalProductApi native product seam", () => {
         operationId: "intent_45222222-2222-4222-8222-222222222222",
       }),
     ).rejects.toThrow(/retry cleanup is not available/);
+    expect(tasks.submit).not.toHaveBeenCalled();
+  });
+
+  it("does not let contradictory Queue or Steer capabilities authorize stale active work", async () => {
+    const { api, tasks } = fixture();
+    const task = (await tasks.productTasks())[0]!;
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...task,
+        capabilities: {
+          canSubmit: false,
+          canQueue: true,
+          canSteer: true,
+          canStop: true,
+          canRespond: false,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
+        conversation: {
+          ...task.conversation!,
+          activeTurnId: undefined,
+          turnStatus: "completed" as const,
+        },
+      },
+    ] as never);
+    await expect(
+      api.executeRendererIntent({
+        type: "task.queue.add",
+        taskId: "task_existing",
+        operationId: "intent_45222222-2222-4222-8222-222222222223",
+        outcome: "Do not queue from a contradictory fixture",
+      }),
+    ).rejects.toThrow(/active work changed/i);
+    await expect(
+      api.executeRendererIntent({
+        type: "task.steer",
+        taskId: "task_existing",
+        operationId: "intent_45222222-2222-4222-8222-222222222224",
+        expectedTurnId: "turn_stale",
+        outcome: "Do not steer a stale turn",
+      }),
+    ).rejects.toThrow(/active work changed/i);
     expect(tasks.submit).not.toHaveBeenCalled();
   });
 
@@ -2082,6 +2138,16 @@ describe("LocalProductApi native product seam", () => {
       operationId: "intent_55555555-5555-4555-8555-555555555555",
       outcome: "Continue safely",
     });
+    expect(tasks.submit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "queue_add", taskId: "task_existing" }),
+    );
+    await api.executeRendererIntent({
+      type: "task.steer",
+      taskId: "task_existing",
+      operationId: "intent_56555555-5555-4555-8555-555555555555",
+      expectedTurnId: "turn_1",
+      outcome: "Send this now",
+    });
     expect(steerTurn).toHaveBeenCalledWith(
       expect.objectContaining({ taskId: "task_existing" }),
     );
@@ -2101,10 +2167,11 @@ describe("LocalProductApi native product seam", () => {
       operationId: "intent_67666666-6666-4666-8666-666666666665",
       outcome: "Redirect the same task after stopping its turn",
     });
-    expect(steerTurn).toHaveBeenLastCalledWith(
+    expect(tasks.submit).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        type: "queue_add",
         taskId: "task_existing",
-        text: "Redirect the same task after stopping its turn",
+        message: "Redirect the same task after stopping its turn",
       }),
     );
 
