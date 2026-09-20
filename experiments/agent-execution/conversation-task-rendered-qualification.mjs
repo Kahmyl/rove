@@ -837,6 +837,60 @@ async function openTask(page, taskId) {
   await page.locator(".task-detail").waitFor();
 }
 
+async function canonicalComposerGeometry(page) {
+  const row = page.locator(
+    '.composer-action-row[data-composer-layout="canonical"]',
+  );
+  await row.waitFor();
+  return row.evaluate((node) => {
+    const groups = [...node.children].map((child) => {
+      const rect = child.getBoundingClientRect();
+      return {
+        name: child.getAttribute("data-composer-group"),
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+      };
+    });
+    const controls = [...node.querySelectorAll("summary, button")]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      })
+      .map((element) => ({
+        label: element.getAttribute("aria-label"),
+        left: element.getBoundingClientRect().left,
+      }));
+    return { groups, controls };
+  });
+}
+
+function assertCanonicalComposerGeometry(geometry, label) {
+  assert(
+    JSON.stringify(geometry.groups.map((group) => group.name)) ===
+      JSON.stringify(["attach", "commands", "ambient", "primary"]),
+    `${label} composer DOM group order diverged.`,
+  );
+  const byName = Object.fromEntries(
+    geometry.groups.map((group) => [group.name, group]),
+  );
+  assert(
+    byName.attach.left <= byName.commands.left &&
+      byName.commands.left <= byName.ambient.left &&
+      byName.ambient.left < byName.primary.left &&
+      byName.ambient.right <= byName.primary.right,
+    `${label} composer bounding-box regions diverged.`,
+  );
+  const labels = geometry.controls.map((control) => control.label ?? "");
+  assert(
+    labels.some((value) => value === "Commands") &&
+      labels.some((value) => value.startsWith("Participation mode:")) &&
+      labels.some((value) => value.startsWith("Approval policy:")) &&
+      labels.some((value) => value.startsWith("Model and reasoning effort:")),
+    `${label} composer canonical controls are incomplete.`,
+  );
+}
+
 async function setWindowSize(application, width, height) {
   await application.evaluate(
     ({ BrowserWindow }, dimensions) =>
@@ -955,6 +1009,33 @@ try {
     "Message is final-positioned without startup flash",
   );
 
+  await page.getByRole("button", { name: "New task" }).click();
+  const newComposerGeometry = await canonicalComposerGeometry(page);
+  assertCanonicalComposerGeometry(newComposerGeometry, "New Task");
+  await capture(
+    page,
+    "new-task-composer",
+    "Start a new Task",
+    "Compare the canonical action row",
+    "Attach, Commands, Mode/Approval, Model, and primary action share one family",
+  );
+  await setScenario(page, "start_fast");
+  await openTask(page, "task_start");
+  const existingComposerGeometry = await canonicalComposerGeometry(page);
+  assertCanonicalComposerGeometry(existingComposerGeometry, "Existing Task");
+  assert(
+    JSON.stringify(newComposerGeometry.groups.map((group) => group.name)) ===
+      JSON.stringify(existingComposerGeometry.groups.map((group) => group.name)),
+    "New and existing Task composer structures diverged.",
+  );
+  await capture(
+    page,
+    "ready-task-composer",
+    "Continue a ready Task",
+    "Compare the canonical action row",
+    "Frozen Task controls remain spatially equivalent to New Task",
+  );
+
   await setScenario(page, "start_sustained");
   const revealStarted = Date.now();
   await page
@@ -993,12 +1074,25 @@ try {
     ),
     "Semantic activity is missing.",
   );
+  const scrollOwnership = await page.evaluate(() => ({
+    timeline: getComputedStyle(
+      document.querySelector(".task-timeline"),
+    ).overflowY,
+    work: getComputedStyle(
+      document.querySelector(".timeline-work-active .timeline-work-items"),
+    ).overflowY,
+  }));
+  assert(
+    ["auto", "scroll"].includes(scrollOwnership.timeline) &&
+      !["auto", "scroll"].includes(scrollOwnership.work),
+    "Active history introduced a nested vertical scrollbar.",
+  );
   await capture(
     page,
     "active-work",
     "Follow current work",
     "Inspect commentary and activity",
-    "Active history is open, bounded, and semantic",
+    "Active history is open, semantic, and bounded by the main timeline",
   );
 
   await setScenario(page, "terminal_work");
@@ -1251,6 +1345,31 @@ try {
     .getByText(/^Stopped/)
     .first()
     .waitFor({ timeout: 1_000 });
+  await page.waitForFunction(
+    async () =>
+      (await window.rove.getJourneyState()).snapshot.product.tasks[0]
+        .customerExecution.state === "stopped",
+  );
+  const transitionedTerminalWork = page.locator("details.timeline-work").last();
+  await transitionedTerminalWork.waitFor();
+  assert(
+    (await transitionedTerminalWork.count()) === 1 &&
+      !(await transitionedTerminalWork.getAttribute("open")),
+    "Active work remained open after the same segment became terminal.",
+  );
+  await transitionedTerminalWork.locator("summary").click();
+  assert(
+    await transitionedTerminalWork.evaluate((node) => node.open),
+    "Customer could not manually reopen transitioned terminal work.",
+  );
+  await page.evaluate(() => window.rove.appendStoppedJourneyActivity());
+  await page
+    .getByText("Verified later terminal update", { exact: true })
+    .waitFor();
+  assert(
+    await transitionedTerminalWork.evaluate((node) => node.open),
+    "A subsequent terminal update closed manually reopened work.",
+  );
   const stoppedTask = await page.evaluate(() => window.rove.getJourneyState());
   assert(
     stoppedTask.snapshot.product.tasks[0].customerExecution.queue.length > 0,
@@ -1586,7 +1705,7 @@ try {
   const manifest = {
     title: "Conversation and Task rendered experience qualification",
     baseline: {
-      branch: "codex/manual-acceptance-task-composer-remediation",
+      branch: "codex/manual-acceptance-stop-work-history-remediation",
       commit,
     },
     environment: {
@@ -1630,6 +1749,8 @@ try {
       antiFlickerBoundMs: revealElapsed,
       activeForcedOpen: true,
       terminalExpandable: true,
+      activeToTerminalAutoCompact: true,
+      composerStructuralParity: true,
       semanticActivityNoMechanismLeak: true,
       queueOutsideTranscript: true,
       queueCommandsExact: true,
@@ -1638,6 +1759,8 @@ try {
       steerExactOnce: true,
       macCommandEnterQualified: process.platform === "darwin",
       stopProgression: true,
+      stopPresentationOnly: true,
+      stopProcessTerminationQualified: false,
       requestFamiliesQualified: Object.keys(attentionFamilies),
       exactHandoffGeneration: true,
       voluntaryCompanionTakeover: true,
@@ -1651,6 +1774,7 @@ try {
       dialogsInViewport: steps.every((step) => step.visible.outside === 0),
       reducedMotionQualified: true,
       autoFollowAndAnchoring: true,
+      singleTimelineScrollbar: true,
       followerParity: true,
     },
     calls: finalState.calls,
@@ -1662,7 +1786,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "manual-acceptance.md"),
-    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; no tool/Runtime identifiers appear.\n- [ ] Composer: active empty shows Stop in the primary slot; typing swaps the same slot to Send; queue acceptance clears the draft and restores Stop.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop: verify primary-slot Stop → disabled Stop while Stopping → Stopped, retained queue, ordinary follow-up, and no browser ownership theft.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, ordinary failure without a duplicate dock warning, persistent uncertain consequence, and no unsafe retry.\n- [ ] Completion: confirm terminal work compacts, reopens, and preserves the final-answer reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, checking, and Stop consequence.\n`,
+    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; a failed internal command followed by a successful answer remains ready/Worked.\n- [ ] Composer: New and existing Tasks preserve Attach, Commands, Mode/Approval, then Model/primary grouping; active empty shows Stop in the primary slot.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop blocker: do not mark Stop accepted or Stage 1 complete until a process-backed long command is proven terminated after turn/interrupt; the current pinned App Server fails this requirement.\n- [ ] Late events: confirm late output stays under its historical turn and cannot mutate newer work or control state.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, genuine turn failure, delivery uncertainty, consequential-result uncertainty, and successful final answer remain distinct.\n- [ ] Completion: confirm the same active segment auto-compacts on terminal transition, reopens manually, uses only the main timeline scrollbar, and preserves Latest/reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, and checking.\n`,
   );
   await application
     .context()

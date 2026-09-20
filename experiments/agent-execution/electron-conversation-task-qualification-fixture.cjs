@@ -168,6 +168,19 @@ function executeProductIntent(intent) {
       task.customerExecution.state = "stopped";
       const current = task.customerExecution.segments.at(-1);
       if (current) {
+        if (current.activities.length === 0) {
+          current.activities.push({
+            id: "activity:stop_transition",
+            itemId: "stop_transition",
+            kind: "verify",
+            state: "confirmed",
+            label: "Verified stopped work",
+          });
+          current.workOrder.push({
+            type: "activity",
+            id: "activity:stop_transition",
+          });
+        }
         current.status = "terminal";
         delete current.activeSince;
         current.completedAt = new Date().toISOString();
@@ -226,6 +239,23 @@ function appendJourneyActivity() {
   publish(`activity.appended.${appendedActivity}`);
 }
 
+function appendStoppedJourneyActivity() {
+  const task = taskById(snapshot.product.currentTaskId);
+  const segment = task?.customerExecution?.segments?.at(-1);
+  if (!segment || segment.status !== "terminal")
+    throw new Error("Stopped transition segment is not terminal.");
+  const id = "activity:after_manual_reopen";
+  segment.activities.push({
+    id,
+    itemId: "after_manual_reopen",
+    kind: "verify",
+    state: "confirmed",
+    label: "Verified later terminal update",
+  });
+  segment.workOrder.push({ type: "activity", id });
+  publish("activity.after-manual-reopen");
+}
+
 if (process.type === "renderer") {
   contextBridge.exposeInMainWorld("rove", {
     getWindowFullscreen: async () => false,
@@ -273,6 +303,7 @@ if (process.type === "renderer") {
     executeProductIntent: async (intent) => executeProductIntent(intent),
     setJourneyScenario: async (name) => setScenario(name),
     appendJourneyActivity: async () => appendJourneyActivity(),
+    appendStoppedJourneyActivity: async () => appendStoppedJourneyActivity(),
     getJourneyState: async () => ({
       scenario: scenarioName,
       calls: structuredClone(calls),

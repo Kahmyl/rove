@@ -944,7 +944,11 @@ function ComposerAttachButton({
   onPick(): void;
 }) {
   return (
-    <div className="attachment-composer" aria-label="Task attachments">
+    <div
+      className="attachment-composer"
+      aria-label="Task attachments"
+      data-composer-group="attach"
+    >
       <button
         className="attachment-button"
         aria-label="Attach files"
@@ -954,6 +958,34 @@ function ComposerAttachButton({
       >
         <span aria-hidden="true">+</span>
       </button>
+    </div>
+  );
+}
+
+function CanonicalComposerActionRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="composer-action-row" data-composer-layout="canonical">
+      {children}
+    </div>
+  );
+}
+
+function ComposerAmbientControls({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="composer-ambient-controls"
+      aria-label="Task configuration"
+      data-composer-group="ambient"
+    >
+      {children}
+    </div>
+  );
+}
+
+function ComposerPrimaryControls({ children }: { children: ReactNode }) {
+  return (
+    <div className="composer-footer" data-composer-group="primary">
+      {children}
     </div>
   );
 }
@@ -2342,13 +2374,6 @@ export function ProductSurface({
     viewedTaskExecution?.workingVisibleAfter,
     viewedTask?.taskId,
   ]);
-  useEffect(() => {
-    const segmentId = viewedTaskExecution?.segments.find(
-      (segment) => segment.status === "active",
-    )?.id;
-    if (!segmentId) return;
-    setOpenWorkTurnIds((current) => new Set(current).add(segmentId));
-  }, [viewedTaskExecution?.segments, viewedTask?.taskId]);
   const executionRevision = JSON.stringify(
     viewedTaskExecution?.segments.map((segment) => [
       segment.id,
@@ -5918,7 +5943,7 @@ export function ProductSurface({
                     void attemptLaunch();
                   }}
                 />
-                <div className="composer-action-row">
+                <CanonicalComposerActionRow>
                   <ComposerAttachButton
                     busy={busy}
                     onPick={() =>
@@ -5928,6 +5953,7 @@ export function ProductSurface({
                   <details
                     className="composer-menu composer-command-menu"
                     id="task-command-palette"
+                    data-composer-group="commands"
                   >
                     <summary aria-label="Commands" title="Commands">
                       <span aria-hidden="true">/</span>
@@ -6122,18 +6148,15 @@ export function ProductSurface({
                       )}
                     </div>
                   </details>
-                  <div
-                    className="composer-ambient-controls"
-                    aria-label="Task configuration"
-                  >
+                  <ComposerAmbientControls>
                     <ComposerModeMenu mode={mode} onChange={setMode} />
                     <ComposerPermissionMenu
                       approvalsReviewer={approvalsReviewer}
                       mode={mode}
                       onChange={setApprovalsReviewer}
                     />
-                  </div>
-                  <div className="composer-footer">
+                  </ComposerAmbientControls>
+                  <ComposerPrimaryControls>
                     <ComposerModelMenu
                       models={product?.catalog.models ?? []}
                       modelId={model}
@@ -6163,8 +6186,8 @@ export function ProductSurface({
                     >
                       <span aria-hidden="true">↑</span>
                     </button>
-                  </div>
-                </div>
+                  </ComposerPrimaryControls>
+                </CanonicalComposerActionRow>
               </ComposerInputShell>
               {customerCodexStatus.ready &&
                 !gate.ready &&
@@ -6381,13 +6404,16 @@ export function ProductSurface({
                         return (
                           <details
                             className="timeline-work"
-                            open={openWorkTurnIds.has(segment.id)}
+                            open={openWorkTurnIds.has(
+                              `${viewedTask.taskId}:${segment.id}`,
+                            )}
                             onToggle={(event) => {
                               const isOpen = event.currentTarget.open;
                               setOpenWorkTurnIds((current) => {
                                 const next = new Set(current);
-                                if (isOpen) next.add(segment.id);
-                                else next.delete(segment.id);
+                                const key = `${viewedTask.taskId}:${segment.id}`;
+                                if (isOpen) next.add(key);
+                                else next.delete(key);
                                 return next;
                               });
                             }}
@@ -6807,7 +6833,7 @@ export function ProductSurface({
                             else void sendFollowup("default");
                           }}
                         />
-                        <div className="composer-action-row">
+                        <CanonicalComposerActionRow>
                           <ComposerAttachButton
                             busy={
                               busy ||
@@ -6821,11 +6847,11 @@ export function ProductSurface({
                               )
                             }
                           />
-                          <div className="composer-footer">
-                            <details
-                              className="composer-menu composer-command-menu"
-                              id="task-followup-command-palette"
-                            >
+                          <details
+                            className="composer-menu composer-command-menu"
+                            id="task-followup-command-palette"
+                            data-composer-group="commands"
+                          >
                               <summary aria-label="Commands" title="Commands">
                                 <span aria-hidden="true">/</span>
                               </summary>
@@ -6894,12 +6920,15 @@ export function ProductSurface({
                                   </section>
                                 )}
                               </div>
-                            </details>
+                          </details>
+                          <ComposerAmbientControls>
                             <ComposerModeMenu mode={viewedTask.executionMode} />
                             <ComposerPermissionMenu
                               approvalsReviewer={viewedTask.approvalsReviewer}
                               mode={viewedTask.executionMode}
                             />
+                          </ComposerAmbientControls>
+                          <ComposerPrimaryControls>
                             <ComposerModelMenu
                               models={product?.catalog.models ?? []}
                               modelId={viewedTask.model ?? ""}
@@ -6962,8 +6991,8 @@ export function ProductSurface({
                                 <span aria-hidden="true">↑</span>
                               </button>
                             )}
-                          </div>
-                        </div>
+                          </ComposerPrimaryControls>
+                        </CanonicalComposerActionRow>
                       </ComposerInputShell>
                     </>
                   )}

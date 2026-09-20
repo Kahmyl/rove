@@ -4579,12 +4579,6 @@ span.composer-control-icon {
   border-left: 1px solid var(--border-soft);
 }
 
-.timeline-work-active .timeline-work-items {
-  max-height: 280px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .timeline-latest {
   position: sticky;
   bottom: 8px;

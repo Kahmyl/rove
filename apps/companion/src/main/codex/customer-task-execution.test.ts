@@ -44,6 +44,7 @@ function aggregate() {
       kind: "user_message",
       status: "completed",
       clientId: "initial",
+      turnId: "provider-turn-1",
       acceptedAt: "2026-09-20T10:00:00.000Z",
       text: "Initial work",
     },
@@ -52,12 +53,14 @@ function aggregate() {
       kind: "assistant_message",
       phase: "commentary",
       status: "completed",
+      turnId: "provider-turn-1",
       text: "I am checking the source.",
     },
     raw_tool: {
       id: "raw_tool",
       kind: "tool",
       status: "completed",
+      turnId: "provider-turn-1",
       title: "mcp__runtime/browser.transaction_verify",
     },
     "user:steer": {
@@ -65,6 +68,7 @@ function aggregate() {
       kind: "user_message",
       status: "completed",
       clientId: "steer",
+      turnId: "provider-turn-2",
       acceptedAt: "2026-09-20T10:00:06.000Z",
       text: "Focus on the newest record",
     },
@@ -72,6 +76,7 @@ function aggregate() {
       id: "command",
       kind: "command",
       status: "started",
+      turnId: "provider-turn-2",
       title: "private-shell-command --with-internal-flags",
     },
   };
@@ -184,6 +189,39 @@ describe("customer Task execution projection", () => {
     expect(activities.some((activity) => activity.label.includes("mcp"))).toBe(
       false,
     );
+  });
+
+  it("binds late interrupted-turn activity to retained stopped history", () => {
+    const value = aggregate();
+    value.codex.turn = "active";
+    value.codex.turnId = "provider-turn-2";
+    value.conversation.terminalTurns = {
+      "provider-turn-1": "interrupted",
+    };
+    value.conversation.items = {
+      ...value.conversation.items,
+      late_command: {
+        id: "late_command",
+        kind: "command",
+        status: "completed",
+        turnId: "provider-turn-1",
+        activityOutcome: "failed",
+        title: "late command completion",
+      },
+    };
+    value.conversation.itemOrder = [
+      ...(value.conversation.itemOrder ?? []),
+      "late_command",
+    ];
+
+    const projection = customerTaskExecution(value);
+    expect(projection.state).toBe("working");
+    expect(
+      projection.segments[0]?.activities.map((activity) => activity.itemId),
+    ).toContain("late_command");
+    expect(
+      projection.segments[1]?.activities.map((activity) => activity.itemId),
+    ).not.toContain("late_command");
   });
 
   it("coalesces repeated low-value activity without hiding commentary or consequence", () => {
