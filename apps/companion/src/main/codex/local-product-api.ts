@@ -173,6 +173,41 @@ export type LocalProductCommand =
       attachmentIds?: readonly string[];
       selectedResultIds?: readonly string[];
     }
+  | {
+      type: "task.steer";
+      taskId: string;
+      operationId: string;
+      expectedTurnId: string;
+      outcome: string;
+      attachmentIds?: readonly string[];
+    }
+  | {
+      type: "task.queue.add";
+      taskId: string;
+      operationId: string;
+      outcome: string;
+      attachmentIds?: readonly string[];
+      selectedResultIds?: readonly string[];
+    }
+  | {
+      type: "task.queue.edit";
+      taskId: string;
+      operationId: string;
+      entryId: string;
+      outcome: string;
+    }
+  | {
+      type: "task.queue.remove";
+      taskId: string;
+      operationId: string;
+      entryId: string;
+    }
+  | {
+      type: "task.queue.reorder";
+      taskId: string;
+      operationId: string;
+      entryIds: readonly string[];
+    }
   | { type: "task.close"; taskId: string; operationId: string }
   | { type: "task.return-control"; taskId: string; operationId: string }
   | { type: "task.thread.read"; taskId: string }
@@ -241,7 +276,12 @@ export type RendererProductIntent =
           | "result.select"
           | "result.authorize"
           | "task.recording.start"
-          | "task.recording.stop";
+          | "task.recording.stop"
+          | "task.steer"
+          | "task.queue.add"
+          | "task.queue.edit"
+          | "task.queue.remove"
+          | "task.queue.reorder";
       }
     >
   | { type: "attachments.remove"; attachmentId: string }
@@ -396,6 +436,7 @@ export interface ProductTaskProjection {
   /** Present on every current production projection. Optional only while
    * decoding older in-memory bridge fixtures during rolling startup. */
   capabilities?: ProductTaskSnapshot["capabilities"];
+  customerExecution?: ProductTaskSnapshot["customerExecution"];
   runtime?: ProductTaskSnapshot["runtime"];
   attachments?: readonly TaskAttachmentDescriptor[];
   workflowContext?: NonNullable<
@@ -581,6 +622,25 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
     "attachmentIds",
     "selectedResultIds",
   ],
+  "task.steer": [
+    "type",
+    "taskId",
+    "operationId",
+    "expectedTurnId",
+    "outcome",
+    "attachmentIds",
+  ],
+  "task.queue.add": [
+    "type",
+    "taskId",
+    "operationId",
+    "outcome",
+    "attachmentIds",
+    "selectedResultIds",
+  ],
+  "task.queue.edit": ["type", "taskId", "operationId", "entryId", "outcome"],
+  "task.queue.remove": ["type", "taskId", "operationId", "entryId"],
+  "task.queue.reorder": ["type", "taskId", "operationId", "entryIds"],
   "task.stop": ["type", "taskId", "operationId"],
   "task.cleanup.retry": ["type", "taskId", "operationId"],
   "task.return-control": ["type", "taskId", "operationId"],
@@ -1317,6 +1377,9 @@ function projectTask(
     },
     availableActions: [...(task.availableActions ?? [])],
     capabilities: structuredClone(task.capabilities),
+    ...(task.customerExecution === undefined
+      ? {}
+      : { customerExecution: structuredClone(task.customerExecution) }),
     attachments,
     ...(task.runtime === undefined ? {} : { runtime: task.runtime }),
     ...(context.lifecycle?.closeOperation === undefined
@@ -2366,6 +2429,22 @@ export class LocalProductApi {
         selectedResultIds: [...selectedResultIds] as string[],
       });
     }
+    if (
+      value.type === "task.steer" ||
+      value.type === "task.queue.add" ||
+      value.type === "task.queue.edit" ||
+      value.type === "task.queue.remove" ||
+      value.type === "task.queue.reorder"
+    ) {
+      return this.execute({
+        ...value,
+        taskId,
+        operationId: stableOperationId(
+          value.operationId,
+          "task interaction operation id",
+        ),
+      } as LocalProductCommand);
+    }
     if (value.type === "task.stop") {
       if (
         !(await this.taskProjection(taskId)).availableActions.includes(
@@ -2645,6 +2724,31 @@ export class LocalProductApi {
         "attachmentIds",
         "selectedResultIds",
       ],
+      "task.steer": [
+        "type",
+        "taskId",
+        "operationId",
+        "expectedTurnId",
+        "outcome",
+        "attachmentIds",
+      ],
+      "task.queue.add": [
+        "type",
+        "taskId",
+        "operationId",
+        "outcome",
+        "attachmentIds",
+        "selectedResultIds",
+      ],
+      "task.queue.edit": [
+        "type",
+        "taskId",
+        "operationId",
+        "entryId",
+        "outcome",
+      ],
+      "task.queue.remove": ["type", "taskId", "operationId", "entryId"],
+      "task.queue.reorder": ["type", "taskId", "operationId", "entryIds"],
       "task.close": ["type", "taskId", "operationId"],
       "task.return-control": ["type", "taskId", "operationId"],
       "task.thread.read": ["type", "taskId"],
@@ -2793,6 +2897,149 @@ export class LocalProductApi {
         this.currentTaskId = started.aggregate.taskId;
         return started;
       }
+      case "task.queue.edit":
+        return this.tasks.submit({
+          type: "queue_edit",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: stableOperationId(
+            command.operationId,
+            "queue edit operation id",
+          ),
+          entryId: nonempty(command.entryId, "queue entry id"),
+          message: nonempty(command.outcome, "queued outcome").slice(0, 16_000),
+        });
+      case "task.queue.remove":
+        return this.tasks.submit({
+          type: "queue_remove",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: stableOperationId(
+            command.operationId,
+            "queue remove operation id",
+          ),
+          entryId: nonempty(command.entryId, "queue entry id"),
+        });
+      case "task.queue.reorder": {
+        if (
+          !Array.isArray(command.entryIds) ||
+          command.entryIds.some((id) => typeof id !== "string") ||
+          new Set(command.entryIds).size !== command.entryIds.length
+        )
+          throw new Error("Queue order is invalid.");
+        return this.tasks.submit({
+          type: "queue_reorder",
+          taskId: nonempty(command.taskId, "task id"),
+          operationId: stableOperationId(
+            command.operationId,
+            "queue reorder operation id",
+          ),
+          entryIds: [...command.entryIds],
+        });
+      }
+      case "task.queue.add":
+      case "task.steer": {
+        const taskId = nonempty(command.taskId, "task id");
+        const outcome = nonempty(command.outcome, "task outcome").slice(
+          0,
+          16_000,
+        );
+        const operationId = stableOperationId(
+          command.operationId,
+          command.type === "task.steer"
+            ? "steer operation id"
+            : "queue operation id",
+        );
+        const attachmentIds = command.attachmentIds ?? [];
+        if (
+          !Array.isArray(attachmentIds) ||
+          attachmentIds.some((id) => typeof id !== "string") ||
+          JSON.stringify([...attachmentIds].sort()) !==
+            JSON.stringify(
+              (this.attachments?.listDrafts() ?? [])
+                .map((attachment) => attachment.id)
+                .sort(),
+            )
+        )
+          throw new Error("Task message attachment selection is stale.");
+        const task = await this.tasks.readTask(taskId);
+        if (!task) throw new Error("Task is unavailable.");
+        this.requireModelReady(
+          task.context.policy.model,
+          task.context.policy.reasoningEffort,
+        );
+        if (
+          task.conversation?.turnStatus !== "in_progress" ||
+          !task.conversation.activeTurnId
+        )
+          throw new Error(
+            "Active work changed before the intervention was accepted.",
+          );
+        if (
+          command.type === "task.steer" &&
+          command.expectedTurnId !== task.conversation.activeTurnId
+        )
+          throw new Error("Send now targets a stale active turn.");
+        if (command.type === "task.steer")
+          return this.tasks.submit({
+            type: "steer",
+            taskId,
+            operationId,
+            expectedTurnId: command.expectedTurnId,
+            message: outcome,
+            attachmentIds: [...attachmentIds],
+            attachmentMetadata: conversationAttachmentMetadata(
+              this.attachments?.listDrafts() ?? [],
+              attachmentIds,
+            ),
+          });
+        const selectedResultIds = command.selectedResultIds ?? [];
+        if (
+          selectedResultIds.length > 8 ||
+          selectedResultIds.some(
+            (resultId) =>
+              typeof resultId !== "string" || resultId.trim().length < 1,
+          ) ||
+          new Set(selectedResultIds).size !== selectedResultIds.length
+        )
+          throw new Error("Task result selection is invalid.");
+        const selectedResults = selectedResultIds.map((resultId) => {
+          const result = this.results?.result(taskId, resultId);
+          if (!result || !result.selected || !result.selectedRevision)
+            throw new Error(
+              "Selected result is stale or belongs to another task.",
+            );
+          return result;
+        });
+        const associatedWorkflow = task.context.workflowAssociation
+          ? this.workflows?.workflow(
+              task.context.workflowAssociation.workflowId,
+            )
+          : null;
+        return this.tasks.submit({
+          type: "queue_add",
+          taskId,
+          operationId,
+          message: outcome,
+          attachmentIds: [...attachmentIds],
+          attachmentMetadata: conversationAttachmentMetadata(
+            this.attachments?.listDrafts() ?? [],
+            attachmentIds,
+          ),
+          ...(associatedWorkflow
+            ? {
+                workflowContext: assembleWorkflowContext(
+                  associatedWorkflow,
+                  outcome,
+                ),
+              }
+            : {}),
+          ...(selectedResults.length
+            ? {
+                selectedResultContext:
+                  assembleTaskResultContext(selectedResults),
+              }
+            : {}),
+        });
+      }
       case "task.message": {
         const taskId = nonempty(command.taskId, "task id");
         const outcome = nonempty(command.outcome, "task outcome").slice(
@@ -2828,6 +3075,28 @@ export class LocalProductApi {
         });
         if (prior) return prior;
         const existingTask = await this.tasks.readTask(taskId);
+        const explicitContinuation = this.attention
+          .list()
+          .some(
+            (entry) =>
+              entry.authority === "rove_control" &&
+              entry.kind === "control_handoff" &&
+              entry.status === "pending" &&
+              entry.taskId === taskId &&
+              entry.payload.policy === "explicit_user_response",
+          );
+        if (
+          existingTask?.conversation?.turnStatus === "in_progress" &&
+          !explicitContinuation
+        )
+          return this.execute({
+            type: "task.queue.add",
+            taskId,
+            operationId,
+            outcome,
+            attachmentIds: [...attachmentIds],
+            selectedResultIds: [...selectedResultIds],
+          });
         this.requireModelReady(
           existingTask?.context.policy.model,
           existingTask?.context.policy.reasoningEffort,
@@ -2849,35 +3118,16 @@ export class LocalProductApi {
             );
           return result;
         });
-        if (
-          selectedResults.length > 0 &&
-          existingTask?.conversation?.turnStatus === "in_progress"
-        )
-          throw new Error(
-            "Selected results can be applied after the current turn finishes.",
-          );
         const selectedResultContext = selectedResults.length
           ? assembleTaskResultContext(selectedResults)
           : undefined;
-        const explicitContinuation = this.attention
-          .list()
-          .some(
-            (entry) =>
-              entry.authority === "rove_control" &&
-              entry.kind === "control_handoff" &&
-              entry.status === "pending" &&
-              entry.taskId === taskId &&
-              entry.payload.policy === "explicit_user_response",
-          );
         const associatedWorkflow = existingTask?.context.workflowAssociation
           ? this.workflows?.workflow(
               existingTask.context.workflowAssociation.workflowId,
             )
           : null;
         const workflowContext =
-          associatedWorkflow &&
-          existingTask?.context.workflowContext &&
-          existingTask.conversation?.turnStatus !== "in_progress"
+          associatedWorkflow && existingTask?.context.workflowContext
             ? assembleWorkflowContext(associatedWorkflow, outcome)
             : undefined;
         const accepted = await this.tasks.submit({

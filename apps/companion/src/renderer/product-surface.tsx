@@ -32,7 +32,9 @@ import type { TaskResult, TaskResultKind } from "../main/codex/results.js";
 import type {
   ApprovalsReviewer,
   ExecutionMode,
+  ProductTaskCapabilities,
 } from "../main/codex/task-coordinator.js";
+import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
@@ -1297,13 +1299,6 @@ function unsetSelectValue(field: ProductElicitationField): string {
   return value;
 }
 
-function humanizeIdentifier(value: string): string {
-  return value
-    .replace(/^.*\//, "")
-    .replace(/[._-]+/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 export function commandPaletteMatches(
   query: string,
   ...terms: string[]
@@ -1312,57 +1307,6 @@ export function commandPaletteMatches(
   return (
     !normalized || terms.some((term) => term.toLowerCase().includes(normalized))
   );
-}
-
-function activityCopy(item: ProjectedConversationItem): {
-  label: string;
-  detail?: string;
-} {
-  const name = item.title ?? "";
-  const browserAction = name.replace(/^.*\/browser\./, "");
-  const browserLabels: Record<string, string> = {
-    inspect: "Reading the current page",
-    screenshot: "Capturing the current page",
-    interact: "Interacting with the page",
-    navigate: "Opening a page",
-    open_page: "Opening a new page",
-    pages: "Checking open pages",
-    switch_page: "Switching pages",
-    close_page: "Closing a page",
-    resolve_target: "Finding an element on the page",
-    scroll: "Scrolling the page",
-    back: "Going back",
-    forward: "Going forward",
-    transaction_begin: "Preparing a browser action",
-    transaction_advance: "Continuing a browser action",
-    transaction_verify: "Verifying the browser action",
-    transaction_status: "Checking the browser action",
-    transaction_cancel: "Stopping the browser action",
-  };
-  if (item.kind === "tool" && browserLabels[browserAction])
-    return { label: browserLabels[browserAction]! };
-  if (item.kind === "tool" && /\/evidence\.list$/.test(name))
-    return { label: "Reviewing saved evidence" };
-  if (item.kind === "tool" && /\/session\.status$/.test(name))
-    return { label: "Checking the browser session" };
-  if (item.kind === "tool" && /\/control\.request_human$/.test(name))
-    return { label: "Requesting browser control" };
-  if (item.kind === "tool")
-    return {
-      label: name ? humanizeIdentifier(name) : "Using a connected tool",
-    };
-  if (item.kind === "plan")
-    return { label: item.text ?? item.title ?? "Planning the next steps" };
-  if (item.kind === "command")
-    return {
-      label: "Running a local command",
-      ...(name ? { detail: name } : {}),
-    };
-  if (item.kind === "file_change")
-    return { label: item.title ?? "Updating files" };
-  return {
-    label: item.text ?? item.title ?? item.progress ?? "Working",
-  };
 }
 
 const TASK_TITLE_STORAGE_KEY = "rove.task-titles.v1";
@@ -1395,6 +1339,35 @@ function formatMessageTime(value: string | undefined): string | undefined {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+export function followupKeyboardAction(
+  event: {
+    key: string;
+    shiftKey: boolean;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    isComposing: boolean;
+  },
+  capabilities: Pick<
+    ProductTaskCapabilities,
+    "canSubmit" | "canQueue" | "canSteer"
+  >,
+): "none" | "newline" | "submit" | "queue" | "steer" {
+  if (event.key !== "Enter" || event.isComposing) return "none";
+  if (event.shiftKey) return "newline";
+  if (event.metaKey || event.ctrlKey)
+    return capabilities.canSteer ? "steer" : "none";
+  if (capabilities.canQueue) return "queue";
+  return capabilities.canSubmit ? "submit" : "none";
+}
+
+export function timelineIsAtBottom(input: {
+  scrollHeight: number;
+  scrollTop: number;
+  clientHeight: number;
+}): boolean {
+  return input.scrollHeight - input.scrollTop - input.clientHeight <= 24;
 }
 
 function formatElapsed(milliseconds: number): string {
@@ -2150,6 +2123,11 @@ export function ProductSurface({
   const [renameDraft, setRenameDraft] = useState("");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
   const [timelineNow, setTimelineNow] = useState(() => Date.now());
+  const [editingQueueEntryId, setEditingQueueEntryId] = useState<string | null>(
+    null,
+  );
+  const [queueEditDraft, setQueueEditDraft] = useState("");
+  const [showLatest, setShowLatest] = useState(false);
   const [openWorkTurnIds, setOpenWorkTurnIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -2158,6 +2136,8 @@ export function ProductSurface({
   const dragPointer = useRef<number | null>(null);
   const outcomeComposer = useRef<HTMLTextAreaElement | null>(null);
   const followupComposer = useRef<HTMLTextAreaElement | null>(null);
+  const taskTimeline = useRef<HTMLElement | null>(null);
+  const followTimeline = useRef(true);
   const savingOutputItemIds = useRef(new Set<string>());
 
   useEffect(() => {
@@ -2279,6 +2259,12 @@ export function ProductSurface({
     : (archivedPreviewTask ??
       product?.tasks.find((entry) => entry.taskId === selectedTaskId) ??
       activeTask);
+  const viewedTaskExecution = viewedTask
+    ? (viewedTask.customerExecution ??
+      (viewedTask.conversation
+        ? legacyCustomerTaskExecution(viewedTask.conversation)
+        : undefined))
+    : undefined;
   const workflowWorkspace = workflowWorkspaceProjection(
     product,
     selectedWorkflowWorkspaceId ?? "",
@@ -2330,31 +2316,47 @@ export function ProductSurface({
   }, [followup]);
 
   useEffect(() => {
-    if (viewedTask?.conversation?.turnStatus !== "in_progress") return;
+    if (viewedTaskExecution?.state !== "working") return;
     setTimelineNow(Date.now());
-    const timer = window.setInterval(() => setTimelineNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [viewedTask?.conversation?.turnStatus, viewedTask?.taskId]);
-  useEffect(() => {
-    const activeTurnId = viewedTask?.conversation?.activeTurnId;
-    if (!activeTurnId || viewedTask?.conversation?.turnStatus !== "in_progress")
-      return;
-    const activeItems = Object.values(viewedTask.conversation.items).filter(
-      (item) => item.turnId === activeTurnId,
+    const visibleAt = viewedTaskExecution.workingVisibleAfter
+      ? Date.parse(viewedTaskExecution.workingVisibleAfter)
+      : Date.now();
+    const reveal = window.setTimeout(
+      () => setTimelineNow(Date.now()),
+      Math.max(0, visibleAt - Date.now()),
     );
-    const lastInput = activeItems
-      .filter((item) => item.kind === "user_message")
-      .at(-1);
-    const segmentId =
-      lastInput?.id ??
-      (activeItems[0]
-        ? `work:${activeTurnId}:${activeItems[0].id}`
-        : activeTurnId);
-    setOpenWorkTurnIds((current) => new Set(current).add(segmentId));
+    const timer = window.setInterval(() => setTimelineNow(Date.now()), 1_000);
+    return () => {
+      window.clearTimeout(reveal);
+      window.clearInterval(timer);
+    };
   }, [
-    viewedTask?.conversation?.activeTurnId,
-    viewedTask?.conversation?.turnStatus,
+    viewedTaskExecution?.state,
+    viewedTaskExecution?.workingVisibleAfter,
+    viewedTask?.taskId,
   ]);
+  useEffect(() => {
+    const segmentId = viewedTaskExecution?.segments.find(
+      (segment) => segment.status === "active",
+    )?.id;
+    if (!segmentId) return;
+    setOpenWorkTurnIds((current) => new Set(current).add(segmentId));
+  }, [viewedTaskExecution?.segments, viewedTask?.taskId]);
+  const executionRevision = JSON.stringify(
+    viewedTaskExecution?.segments.map((segment) => [
+      segment.id,
+      segment.commentaryItemIds.length,
+      segment.activities.length,
+      segment.finalAnswerItemIds.length,
+      segment.status,
+    ]) ?? [],
+  );
+  useEffect(() => {
+    const node = taskTimeline.current;
+    if (!node || !followTimeline.current) return;
+    node.scrollTop = node.scrollHeight;
+    setShowLatest(false);
+  }, [executionRevision]);
   const gate = composerGate(desktop, {
     outcome,
     mode,
@@ -3033,12 +3035,19 @@ export function ProductSurface({
       }),
     );
   };
-  const sendFollowup = async () => {
+  const sendFollowup = async (requested: "default" | "steer" = "default") => {
     const message = followup.trim();
-    if (!viewedTask?.capabilities?.canSubmit || !message || busy) return;
+    if (!viewedTask || !message || busy) return;
+    const activeDefault = viewedTask.capabilities?.canQueue === true;
+    if (requested === "steer" && !viewedTask.capabilities?.canSteer) return;
+    if (
+      requested === "default" &&
+      !activeDefault &&
+      !viewedTask.capabilities?.canSubmit
+    )
+      return;
     await run(async () => {
-      await command({
-        type: "task.message",
+      const common = {
         taskId: viewedTask.taskId,
         operationId: `intent_${crypto.randomUUID()}`,
         outcome: message,
@@ -3056,9 +3065,67 @@ export function ProductSurface({
                 .map((result) => result.resultId),
             }
           : {}),
-      });
+      };
+      if (requested === "steer")
+        await command({
+          type: "task.steer",
+          taskId: common.taskId,
+          operationId: common.operationId,
+          outcome: common.outcome,
+          expectedTurnId: viewedTask.conversation?.activeTurnId ?? "",
+          ...(common.attachmentIds
+            ? { attachmentIds: common.attachmentIds }
+            : {}),
+        });
+      else if (activeDefault)
+        await command({ type: "task.queue.add", ...common });
+      else await command({ type: "task.message", ...common });
       setFollowup("");
     });
+  };
+
+  const editQueuedEntry = async (entryId: string) => {
+    if (!viewedTask || !queueEditDraft.trim() || busy) return;
+    await run(() =>
+      command({
+        type: "task.queue.edit",
+        taskId: viewedTask.taskId,
+        operationId: `intent_${crypto.randomUUID()}`,
+        entryId,
+        outcome: queueEditDraft.trim(),
+      }),
+    );
+    setEditingQueueEntryId(null);
+    setQueueEditDraft("");
+  };
+
+  const removeQueuedEntry = async (entryId: string) => {
+    if (!viewedTask || busy) return;
+    await run(() =>
+      command({
+        type: "task.queue.remove",
+        taskId: viewedTask.taskId,
+        operationId: `intent_${crypto.randomUUID()}`,
+        entryId,
+      }),
+    );
+  };
+
+  const moveQueuedEntry = async (entryId: string, offset: -1 | 1) => {
+    if (!viewedTask || !viewedTaskExecution || busy) return;
+    const order = viewedTaskExecution.queue.map((entry) => entry.id);
+    const from = order.indexOf(entryId);
+    const to = from + offset;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to]!, order[from]!];
+    await run(() =>
+      command({
+        type: "task.queue.reorder",
+        taskId: viewedTask.taskId,
+        operationId: `intent_${crypto.randomUUID()}`,
+        entryIds: order,
+      }),
+    );
   };
 
   const setQuestionAnswer = (
@@ -3554,85 +3621,36 @@ export function ProductSurface({
   }
 
   const timeline = Object.values(viewedTask?.conversation?.items ?? {});
-  const itemOrder = viewedTask?.conversation?.itemOrder ?? [];
   const itemsById = new Map(timeline.map((item) => [item.id, item]));
-  const orderedTimeline = [
-    ...itemOrder.flatMap((id) => {
-      const item = itemsById.get(id);
-      return item ? [item] : [];
-    }),
-    ...timeline.filter((item) => !itemOrder.includes(item.id)),
-  ];
-  const rawSegments: Array<{
-    id: string;
-    input?: ProjectedConversationItem;
-    items: ProjectedConversationItem[];
-  }> = [];
-  for (const item of orderedTimeline) {
-    if (item.kind === "user_message") {
-      rawSegments.push({ id: item.id, input: item, items: [] });
-      continue;
-    }
-    const current = rawSegments.at(-1);
-    if (current) current.items.push(item);
-    else
-      rawSegments.push({
-        id: `work:${item.turnId ?? "unassociated"}:${item.id}`,
-        items: [item],
+  const timelineSegments = (viewedTaskExecution?.segments ?? []).map(
+    (segment) => {
+      const input = segment.inputItemId
+        ? itemsById.get(segment.inputItemId)
+        : undefined;
+      const commentary = segment.commentaryItemIds.flatMap((id) => {
+        const item = itemsById.get(id);
+        return item ? [item] : [];
       });
-  }
-  const timelineSegments = rawSegments.map((segment, index) => {
-    const isActiveSegment =
-      index === rawSegments.length - 1 &&
-      viewedTask?.conversation?.turnStatus === "in_progress";
-    const assistants = segment.items.filter(
-      (item) => item.kind === "assistant_message",
-    );
-    const explicitFinals = assistants.filter(
-      (item) => item.phase === "final_answer",
-    );
-    const fallbackFinal =
-      explicitFinals.length === 0 &&
-      !isActiveSegment &&
-      assistants.every((item) => item.phase === undefined)
-        ? assistants.at(-1)
-        : undefined;
-    const finalIds = new Set(
-      [...explicitFinals, ...(fallbackFinal ? [fallbackFinal] : [])].map(
-        (item) => item.id,
-      ),
-    );
-    const allItems = [
-      ...(segment.input ? [segment.input] : []),
-      ...segment.items,
-    ];
-    const timestamps = allItems
-      .flatMap((item) => [item.startedAt, item.completedAt])
-      .filter((value): value is string => value !== undefined)
-      .map((value) => Date.parse(value))
-      .filter(Number.isFinite);
-    const startedAt =
-      timestamps.length > 0 ? Math.min(...timestamps) : undefined;
-    const completedAt = isActiveSegment
-      ? timelineNow
-      : timestamps.length > 0
-        ? Math.max(...timestamps)
-        : undefined;
-    return {
-      ...segment,
-      work: segment.items.filter((item) => !finalIds.has(item.id)),
-      finals: segment.items.filter((item) => finalIds.has(item.id)),
-      isActiveSegment,
-      completedTimestamp:
-        completedAt === undefined
-          ? undefined
-          : new Date(completedAt).toISOString(),
-      elapsed:
-        startedAt === undefined || completedAt === undefined
-          ? undefined
-          : formatElapsed(completedAt - startedAt),
-    };
-  });
+      const finals = segment.finalAnswerItemIds.flatMap((id) => {
+        const item = itemsById.get(id);
+        return item ? [item] : [];
+      });
+      const runningMs = segment.activeSince
+        ? Math.max(0, timelineNow - Date.parse(segment.activeSince))
+        : 0;
+      return {
+        ...segment,
+        input,
+        commentary,
+        finals,
+        elapsed: formatElapsed(segment.accumulatedActiveMs + runningMs),
+      };
+    },
+  );
+  const workingVisible =
+    viewedTaskExecution?.state !== "working" ||
+    !viewedTaskExecution.workingVisibleAfter ||
+    timelineNow >= Date.parse(viewedTaskExecution.workingVisibleAfter);
   const taskContextEntry = product?.tasks.find(
     (task) => task.taskId === taskContextMenu?.taskId,
   );
@@ -5080,8 +5098,7 @@ export function ProductSurface({
                               <span>
                                 <strong>{displayTaskTitle(task)}</strong>
                                 <small>
-                                  {task.conversation?.turnStatus ===
-                                  "in_progress"
+                                  {task.customerExecution?.state === "working"
                                     ? "Working"
                                     : terminalProductTask(task)
                                       ? "Completed"
@@ -6113,6 +6130,13 @@ export function ProductSurface({
               <section
                 className="task-timeline"
                 aria-label="Conversation and activity"
+                ref={taskTimeline}
+                onScroll={(event) => {
+                  const node = event.currentTarget;
+                  const atBottom = timelineIsAtBottom(node);
+                  followTimeline.current = atBottom;
+                  setShowLatest(!atBottom);
+                }}
               >
                 {timeline.length === 0 && (
                   <div className="timeline-empty">
@@ -6197,77 +6221,112 @@ export function ProductSurface({
                         </footer>
                       </article>
                     )}
-                    {segment.work.length > 0 && (
-                      <details
-                        className="timeline-work"
-                        open={openWorkTurnIds.has(segment.id)}
-                        onToggle={(event) => {
-                          const isOpen = event.currentTarget.open;
-                          setOpenWorkTurnIds((current) => {
-                            const next = new Set(current);
-                            if (isOpen) next.add(segment.id);
-                            else next.delete(segment.id);
-                            return next;
-                          });
-                        }}
-                      >
-                        <summary>
-                          <span
-                            className={
-                              segment.isActiveSegment
-                                ? "activity-spinner"
-                                : "work-complete"
-                            }
-                            aria-hidden="true"
-                          >
-                            {segment.isActiveSegment ? "" : "✓"}
-                          </span>
-                          <strong>
-                            {segment.isActiveSegment ? "Working" : "Worked"}
-                            {segment.elapsed ? ` for ${segment.elapsed}` : ""}
-                          </strong>
-                          {formatMessageTime(segment.completedTimestamp) && (
-                            <time>
-                              {formatMessageTime(segment.completedTimestamp)}
-                            </time>
-                          )}
-                          <svg viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="m4 6 4 4 4-4" />
-                          </svg>
-                        </summary>
-                        <div className="timeline-work-items">
-                          {segment.work.map((item) => {
-                            if (item.kind === "assistant_message")
-                              return (
-                                <div className="work-commentary" key={item.id}>
-                                  <MessageBody text={messageText(item)} />
-                                </div>
+                    {(segment.status === "active" ||
+                      segment.commentary.length > 0 ||
+                      segment.activities.length > 0) &&
+                      (segment.status !== "active" || workingVisible) &&
+                      (() => {
+                        const content = (
+                          <div className="timeline-work-items">
+                            {segment.workOrder.map((entry) => {
+                              if (entry.type === "commentary") {
+                                const item = segment.commentary.find(
+                                  (candidate) => candidate.id === entry.id,
+                                );
+                                return item ? (
+                                  <div
+                                    className="work-commentary"
+                                    key={item.id}
+                                  >
+                                    <MessageBody text={messageText(item)} />
+                                  </div>
+                                ) : null;
+                              }
+                              const activity = segment.activities.find(
+                                (candidate) => candidate.id === entry.id,
                               );
-                            const activity = activityCopy(item);
-                            return (
-                              <div
-                                key={item.id}
-                                className="timeline-activity"
-                                data-status={item.status}
-                              >
-                                <span
-                                  className="activity-icon"
-                                  aria-hidden="true"
+                              return activity ? (
+                                <div
+                                  key={activity.id}
+                                  className="timeline-activity"
+                                  data-status={activity.state}
+                                  data-kind={activity.kind}
                                 >
-                                  {item.status === "completed" ? "✓" : ""}
-                                </span>
-                                <span className="activity-copy">
-                                  <strong>{activity.label}</strong>
-                                  {activity.detail && (
-                                    <small>{activity.detail}</small>
-                                  )}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </details>
-                    )}
+                                  <span
+                                    className="activity-icon"
+                                    aria-hidden="true"
+                                  >
+                                    {activity.state === "confirmed" ? "✓" : ""}
+                                  </span>
+                                  <span className="activity-copy">
+                                    <strong>{activity.label}</strong>
+                                  </span>
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        );
+                        if (segment.status === "active")
+                          return (
+                            <section
+                              className="timeline-work timeline-work-active"
+                              aria-label="Active work"
+                            >
+                              <header className="timeline-work-heading">
+                                <span
+                                  className="activity-spinner"
+                                  aria-hidden="true"
+                                />
+                                <strong>
+                                  Working
+                                  {segment.elapsed
+                                    ? ` for ${segment.elapsed}`
+                                    : ""}
+                                </strong>
+                              </header>
+                              {content}
+                            </section>
+                          );
+                        return (
+                          <details
+                            className="timeline-work"
+                            open={openWorkTurnIds.has(segment.id)}
+                            onToggle={(event) => {
+                              const isOpen = event.currentTarget.open;
+                              setOpenWorkTurnIds((current) => {
+                                const next = new Set(current);
+                                if (isOpen) next.add(segment.id);
+                                else next.delete(segment.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <summary>
+                              <span
+                                className="work-complete"
+                                aria-hidden="true"
+                              >
+                                ✓
+                              </span>
+                              <strong>
+                                Worked
+                                {segment.elapsed
+                                  ? ` for ${segment.elapsed}`
+                                  : ""}
+                              </strong>
+                              {formatMessageTime(segment.completedAt) && (
+                                <time>
+                                  {formatMessageTime(segment.completedAt)}
+                                </time>
+                              )}
+                              <svg viewBox="0 0 16 16" aria-hidden="true">
+                                <path d="m4 6 4 4 4-4" />
+                              </svg>
+                            </summary>
+                            {content}
+                          </details>
+                        );
+                      })()}
                     {segment.finals.map((item) => (
                       <article
                         key={item.id}
@@ -6353,6 +6412,21 @@ export function ProductSurface({
                     ))}
                   </section>
                 ))}
+                {showLatest && (
+                  <button
+                    className="timeline-latest"
+                    type="button"
+                    onClick={() => {
+                      const node = taskTimeline.current;
+                      if (!node) return;
+                      followTimeline.current = true;
+                      node.scrollTop = node.scrollHeight;
+                      setShowLatest(false);
+                    }}
+                  >
+                    Latest
+                  </button>
+                )}
               </section>
               {!gate.ready && viewedTask.lifecycle.phase === "recovering" && (
                 <div className="product-warning" role="status">
@@ -6392,11 +6466,18 @@ export function ProductSurface({
                 {!respondableCodexAttention &&
                   viewedTask.executionMode !== "capture" &&
                   (viewedTask.capabilities?.canSubmit ||
+                    viewedTask.capabilities?.canQueue ||
+                    viewedTask.capabilities?.canSteer ||
                     viewedTask.availableActions.includes("resume") ||
                     viewedTask.capabilities?.canReturnToRove) && (
                     <ComposerInputShell
                       attachments={product?.draftAttachments ?? []}
-                      busy={busy || !viewedTask.capabilities?.canSubmit}
+                      busy={
+                        busy ||
+                        (!viewedTask.capabilities?.canSubmit &&
+                          !viewedTask.capabilities?.canQueue &&
+                          !viewedTask.capabilities?.canSteer)
+                      }
                       className="followup task-composer-shell"
                       onReplace={(attachmentId) =>
                         void run(() =>
@@ -6412,6 +6493,95 @@ export function ProductSurface({
                         )
                       }
                     >
+                      {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
+                        <div
+                          className="task-queue"
+                          aria-label="Queued follow-ups"
+                        >
+                          {viewedTaskExecution!.queue.map(
+                            (entry, index, queue) => (
+                              <div className="task-queue-entry" key={entry.id}>
+                                {editingQueueEntryId === entry.id ? (
+                                  <form
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      void editQueuedEntry(entry.id);
+                                    }}
+                                  >
+                                    <input
+                                      aria-label="Edit queued follow-up"
+                                      maxLength={16_000}
+                                      value={queueEditDraft}
+                                      onChange={(event) =>
+                                        setQueueEditDraft(event.target.value)
+                                      }
+                                    />
+                                    <button
+                                      type="submit"
+                                      disabled={busy || !queueEditDraft.trim()}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingQueueEntryId(null)
+                                      }
+                                    >
+                                      Cancel
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <>
+                                    <span>{entry.message}</span>
+                                    <div className="task-queue-actions">
+                                      <button
+                                        type="button"
+                                        aria-label="Move queued follow-up earlier"
+                                        disabled={busy || index === 0}
+                                        onClick={() =>
+                                          void moveQueuedEntry(entry.id, -1)
+                                        }
+                                      >
+                                        ↑
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label="Move queued follow-up later"
+                                        disabled={
+                                          busy || index === queue.length - 1
+                                        }
+                                        onClick={() =>
+                                          void moveQueuedEntry(entry.id, 1)
+                                        }
+                                      >
+                                        ↓
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingQueueEntryId(entry.id);
+                                          setQueueEditDraft(entry.message);
+                                        }}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void removeQueuedEntry(entry.id)
+                                        }
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
                       {viewedTask.results.some((result) => result.selected) && (
                         <div
                           className="output-context-rail"
@@ -6446,7 +6616,12 @@ export function ProductSurface({
                             : "Add a follow-up…"
                         }
                         value={followup}
-                        disabled={busy || !viewedTask.capabilities?.canSubmit}
+                        disabled={
+                          busy ||
+                          (!viewedTask.capabilities?.canSubmit &&
+                            !viewedTask.capabilities?.canQueue &&
+                            !viewedTask.capabilities?.canSteer)
+                        }
                         onChange={(event) => setFollowup(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "/" && followup.length === 0) {
@@ -6464,19 +6639,34 @@ export function ProductSurface({
                             );
                             return;
                           }
-                          if (
-                            event.key !== "Enter" ||
-                            event.shiftKey ||
-                            event.nativeEvent.isComposing
-                          )
-                            return;
+                          const action = followupKeyboardAction(
+                            {
+                              key: event.key,
+                              shiftKey: event.shiftKey,
+                              metaKey: event.metaKey,
+                              ctrlKey: event.ctrlKey,
+                              isComposing: event.nativeEvent.isComposing,
+                            },
+                            viewedTask.capabilities ?? {
+                              canSubmit: false,
+                              canQueue: false,
+                              canSteer: false,
+                            },
+                          );
+                          if (action === "none" || action === "newline") return;
                           event.preventDefault();
-                          void sendFollowup();
+                          if (action === "steer") void sendFollowup("steer");
+                          else void sendFollowup("default");
                         }}
                       />
                       <div className="composer-action-row">
                         <ComposerAttachButton
-                          busy={busy || !viewedTask.capabilities?.canSubmit}
+                          busy={
+                            busy ||
+                            (!viewedTask.capabilities?.canSubmit &&
+                              !viewedTask.capabilities?.canQueue &&
+                              !viewedTask.capabilities?.canSteer)
+                          }
                           onPick={() =>
                             void run(() =>
                               command({ type: "attachments.pick" }),
@@ -6588,14 +6778,44 @@ export function ProductSurface({
                               <span aria-hidden="true">▶</span>
                             </button>
                           ) : (
-                            <button
-                              className="primary composer-submit"
-                              aria-label="Send follow-up"
-                              disabled={busy || !followup.trim()}
-                              onClick={() => void sendFollowup()}
-                            >
-                              <span aria-hidden="true">↑</span>
-                            </button>
+                            <>
+                              {viewedTask.capabilities?.canSteer && (
+                                <button
+                                  className="composer-send-now"
+                                  type="button"
+                                  disabled={busy || !followup.trim()}
+                                  onClick={() => void sendFollowup("steer")}
+                                >
+                                  Send now
+                                </button>
+                              )}
+                              <button
+                                className="primary composer-submit"
+                                aria-label={
+                                  viewedTask.capabilities?.canQueue
+                                    ? "Queue follow-up"
+                                    : "Send follow-up"
+                                }
+                                title={
+                                  viewedTask.capabilities?.canQueue
+                                    ? "Queue follow-up"
+                                    : "Send follow-up"
+                                }
+                                disabled={
+                                  busy ||
+                                  !followup.trim() ||
+                                  (!viewedTask.capabilities?.canQueue &&
+                                    !viewedTask.capabilities?.canSubmit)
+                                }
+                                onClick={() => void sendFollowup("default")}
+                              >
+                                <span aria-hidden="true">
+                                  {viewedTask.capabilities?.canQueue
+                                    ? "+"
+                                    : "↑"}
+                                </span>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -6741,7 +6961,7 @@ export function ProductSurface({
                         : "Standalone · "}
                       {taskNeedsCustomerInput(product, entry.taskId)
                         ? "Needs input"
-                        : entry.conversation?.turnStatus === "in_progress"
+                        : entry.customerExecution?.state === "working"
                           ? "Working"
                           : terminalProductTask(entry)
                             ? "Completed"

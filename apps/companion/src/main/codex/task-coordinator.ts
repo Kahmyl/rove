@@ -33,6 +33,7 @@ import {
 } from "@rove/protocol";
 import { APPROVED_CODEX_CLI_VERSION } from "./compatibility.js";
 import { customerTaskCapabilities } from "./customer-task-capabilities.js";
+import type { CustomerTaskExecutionProjection } from "./customer-task-execution.js";
 
 export type ProductionLifecycleCommandClass =
   | "internal_durable_transition"
@@ -1088,6 +1089,7 @@ export interface ProductTaskSnapshot {
   lifecycle: { phase: ProductLifecyclePhase; reason: string };
   availableActions: ProductLifecycleAction[];
   capabilities: ProductTaskCapabilities;
+  customerExecution?: CustomerTaskExecutionProjection;
   runtime?: {
     status: NativeRuntimeTruth["status"];
     controller: NativeRuntimeTruth["controller"];
@@ -2404,6 +2406,8 @@ export class RoveTaskCoordinator {
                 availableActions: ["finish"],
                 capabilities: customerTaskCapabilities({
                   canSubmit: false,
+                  canQueue: false,
+                  canSteer: false,
                   canStop: context.executionMode !== "capture",
                   canRespond: false,
                   canTakeControl: false,
@@ -2425,6 +2429,8 @@ export class RoveTaskCoordinator {
               availableActions: ["retry_cleanup"],
               capabilities: customerTaskCapabilities({
                 canSubmit: false,
+                canQueue: false,
+                canSteer: false,
                 canStop: false,
                 canRespond: false,
                 canTakeControl: false,
@@ -5316,6 +5322,8 @@ export class RoveTaskCoordinator {
             authoritativeOutput.allowedActions.includes("message") &&
             conversation?.turnStatus !== "in_progress" &&
             authoritativeOutput.phase !== "recovering",
+          canQueue: false,
+          canSteer: false,
           canStop:
             context.executionMode !== "capture" &&
             (authoritativeOutput.allowedActions.includes("interrupt") ||

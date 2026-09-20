@@ -105,6 +105,13 @@ export interface TaskConversationItem {
     | "tool"
     | "other";
   status: "started" | "completed";
+  activityOutcome?:
+    | "started"
+    | "dispatched"
+    | "checking"
+    | "confirmed"
+    | "failed"
+    | "unresolved";
   phase?: "commentary" | "final_answer";
   startedAt?: string;
   completedAt?: string;
@@ -112,6 +119,30 @@ export interface TaskConversationItem {
   title?: string;
   progress?: string;
 }
+
+/** Durable customer intent waiting for an execution boundary. Queue entries
+ * are deliberately not conversation items and have no provider identity until
+ * promotion removes one entry and creates user:<operationId> atomically. */
+export interface TaskQueueEntry {
+  id: string;
+  operationId: string;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+  attachmentIds: readonly string[];
+  attachmentMetadata?: TaskConversationItem["attachments"];
+  workflowContext?: TaskWorkflowContextSnapshot;
+  selectedResultContext?: TaskSelectedResultContextSnapshot;
+}
+
+export interface TaskCustomerActiveInterval {
+  segmentId: string;
+  startedAt: string;
+  endedAt?: string;
+}
+
+export const MAX_TASK_QUEUE_ENTRIES = 16;
+export const MAX_TASK_QUEUE_MESSAGE_LENGTH = 16_000;
 
 export interface TaskCompletedHandoff {
   sessionId: string;
@@ -187,6 +218,31 @@ export type TaskEvent =
       attachmentMetadata?: TaskConversationItem["attachments"];
       workflowContext?: TaskWorkflowContextSnapshot;
       selectedResultContext?: TaskSelectedResultContextSnapshot;
+    })
+  | (TaskEventBase & {
+      type: "task_queue_added";
+      operationId: string;
+      message: string;
+      attachmentIds?: readonly string[];
+      attachmentMetadata?: TaskConversationItem["attachments"];
+      workflowContext?: TaskWorkflowContextSnapshot;
+      selectedResultContext?: TaskSelectedResultContextSnapshot;
+    })
+  | (TaskEventBase & {
+      type: "task_queue_edited";
+      operationId: string;
+      entryId: string;
+      message: string;
+    })
+  | (TaskEventBase & {
+      type: "task_queue_removed";
+      operationId: string;
+      entryId: string;
+    })
+  | (TaskEventBase & {
+      type: "task_queue_reordered";
+      operationId: string;
+      entryIds: readonly string[];
     })
   | (TaskEventBase & {
       type: "task_return_requested";
@@ -347,6 +403,12 @@ export interface TaskAggregate {
       Record<string, "completed" | "failed" | "interrupted">
     >;
   };
+  queue: {
+    entries: Readonly<Record<string, TaskQueueEntry>>;
+    order: readonly string[];
+  };
+  customerActiveIntervals: readonly TaskCustomerActiveInterval[];
+  pendingQueuePromotion?: TaskQueueEntry;
   messageDeliveries: Readonly<Record<string, TaskMessageDeliveryEvidence>>;
   requestedOperation: NativeRequestedOperation;
   processorGeneration: number;
@@ -370,6 +432,8 @@ export interface TaskProjection {
   runtime: NativeRuntimeTruth;
   attentions: readonly NativeAttentionTruth[];
   conversation: TaskAggregate["conversation"];
+  queue: TaskAggregate["queue"];
+  customerActiveIntervals: TaskAggregate["customerActiveIntervals"];
   messageDeliveries: TaskAggregate["messageDeliveries"];
   recoveryRequired: string | null;
   codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
@@ -611,6 +675,8 @@ export function emptyTaskAggregate(taskId: string): TaskAggregate {
       turnOrder: [],
       terminalTurns: {},
     },
+    queue: { entries: {}, order: [] },
+    customerActiveIntervals: [],
     messageDeliveries: {},
     requestedOperation: { type: "observe", taskId },
     processorGeneration: 1,
@@ -802,12 +868,14 @@ export function validateTaskEvent(event: TaskEvent): void {
     event.type === "task_launch_requested"
       ? event.launch.workflowContext
       : event.type === "task_message_requested" ||
+          event.type === "task_queue_added" ||
           event.type === "explicit_continuation_response_requested"
         ? event.workflowContext
         : undefined;
   if (workflowContext) validateWorkflowContextSnapshot(workflowContext);
   const selectedResultContext =
     event.type === "task_message_requested" ||
+    event.type === "task_queue_added" ||
     event.type === "explicit_continuation_response_requested"
       ? event.selectedResultContext
       : undefined;
@@ -838,6 +906,7 @@ export function validateTaskEvent(event: TaskEvent): void {
     event.type === "task_launch_requested"
       ? event.launch.attachmentMetadata
       : event.type === "task_message_requested" ||
+          event.type === "task_queue_added" ||
           event.type === "explicit_continuation_response_requested"
         ? event.attachmentMetadata
         : undefined;
@@ -845,6 +914,7 @@ export function validateTaskEvent(event: TaskEvent): void {
     event.type === "task_launch_requested"
       ? event.launch.attachmentIds
       : event.type === "task_message_requested" ||
+          event.type === "task_queue_added" ||
           event.type === "explicit_continuation_response_requested"
         ? (event.attachmentIds ?? [])
         : [];
@@ -860,6 +930,32 @@ export function validateTaskEvent(event: TaskEvent): void {
       ))
   )
     throw new Error("Accepted message attachments are invalid.");
+  if (event.type === "task_queue_added" || event.type === "task_queue_edited") {
+    if (
+      typeof event.message !== "string" ||
+      event.message.length < 1 ||
+      event.message.length > MAX_TASK_QUEUE_MESSAGE_LENGTH
+    )
+      throw new Error("Queued task message is invalid.");
+  }
+  if (
+    event.type === "task_queue_added" ||
+    event.type === "task_queue_edited" ||
+    event.type === "task_queue_removed" ||
+    event.type === "task_queue_reordered"
+  )
+    requireIdentity(event.operationId, "Queue operation identity");
+  if (event.type === "task_queue_edited" || event.type === "task_queue_removed")
+    requireIdentity(event.entryId, "Queue entry identity");
+  if (event.type === "task_queue_reordered") {
+    if (
+      event.entryIds.length > MAX_TASK_QUEUE_ENTRIES ||
+      new Set(event.entryIds).size !== event.entryIds.length
+    )
+      throw new Error("Task queue order is invalid.");
+    for (const entryId of event.entryIds)
+      requireIdentity(entryId, "Queue entry identity");
+  }
 }
 
 function recordMessageDelivery(
@@ -1248,6 +1344,8 @@ export function foldTaskEvent(
     current ?? emptyTaskAggregate(event.taskId),
   );
   aggregate.messageDeliveries ??= {};
+  aggregate.queue ??= { entries: {}, order: [] };
+  aggregate.customerActiveIntervals ??= [];
   aggregate.conversation.itemOrder ??= [
     ...aggregate.conversation.turnOrder.flatMap((turnId) =>
       Object.values(aggregate.conversation.items)
@@ -1301,6 +1399,85 @@ export function foldTaskEvent(
       )
         throw new Error("Frozen launch configuration cannot change.");
       aggregate.launch = structuredClone(event.launch);
+      break;
+    }
+    case "task_queue_added": {
+      if (
+        aggregate.desiredState !== "open" ||
+        aggregate.record?.bootstrap.stage !== "complete" ||
+        aggregate.codex.turn !== "active" ||
+        !aggregate.codex.turnId ||
+        aggregate.recoveryRequired !== null ||
+        aggregate.requestedOperation.type !== "observe"
+      )
+        throw new Error("Queueing requires exact active task authority.");
+      if (aggregate.queue.order.length >= MAX_TASK_QUEUE_ENTRIES)
+        throw new Error("Task queue is full.");
+      const id = `queue:${event.operationId}`;
+      if (aggregate.queue.entries[id])
+        throw new Error("Queue entry identity already exists.");
+      const entry: TaskQueueEntry = {
+        id,
+        operationId: event.operationId,
+        message: event.message,
+        createdAt: event.observedAt,
+        updatedAt: event.observedAt,
+        attachmentIds: [...(event.attachmentIds ?? [])],
+        ...(event.attachmentMetadata?.length
+          ? { attachmentMetadata: structuredClone(event.attachmentMetadata) }
+          : {}),
+        ...(event.workflowContext
+          ? { workflowContext: structuredClone(event.workflowContext) }
+          : {}),
+        ...(event.selectedResultContext
+          ? {
+              selectedResultContext: structuredClone(
+                event.selectedResultContext,
+              ),
+            }
+          : {}),
+      };
+      aggregate.queue = {
+        entries: { ...aggregate.queue.entries, [id]: entry },
+        order: [...aggregate.queue.order, id],
+      };
+      break;
+    }
+    case "task_queue_edited": {
+      const entry = aggregate.queue.entries[event.entryId];
+      if (!entry) throw new Error("Queue entry was not found on this task.");
+      aggregate.queue = {
+        ...aggregate.queue,
+        entries: {
+          ...aggregate.queue.entries,
+          [entry.id]: {
+            ...entry,
+            message: event.message,
+            updatedAt: event.observedAt,
+          },
+        },
+      };
+      break;
+    }
+    case "task_queue_removed": {
+      if (!aggregate.queue.entries[event.entryId])
+        throw new Error("Queue entry was not found on this task.");
+      const entries = { ...aggregate.queue.entries };
+      delete entries[event.entryId];
+      aggregate.queue = {
+        entries,
+        order: aggregate.queue.order.filter((id) => id !== event.entryId),
+      };
+      break;
+    }
+    case "task_queue_reordered": {
+      if (
+        event.entryIds.length !== aggregate.queue.order.length ||
+        event.entryIds.some((id) => !aggregate.queue.entries[id]) ||
+        aggregate.queue.order.some((id) => !event.entryIds.includes(id))
+      )
+        throw new Error("Queue reorder must name every exact task entry once.");
+      aggregate.queue = { ...aggregate.queue, order: [...event.entryIds] };
       break;
     }
     case "codex_availability_observed":
@@ -1587,6 +1764,17 @@ export function foldTaskEvent(
       break;
     case "codex_message_delivery_observed": {
       recordMessageDelivery(aggregate, event.delivery);
+      if (
+        aggregate.pendingQueuePromotion?.operationId ===
+          event.delivery.operationId &&
+        [
+          "acceptance_observed",
+          "message_materialized",
+          "non_submission_established",
+          "unresolved",
+        ].includes(event.delivery.state)
+      )
+        delete aggregate.pendingQueuePromotion;
       if (
         aggregate.requestedOperation.type === "message" &&
         aggregate.requestedOperation.operationId ===
@@ -2167,6 +2355,8 @@ export function projectTaskAggregate(aggregate: TaskAggregate): TaskProjection {
     runtime: structuredClone(aggregate.runtime),
     attentions: structuredClone([...aggregate.attentions]),
     conversation: structuredClone(aggregate.conversation),
+    queue: structuredClone(aggregate.queue),
+    customerActiveIntervals: structuredClone(aggregate.customerActiveIntervals),
     messageDeliveries: structuredClone(aggregate.messageDeliveries),
     recoveryRequired: aggregate.recoveryRequired,
     codexReconciliation: structuredClone(aggregate.codexReconciliation ?? []),
@@ -2201,6 +2391,17 @@ function makeCommand(
       event.selectedResultContext
         ? { selectedResultContext: event.selectedResultContext }
         : {}),
+      ...(aggregate.pendingQueuePromotion?.workflowContext
+        ? {
+            workflowContext: aggregate.pendingQueuePromotion.workflowContext,
+          }
+        : {}),
+      ...(aggregate.pendingQueuePromotion?.selectedResultContext
+        ? {
+            selectedResultContext:
+              aggregate.pendingQueuePromotion.selectedResultContext,
+          }
+        : {}),
     }),
     classification: TASK_COMMAND_MANIFEST[type],
     status: "pending",
@@ -2220,28 +2421,19 @@ function boundedHash(value: string): string {
   return `${left.toString(16).padStart(8, "0")}${right.toString(16).padStart(8, "0")}`;
 }
 
-function recordAcceptedUserItem(
+function recordAcceptedUserMaterial(
   aggregate: TaskAggregate,
-  event: Extract<
-    TaskEvent,
-    {
-      type:
-        | "task_launch_requested"
-        | "task_message_requested"
-        | "explicit_continuation_response_requested";
-    }
-  >,
+  input: {
+    operationId: string;
+    text: string;
+    acceptedAt: string;
+    attachments?: TaskConversationItem["attachments"];
+  },
 ): void {
-  const operationId = event.operationId;
+  const operationId = input.operationId;
   const id = `user:${operationId}`;
-  const text =
-    event.type === "task_launch_requested"
-      ? event.launch.outcome
-      : event.message;
-  const attachments =
-    event.type === "task_launch_requested"
-      ? event.launch.attachmentMetadata
-      : event.attachmentMetadata;
+  const text = input.text;
+  const attachments = input.attachments;
   const matchingItems = Object.entries(aggregate.conversation.items).filter(
     ([, item]) => item.kind === "user_message" && item.clientId === operationId,
   );
@@ -2263,9 +2455,9 @@ function recordAcceptedUserItem(
     kind: "user_message",
     status: "completed",
     clientId: operationId,
-    acceptedAt: existing?.acceptedAt ?? event.observedAt,
-    startedAt: existing?.startedAt ?? event.observedAt,
-    completedAt: existing?.completedAt ?? event.observedAt,
+    acceptedAt: existing?.acceptedAt ?? input.acceptedAt,
+    startedAt: existing?.startedAt ?? input.acceptedAt,
+    completedAt: existing?.completedAt ?? input.acceptedAt,
     text,
     ...(attachments?.length
       ? { attachments: structuredClone(attachments) }
@@ -2295,6 +2487,131 @@ function recordAcceptedUserItem(
     ),
     itemOrder,
   };
+}
+
+function recordAcceptedUserItem(
+  aggregate: TaskAggregate,
+  event: Extract<
+    TaskEvent,
+    {
+      type:
+        | "task_launch_requested"
+        | "task_message_requested"
+        | "explicit_continuation_response_requested";
+    }
+  >,
+): void {
+  recordAcceptedUserMaterial(aggregate, {
+    operationId: event.operationId,
+    text:
+      event.type === "task_launch_requested"
+        ? event.launch.outcome
+        : event.message,
+    acceptedAt: event.observedAt,
+    attachments:
+      event.type === "task_launch_requested"
+        ? event.launch.attachmentMetadata
+        : event.attachmentMetadata,
+  });
+}
+
+function promoteNextQueuedEntry(
+  aggregate: TaskAggregate,
+  observedAt: string,
+): boolean {
+  const entryId = aggregate.queue.order[0];
+  const entry = entryId ? aggregate.queue.entries[entryId] : undefined;
+  if (!entry) return false;
+  const entries = { ...aggregate.queue.entries };
+  delete entries[entry.id];
+  aggregate.queue = {
+    entries,
+    order: aggregate.queue.order.filter((id) => id !== entry.id),
+  };
+  aggregate.pendingQueuePromotion = structuredClone(entry);
+  aggregate.requestedOperation = {
+    type: "message",
+    taskId: aggregate.taskId,
+    operationId: entry.operationId,
+    message: entry.message,
+    ...(entry.attachmentIds.length
+      ? { attachmentIds: [...entry.attachmentIds] }
+      : {}),
+  };
+  recordAcceptedUserMaterial(aggregate, {
+    operationId: entry.operationId,
+    text: entry.message,
+    acceptedAt: observedAt,
+    attachments: entry.attachmentMetadata,
+  });
+  return true;
+}
+
+const ACTIVE_ATTENTION_STATES = new Set([
+  "pending",
+  "responding",
+  "awaiting_confirmation",
+  "resolution_unknown",
+]);
+
+function currentAcceptedSegmentId(aggregate: TaskAggregate): string | null {
+  const ids = aggregate.conversation.itemOrder ?? [];
+  for (let index = ids.length - 1; index >= 0; index -= 1) {
+    const item = aggregate.conversation.items[ids[index]!];
+    if (item?.kind === "user_message" && item.acceptedAt) return item.id;
+  }
+  return null;
+}
+
+function customerSemanticActive(aggregate: TaskAggregate): boolean {
+  const segmentId = currentAcceptedSegmentId(aggregate);
+  if (!segmentId || aggregate.desiredState !== "open") return false;
+  if (aggregate.recoveryRequired !== null) return false;
+  if (aggregate.requestedOperation.type === "interrupt") return false;
+  if (
+    aggregate.attentions.some((attention) =>
+      ACTIVE_ATTENTION_STATES.has(attention.status),
+    )
+  )
+    return false;
+  if (
+    aggregate.runtime.controller === "human" ||
+    aggregate.runtime.status === "awaiting_human"
+  )
+    return false;
+  if (aggregate.requestedOperation.type === "message") return true;
+  if (aggregate.record?.bootstrap.stage !== "complete") return true;
+  if (aggregate.codex.turn !== "active") return false;
+  const item = aggregate.conversation.items[segmentId];
+  return (
+    item?.clientId !== undefined &&
+    aggregate.messageDeliveries[item.clientId]?.state !==
+      "non_submission_established"
+  );
+}
+
+function updateCustomerActiveIntervals(
+  aggregate: TaskAggregate,
+  observedAt: string,
+): void {
+  const timestamp = Date.parse(observedAt);
+  if (!Number.isFinite(timestamp)) return;
+  const intervals = [...(aggregate.customerActiveIntervals ?? [])];
+  const open = intervals.at(-1);
+  const segmentId = currentAcceptedSegmentId(aggregate);
+  const active = customerSemanticActive(aggregate) && segmentId !== null;
+  if (open && open.endedAt === undefined) {
+    if (active && open.segmentId === segmentId) return;
+    const start = Date.parse(open.startedAt);
+    intervals[intervals.length - 1] = {
+      ...open,
+      endedAt: new Date(Math.max(start, timestamp)).toISOString(),
+    };
+  }
+  if (active && segmentId) {
+    intervals.push({ segmentId, startedAt: observedAt });
+  }
+  aggregate.customerActiveIntervals = intervals.slice(-128);
 }
 
 export class TaskEngine {
@@ -2343,6 +2660,13 @@ export class TaskEngine {
         throw new Error(
           "A task message cannot be accepted before bootstrap completes.",
         );
+      if (
+        event.type === "task_message_requested" &&
+        event.expectedTurnId !== undefined &&
+        (current?.codex.turn !== "active" ||
+          current.codex.turnId !== event.expectedTurnId)
+      )
+        throw new Error("Steer targets a stale or mismatched active turn.");
       if (
         current &&
         incomingOperation &&
@@ -2409,6 +2733,20 @@ export class TaskEngine {
         }
       }
       synchronizeCodexRecoveryRequired(aggregate);
+      if (
+        event.type === "codex_turn_observed" &&
+        event.turn.turn === "completed" &&
+        event.turn.turnId !== undefined &&
+        current?.codex.turn === "active" &&
+        current.codex.turnId === event.turn.turnId &&
+        aggregate.codex.turn === "completed" &&
+        aggregate.requestedOperation.type === "observe" &&
+        aggregate.recoveryRequired === null &&
+        !aggregate.attentions.some((attention) =>
+          ACTIVE_ATTENTION_STATES.has(attention.status),
+        )
+      )
+        promoteNextQueuedEntry(aggregate, event.observedAt);
       const output = outputFor(aggregate);
       if (
         (event.type === "task_launch_requested" ||
@@ -2417,6 +2755,7 @@ export class TaskEngine {
         output.operationDisposition.status !== "rejected"
       )
         recordAcceptedUserItem(aggregate, event);
+      updateCustomerActiveIntervals(aggregate, event.observedAt);
       const outcomeReleasesActive =
         event.type === "command_outcome_observed" &&
         active?.commandId === event.commandId;

@@ -151,6 +151,363 @@ async function seedReadyTask(
 }
 
 describe("LedgerProductTaskPort protected workspace boundary", () => {
+  it("keeps an ordered queue durable and outside conversation truth until one atomic promotion", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-durable-queue-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    let store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "active";
+        aggregate.codex.turnId = "turn_active";
+        aggregate.codex.runtimeStatus = "active";
+        aggregate.conversation.items = {
+          ["user:intent_12345678-1234-4123-8123-123456789abc"]: {
+            id: "user:intent_12345678-1234-4123-8123-123456789abc",
+            kind: "user_message",
+            status: "completed",
+            clientId: "intent_12345678-1234-4123-8123-123456789abc",
+            acceptedAt: "2026-09-09T12:00:00.000Z",
+            text: "Initial work",
+          },
+        };
+        aggregate.conversation.itemOrder = Object.keys(
+          aggregate.conversation.items,
+        );
+        aggregate.conversation.turnOrder = ["turn_active"];
+      },
+    });
+    const worker = { signal: vi.fn(), cancelTask: vi.fn() };
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: worker as never,
+      now: () => "2026-09-09T12:01:00.000Z",
+    });
+    expect((await port.readTask(seededTaskId))?.capabilities).toMatchObject({
+      canSubmit: false,
+      canQueue: true,
+      canSteer: true,
+    });
+    const firstOperation = "intent_22345678-1234-4123-8123-123456789abc";
+    const secondOperation = "intent_32345678-1234-4123-8123-123456789abc";
+    const firstAdd = {
+      type: "queue_add",
+      taskId: seededTaskId,
+      operationId: firstOperation,
+      message: "First queued instruction",
+    } as const;
+    await port.submit(firstAdd);
+    expect((await port.submit(firstAdd)).duplicate).toBe(true);
+    await port.submit({
+      type: "queue_add",
+      taskId: seededTaskId,
+      operationId: secondOperation,
+      message: "Second queued instruction",
+    });
+    const queued = await store.aggregate(seededTaskId);
+    expect(queued?.queue.order).toEqual([
+      `queue:${firstOperation}`,
+      `queue:${secondOperation}`,
+    ]);
+    expect(
+      queued?.conversation.items[`user:${firstOperation}`],
+    ).toBeUndefined();
+    expect(await store.claimDueCommands("restart-check", 1, 10)).toEqual([]);
+    store.close();
+
+    store = new SqliteTaskEngineStore({ path });
+    expect((await store.aggregate(seededTaskId))?.queue.order).toEqual([
+      `queue:${firstOperation}`,
+      `queue:${secondOperation}`,
+    ]);
+    expect(await store.claimDueCommands("restart-check", 2, 10)).toEqual([]);
+    let engine = new TaskEngine(store);
+    const terminal: TaskEvent = {
+      schemaVersion: 1,
+      type: "codex_turn_observed",
+      eventId: "codex:turn-active:completed",
+      taskId: seededTaskId,
+      source: { kind: "codex", id: "connection", generation: 2, position: 1 },
+      observedAt: "2026-09-09T12:02:00.000Z",
+      threadId: "thread_seeded",
+      turn: {
+        turn: "completed",
+        turnId: "turn_active",
+        runtimeStatus: "idle",
+      },
+    };
+    const promoted = await engine.accept(terminal);
+    expect(promoted.command?.type).toBe("start_or_steer_codex_turn");
+    expect(promoted.aggregate.queue.order).toEqual([
+      `queue:${secondOperation}`,
+    ]);
+    expect(promoted.aggregate.customerActiveIntervals[0]).toMatchObject({
+      segmentId: "user:intent_12345678-1234-4123-8123-123456789abc",
+      startedAt: "2026-09-09T12:01:00.000Z",
+      endedAt: "2026-09-09T12:02:00.000Z",
+    });
+    expect(
+      promoted.aggregate.conversation.items[`user:${firstOperation}`],
+    ).toMatchObject({
+      clientId: firstOperation,
+      text: "First queued instruction",
+    });
+    const duplicate = await engine.accept(terminal);
+    expect(duplicate.duplicate).toBe(true);
+    expect(duplicate.aggregate.queue.order).toEqual([
+      `queue:${secondOperation}`,
+    ]);
+    expect(
+      Object.values(duplicate.aggregate.conversation.items).filter(
+        (item) => item.clientId === firstOperation,
+      ),
+    ).toHaveLength(1);
+
+    // Cut the process immediately after the atomic promotion commit. The
+    // promoted item and remaining queue entry recover without another
+    // promotion, while the one normal delivery command remains claimable.
+    store.close();
+    store = new SqliteTaskEngineStore({ path });
+    engine = new TaskEngine(store);
+    const afterPromotionRestart = await store.aggregate(seededTaskId);
+    expect(afterPromotionRestart?.queue.order).toEqual([
+      `queue:${secondOperation}`,
+    ]);
+    expect(
+      Object.values(afterPromotionRestart!.conversation.items).filter(
+        (item) => item.clientId === firstOperation,
+      ),
+    ).toHaveLength(1);
+    const claimed = await store.claimDueCommands("promotion-cut", 3, 10);
+    expect(claimed).toHaveLength(1);
+    const promotedCommandId = claimed[0]!.commandId;
+
+    // Provider materialization reconciles into the same accepted item key.
+    await engine.accept({
+      schemaVersion: 1,
+      type: "codex_item_observed",
+      eventId: "codex:promoted-user:materialized",
+      taskId: seededTaskId,
+      source: { kind: "codex", id: "connection", generation: 2, position: 2 },
+      observedAt: "2026-09-09T12:02:01.000Z",
+      threadId: "thread_seeded",
+      turnId: "turn_promoted",
+      itemId: "provider-promoted-user",
+      terminal: true,
+      item: {
+        id: "provider-promoted-user",
+        turnId: "turn_promoted",
+        clientId: firstOperation,
+        kind: "user_message",
+        status: "completed",
+        text: "First queued instruction",
+      },
+    });
+    const materialized = await store.aggregate(seededTaskId);
+    expect(materialized?.queue.order).toEqual([`queue:${secondOperation}`]);
+    expect(
+      materialized?.conversation.items[`user:${firstOperation}`],
+    ).toMatchObject({
+      clientId: firstOperation,
+      providerItemId: "provider-promoted-user",
+      turnId: "turn_promoted",
+    });
+
+    // A second cut after dispatch may have started retains exactly the same
+    // command/delivery identity and never consumes the next queue entry.
+    store.close();
+    store = new SqliteTaskEngineStore({ path });
+    expect((await store.aggregate(seededTaskId))?.queue.order).toEqual([
+      `queue:${secondOperation}`,
+    ]);
+    const recoveryClaim = await store.claimDueCommands(
+      "promotion-cut-restart",
+      4,
+      10,
+    );
+    expect(recoveryClaim).toHaveLength(1);
+    expect(recoveryClaim[0]).toMatchObject({
+      commandId: promotedCommandId,
+      claimedFrom: "pending",
+      classification: { reconcile: "correlate_receipt" },
+    });
+    const outbox = new Database(path, { readonly: true });
+    expect(
+      (
+        outbox
+          .prepare(
+            "SELECT command_id FROM task_engine_outbox WHERE task_id = ? ORDER BY aggregate_revision",
+          )
+          .all(seededTaskId) as { command_id: string }[]
+      ).map((row) => row.command_id),
+    ).toEqual([promotedCommandId]);
+    outbox.close();
+    expect(
+      Object.values(
+        (await store.aggregate(seededTaskId))!.conversation.items,
+      ).filter((item) => item.clientId === firstOperation),
+    ).toHaveLength(1);
+    store.close();
+  });
+
+  it("bounds queue growth and keeps edits, removal, and reorder exact-task and idempotent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-queue-operations-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "active";
+        aggregate.codex.turnId = "turn_active";
+        aggregate.codex.runtimeStatus = "active";
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const operations = Array.from(
+      { length: 16 },
+      (_, index) =>
+        `intent_${String(index + 10).padStart(8, "0")}-1234-4123-8123-123456789abc`,
+    );
+    for (const [index, operationId] of operations.entries())
+      await port.submit({
+        type: "queue_add",
+        taskId: seededTaskId,
+        operationId,
+        message: `Queued ${index}`,
+      });
+    expect((await port.readTask(seededTaskId))?.capabilities).toMatchObject({
+      canQueue: false,
+      canSteer: true,
+    });
+    await expect(
+      port.submit({
+        type: "queue_add",
+        taskId: seededTaskId,
+        operationId: "intent_99345678-1234-4123-8123-123456789abc",
+        message: "Overflow",
+      }),
+    ).rejects.toThrow(/queue is full/i);
+    const firstId = `queue:${operations[0]}`;
+    const secondId = `queue:${operations[1]}`;
+    const edit = {
+      type: "queue_edit" as const,
+      taskId: seededTaskId,
+      operationId: "intent_88345678-1234-4123-8123-123456789abc",
+      entryId: firstId,
+      message: "Edited once",
+    };
+    await port.submit(edit);
+    const duplicate = await port.submit(edit);
+    expect(duplicate.duplicate).toBe(true);
+    const current = await store.aggregate(seededTaskId);
+    await port.submit({
+      type: "queue_reorder",
+      taskId: seededTaskId,
+      operationId: "intent_77345678-1234-4123-8123-123456789abc",
+      entryIds: [secondId, firstId, ...current!.queue.order.slice(2)],
+    });
+    const remove = {
+      type: "queue_remove",
+      taskId: seededTaskId,
+      operationId: "intent_66345678-1234-4123-8123-123456789abc",
+      entryId: firstId,
+    } as const;
+    await port.submit(remove);
+    expect((await port.submit(remove)).duplicate).toBe(true);
+    await expect(
+      port.submit({
+        type: "queue_remove",
+        taskId: "task_22345678-1234-4123-8123-123456789abc",
+        operationId: "intent_67345678-1234-4123-8123-123456789abc",
+        entryId: secondId,
+      }),
+    ).rejects.toThrow(/not found on this task/i);
+    const final = await store.aggregate(seededTaskId);
+    expect(final?.queue.entries[firstId]).toBeUndefined();
+    expect(final?.queue.order[0]).toBe(secondId);
+    expect(final?.queue.order).toHaveLength(15);
+    const stopped = await port.submit({
+      type: "interrupt",
+      taskId: seededTaskId,
+      operationId: "intent_65345678-1234-4123-8123-123456789abc",
+    });
+    expect(stopped.aggregate.queue.order).toEqual(final?.queue.order);
+    expect(
+      stopped.aggregate.conversation.items[`user:${operations[1]}`],
+    ).toBeUndefined();
+    store.close();
+  });
+
+  it("accepts explicit Steer only for the exact active turn and deduplicates its user item", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-explicit-steer-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "active";
+        aggregate.codex.turnId = "turn_active";
+        aggregate.codex.runtimeStatus = "active";
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    const staleOperation = "intent_44345678-1234-4123-8123-123456789abc";
+    await expect(
+      port.submit({
+        type: "steer",
+        taskId: seededTaskId,
+        operationId: staleOperation,
+        expectedTurnId: "turn_stale",
+        message: "Do not send this",
+      }),
+    ).rejects.toThrow(/stale or mismatched active turn/i);
+    expect(
+      (await store.aggregate(seededTaskId))?.conversation.items[
+        `user:${staleOperation}`
+      ],
+    ).toBeUndefined();
+    const operationId = "intent_55345678-1234-4123-8123-123456789abc";
+    const accepted = await port.submit({
+      type: "steer",
+      taskId: seededTaskId,
+      operationId,
+      expectedTurnId: "turn_active",
+      message: "Send this now",
+    });
+    expect(accepted.command?.type).toBe("start_or_steer_codex_turn");
+    expect(
+      accepted.aggregate.conversation.items[`user:${operationId}`],
+    ).toMatchObject({
+      clientId: operationId,
+      text: "Send this now",
+    });
+    const duplicate = await port.submit({
+      type: "steer",
+      taskId: seededTaskId,
+      operationId,
+      expectedTurnId: "turn_active",
+      message: "Send this now",
+    });
+    expect(duplicate.duplicate).toBe(true);
+    expect(
+      Object.values(duplicate.aggregate.conversation.items).filter(
+        (item) => item.clientId === operationId,
+      ),
+    ).toHaveLength(1);
+    store.close();
+  });
+
   it("does not manufacture a transcript item for a rejected customer message", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-rejected-message-"));
     roots.push(root);

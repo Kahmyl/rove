@@ -39,6 +39,13 @@ export interface ProjectedConversationItem {
     | "tool"
     | "other";
   status: "started" | "completed";
+  activityOutcome?:
+    | "started"
+    | "dispatched"
+    | "checking"
+    | "confirmed"
+    | "failed"
+    | "unresolved";
   phase?: "commentary" | "final_answer";
   startedAt?: string;
   completedAt?: string;
@@ -205,6 +212,25 @@ function projectItem(
   const item = objectValue(raw, "thread item");
   const id = stringValue(item.id, "item.id");
   const type = item.type;
+  const mechanismStatus =
+    typeof item.status === "string" ? item.status : undefined;
+  const activityOutcome: ProjectedConversationItem["activityOutcome"] = ![
+    "commandExecution",
+    "fileChange",
+    "mcpToolCall",
+    "dynamicToolCall",
+  ].includes(String(type))
+    ? undefined
+    : mechanismStatus === "failed" ||
+        mechanismStatus === "declined" ||
+        item.success === false ||
+        (item.error !== null && item.error !== undefined)
+      ? "failed"
+      : mechanismStatus === "unresolved"
+        ? "unresolved"
+        : status === "started" || mechanismStatus === "inProgress"
+          ? "started"
+          : "confirmed";
   if (type === "reasoning") {
     const summaries = Array.isArray(item.summary)
       ? item.summary.filter(
@@ -273,19 +299,28 @@ function projectItem(
       turnId,
       kind: "command",
       status,
+      ...(activityOutcome ? { activityOutcome } : {}),
       ...(typeof item.command === "string" ? { title: item.command } : {}),
       ...(typeof item.aggregatedOutput === "string"
         ? { progress: item.aggregatedOutput.slice(-4000) }
         : {}),
     };
   if (type === "fileChange")
-    return { id, turnId, kind: "file_change", status, title: "File changes" };
+    return {
+      id,
+      turnId,
+      kind: "file_change",
+      status,
+      ...(activityOutcome ? { activityOutcome } : {}),
+      title: "File changes",
+    };
   if (type === "mcpToolCall" || type === "dynamicToolCall")
     return {
       id,
       turnId,
       kind: "tool",
       status,
+      ...(activityOutcome ? { activityOutcome } : {}),
       title: `${typeof item.server === "string" ? `${item.server}/` : ""}${String(item.tool ?? "tool")}`,
     };
   return { id, turnId, kind: "other", status };

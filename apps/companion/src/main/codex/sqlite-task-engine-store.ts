@@ -77,6 +77,8 @@ function normalizeAggregate(value: string): TaskAggregate {
   )
     throw new Error("Persisted task aggregate is invalid.");
   aggregate.messageDeliveries ??= {};
+  aggregate.queue ??= { entries: {}, order: [] };
+  aggregate.customerActiveIntervals ??= [];
   aggregate.conversation.itemOrder ??= legacyConversationItemOrder(
     aggregate.conversation,
   );
@@ -96,6 +98,8 @@ function normalizeProjection(value: string): TaskProjection {
   )
     throw new Error("Persisted task projection is invalid.");
   projection.messageDeliveries ??= {};
+  projection.queue ??= { entries: {}, order: [] };
+  projection.customerActiveIntervals ??= [];
   projection.conversation.itemOrder ??= legacyConversationItemOrder(
     projection.conversation,
   );
