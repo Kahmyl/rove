@@ -375,6 +375,94 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     store.close();
   });
 
+  it("steers one exact queued identity atomically and rejects stale turn authority", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-queued-steer-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    let store = new SqliteTaskEngineStore({ path });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "active";
+        aggregate.codex.turnId = "turn_active";
+        aggregate.codex.runtimeStatus = "active";
+        aggregate.requestedOperation = {
+          type: "observe",
+          taskId: seededTaskId,
+        };
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+      now: () => "2026-09-09T12:01:00.000Z",
+    });
+    const firstOperation = "intent_71345678-1234-4123-8123-123456789abc";
+    const chosenOperation = "intent_72345678-1234-4123-8123-123456789abc";
+    await port.submit({
+      type: "queue_add",
+      taskId: seededTaskId,
+      operationId: firstOperation,
+      message: "Keep this queued",
+    });
+    await port.submit({
+      type: "queue_add",
+      taskId: seededTaskId,
+      operationId: chosenOperation,
+      message: "Apply this exact queued instruction",
+    });
+    await expect(
+      port.submit({
+        type: "queue_steer",
+        taskId: seededTaskId,
+        operationId: chosenOperation,
+        entryId: `queue:${chosenOperation}`,
+        expectedTurnId: "turn_stale",
+      }),
+    ).rejects.toThrow(/stale|mismatched/i);
+    expect((await store.aggregate(seededTaskId))?.queue.order).toContain(
+      `queue:${chosenOperation}`,
+    );
+
+    const intent = {
+      type: "queue_steer" as const,
+      taskId: seededTaskId,
+      operationId: chosenOperation,
+      entryId: `queue:${chosenOperation}`,
+      expectedTurnId: "turn_active",
+    };
+    const accepted = await port.submit(intent);
+    expect(accepted.command).toMatchObject({
+      type: "start_or_steer_codex_turn",
+      payload: {
+        operationId: chosenOperation,
+        expectedTurnId: "turn_active",
+      },
+    });
+    expect(accepted.aggregate.queue.order).toEqual([`queue:${firstOperation}`]);
+    expect(
+      accepted.aggregate.conversation.items[`user:${chosenOperation}`],
+    ).toMatchObject({
+      clientId: chosenOperation,
+      text: "Apply this exact queued instruction",
+    });
+    expect((await port.submit(intent)).duplicate).toBe(true);
+    store.close();
+
+    store = new SqliteTaskEngineStore({ path });
+    const restarted = await store.aggregate(seededTaskId);
+    expect(restarted?.queue.order).toEqual([`queue:${firstOperation}`]);
+    expect(
+      Object.values(restarted!.conversation.items).filter(
+        (item) => item.clientId === chosenOperation,
+      ),
+    ).toHaveLength(1);
+    expect(
+      await store.claimDueCommands("queued-steer-restart", 1, 10),
+    ).toHaveLength(1);
+    store.close();
+  });
+
   it("bounds queue growth and keeps edits, removal, and reorder exact-task and idempotent", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-queue-operations-"));
     roots.push(root);

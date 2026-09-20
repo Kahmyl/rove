@@ -245,6 +245,12 @@ export type TaskEvent =
       entryIds: readonly string[];
     })
   | (TaskEventBase & {
+      type: "task_queue_steer_requested";
+      operationId: string;
+      entryId: string;
+      expectedTurnId: string;
+    })
+  | (TaskEventBase & {
       type: "task_return_requested";
       operationId: string;
     })
@@ -947,6 +953,11 @@ export function validateTaskEvent(event: TaskEvent): void {
     requireIdentity(event.operationId, "Queue operation identity");
   if (event.type === "task_queue_edited" || event.type === "task_queue_removed")
     requireIdentity(event.entryId, "Queue entry identity");
+  if (event.type === "task_queue_steer_requested") {
+    requireIdentity(event.operationId, "Queue entry operation identity");
+    requireIdentity(event.entryId, "Queue entry identity");
+    requireIdentity(event.expectedTurnId, "Expected turn identity");
+  }
   if (event.type === "task_queue_reordered") {
     if (
       event.entryIds.length > MAX_TASK_QUEUE_ENTRIES ||
@@ -1094,6 +1105,14 @@ function operation(event: TaskEvent): NativeRequestedOperation | null {
         ...(event.attachmentIds?.length
           ? { attachmentIds: [...event.attachmentIds] }
           : {}),
+      };
+    case "task_queue_steer_requested":
+      return {
+        type: "message",
+        taskId: event.taskId,
+        operationId: event.operationId,
+        message: "queued intervention",
+        expectedTurnId: event.expectedTurnId,
       };
     case "task_return_requested":
       return {
@@ -1478,6 +1497,46 @@ export function foldTaskEvent(
       )
         throw new Error("Queue reorder must name every exact task entry once.");
       aggregate.queue = { ...aggregate.queue, order: [...event.entryIds] };
+      break;
+    }
+    case "task_queue_steer_requested": {
+      if (
+        aggregate.desiredState !== "open" ||
+        aggregate.record?.bootstrap.stage !== "complete" ||
+        aggregate.codex.turn !== "active" ||
+        aggregate.codex.turnId !== event.expectedTurnId ||
+        aggregate.recoveryRequired !== null ||
+        aggregate.requestedOperation.type !== "message" ||
+        aggregate.requestedOperation.operationId !== event.operationId
+      )
+        throw new Error("Steer targets stale active work.");
+      const entry = aggregate.queue.entries[event.entryId];
+      if (!entry) throw new Error("Queue entry was not found on this task.");
+      if (entry.operationId !== event.operationId)
+        throw new Error("Queue entry operation identity changed.");
+      const entries = { ...aggregate.queue.entries };
+      delete entries[entry.id];
+      aggregate.queue = {
+        entries,
+        order: aggregate.queue.order.filter((id) => id !== entry.id),
+      };
+      aggregate.pendingQueuePromotion = structuredClone(entry);
+      aggregate.requestedOperation = {
+        type: "message",
+        taskId: aggregate.taskId,
+        operationId: entry.operationId,
+        message: entry.message,
+        expectedTurnId: event.expectedTurnId,
+        ...(entry.attachmentIds.length
+          ? { attachmentIds: [...entry.attachmentIds] }
+          : {}),
+      };
+      recordAcceptedUserMaterial(aggregate, {
+        operationId: entry.operationId,
+        text: entry.message,
+        acceptedAt: event.observedAt,
+        attachments: entry.attachmentMetadata,
+      });
       break;
     }
     case "codex_availability_observed":
@@ -2654,14 +2713,16 @@ export class TaskEngine {
         active !== null ||
         currentDisposition?.status === "deferred-for-convergence";
       if (
-        event.type === "task_message_requested" &&
+        (event.type === "task_message_requested" ||
+          event.type === "task_queue_steer_requested") &&
         current?.record?.bootstrap.stage !== "complete"
       )
         throw new Error(
           "A task message cannot be accepted before bootstrap completes.",
         );
       if (
-        event.type === "task_message_requested" &&
+        (event.type === "task_message_requested" ||
+          event.type === "task_queue_steer_requested") &&
         event.expectedTurnId !== undefined &&
         (current?.codex.turn !== "active" ||
           current.codex.turnId !== event.expectedTurnId)

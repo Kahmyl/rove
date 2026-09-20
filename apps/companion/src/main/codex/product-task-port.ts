@@ -96,6 +96,13 @@ export type ProductTaskIntent =
       operationId: string;
       entryIds: readonly string[];
     }
+  | {
+      type: "queue_steer";
+      taskId: string;
+      operationId: string;
+      entryId: string;
+      expectedTurnId: string;
+    }
   | { type: "interrupt"; taskId: string; operationId: string }
   | { type: "finish"; taskId: string; operationId: string }
   | { type: "retry_cleanup"; taskId: string; operationId: string }
@@ -469,6 +476,15 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           type: "task_queue_reordered",
           operationId: intent.operationId,
           entryIds: [...intent.entryIds],
+        };
+        break;
+      case "queue_steer":
+        event = {
+          ...base,
+          type: "task_queue_steer_requested",
+          operationId: intent.operationId,
+          entryId: intent.entryId,
+          expectedTurnId: intent.expectedTurnId,
         };
         break;
       case "interrupt":

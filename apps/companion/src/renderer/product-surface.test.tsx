@@ -31,6 +31,7 @@ import {
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   taskNeedsCustomerInput,
+  taskComposerPrimaryAction,
   timelineIsAtBottom,
   workflowConfigurationFromDraft,
   workflowDraft,
@@ -161,7 +162,78 @@ function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
-  it("qualifies Queue, Send now, newline, IME, and respectful timeline following", () => {
+  it("keeps one primary composer slot across ready, active, stopping, and stopped states", () => {
+    expect(
+      taskComposerPrimaryAction({
+        state: "working",
+        hasDraft: false,
+        canStop: true,
+        canSubmit: false,
+        canQueue: true,
+      }),
+    ).toEqual({ kind: "stop", disabled: false });
+    expect(
+      taskComposerPrimaryAction({
+        state: "working",
+        hasDraft: true,
+        canStop: true,
+        canSubmit: false,
+        canQueue: true,
+      }),
+    ).toEqual({ kind: "send", disabled: false });
+    expect(
+      taskComposerPrimaryAction({
+        state: "stopping",
+        hasDraft: true,
+        canStop: false,
+        canSubmit: false,
+        canQueue: false,
+      }),
+    ).toEqual({ kind: "stop", disabled: true });
+    for (const state of ["ready", "stopped"] as const) {
+      expect(
+        taskComposerPrimaryAction({
+          state,
+          hasDraft: false,
+          canStop: false,
+          canSubmit: true,
+          canQueue: false,
+        }),
+      ).toEqual({ kind: "send", disabled: true });
+      expect(
+        taskComposerPrimaryAction({
+          state,
+          hasDraft: true,
+          canStop: false,
+          canSubmit: true,
+          canQueue: false,
+        }),
+      ).toEqual({ kind: "send", disabled: false });
+    }
+    const source = readFileSync(
+      new URL("./product-surface.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).not.toContain("composer-send-now");
+    expect(source).not.toContain("task-independent-controls");
+  });
+
+  it("uses the canonical composer shell for a New Task", () => {
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={snapshot()}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain('class="composer-card"');
+    expect(html).toContain('class="composer-input-shell"');
+    expect(html).toContain('placeholder="Do anything"');
+    expect(html).toContain('class="primary composer-submit"');
+  });
+
+  it("qualifies default Queue, direct-Steer shortcut, newline, IME, and respectful timeline following", () => {
     const active = { canSubmit: false, canQueue: true, canSteer: true };
     expect(
       followupKeyboardAction(
@@ -363,10 +435,21 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain(
       '<details class="timeline-work" open=""><summary><span class="activity-spinner"',
     );
-    expect(html).toContain('aria-label="Queued follow-ups"');
+    expect(html).toContain('aria-label="Queued messages"');
     expect(html).toContain("Queued follow-up");
-    expect(html).toContain(">Send now</button>");
-    expect(html).toContain('aria-label="Queue follow-up"');
+    expect(html).toContain(">Steer</button>");
+    expect(html).toContain('aria-label="Delete queued message"');
+    expect(html).not.toContain("Send now");
+    expect(html).not.toMatch(
+      /composer-submit[^<]*<span aria-hidden="true">\+<\/span>/,
+    );
+    expect(html).toContain('aria-label="Stop current work"');
+    expect(html).toContain(
+      'class="composer-input-shell followup task-composer-shell"',
+    );
+    expect(html.indexOf('class="task-queue"')).toBeLessThan(
+      html.indexOf('class="composer-input-shell followup task-composer-shell"'),
+    );
     expect(html).not.toContain("private/browser");
 
     const stopping = value.product!.tasks[0]!;
@@ -392,7 +475,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
     expect(stoppingHtml).toContain("Stopping… for 0s");
     expect(stoppingHtml).toContain(
-      '<button type="button" class="composer-stop" aria-label="Stop current work" disabled="">Stopping…</button>',
+      'class="primary composer-submit composer-stop" aria-label="Stop current work" title="Stop current work" disabled=""',
     );
   });
 
@@ -703,7 +786,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(styles).toContain("--rove-accent-text: var(--rove-accent-strong);");
     expect(styles).toContain("--rove-accent-text: var(--rove-accent-visible);");
     expect(styles).toContain(
-      ".product-app .task-independent-controls .composer-stop",
+      ".product-app .composer-submit.composer-stop > span",
     );
     expect(styles).toContain("--rove-accent-contrast: #faf5ee;");
     expect(styles).not.toContain("--rove-accent: #245846;");
@@ -1880,7 +1963,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain(">Send</button>");
     expect(html).not.toContain("File change approval");
     expect(html).toContain("Take Over");
-    expect(html).toContain('aria-label="Stop current work"');
+    expect(html).not.toContain('aria-label="Stop current work"');
     expect(html).toContain("Personal");
     expect(html).toContain('aria-label="Browser status"');
     expect(html).toContain(">View Browser</button>");

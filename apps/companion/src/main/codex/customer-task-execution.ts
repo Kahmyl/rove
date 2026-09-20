@@ -159,6 +159,24 @@ function activityProjection(
   };
 }
 
+function selectCustomerActivities(
+  items: readonly TaskConversationItem[],
+): CustomerActivityProjection[] {
+  const selected: CustomerActivityProjection[] = [];
+  const shownLowValue = new Set<CustomerActivityKind>();
+  for (const item of items) {
+    if (item.kind === "assistant_message") continue;
+    const activity = activityProjection(item);
+    const safelyRepeatable =
+      activity.state === "confirmed" &&
+      ["read", "inspect", "verify"].includes(activity.kind);
+    if (safelyRepeatable && shownLowValue.has(activity.kind)) continue;
+    selected.push(activity);
+    if (safelyRepeatable) shownLowValue.add(activity.kind);
+  }
+  return selected;
+}
+
 function executionState(
   aggregate: TaskAggregate,
 ): CustomerTaskExecutionProjection["state"] {
@@ -248,10 +266,19 @@ export function customerTaskExecution(
       .flatMap((item) => [item.completedAt])
       .filter((value): value is string => value !== undefined)
       .at(-1);
+    const activities = selectCustomerActivities(segment.items);
+    const visibleActivityIds = new Set(
+      activities.map((activity) => activity.itemId),
+    );
     const workOrder: CustomerWorkSegmentProjection["workOrder"] =
       segment.items.reduce<{ type: "commentary" | "activity"; id: string }[]>(
         (order, item) => {
           if (finalIds.has(item.id)) return order;
+          if (
+            item.kind !== "assistant_message" &&
+            !visibleActivityIds.has(item.id)
+          )
+            return order;
           order.push(
             item.kind === "assistant_message"
               ? { type: "commentary", id: item.id }
@@ -272,9 +299,7 @@ export function customerTaskExecution(
       finalAnswerItemIds: segment.items
         .filter((item) => finalIds.has(item.id))
         .map((item) => item.id),
-      activities: segment.items
-        .filter((item) => item.kind !== "assistant_message")
-        .map(activityProjection),
+      activities,
       workOrder,
       status: active ? ("active" as const) : ("terminal" as const),
       accumulatedActiveMs,

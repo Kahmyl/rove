@@ -1797,6 +1797,65 @@ describe("LocalProductApi native product seam", () => {
     expect(tasks.submit).not.toHaveBeenCalled();
   });
 
+  it("promotes an exact queued entry through Steer without replacing its identity", async () => {
+    const { api, tasks } = fixture();
+    const task = (await tasks.productTasks())[0]!;
+    const queuedOperationId = "intent_46222222-2222-4222-8222-222222222222";
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...task,
+        capabilities: {
+          canSubmit: false,
+          canQueue: true,
+          canSteer: true,
+          canStop: true,
+          canRespond: false,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
+        customerExecution: {
+          state: "working" as const,
+          queue: [
+            {
+              id: `queue:${queuedOperationId}`,
+              operationId: queuedOperationId,
+              message: "Use the exact queued instruction",
+              createdAt: "2026-09-20T10:00:00.000Z",
+              updatedAt: "2026-09-20T10:00:00.000Z",
+              attachmentIds: [],
+            },
+          ],
+          segments: [],
+        },
+      },
+    ] as never);
+
+    await api.executeRendererIntent({
+      type: "task.queue.steer",
+      taskId: "task_existing",
+      entryId: `queue:${queuedOperationId}`,
+      expectedTurnId: "turn_1",
+    });
+    expect(tasks.submit).toHaveBeenCalledWith({
+      type: "queue_steer",
+      taskId: "task_existing",
+      operationId: queuedOperationId,
+      entryId: `queue:${queuedOperationId}`,
+      expectedTurnId: "turn_1",
+    });
+
+    await expect(
+      api.executeRendererIntent({
+        type: "task.queue.steer",
+        taskId: "task_existing",
+        entryId: `queue:${queuedOperationId}`,
+        expectedTurnId: "turn_stale",
+      }),
+    ).rejects.toThrow(/active work changed/i);
+  });
+
   it("passes exact archive and restore retries through despite the current organization action", async () => {
     const { api, tasks } = fixture();
     const task = (await tasks.productTasks())[0]!;
