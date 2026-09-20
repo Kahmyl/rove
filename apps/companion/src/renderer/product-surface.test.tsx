@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import type { ProductTaskCapabilities } from "../main/codex/task-coordinator.js";
 import {
   ArchivedTaskSettings,
   LocalBackupSettings,
@@ -37,6 +38,23 @@ import {
 } from "./product-surface.js";
 
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
+
+function taskCapabilities(
+  overrides: Partial<ProductTaskCapabilities> = {},
+): ProductTaskCapabilities {
+  return {
+    canSubmit: false,
+    canQueue: false,
+    canSteer: false,
+    canStop: false,
+    canRespond: false,
+    canTakeControl: false,
+    canReturnToRove: false,
+    canRetry: false,
+    canArchive: false,
+    ...overrides,
+  };
+}
 
 function snapshot(
   presentation: "chip" | "expanded" | "full" = "full",
@@ -1185,7 +1203,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         bootstrapStage: "complete",
         results: [],
         lifecycle: { phase: "closed", reason: "Closed." },
-        availableActions: ["archive"],
+        availableActions: [],
+        capabilities: taskCapabilities({ canArchive: true }),
       },
     ];
 
@@ -1206,6 +1225,22 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain(">Clear</button>");
     expect(html).not.toContain("Back to new task");
     expect(html).not.toContain("New task blocked");
+
+    value.product!.tasks[0]!.availableActions = ["archive"];
+    value.product!.tasks[0]!.capabilities = taskCapabilities({
+      canArchive: false,
+    });
+    const internalArchiveOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalArchiveOnly).not.toContain(
+      'aria-label="Archive Untitled task"',
+    );
   });
 
   it("keeps first launch task-focused and places Codex access in execution status", () => {
@@ -1629,6 +1664,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
           reason: "Choose the audience.",
         },
         availableActions: [],
+        capabilities: taskCapabilities({ canRespond: true }),
         conversation: {
           turnStatus: "in_progress",
           archived: false,
@@ -1694,6 +1730,20 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("task-composer-shell");
     expect(html).not.toContain("composer-ambient-controls");
     expect(html).not.toContain('aria-label="Commands"');
+
+    value.product!.tasks[0]!.capabilities = taskCapabilities({
+      canRespond: false,
+    });
+    const internalAttentionOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalAttentionOnly).not.toContain("task-choice-response");
+    expect(internalAttentionOnly).not.toContain(">Send</button>");
   });
 
   it("renders bounded keyboard-scroll regions for long task content", () => {
@@ -2103,7 +2153,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         phase: "cleanup_required" as const,
         reason: `Cleanup remains for ${suffix}.`,
       },
-      availableActions: ["retry_cleanup" as const],
+      availableActions: [],
+      capabilities: taskCapabilities({ canRetry: true }),
     }));
     value.product!.currentTaskId = "task_blocker_new";
 
@@ -2119,6 +2170,37 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain("Cleanup remains for new.");
     expect(html).not.toContain("must finish or converge");
     expect(html.match(/>Retry cleanup<\/button>/g)).toHaveLength(1);
+
+    value.product!.tasks[1]!.availableActions = ["retry_cleanup"];
+    value.product!.tasks[1]!.capabilities = taskCapabilities({
+      canRetry: false,
+    });
+    const internalRetryOnly = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(internalRetryOnly).not.toContain("Task needs attention");
+    expect(internalRetryOnly).not.toContain(">Retry cleanup</button>");
+  });
+
+  it("uses lifecycle actions only for restoration and bounded legacy controls", () => {
+    const source = readFileSync(
+      new URL("./product-surface.tsx", import.meta.url),
+      "utf8",
+    );
+    const interpretedActions = [
+      ...source.matchAll(/availableActions\.includes\(\s*"([^"]+)"/g),
+    ].map((match) => match[1]);
+    expect(new Set(interpretedActions)).toEqual(
+      new Set(["resume", "acknowledge_legacy_effects"]),
+    );
+    expect(source).toMatch(/capabilities\?\.canArchive/);
+    expect(source).toMatch(/capabilities\?\.canRetry/);
+    expect(source).toMatch(/capabilities\?\.canRespond/);
   });
 
   it("exposes explicit acknowledgement when previous-work uncertainty blocks fresh effects", () => {
@@ -2196,6 +2278,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
             reason: "Your response is needed.",
           },
           availableActions: ["message"],
+          capabilities: taskCapabilities({ canRespond: true }),
           runtime: {
             status: "active",
             controller: "agent",

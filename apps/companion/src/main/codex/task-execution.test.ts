@@ -1830,6 +1830,7 @@ describe("bounded conversation projection", () => {
     const [projected] = await coordinator.productTasks();
     expect(projected?.lifecycle.phase).not.toBe("closed");
     expect(projected?.availableActions).toContain("retry_cleanup");
+    expect(projected?.capabilities.canRetry).toBe(true);
   });
   it("migrates the exact legacy completed-task fingerprints across restart before Stop", async () => {
     const historical = {

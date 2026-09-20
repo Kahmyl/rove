@@ -2382,6 +2382,9 @@ export function ProductSurface({
   const currentCodexAttention = [...codexAttention].sort(
     (left, right) => left.sequence - right.sequence,
   )[0];
+  const respondableCodexAttention = viewedTask?.capabilities?.canRespond
+    ? currentCodexAttention
+    : undefined;
   const browserHandoff = taskAttention.find(
     (entry) => entry.authority === "rove_control",
   );
@@ -2866,6 +2869,11 @@ export function ProductSurface({
     entry: ProductAttentionProjection,
     decision: "accept" | "decline" | "cancel",
   ) => {
+    if (
+      viewedTask?.taskId !== entry.taskId ||
+      !viewedTask.capabilities?.canRespond
+    )
+      return;
     const stateKey = attentionStateKey(entry);
     await run(() =>
       command({
@@ -2894,7 +2902,7 @@ export function ProductSurface({
     );
   };
   const takeControl = async (task: ProductTaskProjection | undefined) => {
-    if (!task) return;
+    if (!task?.capabilities?.canTakeControl) return;
     const handoffGeneration = activeAttention.find(
       (entry) =>
         entry.taskId === task.taskId &&
@@ -2928,7 +2936,7 @@ export function ProductSurface({
   const requestTaskArchive = (task = viewedTask) => {
     if (
       !task ||
-      !task.availableActions.includes("archive") ||
+      !task.capabilities?.canArchive ||
       archivingTaskIds.has(task.taskId)
     )
       return;
@@ -2937,6 +2945,11 @@ export function ProductSurface({
   const confirmTaskArchive = async () => {
     const taskId = archiveTaskId;
     if (!taskId || archivingTaskIds.has(taskId)) return;
+    const task = product?.tasks.find((entry) => entry.taskId === taskId);
+    if (!task?.capabilities?.canArchive) {
+      setArchiveTaskId(null);
+      return;
+    }
     setArchivingTaskIds((current) => new Set(current).add(taskId));
     try {
       await command({
@@ -2960,7 +2973,7 @@ export function ProductSurface({
     }
   };
   const retryTaskCleanup = async () => {
-    if (!viewedTask?.availableActions.includes("retry_cleanup")) return;
+    if (!viewedTask?.capabilities?.canRetry) return;
     await run(() =>
       command({
         type: "task.cleanup.retry",
@@ -3022,7 +3035,7 @@ export function ProductSurface({
   };
   const sendFollowup = async () => {
     const message = followup.trim();
-    if (!viewedTask || !message || busy) return;
+    if (!viewedTask?.capabilities?.canSubmit || !message || busy) return;
     await run(async () => {
       await command({
         type: "task.message",
@@ -4316,7 +4329,7 @@ export function ProductSurface({
           </strong>
           {!selectedWorkflow &&
             viewedTask &&
-            (viewedTask.availableActions.includes("retry_cleanup") ||
+            (viewedTask.capabilities?.canRetry ||
               viewedTask.availableActions.includes(
                 "acknowledge_legacy_effects",
               )) && (
@@ -4333,7 +4346,7 @@ export function ProductSurface({
                       Acknowledge previous-work uncertainty
                     </button>
                   )}
-                  {viewedTask.availableActions.includes("retry_cleanup") && (
+                  {viewedTask.capabilities?.canRetry && (
                     <button
                       disabled={busy}
                       onClick={() => void retryTaskCleanup()}
@@ -6349,16 +6362,16 @@ export function ProductSurface({
               )}
               {!gate.ready &&
                 viewedTask.lifecycle.phase !== "recovering" &&
-                viewedTask.availableActions.includes("retry_cleanup") && (
+                viewedTask.capabilities?.canRetry && (
                   <div className="product-warning" role="status">
                     <strong>Task needs attention</strong>
                     <span>{viewedTask.lifecycle.reason}</span>
                   </div>
                 )}
               <footer className="task-detail-dock">
-                {currentCodexAttention &&
-                  renderCodexAttention(currentCodexAttention)}
-                {!currentCodexAttention && awaitingExplicitResponse && (
+                {respondableCodexAttention &&
+                  renderCodexAttention(respondableCodexAttention)}
+                {!respondableCodexAttention && awaitingExplicitResponse && (
                   <p className="task-response-hint">
                     {activeSurfaceDescription}
                   </p>
@@ -6376,7 +6389,7 @@ export function ProductSurface({
                     </button>
                   </div>
                 )}
-                {!currentCodexAttention &&
+                {!respondableCodexAttention &&
                   viewedTask.executionMode !== "capture" &&
                   (viewedTask.capabilities?.canSubmit ||
                     viewedTask.availableActions.includes("resume") ||
@@ -6736,7 +6749,7 @@ export function ProductSurface({
                       {` · ${entry.executionMode === "agent" ? "Agent" : entry.executionMode === "companion" ? "Companion" : "Capture"}`}
                     </span>
                   </button>
-                  {entry.availableActions.includes("archive") && (
+                  {entry.capabilities?.canArchive && (
                     <button
                       className="task-history-archive"
                       type="button"
@@ -6826,7 +6839,7 @@ export function ProductSurface({
                     type="button"
                     role="menuitem"
                     disabled={
-                      !taskContextEntry.availableActions.includes("archive") ||
+                      !taskContextEntry.capabilities?.canArchive ||
                       archivingTaskIds.has(taskContextEntry.taskId)
                     }
                     onClick={() => {

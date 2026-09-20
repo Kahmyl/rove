@@ -913,6 +913,10 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
     });
 
+    expect((await port.readTask(seededTaskId))?.capabilities).toMatchObject({
+      canArchive: true,
+      canRetry: false,
+    });
     await port.submit({
       type: "archive",
       taskId: seededTaskId,
@@ -930,6 +934,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
     const [task] = await restartedPort.productTasks();
     expect(task?.conversation?.archived).toBe(true);
+    expect(task?.capabilities.canArchive).toBe(false);
     reopened.close();
   });
 
@@ -1229,6 +1234,9 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     );
     expect((await port.readTask(seededTaskId))?.availableActions).not.toContain(
       "archive",
+    );
+    expect((await port.readTask(seededTaskId))?.capabilities.canArchive).toBe(
+      false,
     );
     await expect(
       port.submit({

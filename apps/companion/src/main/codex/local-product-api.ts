@@ -2367,11 +2367,11 @@ export class LocalProductApi {
       });
     }
     if (value.type === "task.stop") {
-      const task = await this.taskProjection(taskId);
-      if (!(
-        task.capabilities?.canStop ??
-        task.availableActions.includes("interrupt")
-      ))
+      if (
+        !(await this.taskProjection(taskId)).availableActions.includes(
+          "interrupt",
+        )
+      )
         throw new Error("Stop is available only while this task is executing.");
       return this.tasks.submit({
         type: "interrupt",
