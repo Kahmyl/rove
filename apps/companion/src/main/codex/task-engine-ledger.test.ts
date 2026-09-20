@@ -281,7 +281,7 @@ describe("SQLite task engine ledger", () => {
 
     expect(accepted.projection).toMatchObject({
       phase: "recovering",
-      allowedActions: [],
+      allowedActions: ["interrupt"],
       recoveryRequired: expect.stringMatching(
         /Runtime and durable browser handoff identities do not match/,
       ),

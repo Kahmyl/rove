@@ -27,7 +27,18 @@ function task(
     bootstrapStage: "complete",
     results: [],
     lifecycle: { phase: "ready", reason: "Ready." },
-    availableActions: ["message", "finish"],
+    availableActions: ["message"],
+    capabilities: {
+      canSubmit: false,
+      canQueue: false,
+      canSteer: false,
+      canStop: false,
+      canRespond: false,
+      canTakeControl: false,
+      canReturnToRove: false,
+      canRetry: false,
+      canArchive: false,
+    },
     ...rest,
   };
 }
@@ -86,6 +97,17 @@ describe("UI Truth renderer projection table", () => {
       },
       runtime: agentRuntime,
       availableActions: ["message", "interrupt", "finish"],
+      capabilities: {
+        canSubmit: false,
+        canQueue: false,
+        canSteer: false,
+        canStop: true,
+        canRespond: false,
+        canTakeControl: false,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: false,
+      },
     });
 
     const state = product([working]);
@@ -117,7 +139,18 @@ describe("UI Truth renderer projection table", () => {
         items: {},
         turnOrder: ["turn_completed"],
       },
-      availableActions: ["message", "finish"],
+      availableActions: ["message"],
+      capabilities: {
+        canSubmit: true,
+        canQueue: false,
+        canSteer: false,
+        canStop: false,
+        canRespond: false,
+        canTakeControl: false,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: true,
+      },
     });
 
     const state = product([completed]);
@@ -209,7 +242,18 @@ describe("UI Truth renderer projection table", () => {
         handoffActionable: true,
         handoffGeneration: 1,
       },
-      availableActions: ["finish"],
+      availableActions: [],
+      capabilities: {
+        canSubmit: false,
+        canQueue: false,
+        canSteer: false,
+        canStop: true,
+        canRespond: false,
+        canTakeControl: true,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: false,
+      },
     });
 
     const unrelated = task({
@@ -218,7 +262,7 @@ describe("UI Truth renderer projection table", () => {
         phase: "ready",
         reason: "Ready.",
       },
-      availableActions: ["message", "finish"],
+      availableActions: ["message"],
     });
 
     const state = product([needsAttention, unrelated]);
@@ -274,6 +318,17 @@ describe("UI Truth renderer projection table", () => {
       },
       runtime: agentRuntime,
       availableActions: ["message", "interrupt", "finish"],
+      capabilities: {
+        canSubmit: false,
+        canQueue: false,
+        canSteer: false,
+        canStop: true,
+        canRespond: false,
+        canTakeControl: false,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: false,
+      },
     });
 
     const viewedB = task({
@@ -288,7 +343,18 @@ describe("UI Truth renderer projection table", () => {
         items: {},
         turnOrder: ["turn_b"],
       },
-      availableActions: ["message", "finish"],
+      availableActions: ["message"],
+      capabilities: {
+        canSubmit: true,
+        canQueue: false,
+        canSteer: false,
+        canStop: false,
+        canRespond: false,
+        canTakeControl: false,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: true,
+      },
     });
 
     const state = product([activeA, viewedB]);
@@ -332,5 +398,10 @@ describe("UI Truth renderer projection table", () => {
 
     expect(viewedB.availableActions).not.toContain("interrupt");
     expect(viewedB.availableActions).toContain("message");
+    expect(activeA.capabilities?.canStop).toBe(true);
+    expect(viewedB.capabilities).toMatchObject({
+      canSubmit: true,
+      canStop: false,
+    });
   });
 });

@@ -2884,7 +2884,7 @@ export function ProductSurface({
     );
   };
   const returnControl = async () => {
-    if (!viewedTask?.availableActions.includes("return_control")) return;
+    if (!viewedTask?.capabilities?.canReturnToRove) return;
     await run(() =>
       command({
         type: "task.return-control",
@@ -2905,7 +2905,7 @@ export function ProductSurface({
     await run(() => window.rove.takeControl(task.taskId, handoffGeneration));
   };
   const stopTask = async () => {
-    if (!viewedTask) return;
+    if (!viewedTask?.capabilities?.canStop) return;
     await run(() =>
       command({
         type: "task.stop",
@@ -3492,7 +3492,7 @@ export function ProductSurface({
                 ? activeSurfaceTitle
                 : "Rove is ready"}
           </strong>
-          {activeTask?.availableActions.includes("return_control") && (
+          {activeTask?.capabilities?.canReturnToRove && (
             <small>{activeTask.lifecycle.reason}</small>
           )}
           <small>
@@ -3509,7 +3509,7 @@ export function ProductSurface({
               Take Over
             </button>
           )}
-          {activeTask?.availableActions.includes("return_control") && (
+          {activeTask?.capabilities?.canReturnToRove && (
             <button onClick={() => void returnControl()}>Return Control</button>
           )}
           {unmatchedSession && (
@@ -6341,9 +6341,15 @@ export function ProductSurface({
                   </section>
                 ))}
               </section>
+              {!gate.ready && viewedTask.lifecycle.phase === "recovering" && (
+                <div className="product-warning" role="status">
+                  <strong>Checking task state</strong>
+                  <span>Rove is confirming the latest task activity.</span>
+                </div>
+              )}
               {!gate.ready &&
-                (viewedTask.availableActions.includes("retry_cleanup") ||
-                  viewedTask.lifecycle.phase === "recovering") && (
+                viewedTask.lifecycle.phase !== "recovering" &&
+                viewedTask.availableActions.includes("retry_cleanup") && (
                   <div className="product-warning" role="status">
                     <strong>Task needs attention</strong>
                     <span>{viewedTask.lifecycle.reason}</span>
@@ -6357,17 +6363,27 @@ export function ProductSurface({
                     {activeSurfaceDescription}
                   </p>
                 )}
+                {viewedTask.capabilities?.canStop && (
+                  <div className="task-independent-controls">
+                    <button
+                      type="button"
+                      className="composer-stop"
+                      aria-label="Stop current work"
+                      disabled={busy}
+                      onClick={() => void stopTask()}
+                    >
+                      Stop
+                    </button>
+                  </div>
+                )}
                 {!currentCodexAttention &&
                   viewedTask.executionMode !== "capture" &&
-                  (viewedTask.availableActions.includes("message") ||
-                    viewedTask.availableActions.includes("finish") ||
+                  (viewedTask.capabilities?.canSubmit ||
                     viewedTask.availableActions.includes("resume") ||
-                    viewedTask.availableActions.includes("return_control")) && (
+                    viewedTask.capabilities?.canReturnToRove) && (
                     <ComposerInputShell
                       attachments={product?.draftAttachments ?? []}
-                      busy={
-                        busy || !viewedTask.availableActions.includes("message")
-                      }
+                      busy={busy || !viewedTask.capabilities?.canSubmit}
                       className="followup task-composer-shell"
                       onReplace={(attachmentId) =>
                         void run(() =>
@@ -6417,10 +6433,7 @@ export function ProductSurface({
                             : "Add a follow-up…"
                         }
                         value={followup}
-                        disabled={
-                          busy ||
-                          !viewedTask.availableActions.includes("message")
-                        }
+                        disabled={busy || !viewedTask.capabilities?.canSubmit}
                         onChange={(event) => setFollowup(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "/" && followup.length === 0) {
@@ -6450,10 +6463,7 @@ export function ProductSurface({
                       />
                       <div className="composer-action-row">
                         <ComposerAttachButton
-                          busy={
-                            busy ||
-                            !viewedTask.availableActions.includes("message")
-                          }
+                          busy={busy || !viewedTask.capabilities?.canSubmit}
                           onPick={() =>
                             void run(() =>
                               command({ type: "attachments.pick" }),
@@ -6544,9 +6554,7 @@ export function ProductSurface({
                             modelId={viewedTask.model ?? ""}
                             effort={viewedTask.reasoningEffort ?? ""}
                           />
-                          {viewedTask.availableActions.includes(
-                            "return_control",
-                          ) ? (
+                          {viewedTask.capabilities?.canReturnToRove ? (
                             <button
                               className="primary composer-submit"
                               aria-label="Resume automation"
@@ -6565,18 +6573,6 @@ export function ProductSurface({
                               onClick={() => void restoreTask()}
                             >
                               <span aria-hidden="true">▶</span>
-                            </button>
-                          ) : viewedTask.conversation?.turnStatus ===
-                              "in_progress" &&
-                            viewedTask.availableActions.includes("finish") ? (
-                            <button
-                              className="primary composer-submit composer-stop"
-                              aria-label="Stop task"
-                              title="Stop task"
-                              disabled={busy}
-                              onClick={() => void stopTask()}
-                            >
-                              <span aria-hidden="true" />
                             </button>
                           ) : (
                             <button
@@ -6916,7 +6912,7 @@ export function ProductSurface({
                     Take Over
                   </button>
                 )}
-                {viewedTask.availableActions.includes("return_control") && (
+                {viewedTask.capabilities?.canReturnToRove && (
                   <button
                     className="primary"
                     disabled={busy}

@@ -171,6 +171,7 @@ export function taskControlProjection(
             ? "Awaiting handoff"
             : "None",
     canTakeControl:
+      task?.capabilities?.canTakeControl === true &&
       runtime?.handoffActionable === true &&
       pendingHandoff === true &&
       runtime?.status === "awaiting_human" &&

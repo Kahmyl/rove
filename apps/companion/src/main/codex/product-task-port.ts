@@ -20,6 +20,7 @@ import type {
   ExecutionMode,
   ProductTaskSnapshot,
 } from "./task-coordinator.js";
+import { customerTaskCapabilities } from "./customer-task-capabilities.js";
 import type { TaskEngineWorker } from "./task-engine-worker.js";
 
 export type {
@@ -157,6 +158,43 @@ function customerDeliveryState(
   if (state === "transport_may_have_received" || state === "unresolved")
     return "uncertain";
   return "pending";
+}
+
+const ACTIVE_CUSTOMER_ATTENTION = new Set([
+  "pending",
+  "responding",
+  "awaiting_confirmation",
+  "resolution_unknown",
+]);
+
+function hasNonterminalAcceptedWork(
+  aggregate: NonNullable<Awaited<ReturnType<TaskEngineStore["aggregate"]>>>,
+): boolean {
+  if (aggregate.launch?.executionMode === "capture") return false;
+  if (aggregate.codex.turn === "active") return true;
+  if (
+    aggregate.record?.bootstrap.stage !== "complete" &&
+    aggregate.launch !== null
+  )
+    return true;
+  if (
+    ["completed", "failed", "interrupted"].includes(aggregate.codex.turn) &&
+    aggregate.recoveryRequired === null
+  )
+    return false;
+  return Object.values(aggregate.conversation.items).some((item) => {
+    if (item.kind !== "user_message" || !item.acceptedAt || !item.clientId)
+      return false;
+    if (
+      item.turnId &&
+      aggregate.conversation.terminalTurns?.[item.turnId] !== undefined
+    )
+      return false;
+    return (
+      aggregate.messageDeliveries[item.clientId]?.state !==
+      "non_submission_established"
+    );
+  });
 }
 
 /** Production product boundary. It accepts one typed intent and exposes only
@@ -419,6 +457,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
       accepted.command === null &&
       !accepted.duplicate &&
       (intent.type === "finish" ||
+        intent.type === "interrupt" ||
         intent.type === "retry_cleanup" ||
         intent.type === "return_control")
     )
@@ -462,6 +501,18 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             : (["archive"] as const);
         const initialDelivery =
           aggregate.messageDeliveries[aggregate.launch.operationId];
+        const handoffActionable = hasActionableTaskHandoff(aggregate);
+        const genuineAttention = aggregate.attentions.some(
+          (attention) =>
+            attention.authority === "codex" &&
+            ACTIVE_CUSTOMER_ATTENTION.has(attention.status),
+        );
+        const hasAcceptedWork = hasNonterminalAcceptedWork(aggregate);
+        const canStop =
+          !archived &&
+          aggregate.desiredState === "open" &&
+          aggregate.requestedOperation.type !== "interrupt" &&
+          hasAcceptedWork;
         return {
           context: {
             roveTaskId: aggregate.taskId,
@@ -535,12 +586,13 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           lifecycle: {
             phase: lifecyclePhase,
             reason:
-              projection.recoveryRequired ??
-              productLifecycleReason(
-                lifecyclePhase,
-                aggregate.codex.turn,
-                projection.operationDisposition.reason,
-              ),
+              projection.recoveryRequired === null
+                ? productLifecycleReason(
+                    lifecyclePhase,
+                    aggregate.codex.turn,
+                    projection.operationDisposition.reason,
+                  )
+                : "Checking task state.",
           },
           availableActions: [
             ...executionActions,
@@ -549,6 +601,23 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               ? (["acknowledge_legacy_effects"] as const)
               : []),
           ],
+          capabilities: customerTaskCapabilities({
+            canSubmit:
+              executionActions.includes("message") &&
+              aggregate.codex.turn !== "active" &&
+              aggregate.recoveryRequired === null &&
+              !genuineAttention &&
+              !hasAcceptedWork,
+            canStop,
+            canRespond: genuineAttention && aggregate.recoveryRequired === null,
+            canTakeControl:
+              handoffActionable &&
+              aggregate.runtime.status === "awaiting_human" &&
+              aggregate.runtime.controller === null,
+            canReturnToRove: executionActions.includes("return_control"),
+            canRetry: executionActions.includes("retry_cleanup"),
+            canArchive: !archived && aggregate.codex.turn !== "active",
+          }),
           runtime: {
             status: aggregate.runtime.status,
             controller: aggregate.runtime.controller,
@@ -561,7 +630,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             ...(aggregate.runtime.handoffId !== undefined ||
             aggregate.continuation.status === "pending"
               ? {
-                  handoffActionable: hasActionableTaskHandoff(aggregate),
+                  handoffActionable,
                 }
               : {}),
             ...(aggregate.runtime.handoffGeneration === undefined

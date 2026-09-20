@@ -1667,4 +1667,141 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     );
     store.close();
   });
+
+  it("projects customer controls independently before a provider turn", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-task-capabilities-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    const operationId = "intent_62345678-1234-4123-8123-123456789abc";
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "none";
+        aggregate.conversation.items = {
+          [`user:${operationId}`]: {
+            id: `user:${operationId}`,
+            clientId: operationId,
+            acceptedAt: "2026-09-09T12:00:00.000Z",
+            kind: "user_message",
+            status: "completed",
+            text: "Accepted before provider turn creation.",
+          },
+        };
+        aggregate.conversation.itemOrder = [`user:${operationId}`];
+        aggregate.messageDeliveries = {
+          [operationId]: {
+            operationId,
+            state: "dispatch_not_started",
+            observedAt: "2026-09-09T12:00:00.000Z",
+            threadId: "thread_seeded",
+            connectionGeneration: 1,
+          },
+        };
+      },
+    });
+    const worker = { signal: vi.fn(), cancelTask: vi.fn() };
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: worker as never,
+    });
+
+    const beforeTurn = await port.readTask(seededTaskId);
+    expect(beforeTurn?.capabilities).toMatchObject({
+      canSubmit: false,
+      canQueue: false,
+      canSteer: false,
+      canStop: true,
+    });
+    expect(beforeTurn?.availableActions).not.toContain("finish");
+
+    const stopped = await port.submit({
+      type: "interrupt",
+      taskId: seededTaskId,
+      operationId: "intent_72345678-1234-4123-8123-123456789abc",
+    });
+    expect(stopped.projection.operationDisposition).toMatchObject({
+      type: "interrupt",
+      status: "accepted",
+    });
+    expect(stopped.command).toBeNull();
+    expect(worker.cancelTask).toHaveBeenCalledWith(seededTaskId);
+    expect((await port.readTask(seededTaskId))?.capabilities.canStop).toBe(
+      false,
+    );
+    store.close();
+  });
+
+  it("retains safe Stop through recovery without exposing diagnostics as attention", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-recovery-controls-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    const operationId = "intent_82345678-1234-4123-8123-123456789abc";
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex.turn = "active";
+        aggregate.codex.turnId = "turn_recovering";
+        aggregate.codex.runtimeStatus = "active";
+        aggregate.recoveryRequired =
+          "Codex external truth requires authoritative reconciliation.";
+        aggregate.conversation.items = {
+          [`user:${operationId}`]: {
+            id: `user:${operationId}`,
+            clientId: operationId,
+            acceptedAt: "2026-09-09T12:00:00.000Z",
+            turnId: "turn_recovering",
+            kind: "user_message",
+            status: "completed",
+            text: "Keep this accepted work interruptible.",
+          },
+        };
+        aggregate.conversation.itemOrder = [`user:${operationId}`];
+        aggregate.messageDeliveries = {
+          [operationId]: {
+            operationId,
+            state: "message_materialized",
+            observedAt: "2026-09-09T12:00:00.000Z",
+            turnId: "turn_recovering",
+            threadId: "thread_seeded",
+            connectionGeneration: 1,
+          },
+        };
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+
+    const task = await port.readTask(seededTaskId);
+    expect(task?.lifecycle).toEqual({
+      phase: "recovering",
+      reason: "Checking task state.",
+    });
+    expect(task?.capabilities).toMatchObject({
+      canStop: true,
+      canRespond: false,
+    });
+    expect(task?.availableActions).toContain("interrupt");
+    expect(task?.lifecycle.reason).not.toContain(
+      "authoritative reconciliation",
+    );
+    expect(
+      projectTaskAggregate((await store.aggregate(seededTaskId))!).attention,
+    ).toBeNull();
+    const stopped = await port.submit({
+      type: "interrupt",
+      taskId: seededTaskId,
+      operationId: "intent_92345678-1234-4123-8123-123456789abc",
+    });
+    expect(stopped.command).toMatchObject({
+      type: "interrupt_codex_turn",
+      payload: { turnId: "turn_recovering" },
+    });
+    store.close();
+  });
 });

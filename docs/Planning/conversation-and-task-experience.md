@@ -256,13 +256,11 @@ The Task ledger now commits the accepted local user item and product intent in o
 - Project definite non-submission and unresolved delivery safely.
 - Cover first Task message, follow-up, restart, duplicate and reordered materialization.
 
-### Slice B — customer interaction/control projection
+### Slice B — customer interaction/control projection (implemented source boundary)
 
-- Define the typed capability projection independently of lifecycle actions.
-- Map Stop to current-work interrupt across pre-turn, active turn, waiting, and safe recovery.
-- Remove `finish` as a customer Stop proxy while preserving internal cleanup compatibility.
-- Retain safe controls through recovery and separate attention from blockers.
-- Audit and correct global launch admission where it contradicts resource-scoped multi-Task behavior.
+The production TaskEngine → LedgerProductTaskPort → LocalProductApi → ProductSurface path now projects typed customer capabilities independently of lifecycle actions. Queue and Steer remain false until Slice C implements their explicit operations. Stop derives from nonterminal accepted work, remains available before provider turn identity and through safe waiting/recovery, submits the existing interrupt intent, and renders independently of both ordinary composer availability and `finish`. Recovery keeps typed blockers authoritative while projecting bounded checking copy rather than attention or internal diagnostics. The retained coordinator path emits the same capability shape. Lifecycle inventory no longer serializes unrelated Task launch; Runtime/profile/page and effect authorities continue to reject their exact conflicts.
+
+Focused ledger, product-port, LocalProductApi, renderer-state, production-component, lifecycle-contract, restart, and Slice A conversation-materialization tests cover this boundary. Internal Finish and cleanup operations remain available for real closure/resource cleanup. The overall plan remains active because Slices C–G are not implemented by this evidence.
 
 ### Slice C — durable Queue and explicit Steer
 

@@ -256,13 +256,13 @@ describe("native product composer state", () => {
       bootstrapStage: "complete",
       results: [],
       lifecycle: { phase: "working", reason: "Working." },
-      availableActions: ["message", "interrupt", "finish"],
+      availableActions: ["message", "interrupt"],
     };
     const selected: ProductTaskProjection = {
       ...active,
       taskId: "task_b",
       lifecycle: { phase: "ready", reason: "Ready." },
-      availableActions: ["message", "finish"],
+      availableActions: ["message"],
     };
     state.tasks = [active, selected];
     state.currentTaskId = active.taskId;
@@ -354,7 +354,7 @@ describe("native product composer state", () => {
       ...closed,
       taskId: "task_active",
       lifecycle: { phase: "working", reason: "Working." },
-      availableActions: ["finish"],
+      availableActions: [],
       conversation: {
         turnStatus: "in_progress",
         archived: false,
@@ -442,7 +442,18 @@ describe("native product composer state", () => {
       bootstrapStage: "complete",
       results: [],
       lifecycle: { phase: "waiting_for_human", reason: "Handoff." },
-      availableActions: ["finish"],
+      availableActions: [],
+      capabilities: {
+        canSubmit: false,
+        canQueue: false,
+        canSteer: false,
+        canStop: true,
+        canRespond: false,
+        canTakeControl: true,
+        canReturnToRove: false,
+        canRetry: false,
+        canArchive: false,
+      },
       runtime: {
         status: "awaiting_human",
         controller: null,
