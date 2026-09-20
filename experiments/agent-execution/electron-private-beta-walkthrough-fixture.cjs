@@ -88,7 +88,7 @@ function task({
   phase = "ready",
   reason = "Ready for follow-up.",
   turnStatus = "completed",
-  availableActions = ["message", "finish"],
+  availableActions = ["message"],
   runtime,
   browserIdentity = { mode: "temporary" },
 }) {
@@ -141,10 +141,10 @@ function multiTaskSnapshot({ attention = false, answered = false } = {}) {
         : "Reviewing interview notes.",
     turnStatus: "in_progress",
     availableActions: answered
-      ? ["message", "interrupt", "finish"]
+      ? ["message", "interrupt"]
       : attention
-        ? ["finish"]
-        : ["message", "interrupt", "finish"],
+        ? ["interrupt"]
+        : ["message", "interrupt"],
     runtime: {
       status: "active",
       controller: "agent",
@@ -235,6 +235,12 @@ function browserSnapshot(state) {
           ...(state === "handoff"
             ? { handoffActionable: true, handoffGeneration: 1 }
             : {}),
+          ...(state === "returned"
+            ? {
+                collaborationState: "checking_after_return",
+                continuationPolicy: "resume_after_control_return",
+              }
+            : {}),
         };
   const primary = task({
     taskId: "task_vendor_research",
@@ -253,10 +259,10 @@ function browserSnapshot(state) {
     turnStatus: "in_progress",
     availableActions:
       state === "human"
-        ? ["return_control", "finish"]
+        ? ["return_control", "interrupt"]
         : state === "handoff"
-          ? ["finish"]
-          : ["message", "interrupt", "finish"],
+          ? ["interrupt"]
+          : ["message", "interrupt"],
     runtime,
     browserIdentity:
       state === "absent"
@@ -467,7 +473,42 @@ const scenarios = {
 
 let snapshot = scenarios.empty();
 
+function applyCustomerCapabilities(value) {
+  for (const task of value.product.tasks) {
+    const active = task.conversation.turnStatus === "in_progress";
+    const taskAttention = value.product.attention.filter(
+      (entry) => entry.taskId === task.taskId && entry.status === "pending",
+    );
+    const exactHandoff = taskAttention.some(
+      (entry) =>
+        entry.authority === "rove_control" &&
+        entry.kind === "control_handoff" &&
+        entry.generation === task.runtime?.handoffGeneration,
+    );
+    task.capabilities = {
+      canSubmit: !active && task.availableActions.includes("message"),
+      canQueue: active && task.availableActions.includes("message"),
+      canSteer: active && task.availableActions.includes("message"),
+      canStop: active && task.availableActions.includes("interrupt"),
+      canRespond: taskAttention.some((entry) => entry.authority === "codex"),
+      canTakeControl:
+        exactHandoff ||
+        (task.executionMode === "companion" &&
+          task.runtime?.status === "active" &&
+          task.runtime?.controller === "agent" &&
+          task.runtime?.attachment === "attached"),
+      canReturnToRove:
+        task.runtime?.controller === "human" &&
+        task.availableActions.includes("return_control"),
+      canRetry: task.availableActions.includes("retry_cleanup"),
+      canArchive: task.availableActions.includes("archive"),
+    };
+  }
+  return value;
+}
+
 function publish(label) {
+  applyCustomerCapabilities(snapshot);
   snapshot.revision += 1;
   snapshot.surface.revision += 1;
   stateChanges.push({

@@ -108,7 +108,28 @@ const snapshot = {
   productError: null,
 };
 
+function applyCustomerCapabilities() {
+  for (const task of snapshot.product.tasks) {
+    const active = task.conversation.turnStatus === "in_progress";
+    const taskAttention = snapshot.product.attention.filter(
+      (entry) => entry.taskId === task.taskId && entry.status === "pending",
+    );
+    task.capabilities = {
+      canSubmit: !active && task.availableActions.includes("message"),
+      canQueue: active && task.availableActions.includes("message"),
+      canSteer: active && task.availableActions.includes("message"),
+      canStop: active && task.availableActions.includes("interrupt"),
+      canRespond: taskAttention.some((entry) => entry.authority === "codex"),
+      canTakeControl: false,
+      canReturnToRove: false,
+      canRetry: false,
+      canArchive: task.availableActions.includes("archive"),
+    };
+  }
+}
+
 function notify() {
+  applyCustomerCapabilities();
   snapshot.revision += 1;
   snapshot.surface.revision += 1;
   for (const listener of listeners) listener(structuredClone(snapshot));
@@ -218,7 +239,7 @@ function executeProductIntent(intent) {
         },
       },
       lifecycle: { phase: "working", reason: "Working." },
-      availableActions: ["message", "interrupt", "finish"],
+      availableActions: ["message", "interrupt"],
       runtime: {
         status: "active",
         controller: "agent",
@@ -267,7 +288,7 @@ function executeProductIntent(intent) {
     );
     if (task) {
       task.lifecycle = { phase: "ready", reason: "Ready for another message." };
-      task.availableActions = ["message", "finish"];
+      task.availableActions = ["message"];
     }
     notify();
     return {};
@@ -283,7 +304,7 @@ function seedWorkflowResult() {
   task.conversation.activeTurnId = undefined;
   task.conversation.turnStatus = "completed";
   task.lifecycle = { phase: "ready", reason: "Ready for another message." };
-  task.availableActions = ["message", "finish"];
+  task.availableActions = ["message"];
   task.runtime = undefined;
   snapshot.product.attention = [];
   task.results = [

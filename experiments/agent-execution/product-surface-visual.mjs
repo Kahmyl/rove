@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global document, getComputedStyle, HTMLButtonElement, HTMLDetailsElement, HTMLElement, localStorage, window */
+/* global document, getComputedStyle, HTMLButtonElement, HTMLDetailsElement, HTMLElement, localStorage, structuredClone, window */
 
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -12,6 +12,10 @@ import {
   UI_TRUTH_SCENARIO_BY_ID,
   UI_TRUTH_VIEWPORTS,
 } from "./ui-truth-scenarios.mjs";
+import { customerTaskCapabilities } from "../../apps/companion/dist/main/main/codex/customer-task-capabilities.js";
+import { customerTaskCollaboration } from "../../apps/companion/dist/main/main/codex/customer-task-collaboration.js";
+import { legacyCustomerTaskExecution } from "../../apps/companion/dist/main/main/codex/customer-task-execution.js";
+import { customerTaskPresentation } from "../../apps/companion/dist/main/main/codex/customer-task-presentation.js";
 
 const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -26,6 +30,57 @@ const outputRoot = process.env.ROVE_PRODUCT_SURFACE_VISUAL_OUTPUT
   ? resolve(process.env.ROVE_PRODUCT_SURFACE_VISUAL_OUTPUT)
   : join(repositoryRoot, "artifacts/verification/product-surface");
 const workspaceId = "wrk_00000000-0000-4000-8000-000000000001";
+
+function productionProjectionSnapshot(snapshot) {
+  const value = structuredClone(snapshot);
+  for (const task of value.product?.tasks ?? []) {
+    task.customerExecution ??= legacyCustomerTaskExecution({
+      turnStatus: task.conversation?.turnStatus ?? "unknown",
+      items: task.conversation?.items ?? {},
+      itemOrder: task.conversation?.itemOrder,
+      turnOrder: task.conversation?.turnOrder ?? [],
+    });
+    const pendingHandoff = (value.product?.attention ?? []).find(
+      (entry) =>
+        entry.authority === "rove_control" &&
+        entry.kind === "control_handoff" &&
+        entry.taskId === task.taskId &&
+        entry.status === "pending" &&
+        entry.generation === task.runtime?.handoffGeneration,
+    );
+    const active = task.conversation?.turnStatus === "in_progress";
+    task.capabilities ??= customerTaskCapabilities({
+      canSubmit: !active && task.availableActions.includes("message"),
+      canQueue: active && task.availableActions.includes("message"),
+      canSteer: active && task.availableActions.includes("message"),
+      canStop: active && task.availableActions.includes("interrupt"),
+      canRespond: (value.product?.attention ?? []).some(
+        (entry) => entry.taskId === task.taskId && entry.status === "pending",
+      ),
+      canTakeControl:
+        pendingHandoff !== undefined ||
+        (task.executionMode === "companion" &&
+          task.runtime?.attachment === "attached" &&
+          task.runtime?.controller === "agent"),
+      canReturnToRove:
+        task.runtime?.controller === "human" &&
+        task.availableActions.includes("return_control"),
+      canRetry: task.availableActions.includes("retry_cleanup"),
+      canArchive: task.availableActions.includes("archive"),
+    });
+    task.customerCollaboration ??= customerTaskCollaboration(
+      task,
+      value.product?.attention ?? [],
+    );
+    task.customerPresentation ??= customerTaskPresentation({
+      execution: task.customerExecution,
+      collaboration: task.customerCollaboration,
+      capabilities: task.capabilities,
+      recordings: task.recordings ?? [],
+    });
+  }
+  return value;
+}
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -303,7 +358,7 @@ function activeSnapshot(presentation) {
         phase: "waiting_for_human",
         reason: "Confirm the delivery address before checkout.",
       },
-      availableActions: ["finish"],
+      availableActions: ["interrupt"],
       runtime: {
         status: "awaiting_human",
         controller: null,
@@ -643,7 +698,7 @@ function uiTruthAttentionSnapshot() {
     phase: "waiting_for_human",
     reason: "Complete sign in.",
     turnStatus: "in_progress",
-    availableActions: ["finish"],
+    availableActions: ["interrupt"],
     executionMode: "companion",
     runtime: {
       status: "awaiting_human",
@@ -651,6 +706,8 @@ function uiTruthAttentionSnapshot() {
       attachment: "attached",
       recovery: "not_needed",
       profileOwnership: "owned",
+      handoffActionable: true,
+      handoffGeneration: 1,
     },
   });
 
@@ -1109,7 +1166,7 @@ async function assertUiTruthCase(page, item) {
         "T01 Start task action",
       );
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T01 must not imply active execution",
       );
       break;
@@ -1121,7 +1178,7 @@ async function assertUiTruthCase(page, item) {
         "T02 active task request",
       );
       await requireVisible(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T02 active Stop action",
       );
       await requireAbsent(
@@ -1141,7 +1198,7 @@ async function assertUiTruthCase(page, item) {
         "T03 follow-up input remains usable",
       );
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T03 completed turn must not imply active execution",
       );
       break;
@@ -1159,7 +1216,7 @@ async function assertUiTruthCase(page, item) {
         "T04 explicit continuation action",
       );
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T04 interrupted state must not still look actively running",
       );
       break;
@@ -1175,7 +1232,7 @@ async function assertUiTruthCase(page, item) {
         "T05 failed task remains reviewable in history",
       );
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T05 failed task must not retain live execution authority",
       );
       break;
@@ -1187,8 +1244,8 @@ async function assertUiTruthCase(page, item) {
         "T06 authoritative handoff instruction",
       );
       await requireVisible(
-        page.getByText("Browser control handoff", { exact: true }),
-        "T06 authoritative attention title",
+        page.getByText("Waiting for you", { exact: true }),
+        "T06 customer browser-collaboration title",
       );
       await requireVisible(
         page.getByRole("button", { name: "Take Over", exact: true }),
@@ -1221,7 +1278,7 @@ async function assertUiTruthCase(page, item) {
       );
 
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "T07 Task B must not inherit Task A Stop authority",
       );
 
@@ -1238,8 +1295,8 @@ async function assertUiTruthCase(page, item) {
         "T08 standalone task content",
       );
       await requireVisible(
-        page.getByText(/Standalone · ready · Agent/),
-        "T08 standalone task status",
+        page.getByLabel("Task history: task_truth_standalone"),
+        "T08 standalone task history",
       );
       await requireVisible(
         page.getByLabel("Follow-up outcome"),
@@ -1248,6 +1305,10 @@ async function assertUiTruthCase(page, item) {
       await requireAbsent(
         page.getByText(/Workflow is required/i),
         "T08 must not require a Workflow",
+      );
+      await requireAbsent(
+        page.getByText(/Standalone · ready · Agent/),
+        "T08 must not expose stale phase and mode noise",
       );
       break;
     }
@@ -1276,12 +1337,20 @@ async function assertUiTruthCase(page, item) {
 
     case "W02": {
       await requireVisible(
-        page.getByText(/Research review · ready · Agent/),
-        "W02 concrete task-to-Workflow association",
+        page.getByText("Research review", { exact: true }),
+        "W02 associated Workflow",
+      );
+      await requireVisible(
+        page.getByText("Review the research with my Workflow", { exact: true }),
+        "W02 associated Task",
       );
       await requireAbsent(
         page.getByText(/task history is Workflow/i),
         "W02 history must not be represented as portable configuration",
+      );
+      await requireAbsent(
+        page.getByText(/Research review · ready · Agent/),
+        "W02 must not expose stale phase and mode noise",
       );
       break;
     }
@@ -1522,7 +1591,7 @@ async function assertUiTruthCase(page, item) {
         `${scenario.id} task-owned browser surface`,
       );
       await requireAbsent(
-        page.getByRole("button", { name: "Return control" }),
+        page.getByRole("button", { name: "Return to Rove" }),
         `${scenario.id} must not imply human control`,
       );
       break;
@@ -1534,7 +1603,7 @@ async function assertUiTruthCase(page, item) {
         "C02 authoritative human control",
       );
       await requireVisible(
-        page.getByRole("button", { name: "Return control" }),
+        page.getByRole("button", { name: "Return to Rove" }),
         "C02 return-control action",
       );
       await requireAbsent(
@@ -1546,8 +1615,8 @@ async function assertUiTruthCase(page, item) {
 
     case "C04": {
       await requireVisible(
-        page.getByText(/Standalone · ready · Capture/),
-        "C04 human-led Capture participation",
+        page.getByLabel("Task history: task_truth_capture"),
+        "C04 human-led Capture task",
       );
       await requireVisible(
         page.getByText("Capture · Human-driven", { exact: true }),
@@ -1558,8 +1627,12 @@ async function assertUiTruthCase(page, item) {
         "C04 Capture setup must not be mislabeled as Agent mode",
       );
       await requireAbsent(
-        page.getByLabel("Stop task"),
+        page.getByLabel("Stop current work"),
         "C04 Capture must not imply an active Codex turn",
+      );
+      await requireAbsent(
+        page.getByText(/Standalone · ready · Capture/),
+        "C04 must not expose stale phase and mode noise",
       );
       break;
     }
@@ -2123,7 +2196,7 @@ const cases = [
     id: "full-constrained-long-content",
     snapshot: constrainedLongSnapshot(),
     follower: false,
-    viewport: { width: 760, height: 420 },
+    viewport: { width: 760, height: 620 },
   },
 ];
 const requestedCase = process.argv
@@ -2249,7 +2322,7 @@ try {
         };
       },
       {
-        snapshot: item.snapshot,
+        snapshot: productionProjectionSnapshot(item.snapshot),
         failFirstLoginOpen: item.failFirstLoginOpen ?? false,
         failWorkflowSave: item.failWorkflowSave ?? false,
         themePreference: item.themePreference,
@@ -2793,9 +2866,19 @@ try {
         (await page.locator(".product-sidebar .browser-status").count()) !== 0
       )
         throw new Error("Browser status remained in the task-history sidebar.");
-      if ((await page.getByText("Codex needs your input").count()) !== 0)
+      if (
+        (await page
+          .getByText("Codex needs your input", { exact: true })
+          .count()) !== 1
+      )
+        throw new Error("The prioritized conversational request is missing.");
+      if (
+        (await page
+          .getByText("File change approval", { exact: true })
+          .count()) !== 0
+      )
         throw new Error(
-          "A later request was rendered before the first request.",
+          "A lower-priority approval displaced the active request.",
         );
       if ((await page.locator(".product-task-nav").count()) !== 1)
         throw new Error(
@@ -2822,9 +2905,8 @@ try {
         throw new Error(
           `Sidebar displayed a focus frame: ${JSON.stringify(sidebarOutline)}`,
         );
-      const chronologicalText = await page
-        .locator(".task-timeline")
-        .innerText();
+      const chronologicalText =
+        (await page.locator(".task-timeline").textContent()) ?? "";
       const firstInputAt = chronologicalText.indexOf("Compare the options");
       const firstOutputAt = chronologicalText.indexOf("Comparison ready");
       const secondInputAt = chronologicalText.indexOf(
@@ -2837,7 +2919,9 @@ try {
         firstOutputAt < secondInputAt &&
         secondInputAt < resumedWorkAt
       ))
-        throw new Error("Conversation segments are not chronological.");
+        throw new Error(
+          `Conversation segments are not chronological: ${chronologicalText}`,
+        );
       if ((await page.getByLabel("Copy message").count()) !== 2)
         throw new Error("Input copy controls are not icon-only per message.");
       if ((await page.getByLabel("Copy response").count()) !== 1)
@@ -2894,7 +2978,11 @@ try {
       if ((await page.getByText("Codex needs your input").count()) !== 0)
         throw new Error("Active attention leaked into historical task scope.");
       await page.getByLabel("Task history: task_visual").click();
-      if ((await page.getByText("File change approval").count()) !== 1)
+      if (
+        (await page
+          .getByText("Codex needs your input", { exact: true })
+          .count()) !== 1
+      )
         throw new Error("Active attention did not return with active scope.");
       await directArchive.click();
       const archiveDialog = page.getByRole("dialog", {
@@ -2996,6 +3084,8 @@ try {
           throw new Error("Full product scroll regions are missing.");
         timeline.scrollTop = timeline.scrollHeight;
         sidebar.scrollTop = sidebar.scrollHeight;
+        if (attention instanceof globalThis.HTMLElement)
+          attention.scrollTop = attention.scrollHeight;
         return {
           mainContained: main.scrollHeight <= main.clientHeight,
           timelineScrollable: timeline.scrollHeight > timeline.clientHeight,
@@ -3021,10 +3111,27 @@ try {
             [...attention.querySelectorAll(".attention-actions button")].every(
               (button) =>
                 button.getBoundingClientRect().bottom <=
-                attention.getBoundingClientRect().bottom - 8,
+                attention.getBoundingClientRect().bottom,
             ) &&
             attention.getBoundingClientRect().bottom <=
               globalThis.innerHeight - 8,
+          attentionRect:
+            attention instanceof globalThis.HTMLElement
+              ? {
+                  top: attention.getBoundingClientRect().top,
+                  bottom: attention.getBoundingClientRect().bottom,
+                  height: attention.getBoundingClientRect().height,
+                }
+              : null,
+          actionRects:
+            attention instanceof globalThis.HTMLElement
+              ? [
+                  ...attention.querySelectorAll(".attention-actions button"),
+                ].map((button) => ({
+                  top: button.getBoundingClientRect().top,
+                  bottom: button.getBoundingClientRect().bottom,
+                }))
+              : [],
           horizontalOverflow: [...document.querySelectorAll("*")]
             .filter(
               (element) =>

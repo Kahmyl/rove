@@ -6313,7 +6313,9 @@ export function ProductSurface({
                             <section
                               className="timeline-work timeline-work-active"
                               aria-label={
-                                currentStopping ? "Stopping work" : "Active work"
+                                currentStopping
+                                  ? "Stopping work"
+                                  : "Active work"
                               }
                             >
                               <header className="timeline-work-heading">
@@ -6539,16 +6541,21 @@ export function ProductSurface({
                     {activeSurfaceDescription}
                   </p>
                 )}
-                {viewedTask.capabilities?.canStop && (
+                {(viewedTask.capabilities?.canStop ||
+                  viewedPresentation?.state === "stopping") && (
                   <div className="task-independent-controls">
                     <button
                       type="button"
                       className="composer-stop"
                       aria-label="Stop current work"
-                      disabled={busy}
+                      disabled={
+                        busy || viewedPresentation?.state === "stopping"
+                      }
                       onClick={() => void stopTask()}
                     >
-                      Stop
+                      {viewedPresentation?.state === "stopping"
+                        ? "Stopping…"
+                        : "Stop"}
                     </button>
                   </div>
                 )}
@@ -7210,7 +7217,7 @@ export function ProductSurface({
                     disabled={busy}
                     onClick={() => void returnControl()}
                   >
-                    Return control
+                    Return to Rove
                   </button>
                 )}
               </div>

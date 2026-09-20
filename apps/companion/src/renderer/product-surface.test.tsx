@@ -380,6 +380,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         }),
       ),
     };
+    stopping.capabilities = taskCapabilities({ canStop: false });
     const stoppingHtml = renderToStaticMarkup(
       <ProductSurface
         desktop={value}
@@ -390,6 +391,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
     expect(stoppingHtml).toContain("Stopping… for 0s");
+    expect(stoppingHtml).toContain(
+      '<button type="button" class="composer-stop" aria-label="Stop current work" disabled="">Stopping…</button>',
+    );
   });
 
   it("discloses optional Workflow synchronization without broadening its data boundary", () => {
@@ -698,6 +702,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(styles).toContain("--rove-accent: #c16137;");
     expect(styles).toContain("--rove-accent-text: var(--rove-accent-strong);");
     expect(styles).toContain("--rove-accent-text: var(--rove-accent-visible);");
+    expect(styles).toContain(
+      ".product-app .task-independent-controls .composer-stop",
+    );
     expect(styles).toContain("--rove-accent-contrast: #faf5ee;");
     expect(styles).not.toContain("--rove-accent: #245846;");
     expect(styles).toContain("--success: #2f6f52;");
@@ -1973,7 +1980,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(humanOwnedFull).toContain("You&#x27;re in control");
     expect(humanOwnedFull).not.toContain(reason);
-    expect(humanOwnedFull).toContain("Return control");
+    expect(humanOwnedFull).toContain("Return to Rove");
     expect(humanOwnedFull).not.toContain("Retry cleanup");
 
     value.surface.presentation = "expanded";

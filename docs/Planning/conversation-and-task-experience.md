@@ -323,6 +323,8 @@ The request-human production trace now waits for the exact correlated external `
 - Cover normal/narrow widths, long titles and content, attachments, many activities, multiple Tasks, keyboard/focus, hover/disabled/submitting states, reduced motion, stable geometry, auto-follow, anchoring, queue/steer/stop, attention, handoff, return/checking, recovery, failure, and uncertainty.
 - Retain DOM/state assertions alongside screenshots and manual development acceptance.
 
+The source qualification now uses the built production customer execution, capability, collaboration, presentation, and follower projections in a deterministic Electron journey. It records DOM/state assertions, 22 customer-visible screenshots, an ordered contact sheet, a Playwright trace, and a machine-readable manifest under ignored `artifacts/customer-journeys/conversation-task-rendered-qualification/`. The journey includes the 16,000-character accepted-input boundary, timing bounds, stable Stop geometry, request-family material, exact handoff generation, main/follower projection parity, narrow/reduced-motion rendering, and multi-Task selection. The older private-beta and ProductSurface visual harnesses were reconciled with current A–F semantics rather than preserving `finish`, diagnostic counters, generic return copy, phase/mode suffixes, or stale request priority. Manual development-app acceptance remains required before this plan is complete.
+
 ## 10. Migration and compatibility
 
 The likely persistence path is additive metadata on the existing Task conversation-item representation plus normalization to an empty queue and accepted user-item metadata defaults. Confirm this against all SQLite aggregate readers, projections, backup/export, process-cut recovery, legacy imports, and fixtures before choosing it. Prefer normalization over destructive SQL migration when it preserves existing local work.
@@ -381,6 +383,8 @@ Send
 ```
 
 Repeat relevant states at normal and narrow widths, with long text/titles, attachments, many activities, keyboard-only use, reduced motion, and background Task attention. Use fixture accounts and safe local/browser fixtures. Do not package until this full private-beta journey is satisfactory. Live external-account acceptance remains separately authorized.
+
+Run `pnpm customer-journey:conversation-task` first, then use the generated `manual-acceptance.md` as the concise development-app checklist. It covers Send, Working, semantic activity, Queue, Steer, Stop and follow-up, attention families, requested and voluntary browser takeover, Return to Rove and fresh checking, recovery/outcomes, completion, multi-Task switching, normal/narrow widths, keyboard-only operation, reduced motion, long content, and background attention. The generated checklist is preparation evidence, not a record that a human completed it.
 
 ## 13. Completion conditions
 

@@ -1,7 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+
+import { waitForProcessCutMarker } from "./task-engine-process-cut-marker.test-support.js";
 
 const root = resolve(import.meta.dirname, "../../../../..");
 const executable = join(root, "apps/companion/node_modules/.bin/tsx");
@@ -183,17 +184,9 @@ export class ProcessProductHarness {
   }
 
   async waitForCut(timeoutMs = 60_000): Promise<ProductValue> {
-    const path = join(this.home, "task-engine-cut.json");
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        return JSON.parse(await readFile(path, "utf8")) as ProductValue;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
-      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
-    }
-    throw new Error("Timed out waiting for a real process cut point.");
+    return waitForProcessCutMarker(join(this.home, "task-engine-cut.json"), {
+      timeoutMs,
+    });
   }
 
   async stop(signal: NodeJS.Signals = "SIGTERM"): Promise<void> {

@@ -18,14 +18,12 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 import { LocalProductApi } from "../../apps/companion/dist/main/main/codex/local-product-api.js";
+import { waitForProcessCutMarker } from "../../apps/companion/dist/main/main/codex/task-engine-process-cut-marker.test-support.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const l2Root = join(root, "experiments/agent-execution/recovery-harness");
 const driverPath = join(l2Root, "desktop-host-driver.mjs");
-const artifactRoot = join(
-  root,
-  "artifacts/verification/process-recovery",
-);
+const artifactRoot = join(root, "artifacts/verification/process-recovery");
 const rendererRoot = join(root, "apps/companion/dist/renderer");
 const temporaryRoot = await mkdtemp(join(tmpdir(), "rove-process-recovery-"));
 const scenarios = JSON.parse(
@@ -144,7 +142,8 @@ async function cleanupResourcesAndWait(driver, taskId, operationId) {
         acceptance.aggregate.requestedOperation?.type === "retry_cleanup" &&
         acceptance.aggregate.requestedOperation.operationId === operationId &&
         acceptance.projection?.operationDisposition?.type === "retry_cleanup" &&
-        acceptance.projection.operationDisposition.operationId === operationId &&
+        acceptance.projection.operationDisposition.operationId ===
+          operationId &&
         acceptance.projection.operationDisposition.status === "accepted",
       `Retry Cleanup did not preserve its exact operation identity: ${JSON.stringify(acceptance)}`,
     );
@@ -296,11 +295,10 @@ class Driver {
   }
 
   waitForCut() {
-    return waitFor(async () =>
-      JSON.parse(
-        await readFile(join(this.home, "task-engine-cut.json"), "utf8"),
-      ),
-    );
+    return waitForProcessCutMarker(join(this.home, "task-engine-cut.json"), {
+      timeoutMs: 60_000,
+      pollIntervalMs: 50,
+    });
   }
 
   async stop() {
@@ -1346,9 +1344,7 @@ async function screenshotRenderer(realSnapshot) {
     await page.waitForFunction(
       () =>
         document
-          .querySelector(
-            '[aria-label="Task history: task_l2_blocker_new"]',
-          )
+          .querySelector('[aria-label="Task history: task_l2_blocker_new"]')
           ?.getAttribute("aria-current") === "true",
     );
     const newestReasonCount = await page
@@ -1356,8 +1352,8 @@ async function screenshotRenderer(realSnapshot) {
       .count();
     check(
       (await newestCleanupTask.getAttribute("aria-current")) === "true" &&
-        newestReasonCount === 2,
-      `Newest blocker was not selectable with exact reason: ${newestReasonCount}.`,
+        newestReasonCount === 0,
+      `Newest blocker selection leaked its internal cleanup reason: ${newestReasonCount}.`,
     );
     const oldestCleanupTask = page.getByRole("button", {
       name: "Task history: task_l2_blocker_old",
@@ -1366,9 +1362,7 @@ async function screenshotRenderer(realSnapshot) {
     await page.waitForFunction(
       () =>
         document
-          .querySelector(
-            '[aria-label="Task history: task_l2_blocker_old"]',
-          )
+          .querySelector('[aria-label="Task history: task_l2_blocker_old"]')
           ?.getAttribute("aria-current") === "true",
     );
     const oldestReasonCount = await page
@@ -1376,8 +1370,8 @@ async function screenshotRenderer(realSnapshot) {
       .count();
     check(
       (await oldestCleanupTask.getAttribute("aria-current")) === "true" &&
-        oldestReasonCount === 2,
-      `Oldest blocker was not selectable with exact reason: ${oldestReasonCount}.`,
+        oldestReasonCount === 0,
+      `Oldest blocker selection leaked its internal cleanup reason: ${oldestReasonCount}.`,
     );
     const screenshot = join(artifactRoot, "persistent-cleanup-tasks.png");
     await page.screenshot({ path: screenshot, fullPage: true });
@@ -1502,7 +1496,8 @@ const evidence = {
   sourceBuilt: true,
   packaged: false,
   externalServicesContacted: false,
-  scenarioManifest: "experiments/agent-execution/recovery-harness/scenarios.json",
+  scenarioManifest:
+    "experiments/agent-execution/recovery-harness/scenarios.json",
   scenarios: results,
   terminalObservations,
   terminalCleanup,

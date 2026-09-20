@@ -359,10 +359,13 @@ try {
     "browser-attached",
     "Understand why and where browser work is happening.",
     "Attach the deterministic managed browser.",
-    "The task-owned Personal browser, Agent controller, observations, and evidence become visible.",
+    "The task-owned Personal browser and Agent controller become visible without diagnostic counters.",
   );
   await setScenario(page, "browser_handoff");
-  await page.getByRole("button", { name: "Take Over", exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "Take Over", exact: true })
+    .first()
+    .waitFor();
   await capture(
     page,
     "browser-collaboration",
@@ -371,9 +374,13 @@ try {
     "Receive a browser handoff.",
     "The exact task presents the reason, Awaiting handoff, Waiting for you, and Take Over.",
   );
-  await page.getByRole("button", { name: "Take Over", exact: true }).click();
   await page
-    .getByRole("button", { name: "Return control", exact: true })
+    .getByRole("button", { name: "Take Over", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Return to Rove", exact: true })
+    .first()
     .waitFor();
   await capture(
     page,
@@ -381,7 +388,7 @@ try {
     "human-control",
     "Inspect the page myself.",
     "Take Over.",
-    "Browser controller is You and Return control is the primary task-owned handback action.",
+    "Browser controller is You and Return to Rove is the primary task-owned handback action.",
   );
   await openTask(page, "task_contract_notes");
   await capture(
@@ -394,16 +401,17 @@ try {
   );
   await openTask(page, "task_vendor_research");
   await page
-    .getByRole("button", { name: "Return control", exact: true })
+    .getByRole("button", { name: "Return to Rove", exact: true })
+    .first()
     .click();
-  await page.getByText(/Control is back/).waitFor();
+  await page.getByText("Checking the page…", { exact: true }).first().waitFor();
   await capture(
     page,
     "browser-collaboration",
     "control-returned",
     "Return the current page to Rove and continue.",
-    "Choose Return control.",
-    "Agent ownership returns and the task explicitly says the current page was reconciled.",
+    "Choose Return to Rove.",
+    "Agent ownership returns only through an explicit fresh-page checking state.",
   );
 
   // Participation modes and composer controls.
@@ -768,7 +776,7 @@ try {
     "dark-browser-human",
     "See browser ownership clearly in dark mode.",
     "Inspect the human-control state.",
-    "Human ownership and Return control remain legible; terracotta identity remains distinct from semantic states.",
+    "Human ownership and Return to Rove remain legible; terracotta identity remains distinct from semantic states.",
   );
   await setScenario(page, "recording_finalizing");
   await capture(
@@ -1014,7 +1022,7 @@ This deterministic local Electron/Playwright walkthrough captured ${steps.length
 ## Assessment
 
 - **Multi-task:** usable. Task A remains visibly active while Task B is viewed; its sidebar row says **Needs input** without hijacking Task B; opening Task A replaces only its composer with the required response, and the label clears after the answer.
-- **Browser collaboration:** usable. The absent state explicitly says **No browser attached** without identity/controller claims; ownership transitions are task-scoped, Take Over/Return control are explicit, and another task sharing the managed identity does not inherit the first task's live handoff.
+- **Browser collaboration:** usable. The absent state explicitly says **No browser attached** without identity/controller claims; ownership transitions are task-scoped, Take Over/Return to Rove are explicit, and another task sharing the managed identity does not inherit the first task's live handoff.
 - **Participation:** usable. Agent, Companion, and Capture have distinct roles; Capture remains human-driven and starts no model turn. The pre-launch composer is information-dense but coherent.
 - **Capture/recording:** usable and safety-truthful. Page-only scope, sensitive-content consent, Starting, active, finalizing, playback availability, and interruption are distinct. The Starting control is disabled and never implies recording is already active.
 - **Data management:** usable for export. Scope and exclusions are explicit, success is concrete, customer cancellation is neutral and confirms no backup was made, operational failure remains an alert, and unsupported Restore is clearly disclosed.
