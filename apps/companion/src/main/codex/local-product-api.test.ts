@@ -2474,6 +2474,119 @@ describe("LocalProductApi native product seam", () => {
     );
   });
 
+  it("preserves the exact supported command-approval decision set", async () => {
+    const { api, attention, broker } = fixture();
+    attention.enqueue({
+      authority: "codex",
+      kind: "command_approval",
+      method: "item/commandExecution/requestApproval",
+      requestId: "decline_only",
+      taskId: "task_existing",
+      generation: 4,
+      payload: { availableDecisions: ["decline"] },
+    });
+    expect((await api.readSnapshot()).attention[0]?.allowedDecisions).toEqual([
+      "decline",
+    ]);
+    await expect(
+      api.execute({
+        type: "attention.decide",
+        requestId: "decline_only",
+        taskId: "task_existing",
+        generation: 4,
+        decision: "accept",
+      }),
+    ).rejects.toThrow(/not available/);
+    expect(broker.respond).not.toHaveBeenCalled();
+  });
+
+  it("composes Task attention into the typed customer collaboration projection", async () => {
+    const { api, attention, tasks } = fixture();
+    tasks.productTasks.mockResolvedValue([
+      {
+        context: context(),
+        lifecycle: {
+          phase: "waiting_for_human" as const,
+          reason: "Waiting.",
+        },
+        availableActions: ["interrupt"] as const,
+        capabilities: {
+          canSubmit: false,
+          canQueue: false,
+          canSteer: false,
+          canStop: true,
+          canRespond: true,
+          canTakeControl: false,
+          canReturnToRove: false,
+          canRetry: false,
+          canArchive: false,
+        },
+        runtime: {
+          status: "active" as const,
+          controller: "agent" as const,
+          attachment: "attached" as const,
+          recovery: "not_needed" as const,
+          profileOwnership: "owned" as const,
+          collaborationState: "agent_control" as const,
+        },
+        conversation: {
+          roveTaskId: "task_existing",
+          codexThreadId: "thread_existing",
+          codexSessionId: "codex_session_existing",
+          roveSessionId: "ses_existing",
+          activeTurnId: "turn_1",
+          turnStatus: "in_progress" as const,
+          archived: false,
+          lastEventSequence: 1,
+          items: {},
+          turnOrder: ["turn_1"],
+        },
+      },
+    ] as never);
+    attention.enqueue({
+      authority: "codex",
+      kind: "user_input",
+      method: "item/tool/requestUserInput",
+      requestId: "question_current",
+      taskId: "task_existing",
+      threadId: "thread_existing",
+      turnId: "turn_1",
+      itemId: "item_1",
+      generation: 5,
+      payload: {
+        questions: [
+          {
+            id: "choice",
+            header: "Choice",
+            question: "Which option?",
+            isOther: false,
+            isSecret: false,
+            options: null,
+          },
+        ],
+      },
+    });
+
+    expect((await api.readSnapshot()).tasks[0]!.customerCollaboration).toMatchObject(
+      {
+        taskId: "task_existing",
+        needsCustomerAction: true,
+        request: {
+          state: "answer_required",
+          identity: {
+            requestId: "question_current",
+            taskId: "task_existing",
+            threadId: "thread_existing",
+            turnId: "turn_1",
+            itemId: "item_1",
+            generation: 5,
+          },
+        },
+        browser: { state: "agent_control" },
+      },
+    );
+  });
+
   it("does not alias opaque attention identities sharing the first 200 characters", async () => {
     const { api, attention, broker } = fixture();
     const prefix = "r".repeat(200);

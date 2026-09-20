@@ -716,9 +716,14 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             canStop,
             canRespond: genuineAttention && aggregate.recoveryRequired === null,
             canTakeControl:
-              handoffActionable &&
-              aggregate.runtime.status === "awaiting_human" &&
-              aggregate.runtime.controller === null,
+              (handoffActionable &&
+                aggregate.runtime.status === "awaiting_human" &&
+                aggregate.runtime.controller === null) ||
+              (aggregate.launch.executionMode === "companion" &&
+                aggregate.runtime.status === "active" &&
+                aggregate.runtime.controller === "agent" &&
+                aggregate.runtime.attachment === "attached" &&
+                aggregate.continuation.status !== "pending"),
             canReturnToRove: executionActions.includes("return_control"),
             canRetry: executionActions.includes("retry_cleanup"),
             canArchive: !archived && aggregate.codex.turn !== "active",
@@ -744,6 +749,21 @@ export class LedgerProductTaskPort implements ProductTaskPort {
               : {
                   handoffGeneration: aggregate.runtime.handoffGeneration,
                 }),
+            ...(aggregate.runtime.controller === "human"
+              ? { collaborationState: "human_control" as const }
+              : handoffActionable
+                ? { collaborationState: "takeover_required" as const }
+                : aggregate.continuation.status === "pending" &&
+                    aggregate.continuation.freshInspectionRequired === true &&
+                    aggregate.runtime.controller === "agent"
+                  ? { collaborationState: "checking_after_return" as const }
+                  : aggregate.runtime.controller === "agent"
+                    ? { collaborationState: "agent_control" as const }
+                    : {}),
+            ...(aggregate.continuation.status === "pending" &&
+            aggregate.continuation.policy !== undefined
+              ? { continuationPolicy: aggregate.continuation.policy }
+              : {}),
           },
           conversation: {
             roveTaskId: aggregate.taskId,
