@@ -1101,6 +1101,14 @@ export interface ProductTaskSnapshot {
     diagnostic?: string;
     handoffActionable?: boolean;
     handoffGeneration?: number;
+    collaborationState?:
+      | "agent_control"
+      | "takeover_required"
+      | "human_control"
+      | "checking_after_return";
+    continuationPolicy?:
+      | "resume_after_control_return"
+      | "explicit_user_response";
   };
 }
 export type ActiveTaskIdentity = Pick<

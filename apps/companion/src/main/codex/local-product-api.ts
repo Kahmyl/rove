@@ -15,6 +15,10 @@ import type {
   ProductTaskSnapshot,
   ApprovalsReviewer,
 } from "./product-task-port.js";
+import {
+  customerTaskCollaboration,
+  type CustomerTaskCollaborationProjection,
+} from "./customer-task-collaboration.js";
 import type {
   CodexTurnStatus,
   ProjectedConversationItem,
@@ -360,6 +364,7 @@ export interface ProductAttentionProjection {
   context?: readonly { label: string; value: string }[];
   questions?: readonly ProductAttentionQuestion[];
   elicitation?: ProductElicitationProjection;
+  allowedDecisions?: readonly ("accept" | "decline" | "cancel")[];
   continuationPolicy?: "resume_after_control_return" | "explicit_user_response";
 }
 export interface ProductAttentionQuestion {
@@ -437,6 +442,7 @@ export interface ProductTaskProjection {
    * decoding older in-memory bridge fixtures during rolling startup. */
   capabilities?: ProductTaskSnapshot["capabilities"];
   customerExecution?: ProductTaskSnapshot["customerExecution"];
+  customerCollaboration?: CustomerTaskCollaborationProjection;
   runtime?: ProductTaskSnapshot["runtime"];
   attachments?: readonly TaskAttachmentDescriptor[];
   workflowContext?: NonNullable<
@@ -1137,6 +1143,23 @@ function attentionTitle(kind: AttentionKind): string {
     control_handoff: "Browser control handoff",
   }[kind];
 }
+function supportedAttentionDecisions(
+  entry: Pick<AttentionRequest, "kind" | "payload" | "method">,
+): readonly ("accept" | "decline" | "cancel")[] {
+  if (entry.kind === "user_input") return ["accept"];
+  if (entry.kind === "mcp_elicitation")
+    return ["accept", "decline", "cancel"];
+  if (entry.kind === "command_approval") {
+    const available = Array.isArray(entry.payload.availableDecisions)
+      ? entry.payload.availableDecisions
+      : undefined;
+    if (available)
+      return ["accept", "decline"].filter((decision) =>
+        available.includes(decision),
+      ) as ("accept" | "decline")[];
+  }
+  return ["accept", "decline"];
+}
 function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
   const context: { label: string; value: string }[] = [];
   const pushContext = (label: string, value: unknown, maximum = 500) => {
@@ -1146,12 +1169,6 @@ function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
   if (entry.kind === "command_approval") {
     pushContext("Command", entry.payload.command, 800);
     pushContext("Reason", entry.payload.reason);
-    if (Array.isArray(entry.payload.availableDecisions))
-      pushContext(
-        "Available decisions",
-        entry.payload.availableDecisions.slice(0, 8).join(", "),
-        200,
-      );
   } else if (entry.kind === "network_approval") {
     const network = record(entry.payload.networkApprovalContext);
     pushContext("Host", network?.host, 253);
@@ -1194,6 +1211,7 @@ function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
     status: entry.status,
     sequence: entry.sequence,
     title: attentionTitle(entry.kind),
+    allowedDecisions: supportedAttentionDecisions(entry),
     ...(context.length === 0 ? {} : { context: context.slice(0, 8) }),
     ...(questions === undefined ? {} : { questions }),
     ...(elicitation === undefined ? {} : { elicitation }),
@@ -1893,6 +1911,11 @@ export class LocalProductApi {
         };
       }),
     );
+    for (const task of tasks)
+      task.customerCollaboration = customerTaskCollaboration(
+        task,
+        projectedAttention,
+      );
     const current = tasks.find((task) => task.taskId === this.currentTaskId);
     const blockers = [...tasks]
       .reverse()
@@ -3339,6 +3362,8 @@ export class LocalProductApi {
         ) {
           if (command.decision === "cancel")
             throw new Error("Approval requests do not support cancel.");
+          if (!supportedAttentionDecisions(entry).includes(command.decision))
+            throw new Error("This approval decision is not available.");
           const legacy =
             entry.method === "execCommandApproval" ||
             entry.method === "applyPatchApproval";

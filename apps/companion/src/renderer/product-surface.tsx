@@ -35,6 +35,7 @@ import type {
   ProductTaskCapabilities,
 } from "../main/codex/task-coordinator.js";
 import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
+import { customerTaskCollaboration } from "../main/codex/customer-task-collaboration.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
@@ -749,14 +750,14 @@ export function taskNeedsCustomerInput(
   product: LocalProductSnapshot | null,
   taskId: string,
 ): boolean {
+  const task = product?.tasks.find((entry) => entry.taskId === taskId);
+  if (!task) return false;
+  const collaboration =
+    task.customerCollaboration ??
+    customerTaskCollaboration(task, product?.attention ?? []);
   return (
-    product?.attention.some(
-      (entry) =>
-        entry.taskId === taskId &&
-        entry.status === "pending" &&
-        (entry.kind === "user_input" ||
-          entry.continuationPolicy === "explicit_user_response"),
-    ) ?? false
+    collaboration.request?.responseState === "pending" ||
+    collaboration.browser.state === "takeover_required"
   );
 }
 
@@ -764,18 +765,14 @@ export function taskHasUnresolvedAttention(
   product: LocalProductSnapshot | null,
   taskId: string,
 ): boolean {
+  const task = product?.tasks.find((entry) => entry.taskId === taskId);
+  if (!task) return false;
+  const collaboration =
+    task.customerCollaboration ??
+    customerTaskCollaboration(task, product?.attention ?? []);
   return (
-    product?.attention.some(
-      (entry) =>
-        entry.taskId === taskId &&
-        [
-          "pending",
-          "responding",
-          "awaiting_confirmation",
-          "resolution_unknown",
-          "stale",
-        ].includes(entry.status),
-    ) ?? false
+    collaboration.request !== undefined ||
+    collaboration.browser.state === "takeover_required"
   );
 }
 
@@ -1263,25 +1260,6 @@ function ComposerModelMenu({
   );
 }
 
-function attentionCopy(entry: ProductAttentionProjection): string {
-  if (entry.instruction) return entry.instruction;
-  if (entry.elicitation) return entry.elicitation.message;
-  if (entry.status === "stale")
-    return "This request belongs to an earlier App Server connection and cannot be answered.";
-  if (entry.status === "resolution_unknown")
-    return "The response outcome is unresolved. Rove will not submit it again.";
-  return {
-    command_approval: "Codex wants to run a command.",
-    file_approval: "Codex wants to change files.",
-    network_approval: "Codex is requesting network access.",
-    permission_approval:
-      "Codex is requesting additional permission for this turn.",
-    mcp_elicitation: "A connected tool needs a decision or value.",
-    user_input: "Codex needs an answer before it can continue.",
-    control_handoff: "Rove needs you to take control of the browser.",
-  }[entry.kind];
-}
-
 function attentionStateKey(entry: ProductAttentionProjection): string {
   return JSON.stringify([
     entry.requestId,
@@ -1291,6 +1269,14 @@ function attentionStateKey(entry: ProductAttentionProjection): string {
     entry.itemId ?? null,
     entry.generation,
   ]);
+}
+export function retainCurrentAttentionState<T>(
+  current: Readonly<Record<string, T>>,
+  liveKeys: ReadonlySet<string>,
+): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(current).filter(([key]) => liveKeys.has(key)),
+  );
 }
 function unsetSelectValue(field: ProductElicitationField): string {
   let value = `__rove_unset__:${field.id}`;
@@ -2282,6 +2268,10 @@ export function ProductSurface({
   };
   const viewedTaskControl = taskControlProjection(viewedTask, product);
   const activeTaskControl = taskControlProjection(activeTask, product);
+  const activeCollaboration = activeTask
+    ? (activeTask.customerCollaboration ??
+      customerTaskCollaboration(activeTask, product?.attention ?? []))
+    : undefined;
   useEffect(() => {
     setSelectedTaskId((current) =>
       reconcileSelectedTaskId(current, previousCurrentTaskId.current, product),
@@ -2365,44 +2355,29 @@ export function ProductSurface({
     ...(effort ? { effort } : {}),
   });
   const error = operationError;
-  const activeAttention =
-    product?.attention.filter((entry) =>
-      [
-        "pending",
-        "responding",
-        "awaiting_confirmation",
-        "resolution_unknown",
-        "stale",
-      ].includes(entry.status),
-    ) ?? [];
-  const taskAttention = activeAttention.filter(
-    (entry) => viewedTask !== undefined && entry.taskId === viewedTask.taskId,
-  );
-  const codexAttention = taskAttention.filter(
-    (entry) => entry.authority === "codex",
-  );
-  const currentCodexAttention = [...codexAttention].sort(
-    (left, right) => left.sequence - right.sequence,
-  )[0];
-  const respondableCodexAttention = viewedTask?.capabilities?.canRespond
-    ? currentCodexAttention
+  const viewedCollaboration = viewedTask
+    ? (viewedTask.customerCollaboration ??
+      customerTaskCollaboration(viewedTask, product?.attention ?? []))
     : undefined;
-  const browserHandoff = taskAttention.find(
-    (entry) => entry.authority === "rove_control",
-  );
+  const respondableCodexAttention = viewedCollaboration?.request
+    ? product?.attention.find(
+        (entry) =>
+          entry.authority === viewedCollaboration.request!.identity.authority &&
+          entry.taskId === viewedCollaboration.request!.identity.taskId &&
+          entry.requestId === viewedCollaboration.request!.identity.requestId &&
+          entry.generation === viewedCollaboration.request!.identity.generation,
+      )
+    : undefined;
   const viewedCompanion =
     viewedTask?.roveSessionId !== undefined &&
     desktop?.companion?.session.id === viewedTask.roveSessionId
       ? desktop.companion
       : null;
   const fileAttention = product?.fileAttention ?? [];
-  const awaitingExplicitResponse = taskAttention.some(
-    (entry) =>
-      entry.authority === "rove_control" &&
-      entry.status === "pending" &&
-      entry.continuationPolicy === "explicit_user_response" &&
-      viewedTask?.runtime?.controller === "agent",
-  );
+  const awaitingExplicitResponse =
+    viewedCollaboration?.browser.continuationPolicy ===
+      "explicit_user_response" &&
+    viewedCollaboration.browser.state === "agent_control";
   const activeSurfaceTitle = awaitingExplicitResponse
     ? "Your response is needed"
     : legacyView.title;
@@ -2410,18 +2385,25 @@ export function ProductSurface({
     ? "Reply below so Rove can continue this task."
     : legacyView.description;
   useEffect(() => {
-    const live = new Set(activeAttention.map(attentionStateKey));
-    setAttentionAnswers((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([key]) => live.has(key)),
-      ),
+    const live = new Set(
+      (product?.tasks ?? []).flatMap((task) => {
+        const request = (
+          task.customerCollaboration ??
+          customerTaskCollaboration(task, product?.attention ?? [])
+        ).request;
+        if (!request) return [];
+        const exact = product?.attention.find(
+          (entry) =>
+            entry.taskId === request.identity.taskId &&
+            entry.requestId === request.identity.requestId &&
+            entry.generation === request.identity.generation,
+        );
+        return exact ? [attentionStateKey(exact)] : [];
+      }),
     );
-    setAttentionForms((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([key]) => live.has(key)),
-      ),
-    );
-  }, [product?.attention]);
+    setAttentionAnswers((current) => retainCurrentAttentionState(current, live));
+    setAttentionForms((current) => retainCurrentAttentionState(current, live));
+  }, [product?.attention, product?.tasks]);
   const browserAttached = viewedTask?.runtime?.attachment === "attached";
   const identityLabel = browserIdentityLabel(desktop, viewedTask);
 
@@ -2894,7 +2876,7 @@ export function ProductSurface({
     );
   };
   const returnControl = async () => {
-    if (!viewedTask?.capabilities?.canReturnToRove) return;
+    if (!viewedTask || !viewedCollaboration?.browser.canReturnToRove) return;
     await run(() =>
       command({
         type: "task.return-control",
@@ -2904,14 +2886,12 @@ export function ProductSurface({
     );
   };
   const takeControl = async (task: ProductTaskProjection | undefined) => {
-    if (!task?.capabilities?.canTakeControl) return;
-    const handoffGeneration = activeAttention.find(
-      (entry) =>
-        entry.taskId === task.taskId &&
-        entry.authority === "rove_control" &&
-        entry.kind === "control_handoff" &&
-        entry.status === "pending",
-    )?.generation;
+    if (!task) return;
+    const collaboration =
+      task.customerCollaboration ??
+      customerTaskCollaboration(task, product?.attention ?? []);
+    if (!collaboration.browser.canTakeOver) return;
+    const handoffGeneration = collaboration.browser.handoffGeneration;
     await run(() => window.rove.takeControl(task.taskId, handoffGeneration));
   };
   const stopTask = async () => {
@@ -3148,12 +3128,49 @@ export function ProductSurface({
     }));
 
   const renderCodexAttention = (entry: ProductAttentionProjection) => {
+    const collaborationRequest = viewedCollaboration?.request;
+    if (
+      !collaborationRequest ||
+      collaborationRequest.identity.requestId !== entry.requestId ||
+      collaborationRequest.identity.generation !== entry.generation
+    )
+      return null;
     const choiceQuestion =
       entry.kind === "user_input" && entry.questions?.length === 1
         ? entry.questions[0]
         : undefined;
     const choiceOptions = choiceQuestion?.options;
     const responseKey = attentionStateKey(entry);
+    const browserCollaborationControls =
+      viewedCollaboration &&
+      ["takeover_required", "human_control", "checking_after_return"].includes(
+        viewedCollaboration.browser.state,
+      ) ? (
+        <div className="browser-collaboration-summary">
+          <strong>{viewedCollaboration.browser.title}</strong>
+          <span>{viewedCollaboration.browser.description}</span>
+          <div className="attention-actions">
+            {viewedCollaboration.browser.canTakeOver && (
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void takeControl(viewedTask)}
+              >
+                Take Over
+              </button>
+            )}
+            {viewedCollaboration.browser.canReturnToRove && (
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void returnControl()}
+              >
+                Return to Rove
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null;
     const selectedChoice = choiceQuestion
       ? attentionAnswers[responseKey]?.[choiceQuestion.id]?.[0]
       : undefined;
@@ -3185,7 +3202,7 @@ export function ProductSurface({
               ))}
             </div>
           ) : null}
-          {entry.status === "pending" ? (
+          {collaborationRequest.responseState === "pending" ? (
             <>
               <fieldset className="task-response-options">
                 <legend>{choiceQuestion.header}</legend>
@@ -3256,8 +3273,9 @@ export function ProductSurface({
               </div>
             </>
           ) : (
-            <small>Status: {entry.status.replaceAll("_", " ")}</small>
+            <small>{collaborationRequest.description}</small>
           )}
+          {browserCollaborationControls}
         </section>
       );
     }
@@ -3274,14 +3292,14 @@ export function ProductSurface({
             ? "Rove needs your input"
             : "Input needed"}
         </div>
-        <h2>{entry.title}</h2>
-        <p>{attentionCopy(entry)}</p>
+        <h2>{collaborationRequest.title}</h2>
+        <p>{collaborationRequest.description}</p>
         {entry.context?.map((item) => (
           <p key={item.label}>
             <strong>{item.label}:</strong> {item.value}
           </p>
         ))}
-        {entry.status === "pending" && (
+        {collaborationRequest.responseState === "pending" && (
           <>
             {entry.questions?.map((question) => (
               <fieldset key={question.id}>
@@ -3454,50 +3472,44 @@ export function ProductSurface({
                   {entry.elicitation.unsupportedReason}
                 </p>
               )}
-            {entry.elicitation?.mode === "url" && (
-              <button
-                onClick={() =>
-                  void window.rove.openTrustedExternal({
-                    purpose: "mcp_elicitation",
-                    taskId: entry.taskId,
-                    requestId: entry.requestId,
-                    generation: entry.generation,
-                  })
-                }
-              >
-                Open secure page
-              </button>
-            )}
             <div className="attention-actions">
-              {entry.kind !== "user_input" && (
-                <button
-                  disabled={busy}
-                  onClick={() => void answerAttention(entry, "decline")}
-                >
-                  Decline
-                </button>
+              {collaborationRequest.actions.map((action) =>
+                action.kind === "trusted_external" ? (
+                  <button
+                    key={action.kind}
+                    onClick={() =>
+                      void window.rove.openTrustedExternal({
+                        purpose: "mcp_elicitation",
+                        taskId: entry.taskId,
+                        requestId: entry.requestId,
+                        generation: entry.generation,
+                      })
+                    }
+                  >
+                    {action.label}
+                  </button>
+                ) : (
+                  <button
+                    key={action.decision}
+                    className={
+                      action.decision === "accept" ? "primary" : undefined
+                    }
+                    disabled={busy}
+                    onClick={() =>
+                      void answerAttention(entry, action.decision)
+                    }
+                  >
+                    {action.label}
+                  </button>
+                ),
               )}
-              {entry.kind === "mcp_elicitation" && (
-                <button
-                  disabled={busy}
-                  onClick={() => void answerAttention(entry, "cancel")}
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                className="primary"
-                disabled={busy || Boolean(entry.elicitation?.unsupportedReason)}
-                onClick={() => void answerAttention(entry, "accept")}
-              >
-                {entry.kind === "user_input" ? "Send" : "Approve / Send"}
-              </button>
             </div>
           </>
         )}
-        {entry.status !== "pending" && (
-          <small>Status: {entry.status.replaceAll("_", " ")}</small>
+        {collaborationRequest.responseState !== "pending" && (
+          <small>{collaborationRequest.description}</small>
         )}
+        {browserCollaborationControls}
       </section>
     );
   };
@@ -3532,14 +3544,14 @@ export function ProductSurface({
         />
         <button
           type="button"
-          aria-label={`Expand Rove. ${unmatchedSession ? "Browser session needs cleanup" : awaitingExplicitResponse ? "Your response is needed" : taskAttention.length ? "Attention required" : customerCodexStatus.label}`}
+          aria-label={`Expand Rove. ${unmatchedSession ? "Browser session needs cleanup" : awaitingExplicitResponse ? "Your response is needed" : viewedCollaboration?.needsCustomerAction ? "Attention required" : customerCodexStatus.label}`}
           onClick={() =>
             void run(() => window.rove.transitionSurface("expand"))
           }
         >
           {awaitingExplicitResponse
             ? "Reply"
-            : taskAttention.length
+            : viewedCollaboration?.needsCustomerAction
               ? "!"
               : "↗"}
         </button>
@@ -3561,7 +3573,7 @@ export function ProductSurface({
           <span>
             {unmatchedSession
               ? "Cleanup required"
-              : taskAttention.length || fileAttention.length
+              : viewedCollaboration?.needsCustomerAction || fileAttention.length
                 ? "Attention needed"
                 : customerCodexStatus.label}
           </span>
@@ -3572,8 +3584,8 @@ export function ProductSurface({
                 ? activeSurfaceTitle
                 : "Rove is ready"}
           </strong>
-          {activeTask?.capabilities?.canReturnToRove && (
-            <small>{activeTask.lifecycle.reason}</small>
+          {activeCollaboration?.browser.canReturnToRove && (
+            <small>{activeTask?.lifecycle.reason}</small>
           )}
           <small>
             {unmatchedSession
@@ -3584,12 +3596,12 @@ export function ProductSurface({
           </small>
         </div>
         <div className="expanded-actions">
-          {activeTaskControl.canTakeControl && (
+          {activeCollaboration?.browser.canTakeOver && (
             <button onClick={() => void takeControl(activeTask)}>
               Take Over
             </button>
           )}
-          {activeTask?.capabilities?.canReturnToRove && (
+          {activeCollaboration?.browser.canReturnToRove && (
             <button onClick={() => void returnControl()}>Return Control</button>
           )}
           {unmatchedSession && (
@@ -6445,6 +6457,43 @@ export function ProductSurface({
               <footer className="task-detail-dock">
                 {respondableCodexAttention &&
                   renderCodexAttention(respondableCodexAttention)}
+                {!respondableCodexAttention &&
+                  viewedCollaboration &&
+                  [
+                    "takeover_required",
+                    "takeover_available",
+                    "human_control",
+                    "checking_after_return",
+                  ].includes(viewedCollaboration.browser.state) && (
+                    <section
+                      className="attention-card attention-inline browser-collaboration"
+                      aria-label="Current browser collaboration"
+                    >
+                      <div className="eyebrow">Browser collaboration</div>
+                      <h2>{viewedCollaboration.browser.title}</h2>
+                      <p>{viewedCollaboration.browser.description}</p>
+                      <div className="attention-actions">
+                        {viewedCollaboration.browser.canTakeOver && (
+                          <button
+                            className="primary"
+                            disabled={busy}
+                            onClick={() => void takeControl(viewedTask)}
+                          >
+                            Take Over
+                          </button>
+                        )}
+                        {viewedCollaboration.browser.canReturnToRove && (
+                          <button
+                            className="primary"
+                            disabled={busy}
+                            onClick={() => void returnControl()}
+                          >
+                            Return to Rove
+                          </button>
+                        )}
+                      </div>
+                    </section>
+                  )}
                 {!respondableCodexAttention && awaitingExplicitResponse && (
                   <p className="task-response-hint">
                     {activeSurfaceDescription}
@@ -6469,7 +6518,7 @@ export function ProductSurface({
                     viewedTask.capabilities?.canQueue ||
                     viewedTask.capabilities?.canSteer ||
                     viewedTask.availableActions.includes("resume") ||
-                    viewedTask.capabilities?.canReturnToRove) && (
+                    viewedCollaboration?.browser.canReturnToRove) && (
                     <ComposerInputShell
                       attachments={product?.draftAttachments ?? []}
                       busy={
@@ -6757,7 +6806,7 @@ export function ProductSurface({
                             modelId={viewedTask.model ?? ""}
                             effort={viewedTask.reasoningEffort ?? ""}
                           />
-                          {viewedTask.capabilities?.canReturnToRove ? (
+                          {viewedCollaboration?.browser.canReturnToRove ? (
                             <button
                               className="primary composer-submit"
                               aria-label="Resume automation"
@@ -7100,17 +7149,6 @@ export function ProductSurface({
                   )}
                 </span>
               </div>
-              {browserHandoff && (
-                <div className="browser-handoff-summary">
-                  <strong>{browserHandoff.title}</strong>
-                  <span>{attentionCopy(browserHandoff)}</span>
-                  <small>
-                    {browserHandoff.status === "pending"
-                      ? "Waiting for you"
-                      : browserHandoff.status.replaceAll("_", " ")}
-                  </small>
-                </div>
-              )}
               <div className="inspector-section">
                 <span className="inspector-section-title">Activity</span>
                 <div className="browser-metrics">
@@ -7136,7 +7174,7 @@ export function ProductSurface({
                     ? "View Browser"
                     : "Open Browser"}
                 </button>
-                {viewedTaskControl.canTakeControl && (
+                {viewedCollaboration?.browser.canTakeOver && (
                   <button
                     className="primary"
                     disabled={busy}
@@ -7145,7 +7183,7 @@ export function ProductSurface({
                     Take Over
                   </button>
                 )}
-                {viewedTask.capabilities?.canReturnToRove && (
+                {viewedCollaboration?.browser.canReturnToRove && (
                   <button
                     className="primary"
                     disabled={busy}

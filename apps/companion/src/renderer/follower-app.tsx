@@ -8,6 +8,8 @@ import type {
 import roveMarkUrl from "./assets/rove-mark.png";
 
 import {
+  compactFollowerTakeControlTarget,
+  compactFollowerTaskContext,
   toCompactFollowerViewModel,
   type CompactFollowerPrimaryAction,
 } from "./follower-state.js";
@@ -35,18 +37,9 @@ export function FollowerApp({
   const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
 
-  const session =
-    desktop?.notice === null ? (desktop.companion?.session ?? null) : null;
-  const task = desktop?.product?.tasks.find(
-    (candidate) => candidate.roveSessionId === session?.id,
-  );
-  const handoffGeneration = desktop?.product?.attention.find(
-    (entry) =>
-      entry.taskId === task?.taskId &&
-      entry.authority === "rove_control" &&
-      entry.kind === "control_handoff" &&
-      entry.status === "pending",
-  )?.generation;
+  const followerContext = compactFollowerTaskContext(desktop);
+  const { session, task, browser } = followerContext;
+  const takeControlTarget = compactFollowerTakeControlTarget(followerContext);
   const loading = desktop === null;
   const offline = connectionError !== null || operationError !== null;
   const presentation = followerPresentation(desktop);
@@ -80,7 +73,11 @@ export function FollowerApp({
     if (dragPointer.current === event.pointerId) dragPointer.current = null;
   };
 
-  const view = toCompactFollowerViewModel(session);
+  const view = toCompactFollowerViewModel(
+    session,
+    browser,
+    task?.capabilities?.canStop === true,
+  );
 
   const expanded = presentation.endsWith("_expanded");
 
@@ -93,8 +90,12 @@ export function FollowerApp({
 
     try {
       if (action === "take_control") {
-        if (!task) throw new Error("Browser control is not bound to a task.");
-        await window.rove.takeControl(task.taskId, handoffGeneration);
+        if (!takeControlTarget)
+          throw new Error("Browser control is not bound to a task.");
+        await window.rove.takeControl(
+          takeControlTarget.taskId,
+          takeControlTarget.handoffGeneration,
+        );
       } else {
         if (!task) throw new Error("Browser control is not bound to a task.");
         await window.rove.returnControl(task.taskId);
@@ -162,13 +163,10 @@ export function FollowerApp({
     );
   }
 
-  const runSecondary = async (action: "pause" | "stop") => {
+  const stop = async () => {
     setBusy(true);
     try {
-      if (action === "pause") {
-        if (!task) throw new Error("Browser control is not bound to a task.");
-        await window.rove.pauseSession(task.taskId);
-      } else if (task) {
+      if (task) {
         await window.rove.executeProductIntent({
           type: "task.stop",
           taskId: task.taskId,
@@ -244,23 +242,12 @@ export function FollowerApp({
           Open Rove
         </button>
 
-        {expanded && view.canPause && (
-          <button
-            className="follower-secondary"
-            type="button"
-            disabled={busy}
-            onClick={() => void runSecondary("pause")}
-          >
-            Pause
-          </button>
-        )}
-
         {expanded && view.canStop && (
           <button
             className="follower-danger"
             type="button"
             disabled={busy}
-            onClick={() => void runSecondary("stop")}
+            onClick={() => void stop()}
           >
             Stop
           </button>

@@ -27,6 +27,7 @@ import {
   outputStatus,
   permissionReviewDescription,
   recordingLifecyclePresentation,
+  retainCurrentAttentionState,
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   taskNeedsCustomerInput,
@@ -899,6 +900,20 @@ describe("ProductSurface accessibility and presentation continuity", () => {
 
   it("marks only pending task-scoped conversational attention as needing input", () => {
     const value = snapshot();
+    value.product!.tasks = [
+      {
+        taskId: "task_a",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-20T00:00:00.000Z",
+        approvalsReviewer: "auto_review",
+        bootstrapStage: "complete",
+        results: [],
+        lifecycle: { phase: "waiting_for_human", reason: "Waiting." },
+        availableActions: [],
+        capabilities: taskCapabilities({ canRespond: true }),
+      },
+    ];
     const attention = {
       authority: "codex",
       kind: "user_input",
@@ -1038,6 +1053,34 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       "Different follow-up for B",
     );
     expect(followupDraftForTask(switched, "task_missing")).toBe("");
+  });
+
+  it("discards ephemeral response values when the exact request identity changes", () => {
+    const oldIdentity = JSON.stringify([
+      "question",
+      "task_a",
+      "thread_a",
+      "turn_a",
+      "item_a",
+      3,
+    ]);
+    const nextIdentity = JSON.stringify([
+      "question",
+      "task_a",
+      "thread_a",
+      "turn_a",
+      "item_a",
+      4,
+    ]);
+    expect(
+      retainCurrentAttentionState(
+        {
+          [oldIdentity]: { password: ["do-not-reuse"] },
+          [nextIdentity]: { password: [""] },
+        },
+        new Set([nextIdentity]),
+      ),
+    ).toEqual({ [nextIdentity]: { password: [""] } });
   });
 
   it("round-trips every represented Workflow configuration class without a lossy edit", () => {
@@ -1727,16 +1770,16 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain("Input needed");
+    expect(html).toContain("Rove needs your input");
     expect(html).toContain('class="product-task-nav"');
     expect(html).not.toContain('class="task-heading"');
     expect(html).toContain('aria-label="Current task request"');
     expect(html.match(/aria-label="Current task request"/g)).toHaveLength(1);
-    expect(html).not.toContain("Later question");
+    expect(html).toContain("Later question");
     expect(html).not.toContain('class="side-card attention-card');
     expect(html).not.toContain("task-composer-shell");
-    expect(html).toContain("Approve / Send");
-    expect(html).toContain("Browser control handoff");
+    expect(html).toContain(">Send</button>");
+    expect(html).not.toContain("File change approval");
     expect(html).toContain("Take Over");
     expect(html).toContain('aria-label="Stop current work"');
     expect(html).toContain("Personal");

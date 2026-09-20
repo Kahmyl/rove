@@ -151,6 +151,30 @@ async function seedReadyTask(
 }
 
 describe("LedgerProductTaskPort protected workspace boundary", () => {
+  it("projects voluntary Companion takeover without treating presentation as authority", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-companion-takeover-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "task-engine.sqlite3"),
+    });
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.launch!.executionMode = "companion";
+      },
+    });
+    const port = new LedgerProductTaskPort({
+      engine: new TaskEngine(store),
+      store,
+      worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+
+    expect((await port.productTasks())[0]).toMatchObject({
+      capabilities: { canTakeControl: true },
+      runtime: { collaborationState: "agent_control" },
+    });
+    store.close();
+  });
+
   it("keeps an ordered queue durable and outside conversation truth until one atomic promotion", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-durable-queue-"));
     roots.push(root);
@@ -615,6 +639,10 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       engine,
       store,
       worker: { signal: vi.fn(), cancelTask: vi.fn() } as never,
+    });
+    expect((await port.productTasks())[0]?.runtime).toMatchObject({
+      collaborationState: "agent_control",
+      continuationPolicy: "explicit_user_response",
     });
     const operationId = "intent_25345678-1234-4123-8123-123456789abc";
     const accepted = await port.submit({
