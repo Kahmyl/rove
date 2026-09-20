@@ -216,6 +216,12 @@ export type LocalProductCommand =
       operationId: string;
       entryIds: readonly string[];
     }
+  | {
+      type: "task.queue.steer";
+      taskId: string;
+      entryId: string;
+      expectedTurnId: string;
+    }
   | { type: "task.close"; taskId: string; operationId: string }
   | { type: "task.return-control"; taskId: string; operationId: string }
   | { type: "task.thread.read"; taskId: string }
@@ -289,7 +295,8 @@ export type RendererProductIntent =
           | "task.queue.add"
           | "task.queue.edit"
           | "task.queue.remove"
-          | "task.queue.reorder";
+          | "task.queue.reorder"
+          | "task.queue.steer";
       }
     >
   | { type: "attachments.remove"; attachmentId: string }
@@ -652,6 +659,7 @@ const RENDERER_PRODUCT_INTENT_SHAPES: Readonly<
   "task.queue.edit": ["type", "taskId", "operationId", "entryId", "outcome"],
   "task.queue.remove": ["type", "taskId", "operationId", "entryId"],
   "task.queue.reorder": ["type", "taskId", "operationId", "entryIds"],
+  "task.queue.steer": ["type", "taskId", "entryId", "expectedTurnId"],
   "task.stop": ["type", "taskId", "operationId"],
   "task.cleanup.retry": ["type", "taskId", "operationId"],
   "task.return-control": ["type", "taskId", "operationId"],
@@ -2493,6 +2501,14 @@ export class LocalProductApi {
         ),
       } as LocalProductCommand);
     }
+    if (value.type === "task.queue.steer") {
+      return this.execute({
+        type: value.type,
+        taskId,
+        entryId: nonempty(value.entryId, "queue entry id"),
+        expectedTurnId: nonempty(value.expectedTurnId, "expected turn id"),
+      });
+    }
     if (value.type === "task.stop") {
       if (
         !(await this.taskProjection(taskId)).availableActions.includes(
@@ -2797,6 +2813,7 @@ export class LocalProductApi {
       ],
       "task.queue.remove": ["type", "taskId", "operationId", "entryId"],
       "task.queue.reorder": ["type", "taskId", "operationId", "entryIds"],
+      "task.queue.steer": ["type", "taskId", "entryId", "expectedTurnId"],
       "task.close": ["type", "taskId", "operationId"],
       "task.return-control": ["type", "taskId", "operationId"],
       "task.thread.read": ["type", "taskId"],
@@ -2956,6 +2973,39 @@ export class LocalProductApi {
           entryId: nonempty(command.entryId, "queue entry id"),
           message: nonempty(command.outcome, "queued outcome").slice(0, 16_000),
         });
+      case "task.queue.steer": {
+        const taskId = nonempty(command.taskId, "task id");
+        const entryId = nonempty(command.entryId, "queue entry id");
+        const expectedTurnId = nonempty(
+          command.expectedTurnId,
+          "expected turn id",
+        );
+        const task = await this.tasks.readTask(taskId);
+        if (!task) throw new Error("Task is unavailable.");
+        if (
+          task.conversation?.turnStatus !== "in_progress" ||
+          task.conversation.activeTurnId !== expectedTurnId ||
+          !task.capabilities.canSteer
+        )
+          throw new Error(
+            "Active work changed before the queued intervention was accepted.",
+          );
+        const entry = task.customerExecution?.queue.find(
+          (candidate) => candidate.id === entryId,
+        );
+        if (!entry) throw new Error("Queued message is no longer available.");
+        this.requireModelReady(
+          task.context.policy.model,
+          task.context.policy.reasoningEffort,
+        );
+        return this.tasks.submit({
+          type: "queue_steer",
+          taskId,
+          operationId: entry.operationId,
+          entryId: entry.id,
+          expectedTurnId,
+        });
+      }
       case "task.queue.remove":
         return this.tasks.submit({
           type: "queue_remove",

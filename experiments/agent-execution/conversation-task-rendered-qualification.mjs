@@ -1025,8 +1025,99 @@ try {
     "Work reopens while the final answer remains readable",
   );
 
+  await setScenario(page, "start_sustained");
+  const canonicalComposer = page.getByLabel("Task message");
+  const emptyStop = page.getByRole("button", { name: "Stop current work" });
+  await emptyStop.waitFor();
+  const emptyStopBox = await emptyStop.boundingBox();
+  assert(
+    (await page.locator(".task-independent-controls").count()) === 0 &&
+      (await page.getByText("Send now", { exact: true }).count()) === 0,
+    "Active composer retained detached or competing controls.",
+  );
+  await capture(
+    page,
+    "active-empty-composer",
+    "Continue while work is active",
+    "Leave the draft empty",
+    "Stop occupies the canonical primary slot",
+  );
+  await canonicalComposer.fill("Apply the newest evidence first");
+  const activeSend = page.getByRole("button", { name: "Queue follow-up" });
+  await activeSend.waitFor();
+  const activeSendBox = await activeSend.boundingBox();
+  assert(
+    emptyStopBox &&
+      activeSendBox &&
+      Math.abs(emptyStopBox.x - activeSendBox.x) < 2 &&
+      Math.abs(emptyStopBox.y - activeSendBox.y) < 2 &&
+      Math.abs(emptyStopBox.width - activeSendBox.width) < 2 &&
+      Math.abs(emptyStopBox.height - activeSendBox.height) < 2,
+    "Typing changed the canonical primary-action geometry.",
+  );
+  await capture(
+    page,
+    "active-draft-composer",
+    "Write an active-work follow-up",
+    "Type without changing composer geometry",
+    "Send replaces Stop in the same primary slot",
+  );
+  await canonicalComposer.press("Enter");
+  const referenceQueue = page.getByLabel("Queued messages");
+  await referenceQueue.getByText("Apply the newest evidence first").waitFor();
+  assert(
+    (await canonicalComposer.inputValue()) === "" &&
+      (await emptyStop.isVisible()),
+    "Queue acceptance did not clear the draft and restore Stop.",
+  );
+  await capture(
+    page,
+    "active-queued-composer",
+    "Queue the follow-up",
+    "Use ordinary Send",
+    "A compact message object appears above the unchanged composer",
+  );
+  await referenceQueue
+    .locator(".task-queue-entry", {
+      hasText: "Apply the newest evidence first",
+    })
+    .getByRole("button", { name: "Steer", exact: true })
+    .click();
+  await page
+    .locator(".timeline-user")
+    .filter({ hasText: "Apply the newest evidence first" })
+    .waitFor();
+  const queuedSteerState = await page.evaluate(() =>
+    window.rove.getJourneyState(),
+  );
+  const queuedSteers = queuedSteerState.calls.filter(
+    (entry) => entry.intent?.type === "task.queue.steer",
+  );
+  const steeredEntryId = queuedSteers[0]?.intent.entryId;
+  const steeredOperationId = steeredEntryId?.slice("queue:".length);
+  const steeredTask = queuedSteerState.snapshot.product.tasks.find(
+    (task) => task.taskId === "task_start",
+  );
+  assert(
+    queuedSteers.length === 1 &&
+      queuedSteers[0].intent.expectedTurnId === "turn_task_start" &&
+      steeredTask?.conversation.items[`user:${steeredOperationId}`]
+        ?.clientId === steeredOperationId &&
+      (await referenceQueue
+        .getByText("Apply the newest evidence first")
+        .count()) === 0,
+    "Queued Steer did not promote the exact entry once.",
+  );
+  await capture(
+    page,
+    "queued-steer",
+    "Apply a queued instruction now",
+    "Choose Steer on the exact message",
+    "The same queued identity becomes one accepted intervention",
+  );
+
   await setScenario(page, "queue");
-  const queueRegion = page.getByLabel("Queued follow-ups");
+  const queueRegion = page.getByLabel("Queued messages");
   await queueRegion.waitFor();
   assert(
     (await page
@@ -1035,27 +1126,26 @@ try {
       .count()) === 0,
     "Queue leaked into transcript.",
   );
-  const composer = page.getByLabel("Follow-up outcome");
+  const composer = page.getByLabel("Task message");
   await composer.fill("A newly queued follow-up");
   await composer.press("Enter");
   await queueRegion.getByText("A newly queued follow-up").waitFor();
-  await queueRegion
-    .getByRole("button", { name: "Edit", exact: true })
-    .last()
-    .click();
-  await page
-    .getByLabel("Edit queued follow-up")
-    .fill("Edited queued follow-up");
+  const addedEntry = queueRegion.locator(".task-queue-entry", {
+    hasText: "A newly queued follow-up",
+  });
+  await addedEntry.getByLabel("More queued message actions").click();
+  await addedEntry.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Edit queued message").fill("Edited queued follow-up");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await queueRegion.getByText("Edited queued follow-up").waitFor();
-  await queueRegion
-    .getByRole("button", { name: "Move queued follow-up earlier" })
-    .last()
+  const editedEntry = queueRegion.locator(".task-queue-entry", {
+    hasText: "Edited queued follow-up",
+  });
+  await editedEntry.getByLabel("More queued message actions").click();
+  await editedEntry
+    .getByRole("button", { name: "Move earlier", exact: true })
     .click();
-  await queueRegion
-    .getByRole("button", { name: "Remove", exact: true })
-    .last()
-    .click();
+  await editedEntry.getByLabel("Delete queued message").click();
   await capture(
     page,
     "queue",
@@ -1065,8 +1155,11 @@ try {
   );
   const queueCalls = await page.evaluate(() => window.rove.getJourneyState());
   assert(
-    queueCalls.calls.filter((entry) => entry.intent?.type === "task.queue.add")
-      .length === 1,
+    queueCalls.calls.filter(
+      (entry) =>
+        entry.intent?.type === "task.queue.add" &&
+        entry.intent.outcome === "A newly queued follow-up",
+    ).length === 1,
     "Queue action was not exact-once.",
   );
 
@@ -1074,7 +1167,7 @@ try {
   await openTask(page, "task_active");
   assert(
     (await page
-      .getByLabel("Queued follow-ups")
+      .getByLabel("Queued messages")
       .locator(".task-queue-entry")
       .count()) === 2,
     "Queue did not survive re-render.",
@@ -1096,7 +1189,7 @@ try {
       .filter({ hasText: promotedMessage })
       .count()) === 1 &&
       (await page
-        .getByLabel("Queued follow-ups")
+        .getByLabel("Queued messages")
         .filter({ hasText: promotedMessage })
         .count()) === 0,
     "Promoted queue entry did not move to one accepted transcript item.",
@@ -1132,12 +1225,13 @@ try {
     "One accepted intervention creates a new work segment",
   );
 
+  await composer.fill("");
   const stopBoxBefore = await page
     .getByRole("button", { name: "Stop current work" })
     .boundingBox();
   await page.getByRole("button", { name: "Stop current work" }).focus();
   await page.keyboard.press("Enter");
-  await page.getByText("Stopping…", { exact: true }).waitFor();
+  await page.getByRole("region", { name: "Stopping work" }).waitFor();
   const stoppingButton = page.getByRole("button", {
     name: "Stop current work",
   });
@@ -1175,10 +1269,20 @@ try {
     await setScenario(page, name);
     await openTask(page, "task_attention");
     await page.getByLabel("Current task request").waitFor();
-    assert(
-      await page.getByRole("button", { name: "Stop current work" }).isVisible(),
-      `${name} hid Stop.`,
-    );
+    if (
+      [
+        "attention_command",
+        "attention_file",
+        "attention_network",
+        "attention_permission",
+      ].includes(name)
+    )
+      assert(
+        await page
+          .getByRole("button", { name: "Stop current work" })
+          .isVisible(),
+        `${name} hid the canonical composer Stop.`,
+      );
     const requestText = await page
       .getByLabel("Current task request")
       .innerText();
@@ -1321,11 +1425,19 @@ try {
       .isVisible(),
     "Confirmed failure is missing.",
   );
+  assert(
+    (await page.locator(".product-warning").count()) === 0,
+    "Ordinary failure rendered a redundant detached warning.",
+  );
   await setScenario(page, "uncertain");
   await openTask(page, "task_uncertain");
   assert(
     await page.getByText("Outcome unclear", { exact: true }).isVisible(),
     "Uncertainty is not distinct.",
+  );
+  assert(
+    (await page.locator(".product-warning").count()) === 1,
+    "Consequential uncertainty lost its persistent warning.",
   );
   assert(
     (await page.getByText("Retry cleanup", { exact: true }).count()) === 0,
@@ -1431,7 +1543,7 @@ try {
   await setScenario(page, "active_work");
   await openTask(page, "task_active");
   const focusOrder = [];
-  await page.getByLabel("Follow-up outcome").focus();
+  await page.getByLabel("Task message").focus();
   for (let index = 0; index < 12; index += 1) {
     focusOrder.push(
       await page.evaluate(
@@ -1443,12 +1555,13 @@ try {
     await page.keyboard.press("Tab");
   }
   assert(
-    focusOrder.some((value) => value?.includes("Follow-up outcome")),
+    focusOrder.some((value) => value?.includes("Task message")),
     "Composer was absent from keyboard order.",
   );
   assert(
-    focusOrder.some((value) => value?.includes("Send now")),
-    "Send now was absent from keyboard order.",
+    focusOrder.some((value) => value?.includes("Stop current work")) &&
+      !focusOrder.some((value) => value?.includes("Send now")),
+    "Canonical Stop was absent or permanent Send now remained in keyboard order.",
   );
   const collapseSidebar = page.getByRole("button", {
     name: "Collapse sidebar",
@@ -1473,7 +1586,7 @@ try {
   const manifest = {
     title: "Conversation and Task rendered experience qualification",
     baseline: {
-      branch: "codex/conversation-task-rendered-qualification",
+      branch: "codex/manual-acceptance-task-composer-remediation",
       commit,
     },
     environment: {
@@ -1521,6 +1634,7 @@ try {
       queueOutsideTranscript: true,
       queueCommandsExact: true,
       queuePromotionExactOnce: true,
+      queuedSteerExactIdentity: true,
       steerExactOnce: true,
       macCommandEnterQualified: process.platform === "darwin",
       stopProgression: true,
@@ -1548,7 +1662,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "manual-acceptance.md"),
-    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; no tool/Runtime identifiers appear.\n- [ ] Queue: add, edit, remove, reorder, restart, promote exactly once, and confirm no restart dispatch.\n- [ ] Steer: use Send now and Command+Enter; confirm one accepted intervention.\n- [ ] Stop: verify Stop → Stopping… → Stopped, retained queue, ordinary follow-up, and no browser ownership theft.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, confirmed failure, uncertain consequence, and no unsafe retry.\n- [ ] Completion: confirm terminal work compacts, reopens, and preserves the final-answer reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, checking, and Stop consequence.\n`,
+    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; no tool/Runtime identifiers appear.\n- [ ] Composer: active empty shows Stop in the primary slot; typing swaps the same slot to Send; queue acceptance clears the draft and restores Stop.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop: verify primary-slot Stop → disabled Stop while Stopping → Stopped, retained queue, ordinary follow-up, and no browser ownership theft.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, ordinary failure without a duplicate dock warning, persistent uncertain consequence, and no unsafe retry.\n- [ ] Completion: confirm terminal work compacts, reopens, and preserves the final-answer reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, checking, and Stop consequence.\n`,
   );
   await application
     .context()

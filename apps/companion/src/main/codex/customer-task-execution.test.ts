@@ -186,6 +186,64 @@ describe("customer Task execution projection", () => {
     );
   });
 
+  it("coalesces repeated low-value activity without hiding commentary or consequence", () => {
+    const value = aggregate();
+    value.conversation.items = {
+      ...value.conversation.items,
+      repeated_read: {
+        id: "repeated_read",
+        kind: "tool",
+        status: "completed",
+        title: "read another detail",
+      },
+      repeated_read_again: {
+        id: "repeated_read_again",
+        kind: "tool",
+        status: "completed",
+        title: "read one more detail",
+      },
+      material_change: {
+        id: "material_change",
+        kind: "file_change",
+        status: "completed",
+        title: "updated customer file",
+      },
+      failed_read: {
+        id: "failed_read",
+        kind: "tool",
+        status: "completed",
+        title: "read final detail",
+        activityOutcome: "failed",
+      },
+    };
+    value.conversation.itemOrder = [
+      "user:initial",
+      "commentary",
+      "raw_tool",
+      "repeated_read",
+      "repeated_read_again",
+      "material_change",
+      "failed_read",
+      "user:steer",
+      "command",
+    ];
+
+    const first = customerTaskExecution(value).segments[0]!;
+    expect(
+      first.activities.filter((activity) => activity.kind === "read"),
+    ).toHaveLength(2);
+    expect(first.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "change", state: "confirmed" }),
+        expect.objectContaining({ kind: "read", state: "failed" }),
+      ]),
+    );
+    expect(first.workOrder[0]).toEqual({
+      type: "commentary",
+      id: "commentary",
+    });
+  });
+
   it.each([
     [
       "attention waiting",

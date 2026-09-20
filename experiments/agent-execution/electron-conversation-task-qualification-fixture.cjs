@@ -102,6 +102,39 @@ function executeProductIntent(intent) {
     );
     task.customerExecution.queue = intent.entryIds.map((id) => byId.get(id));
     publish("queue.reordered");
+  } else if (intent.type === "task.queue.steer" && task) {
+    const entry = task.customerExecution.queue.find(
+      (candidate) => candidate.id === intent.entryId,
+    );
+    if (!entry || intent.expectedTurnId !== task.conversation.activeTurnId)
+      throw new Error("Queued Steer lost exact entry or turn authority.");
+    task.customerExecution.queue = task.customerExecution.queue.filter(
+      (candidate) => candidate.id !== entry.id,
+    );
+    const id = `user:${entry.operationId}`;
+    task.conversation.items[id] = {
+      id,
+      turnId: intent.expectedTurnId,
+      clientId: entry.operationId,
+      kind: "user_message",
+      status: "completed",
+      authoredBy: "user",
+      acceptedAt: new Date().toISOString(),
+      text: entry.message,
+    };
+    task.conversation.itemOrder.push(id);
+    task.customerExecution.segments.push({
+      id,
+      inputItemId: id,
+      commentaryItemIds: [],
+      finalAnswerItemIds: [],
+      activities: [],
+      workOrder: [],
+      status: "active",
+      accumulatedActiveMs: 0,
+      activeSince: new Date().toISOString(),
+    });
+    publish("queue.steered");
   } else if (intent.type === "task.steer" && task) {
     const id = `user:${intent.operationId}`;
     task.conversation.items[id] = {

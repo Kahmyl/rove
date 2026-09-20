@@ -4691,8 +4691,8 @@ span.composer-control-icon {
   position: relative;
   z-index: 4;
   flex: 0 0 auto;
-  padding: 16px 0 20px;
-  background: linear-gradient(transparent, var(--surface) 18%, var(--surface));
+  padding: 8px 0 12px;
+  background: linear-gradient(transparent, var(--surface) 12%, var(--surface));
 }
 
 .attention-inline {
@@ -4760,10 +4760,6 @@ span.composer-control-icon {
   font-size: 11px;
 }
 
-.product-app .task-independent-controls .composer-stop {
-  width: 96px;
-}
-
 .followup.composer-input-shell {
   position: static;
   display: grid;
@@ -4774,14 +4770,14 @@ span.composer-control-icon {
   gap: 0;
   margin: 0;
   padding: 0;
-  border-radius: 22px;
+  border-radius: 24px;
   background: var(--surface-raised);
 }
 
 .task-queue {
   display: grid;
   gap: 6px;
-  padding: 8px 10px 0;
+  margin: 0 10px 8px;
 }
 
 .task-queue-entry {
@@ -4799,9 +4795,9 @@ span.composer-control-icon {
 }
 
 .task-queue-entry > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 .task-queue-entry form {
@@ -4816,14 +4812,15 @@ span.composer-control-icon {
 }
 
 .task-queue-actions {
+  position: relative;
   display: flex;
   flex: none;
+  align-items: center;
   gap: 3px;
 }
 
 .product-app .task-queue-actions button,
-.product-app .task-queue-entry form button,
-.product-app button.composer-send-now {
+.product-app .task-queue-entry form button {
   min-height: 28px;
   padding: 4px 8px;
   border-color: transparent;
@@ -4832,23 +4829,64 @@ span.composer-control-icon {
   font-size: 10px;
 }
 
+.product-app .task-queue-actions .task-queue-steer {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.task-queue-more > summary {
+  min-height: 28px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  list-style: none;
+}
+
+.task-queue-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-queue-more > div {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: calc(100% + 4px);
+  display: grid;
+  min-width: 118px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+.product-app .task-queue-more > div button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .followup.composer-input-shell textarea {
   width: 100%;
-  min-height: 44px;
-  max-height: 180px;
-  padding: 17px 20px 7px;
+  min-height: 58px;
+  max-height: 240px;
+  padding: 18px 24px 6px;
   border: 0;
   border-radius: 0;
   outline: 0;
   resize: none;
   background: transparent;
   box-shadow: none;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.55;
 }
 
 .task-composer-shell .composer-action-row {
-  padding: 8px 12px 12px;
+  padding: 10px 14px 14px;
+}
+
+.product-app .composer-submit.composer-stop > span {
+  font-size: 10px;
 }
 
 .task-composer-shell .composer-footer {

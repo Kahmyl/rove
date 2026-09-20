@@ -307,7 +307,7 @@ try {
   );
   await page.getByText("Leadership", { exact: true }).click();
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await page.getByLabel("Follow-up outcome").waitFor();
+  await page.getByLabel("Task message").waitFor();
   assert(
     (await page
       .getByRole("button", { name: "Task history: task_market_analysis" })

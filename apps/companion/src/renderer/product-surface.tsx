@@ -37,6 +37,7 @@ import type {
 import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
 import { customerTaskCollaboration } from "../main/codex/customer-task-collaboration.js";
 import { customerTaskPresentation } from "../main/codex/customer-task-presentation.js";
+import type { CustomerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
@@ -1348,6 +1349,22 @@ export function followupKeyboardAction(
   return capabilities.canSubmit ? "submit" : "none";
 }
 
+export function taskComposerPrimaryAction(input: {
+  state: CustomerTaskPresentation["state"];
+  hasDraft: boolean;
+  canStop: boolean;
+  canSubmit: boolean;
+  canQueue: boolean;
+}): { kind: "stop" | "send"; disabled: boolean } {
+  if (input.state === "stopping") return { kind: "stop", disabled: true };
+  if (input.canStop && !input.hasDraft)
+    return { kind: "stop", disabled: false };
+  return {
+    kind: "send",
+    disabled: !input.hasDraft || (!input.canSubmit && !input.canQueue),
+  };
+}
+
 export function timelineIsAtBottom(input: {
   scrollHeight: number;
   scrollTop: number;
@@ -2389,6 +2406,15 @@ export function ProductSurface({
   const viewedPresentation = viewedTask
     ? presentationForTask(viewedTask)
     : undefined;
+  const composerPrimaryAction = viewedPresentation
+    ? taskComposerPrimaryAction({
+        state: viewedPresentation.state,
+        hasDraft: followup.trim().length > 0,
+        canStop: viewedTask?.capabilities?.canStop === true,
+        canSubmit: viewedTask?.capabilities?.canSubmit === true,
+        canQueue: viewedTask?.capabilities?.canQueue === true,
+      })
+    : undefined;
   const respondableCodexAttention = viewedCollaboration?.request
     ? product?.attention.find(
         (entry) =>
@@ -2398,6 +2424,9 @@ export function ProductSurface({
           entry.generation === viewedCollaboration.request!.identity.generation,
       )
     : undefined;
+  const attentionReplacesComposer =
+    respondableCodexAttention?.kind === "user_input" ||
+    respondableCodexAttention?.kind === "mcp_elicitation";
   const viewedCompanion =
     viewedTask?.roveSessionId !== undefined &&
     desktop?.companion?.session.id === viewedTask.roveSessionId
@@ -3136,6 +3165,20 @@ export function ProductSurface({
         taskId: viewedTask.taskId,
         operationId: `intent_${crypto.randomUUID()}`,
         entryIds: order,
+      }),
+    );
+  };
+
+  const steerQueuedEntry = async (entryId: string) => {
+    const expectedTurnId = viewedTask?.conversation?.activeTurnId;
+    if (!viewedTask || !viewedTask.capabilities?.canSteer || !expectedTurnId)
+      return;
+    await run(() =>
+      command({
+        type: "task.queue.steer",
+        taskId: viewedTask.taskId,
+        entryId,
+        expectedTurnId,
       }),
     );
   };
@@ -6541,58 +6584,20 @@ export function ProductSurface({
                     {activeSurfaceDescription}
                   </p>
                 )}
-                {(viewedTask.capabilities?.canStop ||
-                  viewedPresentation?.state === "stopping") && (
-                  <div className="task-independent-controls">
-                    <button
-                      type="button"
-                      className="composer-stop"
-                      aria-label="Stop current work"
-                      disabled={
-                        busy || viewedPresentation?.state === "stopping"
-                      }
-                      onClick={() => void stopTask()}
-                    >
-                      {viewedPresentation?.state === "stopping"
-                        ? "Stopping…"
-                        : "Stop"}
-                    </button>
-                  </div>
-                )}
-                {!respondableCodexAttention &&
+                {!attentionReplacesComposer &&
                   viewedTask.executionMode !== "capture" &&
                   (viewedTask.capabilities?.canSubmit ||
                     viewedTask.capabilities?.canQueue ||
                     viewedTask.capabilities?.canSteer ||
+                    viewedTask.capabilities?.canStop ||
+                    viewedPresentation?.state === "stopping" ||
                     viewedTask.availableActions.includes("resume") ||
                     viewedCollaboration?.browser.canReturnToRove) && (
-                    <ComposerInputShell
-                      attachments={product?.draftAttachments ?? []}
-                      busy={
-                        busy ||
-                        (!viewedTask.capabilities?.canSubmit &&
-                          !viewedTask.capabilities?.canQueue &&
-                          !viewedTask.capabilities?.canSteer)
-                      }
-                      className="followup task-composer-shell"
-                      onReplace={(attachmentId) =>
-                        void run(() =>
-                          command({
-                            type: "attachments.replace",
-                            attachmentId,
-                          }),
-                        )
-                      }
-                      onRemove={(attachmentId) =>
-                        void run(() =>
-                          command({ type: "attachments.remove", attachmentId }),
-                        )
-                      }
-                    >
+                    <>
                       {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
                         <div
                           className="task-queue"
-                          aria-label="Queued follow-ups"
+                          aria-label="Queued messages"
                         >
                           {viewedTaskExecution!.queue.map(
                             (entry, index, queue) => (
@@ -6605,7 +6610,7 @@ export function ProductSurface({
                                     }}
                                   >
                                     <input
-                                      aria-label="Edit queued follow-up"
+                                      aria-label="Edit queued message"
                                       maxLength={16_000}
                                       value={queueEditDraft}
                                       onChange={(event) =>
@@ -6631,45 +6636,63 @@ export function ProductSurface({
                                   <>
                                     <span>{entry.message}</span>
                                     <div className="task-queue-actions">
+                                      {viewedTask.capabilities?.canSteer && (
+                                        <button
+                                          type="button"
+                                          className="task-queue-steer"
+                                          title="Apply this queued instruction to the current work now"
+                                          onClick={() =>
+                                            void steerQueuedEntry(entry.id)
+                                          }
+                                        >
+                                          Steer
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
-                                        aria-label="Move queued follow-up earlier"
-                                        disabled={busy || index === 0}
-                                        onClick={() =>
-                                          void moveQueuedEntry(entry.id, -1)
-                                        }
-                                      >
-                                        ↑
-                                      </button>
-                                      <button
-                                        type="button"
-                                        aria-label="Move queued follow-up later"
-                                        disabled={
-                                          busy || index === queue.length - 1
-                                        }
-                                        onClick={() =>
-                                          void moveQueuedEntry(entry.id, 1)
-                                        }
-                                      >
-                                        ↓
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingQueueEntryId(entry.id);
-                                          setQueueEditDraft(entry.message);
-                                        }}
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
+                                        aria-label="Delete queued message"
                                         onClick={() =>
                                           void removeQueuedEntry(entry.id)
                                         }
                                       >
-                                        Remove
+                                        Delete
                                       </button>
+                                      <details className="task-queue-more">
+                                        <summary aria-label="More queued message actions">
+                                          More
+                                        </summary>
+                                        <div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingQueueEntryId(entry.id);
+                                              setQueueEditDraft(entry.message);
+                                            }}
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={busy || index === 0}
+                                            onClick={() =>
+                                              void moveQueuedEntry(entry.id, -1)
+                                            }
+                                          >
+                                            Move earlier
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={
+                                              busy || index === queue.length - 1
+                                            }
+                                            onClick={() =>
+                                              void moveQueuedEntry(entry.id, 1)
+                                            }
+                                          >
+                                            Move later
+                                          </button>
+                                        </div>
+                                      </details>
                                     </div>
                                   </>
                                 )}
@@ -6678,213 +6701,246 @@ export function ProductSurface({
                           )}
                         </div>
                       )}
-                      {viewedTask.results.some((result) => result.selected) && (
-                        <div
-                          className="output-context-rail"
-                          aria-label="Outputs used for this message"
-                        >
-                          {viewedTask.results
-                            .filter((result) => result.selected)
-                            .map((result) => (
-                              <button
-                                type="button"
-                                key={result.resultId}
-                                disabled={busy}
-                                onClick={() =>
-                                  void toggleResultSelection(result)
-                                }
-                              >
-                                Using: {result.revision.title} ×
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                      <textarea
-                        ref={followupComposer}
-                        aria-label={
-                          awaitingExplicitResponse
-                            ? "Handoff response"
-                            : "Follow-up outcome"
-                        }
-                        placeholder={
-                          awaitingExplicitResponse
-                            ? "Reply so the task can continue…"
-                            : "Add a follow-up…"
-                        }
-                        value={followup}
-                        disabled={
+                      <ComposerInputShell
+                        attachments={product?.draftAttachments ?? []}
+                        busy={
                           busy ||
                           (!viewedTask.capabilities?.canSubmit &&
                             !viewedTask.capabilities?.canQueue &&
                             !viewedTask.capabilities?.canSteer)
                         }
-                        onChange={(event) => setFollowup(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "/" && followup.length === 0) {
-                            event.preventDefault();
-                            const palette = document.getElementById(
-                              "task-followup-command-palette",
-                            ) as HTMLDetailsElement | null;
-                            if (palette) palette.open = true;
-                            window.setTimeout(() =>
-                              document
-                                .querySelector<HTMLInputElement>(
-                                  "#task-followup-command-palette input[type='search']",
-                                )
-                                ?.focus(),
-                            );
-                            return;
+                        className="followup task-composer-shell"
+                        onReplace={(attachmentId) =>
+                          void run(() =>
+                            command({
+                              type: "attachments.replace",
+                              attachmentId,
+                            }),
+                          )
+                        }
+                        onRemove={(attachmentId) =>
+                          void run(() =>
+                            command({
+                              type: "attachments.remove",
+                              attachmentId,
+                            }),
+                          )
+                        }
+                      >
+                        {viewedTask.results.some(
+                          (result) => result.selected,
+                        ) && (
+                          <div
+                            className="output-context-rail"
+                            aria-label="Outputs used for this message"
+                          >
+                            {viewedTask.results
+                              .filter((result) => result.selected)
+                              .map((result) => (
+                                <button
+                                  type="button"
+                                  key={result.resultId}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void toggleResultSelection(result)
+                                  }
+                                >
+                                  Using: {result.revision.title} ×
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        <textarea
+                          ref={followupComposer}
+                          aria-label={
+                            awaitingExplicitResponse
+                              ? "Handoff response"
+                              : "Task message"
                           }
-                          const action = followupKeyboardAction(
-                            {
-                              key: event.key,
-                              shiftKey: event.shiftKey,
-                              metaKey: event.metaKey,
-                              ctrlKey: event.ctrlKey,
-                              isComposing: event.nativeEvent.isComposing,
-                            },
-                            viewedTask.capabilities ?? {
-                              canSubmit: false,
-                              canQueue: false,
-                              canSteer: false,
-                            },
-                          );
-                          if (action === "none" || action === "newline") return;
-                          event.preventDefault();
-                          if (action === "steer") void sendFollowup("steer");
-                          else void sendFollowup("default");
-                        }}
-                      />
-                      <div className="composer-action-row">
-                        <ComposerAttachButton
-                          busy={
+                          placeholder={
+                            awaitingExplicitResponse
+                              ? "Reply so the task can continue…"
+                              : "Do anything"
+                          }
+                          value={followup}
+                          disabled={
                             busy ||
                             (!viewedTask.capabilities?.canSubmit &&
                               !viewedTask.capabilities?.canQueue &&
                               !viewedTask.capabilities?.canSteer)
                           }
-                          onPick={() =>
-                            void run(() =>
-                              command({ type: "attachments.pick" }),
-                            )
-                          }
+                          onChange={(event) => setFollowup(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "/" && followup.length === 0) {
+                              event.preventDefault();
+                              const palette = document.getElementById(
+                                "task-followup-command-palette",
+                              ) as HTMLDetailsElement | null;
+                              if (palette) palette.open = true;
+                              window.setTimeout(() =>
+                                document
+                                  .querySelector<HTMLInputElement>(
+                                    "#task-followup-command-palette input[type='search']",
+                                  )
+                                  ?.focus(),
+                              );
+                              return;
+                            }
+                            const action = followupKeyboardAction(
+                              {
+                                key: event.key,
+                                shiftKey: event.shiftKey,
+                                metaKey: event.metaKey,
+                                ctrlKey: event.ctrlKey,
+                                isComposing: event.nativeEvent.isComposing,
+                              },
+                              viewedTask.capabilities ?? {
+                                canSubmit: false,
+                                canQueue: false,
+                                canSteer: false,
+                              },
+                            );
+                            if (action === "none" || action === "newline")
+                              return;
+                            event.preventDefault();
+                            if (action === "steer") void sendFollowup("steer");
+                            else void sendFollowup("default");
+                          }}
                         />
-                        <div className="composer-footer">
-                          <details
-                            className="composer-menu composer-command-menu"
-                            id="task-followup-command-palette"
-                          >
-                            <summary aria-label="Commands" title="Commands">
-                              <span aria-hidden="true">/</span>
-                            </summary>
-                            <div
-                              className="composer-command-palette"
-                              aria-label="Task commands and settings"
+                        <div className="composer-action-row">
+                          <ComposerAttachButton
+                            busy={
+                              busy ||
+                              (!viewedTask.capabilities?.canSubmit &&
+                                !viewedTask.capabilities?.canQueue &&
+                                !viewedTask.capabilities?.canSteer)
+                            }
+                            onPick={() =>
+                              void run(() =>
+                                command({ type: "attachments.pick" }),
+                              )
+                            }
+                          />
+                          <div className="composer-footer">
+                            <details
+                              className="composer-menu composer-command-menu"
+                              id="task-followup-command-palette"
                             >
-                              <label className="composer-command-search">
-                                <span>Commands</span>
-                                <input
-                                  type="search"
-                                  aria-label="Search commands"
-                                  placeholder="Search task settings"
-                                  value={commandPaletteQuery}
-                                  onChange={(event) =>
-                                    setCommandPaletteQuery(event.target.value)
-                                  }
-                                />
-                              </label>
-                              {commandPaletteMatches(
-                                commandPaletteQuery,
-                                "task",
-                                "mode",
-                                "browser",
-                                "approval",
-                              ) && (
-                                <section>
-                                  <strong>Task</strong>
-                                  <div className="composer-control-rail">
-                                    <ComposerModeMenu
-                                      mode={viewedTask.executionMode}
-                                    />
-                                    <ComposerPermissionMenu
-                                      approvalsReviewer={
-                                        viewedTask.approvalsReviewer
-                                      }
-                                      mode={viewedTask.executionMode}
-                                    />
-                                    <details className="composer-menu composer-setup-menu">
-                                      <summary aria-label="Browser profile">
-                                        Browser profile
-                                      </summary>
-                                      <div className="composer-popover compact-popover task-settings-popover">
-                                        <div className="task-frozen-option">
-                                          <span>{identityLabel}</span>
-                                          <small>Fixed for this task</small>
-                                        </div>
-                                      </div>
-                                    </details>
-                                  </div>
-                                </section>
-                              )}
-                              {commandPaletteMatches(
-                                commandPaletteQuery,
-                                "model",
-                                "reasoning",
-                                "effort",
-                              ) && (
-                                <section>
-                                  <strong>Model</strong>
-                                  <ComposerModelMenu
-                                    models={product?.catalog.models ?? []}
-                                    modelId={viewedTask.model ?? ""}
-                                    effort={viewedTask.reasoningEffort ?? ""}
+                              <summary aria-label="Commands" title="Commands">
+                                <span aria-hidden="true">/</span>
+                              </summary>
+                              <div
+                                className="composer-command-palette"
+                                aria-label="Task commands and settings"
+                              >
+                                <label className="composer-command-search">
+                                  <span>Commands</span>
+                                  <input
+                                    type="search"
+                                    aria-label="Search commands"
+                                    placeholder="Search task settings"
+                                    value={commandPaletteQuery}
+                                    onChange={(event) =>
+                                      setCommandPaletteQuery(event.target.value)
+                                    }
                                   />
-                                </section>
-                              )}
-                            </div>
-                          </details>
-                          <ComposerModeMenu mode={viewedTask.executionMode} />
-                          <ComposerPermissionMenu
-                            approvalsReviewer={viewedTask.approvalsReviewer}
-                            mode={viewedTask.executionMode}
-                          />
-                          <ComposerModelMenu
-                            models={product?.catalog.models ?? []}
-                            modelId={viewedTask.model ?? ""}
-                            effort={viewedTask.reasoningEffort ?? ""}
-                          />
-                          {viewedCollaboration?.browser.canReturnToRove ? (
-                            <button
-                              className="primary composer-submit"
-                              aria-label="Resume automation"
-                              title="Return control to Rove"
-                              disabled={busy}
-                              onClick={() => void returnControl()}
-                            >
-                              <span aria-hidden="true">▶</span>
-                            </button>
-                          ) : viewedTask.availableActions.includes("resume") ? (
-                            <button
-                              className="primary composer-submit"
-                              aria-label="Resume task"
-                              title="Resume task"
-                              disabled={busy}
-                              onClick={() => void restoreTask()}
-                            >
-                              <span aria-hidden="true">▶</span>
-                            </button>
-                          ) : (
-                            <>
-                              {viewedTask.capabilities?.canSteer && (
-                                <button
-                                  className="composer-send-now"
-                                  type="button"
-                                  disabled={busy || !followup.trim()}
-                                  onClick={() => void sendFollowup("steer")}
-                                >
-                                  Send now
-                                </button>
-                              )}
+                                </label>
+                                {commandPaletteMatches(
+                                  commandPaletteQuery,
+                                  "task",
+                                  "mode",
+                                  "browser",
+                                  "approval",
+                                ) && (
+                                  <section>
+                                    <strong>Task</strong>
+                                    <div className="composer-control-rail">
+                                      <ComposerModeMenu
+                                        mode={viewedTask.executionMode}
+                                      />
+                                      <ComposerPermissionMenu
+                                        approvalsReviewer={
+                                          viewedTask.approvalsReviewer
+                                        }
+                                        mode={viewedTask.executionMode}
+                                      />
+                                      <details className="composer-menu composer-setup-menu">
+                                        <summary aria-label="Browser profile">
+                                          Browser profile
+                                        </summary>
+                                        <div className="composer-popover compact-popover task-settings-popover">
+                                          <div className="task-frozen-option">
+                                            <span>{identityLabel}</span>
+                                            <small>Fixed for this task</small>
+                                          </div>
+                                        </div>
+                                      </details>
+                                    </div>
+                                  </section>
+                                )}
+                                {commandPaletteMatches(
+                                  commandPaletteQuery,
+                                  "model",
+                                  "reasoning",
+                                  "effort",
+                                ) && (
+                                  <section>
+                                    <strong>Model</strong>
+                                    <ComposerModelMenu
+                                      models={product?.catalog.models ?? []}
+                                      modelId={viewedTask.model ?? ""}
+                                      effort={viewedTask.reasoningEffort ?? ""}
+                                    />
+                                  </section>
+                                )}
+                              </div>
+                            </details>
+                            <ComposerModeMenu mode={viewedTask.executionMode} />
+                            <ComposerPermissionMenu
+                              approvalsReviewer={viewedTask.approvalsReviewer}
+                              mode={viewedTask.executionMode}
+                            />
+                            <ComposerModelMenu
+                              models={product?.catalog.models ?? []}
+                              modelId={viewedTask.model ?? ""}
+                              effort={viewedTask.reasoningEffort ?? ""}
+                            />
+                            {viewedCollaboration?.browser.canReturnToRove ? (
+                              <button
+                                className="primary composer-submit"
+                                aria-label="Resume automation"
+                                title="Return control to Rove"
+                                disabled={busy}
+                                onClick={() => void returnControl()}
+                              >
+                                <span aria-hidden="true">▶</span>
+                              </button>
+                            ) : viewedTask.availableActions.includes(
+                                "resume",
+                              ) ? (
+                              <button
+                                className="primary composer-submit"
+                                aria-label="Resume task"
+                                title="Resume task"
+                                disabled={busy}
+                                onClick={() => void restoreTask()}
+                              >
+                                <span aria-hidden="true">▶</span>
+                              </button>
+                            ) : composerPrimaryAction?.kind === "stop" ? (
+                              <button
+                                type="button"
+                                className="primary composer-submit composer-stop"
+                                aria-label="Stop current work"
+                                title="Stop current work"
+                                disabled={
+                                  busy || composerPrimaryAction.disabled
+                                }
+                                onClick={() => void stopTask()}
+                              >
+                                <span aria-hidden="true">■</span>
+                              </button>
+                            ) : (
                               <button
                                 className="primary composer-submit"
                                 aria-label={
@@ -6899,23 +6955,17 @@ export function ProductSurface({
                                 }
                                 disabled={
                                   busy ||
-                                  !followup.trim() ||
-                                  (!viewedTask.capabilities?.canQueue &&
-                                    !viewedTask.capabilities?.canSubmit)
+                                  composerPrimaryAction?.disabled !== false
                                 }
                                 onClick={() => void sendFollowup("default")}
                               >
-                                <span aria-hidden="true">
-                                  {viewedTask.capabilities?.canQueue
-                                    ? "+"
-                                    : "↑"}
-                                </span>
+                                <span aria-hidden="true">↑</span>
                               </button>
-                            </>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </ComposerInputShell>
+                      </ComposerInputShell>
+                    </>
                   )}
               </footer>
             </div>

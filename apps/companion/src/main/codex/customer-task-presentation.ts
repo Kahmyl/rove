@@ -147,11 +147,6 @@ export function customerTaskPresentation(
   )
     return result("failed", {
       sidebar: { label: "Couldn't continue", tone: "danger" },
-      conversationStatus: {
-        title: "Couldn't continue",
-        description: "The current work ended before Rove could complete it.",
-        tone: "danger",
-      },
       terminalWorkLabel: "Couldn't continue",
     });
   return result("ready");

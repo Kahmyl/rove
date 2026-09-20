@@ -100,6 +100,7 @@ describe("customer Task presentation", () => {
       state: "failed",
       sidebar: { label: "Couldn't continue" },
     });
+    expect(failed.conversationStatus).toBeUndefined();
     expect(uncertain).toMatchObject({
       state: "outcome_unclear",
       conversationStatus: { title: "Outcome unclear" },
