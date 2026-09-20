@@ -11,6 +11,7 @@ import { CodexExecutionCore } from "../../../apps/companion/src/main/codex/execu
 import { CodexAppServerHost } from "../../../apps/companion/src/main/codex/app-server-host.ts";
 import { CodexExecutableResolver } from "../../../apps/companion/src/main/codex/compatibility.ts";
 import { TaskAttachmentAuthority } from "../../../apps/companion/src/main/codex/task-attachments.ts";
+import { publishProcessCutMarker } from "../../../apps/companion/src/main/codex/task-engine-process-cut-marker.test-support.ts";
 import { DesktopHost } from "../../../apps/companion/src/main/host/desktop-host.ts";
 import { CompanionRuntimeClient } from "../../../apps/companion/src/main/runtime-client.ts";
 
@@ -45,11 +46,12 @@ async function pauseAtCut(point, detail) {
   if (cutCommand && cutCommand !== detail.commandType) return;
   matchingCutCount += 1;
   if (matchingCutCount !== cutOccurrence) return;
-  await writeFile(
-    join(home, "task-engine-cut.json"),
-    `${JSON.stringify({ point, ...detail, occurrence: matchingCutCount, desktopPid: process.pid })}\n`,
-    { mode: 0o600 },
-  );
+  await publishProcessCutMarker(join(home, "task-engine-cut.json"), {
+    point,
+    ...detail,
+    occurrence: matchingCutCount,
+    desktopPid: process.pid,
+  });
   await new Promise(() => undefined);
 }
 

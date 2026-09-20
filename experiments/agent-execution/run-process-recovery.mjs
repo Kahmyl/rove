@@ -18,6 +18,7 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 import { LocalProductApi } from "../../apps/companion/dist/main/main/codex/local-product-api.js";
+import { waitForProcessCutMarker } from "../../apps/companion/dist/main/main/codex/task-engine-process-cut-marker.test-support.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const l2Root = join(root, "experiments/agent-execution/recovery-harness");
@@ -294,11 +295,10 @@ class Driver {
   }
 
   waitForCut() {
-    return waitFor(async () =>
-      JSON.parse(
-        await readFile(join(this.home, "task-engine-cut.json"), "utf8"),
-      ),
-    );
+    return waitForProcessCutMarker(join(this.home, "task-engine-cut.json"), {
+      timeoutMs: 60_000,
+      pollIntervalMs: 50,
+    });
   }
 
   async stop() {
