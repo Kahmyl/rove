@@ -1192,9 +1192,17 @@ function projectConversation(
           ...(item.authoredBy === undefined
             ? {}
             : { authoredBy: item.authoredBy }),
-          ...(safeText(item.text, 2_000) === undefined
+          ...(safeText(
+            item.text,
+            item.kind === "user_message" ? 16_000 : 2_000,
+          ) === undefined
             ? {}
-            : { text: safeText(item.text, 2_000) }),
+            : {
+                text: safeText(
+                  item.text,
+                  item.kind === "user_message" ? 16_000 : 2_000,
+                ),
+              }),
           ...(safeText(item.title, 500) === undefined
             ? {}
             : { title: safeText(item.title, 500) }),

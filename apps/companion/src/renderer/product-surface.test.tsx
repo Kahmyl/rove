@@ -361,6 +361,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
 
   it("renders an accepted customer message before any provider turn exists", () => {
     const value = snapshot();
+    const tail = "accepted-message-render-tail";
+    const longMessage = `${"x".repeat(16_000 - tail.length)}${tail}`;
     value.product!.tasks = [
       {
         taskId: "task_accepted_local",
@@ -383,7 +385,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
               completedAt: "2026-09-20T00:00:00.000Z",
               clientId: "intent_local",
               deliveryState: "pending",
-              text: "Keep this exact instruction visible.",
+              text: longMessage,
             },
           },
           itemOrder: ["user:intent_local"],
@@ -403,7 +405,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain("Keep this exact instruction visible.");
+    expect(html).toContain(longMessage);
+    expect(html).toContain(tail);
     expect(html).toContain("Sending…");
     expect(html).not.toContain("Starting this task.");
   });

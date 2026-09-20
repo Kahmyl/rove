@@ -2319,6 +2319,7 @@ describe("LocalProductApi native product seam", () => {
     const projected = await api.readSnapshot();
     const conversation = projected.tasks[0]!.conversation!;
     expect(Object.keys(conversation.items)).toHaveLength(128);
+    expect(conversation.items.item_199?.text).toHaveLength(2_000);
     expect(conversation.turnOrder).toHaveLength(64);
     expect(conversation.explicitSummary).toHaveLength(2_000);
     expect(JSON.stringify(conversation)).not.toContain("never-render");

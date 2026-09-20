@@ -352,7 +352,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     store.close();
   });
 
-  it("keeps one stable accepted follow-up through provider materialization and delivery outcomes", async () => {
+  it("keeps one full 16,000-character accepted follow-up through customer projection and provider materialization", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-accepted-message-"));
     roots.push(root);
     const path = join(root, "task-engine.sqlite3");
@@ -367,23 +367,61 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
     const operationId = "intent_32345678-1234-4123-8123-123456789abc";
     const itemId = `user:${operationId}`;
+    const tail = "accepted-message-boundary-tail";
+    const longMessage = `${"x".repeat(16_000 - tail.length)}${tail}`;
     const accepted = await port.submit({
       type: "message",
       taskId: seededTaskId,
       operationId,
-      message: "Use my exact instruction",
+      message: longMessage,
       attachmentIds: ["attachment-safe"],
       attachmentMetadata: [{ filename: "reference.png", kind: "image" }],
     });
     expect(accepted.aggregate.conversation.items[itemId]).toMatchObject({
       id: itemId,
       clientId: operationId,
-      text: "Use my exact instruction",
+      text: longMessage,
       attachments: [{ filename: "reference.png", kind: "image" }],
     });
+    expect(accepted.aggregate.conversation.items[itemId]?.text).toHaveLength(
+      16_000,
+    );
     expect(
       accepted.aggregate.conversation.items[itemId]?.turnId,
     ).toBeUndefined();
+    const api = new LocalProductApi(
+      () => ({
+        state: "ready",
+        ready: true,
+        restartAttempt: 0,
+        stderrTail: [],
+      }),
+      {
+        snapshot: () => ({
+          account: { status: "logged_in", authMode: "chatgpt" },
+          models: [],
+          rateLimits: null,
+          usage: null,
+          refreshedAt: "2026-09-09T12:00:00.000Z",
+        }),
+      } as never,
+      port,
+      {},
+      new OrderedAttentionQueue(),
+      "/isolated/task-workspace",
+      () => [],
+    );
+    const beforeMaterialization = (await api.readSnapshot()).tasks.find(
+      (task) => task.taskId === seededTaskId,
+    )!;
+    expect(beforeMaterialization.conversation?.items[itemId]?.text).toBe(
+      longMessage,
+    );
+    expect(
+      Object.values(beforeMaterialization.conversation!.items).filter(
+        (item) => item.kind === "user_message",
+      ),
+    ).toHaveLength(1);
 
     await engine.accept({
       schemaVersion: 1,
@@ -403,7 +441,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     expect(
       (await port.readTask(seededTaskId))?.conversation?.items[itemId],
     ).toMatchObject({
-      text: "Use my exact instruction",
+      text: longMessage,
       deliveryState: "not_sent",
     });
 
@@ -411,7 +449,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       type: "message",
       taskId: seededTaskId,
       operationId,
-      message: "Use my exact instruction",
+      message: longMessage,
       attachmentIds: ["attachment-safe"],
       attachmentMetadata: [{ filename: "reference.png", kind: "image" }],
     });
@@ -437,7 +475,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
         clientId: operationId,
         kind: "user_message",
         status: "completed",
-        text: "Provider-only selected result context\nUse my exact instruction",
+        text: `Provider-only selected result context\n${longMessage}`,
         attachments: [
           { filename: "/private/path/reference.png", kind: "image" },
         ],
@@ -465,7 +503,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
         clientId: operationId,
         kind: "user_message",
         status: "completed",
-        text: "Provider-only selected result context\nUse my exact instruction",
+        text: `Provider-only selected result context\n${longMessage}`,
       },
     });
     const afterMaterialization = await store.aggregate(seededTaskId);
@@ -473,7 +511,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
       id: itemId,
       providerItemId: "provider-item-1",
       turnId: "turn_provider",
-      text: "Use my exact instruction",
+      text: longMessage,
       attachments: [{ filename: "reference.png", kind: "image" }],
     });
     expect(
@@ -482,9 +520,22 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     expect(afterMaterialization?.messageDeliveries[operationId]?.state).toBe(
       "message_materialized",
     );
+    const materializedProjection = (await api.readSnapshot()).tasks.find(
+      (task) => task.taskId === seededTaskId,
+    )!;
+    expect(materializedProjection.conversation?.items[itemId]).toMatchObject({
+      id: itemId,
+      providerItemId: "provider-item-1",
+      turnId: "turn_provider",
+      text: longMessage,
+      attachments: [{ filename: "reference.png", kind: "image" }],
+      deliveryState: "materialized",
+    });
     expect(
-      (await port.readTask(seededTaskId))?.conversation?.items[itemId],
-    ).toMatchObject({ deliveryState: "materialized" });
+      Object.values(materializedProjection.conversation!.items).filter(
+        (item) => item.kind === "user_message",
+      ),
+    ).toHaveLength(1);
     store.close();
 
     const reopened = new SqliteTaskEngineStore({ path });
@@ -493,7 +544,7 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     ).toMatchObject({
       id: itemId,
       providerItemId: "provider-item-1",
-      text: "Use my exact instruction",
+      text: longMessage,
     });
     reopened.close();
   });
