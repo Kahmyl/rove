@@ -29,7 +29,9 @@ A workflow can exist without configuration beyond its name and without tasks on 
 | Workflow environment  | Persistent named place for recurring work and its optional approved operating context.    | Small portable identity/configuration and local cache.              |
 | Workflow revision     | Immutable approved configuration used to identify what guidance applied.                  | Portable configuration metadata; not a product release version.     |
 | Task                  | Flexible conversation and related work; standalone or associated with a workflow.         | Local.                                                              |
-| Conversation entry    | User input, assistant output, or meaningful displayed tool/result item.                   | Local; raw model internals are not a product record.                |
+| Accepted user instruction | User input durably accepted by Rove and immediately placed in the local conversation, with operation identity and delivery state. | Local; later provider materialization corroborates the same item. |
+| Queued follow-up      | Ordered Task-owned instruction accepted for later execution, not yet delivered to the model or transcript. | Local and restart-safe until edited, removed, or promoted.          |
+| Conversation entry    | Accepted user instruction after delivery begins, assistant output, or meaningful displayed work/result item. | Local; raw model internals are not a product record.                |
 | Execution turn        | A bounded attempt to respond to a request inside a task.                                  | Local status, correlation, and outcomes.                            |
 | Engine association    | Mapping from a task to a qualified Codex thread/account connection epoch.                 | Local; no credential values in the mapping.                         |
 | Capability attachment | Availability and ownership of a resource needed by a task.                                | Local; live authority must be revalidated after restart.            |
@@ -37,6 +39,9 @@ A workflow can exist without configuration beyond its name and without tasks on 
 | Page group            | Task-owned set of pages within a host; not an authentication boundary.                    | Local mapping, re-established using current browser evidence.       |
 | Grant                 | User-authorized access to a resource and operations within a scope.                       | Local, revocable, never inherited from webpage instructions.        |
 | Attention request     | A pending decision or intervention addressed to one task/operation.                       | Local with resolved/cancelled/expired state.                        |
+| Browser control ownership | Exact current human/agent ownership of one task-bound browser resource and its handoff generation. | Runtime authority, durably correlated where continuation requires it. |
+| Recovery blocker      | Exact bounded uncertainty that prevents an unsafe transition or replay until its owning authority reconciles it. | Local; typed by authority and correlation rather than customer copy. |
+| Customer presentation state | Customer-safe projection of execution, interaction capabilities, attention, control ownership, and recovery consequences. | Derived; optional session preferences such as expanded history remain presentation-only. |
 | Operation             | One accepted command with stable identity plus intent, dispatch, reconciliation, and outcome evidence. | Local journal; deduplication is not external exactly-once delivery. |
 | Result                | A finding collection, draft, record, recommendation, or action outcome.                   | Local; can reference sources and artifacts.                         |
 | Artifact              | A managed local file with ownership, type, size, integrity, and origin metadata.          | Local bytes and metadata.                                           |
@@ -44,11 +49,13 @@ A workflow can exist without configuration beyond its name and without tasks on 
 
 ## Task, turn, control, and presentation are separate
 
-A task's organization state is active or archived; explicit deletion has separate cleanup rules. Its execution state may be idle, starting, running, waiting for attention, waiting for a resource, stopped, failed, or requiring outcome reconciliation. These are projections of facts, not permission to erase the conversation.
+A task's organization state is active or archived; explicit deletion has separate cleanup rules. An accepted user instruction is durable Task conversation truth before provider materialization. An execution turn is the bounded agent attempt that may later deliver that instruction. A queued follow-up is neither an execution turn nor a delivered conversation entry until promotion begins; stopping does not discard or execute it.
+
+Execution facts may describe idle, starting, running, waiting, interrupted, failed, or reconciliation work. Customer presentation instead distinguishes useful Working, genuine Waiting for you, You're in control, Checking state, Stopping, Stopped, failure, and uncertainty. Presentation is a projection of facts and safe interaction capabilities, not permission to erase conversation, authorize execution, or infer browser ownership.
 
 An execution turn may complete while the task remains active. Stop interrupts the turn and future dispatch; it does not create a terminal conversation state. A new message may redirect the work. An unresolved external operation restricts repetition of that operation, not ordinary discussion.
 
-Control ownership belongs to the affected capability resource. Agent Mode, Companion Mode, and Capture Mode establish participation expectations but do not transfer authority merely because the selected view changes. Capture remains human-led; returning a browser resource to an agent requires an explicit compatible operation.
+Attention, recovery, and control ownership are independent. Attention means a real user action is pending. A recovery blocker may restrict an exact transition without creating attention. Control ownership belongs to the affected capability resource. Agent Mode, Companion Mode, and Capture Mode establish participation expectations but do not transfer authority merely because the selected view changes. Capture remains human-led; returning a browser resource to an agent requires an explicit compatible operation followed by fresh inspection where required.
 
 The renderer's selected task, current tab, expanded result, and local unsent composer text are presentation state. They are not routing keys for background events or authorization evidence.
 

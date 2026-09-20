@@ -4,9 +4,11 @@
 
 ## Three kinds of state
 
-Durable product facts include accepted task requests, confirmed message items, local Task-history archive preferences, attention transitions, operation outcomes, result references, artifact availability, and approved workflow changes. They must survive the interruption scenarios they claim to cover. Codex thread archival and absence are external observations, not local Task-organization facts.
+Durable product facts include accepted user instructions, their local conversation items and delivery states, ordered queued follow-ups, confirmed provider materialization, local Task-history archive preferences, attention transitions, operation outcomes, result references, artifact availability, and approved workflow changes. They must survive the interruption scenarios they claim to cover. Codex thread archival and absence are external observations, not local Task-organization facts.
 
-Ephemeral presentation includes token deltas, temporary progress text, cursor position, selected task, visible page, and component connectivity. Persist only what is needed for useful history and recovery. Do not write every streaming token as a separate full task snapshot.
+Durable acceptance creates local conversation truth without waiting for App Server `userMessage` history. The exact later live/history item reconciles the existing local item through stable client/operation identity and may advance delivery evidence; it never appends a duplicate. A queued follow-up is durable Task state but is not a conversation message, execution turn, or external submission until promotion begins. Restart replay restores the queue without dispatching it.
+
+Ephemeral presentation includes token deltas, temporary progress text, cursor position, selected task, visible page, open/collapsed history choices, anti-flicker timing, and component connectivity. Persist only what is needed for useful history and recovery. Do not write every streaming token as a separate full task snapshot. Intermediate semantic activity may be coalesced or reconstructed where final durable truth is sufficient, but consequential state, failure, and uncertainty remain durable as required by their owning contract.
 
 External observations are facts from Codex, the browser, or an integration. Validate and correlate them before using them to change product state. An external event is not an authorization to execute a new action.
 
@@ -35,6 +37,8 @@ Commit the authoritative local change before publishing its notification. Within
 The application service may publish a bounded change feed or invalidate a snapshot through the existing subscription seam. A durable local change table is useful where it solves reconnection or crash boundaries, but is not mandatory duplication of the existing task ledger. Choose one authority and derive views from it.
 
 Streaming deltas carry exact task, turn, and item association. A component switching views unsubscribes or changes its displayed selector; it does not alter the producer's task association. A late delta for an interrupted turn cannot activate a new turn or append to another task.
+
+Customer active-work state is derived from the combination of accepted work, current exact turn/dispatch facts, waiting and attention state, browser ownership, stopping intent, and recovery blockers. It does not blindly mirror one stale provider `turnStatus`. Active-duration intervals open and close from that customer projection; waiting for the user, human ownership, checking/recovery, stopping, and stopped time do not accumulate.
 
 ## Initial snapshot and resubscription
 
@@ -78,7 +82,7 @@ Transient sync failure produces an explicit pending/conflict state while local a
 
 Coalesce expendable progress updates while retaining final message items, errors, attention changes, and operation outcomes. Bound subscriptions and event buffers. When a consumer falls behind, require a resnapshot rather than growing memory without limit.
 
-After restart, recover unfinished operation facts before presenting running states. Replay of persisted facts rebuilds projections only. External effects require a separate dispatch decision with current authority. This distinction must be tested with duplicate, late, missing, and reordered events.
+After restart, recover unfinished operation facts before presenting running states. Replay of persisted facts and queued follow-ups rebuilds projections only. External effects and queue promotion require a separate dispatch decision with current authority. This distinction must be tested with duplicate, late, missing, and reordered events.
 
 An unresolved command retains its exact operation identity until matching delivery or non-submission evidence resolves it. Unrelated observations cannot erase that fence. This operation-level recovery state does not delete or hide the durable conversation, and completed cleanup reopens normal message flow rather than producing a terminal Task.
 

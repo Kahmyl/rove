@@ -1,0 +1,379 @@
+# Conversation and Task Experience
+
+**Status:** Active implementation plan
+
+**Authority:** [Product Direction](../Products/product-direction.md), [Product Operating Model](../Products/product-operating-model.md), and the responsible Engineering contracts
+
+**Implementation status:** [Conversation and Task interaction/presentation](../Engineering/implementation-status.md)
+
+This plan sequences an approved product and engineering correction. It is not evidence that the target behavior is implemented, and it does not replace the canonical contracts.
+
+## 1. Why this work exists
+
+Private-beta use exposed a structural coupling between execution lifecycle, execution permission, customer interaction, and renderer presentation:
+
+- A new conversation can show **Starting this task.** or **Waiting for Codex activity.** before the user's own message materializes.
+- One task showed **Working** for more than 188 minutes while exact state was actually uncertain and being recovered.
+- `recoveryRequired` currently forces `recovering` with `allowedActions: []`; because the composer owns the visible Stop control, recovery can remove Stop.
+- Internal copy such as **Codex external truth requires authoritative reconciliation.** can reach the customer surface.
+- Stop semantics drift: TaskEngine and LocalProductApi submit `interrupt`, ProductTaskPort removes `finish`, and React requires `finish` to render Stop. Renderer fixtures often inject `finish`, masking the production mismatch.
+- Active work expands automatically but terminal work does not automatically compact. Duration is wall-clock time derived from item timestamps and a provider turn status.
+- React maps raw tool names to activity copy and can expose implementation mechanisms rather than customer work.
+- An active-turn `task.message` becomes `turn/steer`; there is no durable customer follow-up queue.
+- Runtime and the compact follower support voluntary Companion takeover while the main Task only projects requested handoff takeover.
+- Task history includes mode and lifecycle noise such as **Working · Agent**; the Browser inspector exposes **Observations** and **Evidence** counters.
+- `lifecycle.phase`, `allowedActions`, Runtime state, `conversation.turnStatus`, and attention independently drive different pieces of UI.
+
+These are not isolated strings. The correction separates durable truth, customer interaction capability, and customer presentation so the renderer can present a coherent conversation without weakening lifecycle, ownership, approval, or effect safety.
+
+## 2. Authority and non-goals
+
+### Preserved authority
+
+- TaskEngine remains the durable lifecycle reducer and SQLite remains local Task authority.
+- Codex App Server remains the execution engine behind the qualified adapter.
+- Exact Task/thread/App Server session/Runtime session/handoff/generation identity remains required.
+- Live App Server observations and exact `thread/read` history continue to reconcile Codex truth without authorizing new work.
+- Runtime retains browser ownership, freshness, consequence/effect, single-dispatch, and replay-fence authority.
+- Workflow context, Output/Result identity, approval material, attachments, and action outcomes retain their existing boundaries.
+- The completed adaptive-browser execution architecture remains in force; its bounded capability gaps are not reopened here.
+
+### Non-goals
+
+This work does not replace TaskEngine or SQLite, introduce another lifecycle engine or generic event framework, add a distributed task-sync or cloud execution system, reopen browser perception/reconciliation architecture, weaken effect or replay fences, replace Workflow/Output models, or expose a whole-Task Pause. Runtime may retain its browser-mutation pause primitive. A future whole-Task Pause requires a separate product contract.
+
+## 3. Reference-product findings
+
+Reference products inform interaction patterns, not Rove authority. Current official OpenAI documentation describes a desktop workspace that keeps parallel and long-running work visible while users move between chats, and long-running work that remains in one chat, exposes progress, accepts follow-up steering, pauses for decisions, and keeps independent chats isolated. Those patterns support immediate conversation continuity, visible bounded progress, explicit intervention, and independent Tasks; they do not establish Rove's safety or persistence rules. See [ChatGPT desktop app](https://learn.chatgpt.com/docs/app) and [Long-running work](https://learn.chatgpt.com/docs/long-running-work).
+
+The adopted direction is therefore narrow: conversational acknowledgement, compact but inspectable work history, stable Stop, distinct queue and steer, genuine user attention, browser ownership separate from conversational execution, and independently usable Tasks. Canonical Rove contracts stand on their own.
+
+## 4. Settled interaction contract
+
+### Accepted input and delivery
+
+1. Send validates pre-acceptance model availability and input.
+2. Durable local acceptance creates the Task if needed and places the user instruction immediately in its final conversation position.
+3. Bootstrap and delivery proceed asynchronously.
+4. Exact App Server `userMessage` materialization with matching client/operation identity corroborates the local item and advances delivery evidence without duplication.
+5. Rejection before durable acceptance creates no running Task and preserves the draft.
+6. Definite post-acceptance non-submission retains the user item and shows a safe failure/not-sent disposition. Retry is offered only when exact replay semantics allow it.
+7. Possible submission retains the item, fences blind replay, and reconciles existing delivery truth.
+8. New Task plus first instruction is one customer action; bootstrap and thread association are not separate customer steps.
+
+### Startup and active work
+
+- Ordinary startup mechanisms are hidden. Qualify a short anti-flicker delay, initially around 200–300 ms, before showing explicit Working.
+- While useful execution is active, its work block is forced expanded and not manually collapsible. Long work scrolls inside a bounded viewport.
+- Assistant commentary explains direction; activity rows describe concrete work. They use different hierarchy.
+- Activity arrives from a typed customer-semantic projection using a bounded vocabulary such as read, search, navigate, inspect, change, create, run, transfer, capture, verify, and compare.
+- Activity preserves tense and consequence truth: started, dispatched, checking, confirmed, failed, and unresolved are not interchangeable.
+- Safe repeated reads may coalesce only when the summary is supported. Consequential actions, failure, approval, transfer, material change, uncertainty, and necessary evidence remain explicit.
+- At the bottom, new activity auto-follows. Scrolling upward preserves position and shows **Latest**; returning to bottom resumes follow.
+
+### Duration and terminal history
+
+- Displayed duration accumulates only during customer-semantic active work intervals.
+- It freezes for Waiting for you, approval/input waiting, human browser ownership, Checking the page, Checking task state, Stopping, and Stopped.
+- A stale provider `in_progress` status cannot extend the timer by itself.
+- Terminal work auto-compacts, preserves the final answer's scroll anchor, and becomes manually expandable.
+- A manual reopen remains for the current rendered session; a fresh render may default terminal work to collapsed.
+- Ordinary completion adds no generic completion banner or transient Ready flash between queued turns.
+
+### Queue and steer
+
+- During active work, ordinary submit means Queue.
+- A queued follow-up is bounded, durable, exact-Task-owned, ordered, restart-safe, editable/removable, and reorderable where practical.
+- It appears above the composer but is not provider input or a delivered conversation message.
+- Restart never dispatches it merely because it exists.
+- Promotion creates the real user message only when execution begins.
+- **Send now** explicitly calls qualified `turn/steer` at the next safe boundary and immediately becomes a real user message.
+- Work segmentation follows meaningful customer intervention rather than requiring a one-to-one mapping with provider turn IDs.
+- Target keyboard behavior: Enter performs the state default; Command/Ctrl+Enter steers while active; Shift+Enter inserts a newline. Final shortcuts require platform/accessibility qualification.
+
+### Stop
+
+- Stop means interrupt current accepted work, never Finish, close, archive, delete, or finish a browser session.
+- It remains independently available before a provider turn ID, during active work, and during safe waiting/checking states while work remains nonterminal.
+- Pre-dispatch Stop cancels pending work safely. Active-turn Stop interrupts the exact turn. At a possible-dispatch boundary, it prevents future work and preserves reconciliation of the uncertain effect.
+- Stop owns a stable hit target. Activation immediately becomes **Stopping…**, disables duplicate intent, and remains spatially stable around attention changes.
+- Authoritative interruption becomes **Stopped after …**, returns the ordinary composer, and retains queued follow-ups without running them.
+- Stopping does not steal browser ownership from a human.
+
+### Interaction capabilities
+
+The Product projection separately represents `canSubmit`, `canQueue`, `canSteer`, `canStop`, `canRespond`, `canTakeControl`, `canReturnToRove`, `canRetry`, and `canArchive` or equivalent typed names. A generic engine action list is not renderer layout state. Each capability remains derived from exact authority and never from selected UI state.
+
+### Attention and browser collaboration
+
+- Attention exists only when the customer must answer, approve/deny, select, complete secure input, or take control. Automatic recovery is not attention.
+- Request-family presentation names the decision and uses matching actions. Exact recipients, content, files, commands, grants, or scope remain visible.
+- Conversational input may replace only the owning selected Task's composer. Approvals generally sit above the composer without suppressing Stop.
+- A response surface stays in place while committing; controls show submitting/checking rather than disappearing under the pointer.
+- Agent ordinary work offers no voluntary takeover. Agent requested handoff offers one-step **Take Over**.
+- Companion agent-owned browser offers voluntary **Take Over**; a requested handoff emphasizes it.
+- Requested handoff is **Waiting for you**, with neutral collaboration styling and duration frozen.
+- Human ownership is **You're in control**, with **Return to Rove** and Stop available.
+- Return transfers the exact resource, then shows **Checking the page…** while grounding is invalidated and fresh inspection occurs. Failure keeps ownership human and offers a safe retry.
+- Capture is human-controlled by definition.
+- The main Task and compact follower consume the same customer browser-control projection.
+
+### Recovery, completion, and failure
+
+- Internal recovery projects as neutral **Checking task state…**, not attention or warning by default.
+- Safe controls remain available. Internal diagnostics never become lifecycle copy.
+- Reconciliation transitions to Working, compact terminal work, Stopped, or **Rove couldn't confirm the latest task activity.**
+- Confirmed execution failure, uncertain consequential outcome, model/provider unavailability, and inability to establish state remain distinct.
+- The conversation remains readable and usable where safe. Generic Retry is absent when it could duplicate an effect.
+
+## 5. Settled presentation contract
+
+The Task hierarchy is: user messages and final assistant answers; genuine actionable requests; current work state; assistant commentary; semantic activity; technical detail. Implementation detail never dominates the conversation.
+
+Active work is forced open; terminal work auto-compacts. Commentary is prose without completion iconography. Activity rows show semantic action and truthful state. Customer-visible duration is accumulated active time. Active work owns bounded internal scrolling and respectful auto-follow. Completion preserves anchoring.
+
+Critical controls keep stable geometry through active, approval, stopping, and response-submission transitions. Focus returns deliberately, hover cannot be required for discovery, disabled states explain their consequence, keyboard behavior is platform-correct, and animation respects reduced motion. Narrow layouts retain recognizable Queue/Send now/Stop/Take Over/Return controls. Long text, titles, attachments, and many activities wrap or scroll without displacing them.
+
+Task-history titles are dominant. A second line appears only for Working, Needs input, You're in control, Checking state, Stopping, Stopped, Capturing, or genuinely useful Couldn't continue. Ready/completed has no permanent label. Mode suffixes and raw lifecycle phases are removed. Working is neutral, checking subdued, stopped muted, attention accented, and danger reserved for genuine failure.
+
+The follower uses the same state and controls as the main Task, with less detail. The Browser inspector shows attached identity, owner/state, safe site/page label, Open/View Browser, Take Over, Return to Rove, and recording. Observation/evidence counters and handoff bookkeeping are developer diagnostics. A full handoff card is not duplicated in transcript and inspector.
+
+## 6. Customer-state matrix
+
+| State | Main transcript and work block | Composer | Controls | Sidebar | Browser/follower | Active duration | Copy constraints |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| New Task | Empty conversation; no fake lifecycle item | New-task input | Send when valid | No row until accepted | No browser unless selected explicitly | No | Preserve draft on pre-acceptance rejection |
+| Just submitted | User message immediately in final position | Clears after acceptance; restores on rejection | Stop if accepted work is nonterminal | Task title; no startup phase | No attachment implied | Not until useful work begins | No separate create/bootstrap step |
+| Internal startup | Usually hidden by anti-flicker | Ordinary Task composer state | Stop remains possible after acceptance | No bootstrap label | No Runtime language | No | No Starting task, binding, or dispatch-intent copy |
+| Active work | Forced-open Working block with commentary/activity | Default submit queues | Queue, Send now, Stop | Working | Agent working; Companion may Take Over | Yes | Only customer-semantic progress |
+| Tool work | Semantic activity with truthful tense/outcome | Same as active | Same as active plus exact approval if needed | Working unless attention supersedes | Relevant safe page/site state | Yes unless waiting/checking | No raw tool or infrastructure names |
+| Queued follow-up | Queue chips above composer; not transcript | Edit/add queue | Remove, edit, reorder where available; Send now remains explicit | Existing live state | Unchanged | Follows owning work | Never imply delivered/sent |
+| Steer | Real user message appears and segments customer work | Continues active defaults | Stop remains; steer deduplicated by operation/turn | Working | Unchanged unless command changes it | Yes | Say sent/steered only after acceptance |
+| Stopping | Current work remains visible; header says Stopping… | Does not auto-run queue | Stop disabled in stable target | Stopping | Human ownership remains if present | No | No duplicate intent |
+| Stopped | Terminal block auto-compacts to Stopped after… | Ordinary Send returns; queue remains | Send, queue management, archive where safe | Stopped | Browser ownership shown truthfully | No | Stop is not finish/archive |
+| Conversational user input | Exact question/request visible in conversation | Exact response surface replaces owning composer | Send/Cancel as contract allows; Stop separate | Needs input | No generic browser takeover unless required | No | Freeform alternative where allowed |
+| Approval | Scoped material directly above composer | Ordinary draft preserved | Family-specific Allow/Deny, Approve/Decline, Send, Cancel; Stop separate | Needs input | Exact task only | No | No raw request status |
+| Requested browser handoff | Waiting for you with reason and prior work | Conversation stays readable | Take Over, Stop | Needs input | Your turn; one action opens and transfers exact browser | No | Neutral collaboration, credentials in browser |
+| Voluntary Companion takeover | Working remains truthful until transfer | Queue remains available | Take Over, Stop | Working | Companion follower offers Take Over | Yes until transfer | Not offered for ordinary Agent work |
+| Human browser ownership | You're in control; work block remains open but paused | Conversation input safe per capability | Return to Rove, Stop | You're in control | Same owner and action across surfaces | No | Prefer Return to Rove |
+| Return to Rove | Checking the page… | Safe input only | Retry only on failed return; Stop where meaningful | Checking state | Ownership transition exact; then fresh inspection | No | No resumed Working until grounding is fresh |
+| Checking page | Current history visible; checking row/state | Safe controls retained | Stop and safe retry as projected | Checking state | Agent not shown working yet | No | Customer consequence, no grounding jargon |
+| Internal checking/recovery | Checking task state…; no fake attention card | Safe submission/queue according to projection | Stop independent; only safe exact retry | Checking state | Preserve exact owner | No | No Runtime, TaskEngine, thread/read, generation, recovery flag |
+| Completed | Final answer; work auto-compacts | Ordinary Send; next queued promotion avoids Ready flash | Send, archive | No status line | Ready/open as applicable | No | No Task completed banner |
+| Confirmed failure | Failure attached to affected work; conversation readable | Safe follow-up if allowed | Exact safe retry only | Couldn't continue when useful | Resource-specific failure | No | Distinguish execution failure from uncertainty |
+| Uncertain consequential outcome | Checking outcome or Outcome unclear bound to exact effect | Unrelated conversation remains safe | Read-only reconcile; no blind mutation retry | Checking state or Couldn't continue | Exact resource/effect state | No | Explain what is unknown and what must not repeat |
+| Model unavailable | Existing history readable; new rejected draft stays draft | Draft preserved | Sign in/retry availability only as truthful | No false Working | Browser unaffected unless separately unavailable | No | Distinguish account, allowance, and startup failure |
+| Capture Mode | Human activity record; no model-work fiction | Capture controls | Stop/finish capture per capture contract | Capturing | Human-controlled | No agent timer | Native capture is not model inference |
+| Another Task running/needs input | Selected Task remains unchanged | Selected Task's own composer | Each Task's own capabilities | Owning rows show Working or Needs input | Follower selects exact task-bound browser without changing authority | Per Task | Background attention never steals selection |
+
+## 7. Current implementation inventory
+
+The inventory below describes source at the plan's starting point, `4b6ede4400d595482c6ce0f9aba706e1f5415679`. Target contracts above remain authoritative.
+
+| Area/field | Current authority | Current customer use | Problem | Planned disposition |
+| --- | --- | --- | --- | --- |
+| `TaskAggregate` | `packages/protocol/src/task-engine.ts`; SQLite aggregate JSON | Indirect source of Task projection | Mixes durable execution facts with fields later presented almost directly | keep as authority |
+| `conversation.items` / `TaskConversationItem` | Task aggregate folded from Codex item observations | Transcript and work rows | User item generally appears only after App Server materialization; activity lacks customer-semantic type | project through customer layer |
+| Accepted `task_launch_requested` / `task_message_requested` | TaskEngine event ledger | Acceptance and dispatch intent | Does not create immediate local user conversation item | replace |
+| `messageDeliveries` | Task aggregate, operation/client correlation | Mostly recovery/dispatch truth | Has states needed for immediate-message failure/uncertainty but no complete customer projection | keep as authority |
+| `requestedOperation` | Native lifecycle input | Drives reducer and recovery | One engine operation is overloaded as UI capability source | keep internal |
+| `lifecycle.phase` / `allowedActions` | Native lifecycle reducer | Status copy, composer gate, Stop/return/archive layout | Engine state is treated as presentation and action layout | project through customer layer |
+| `recoveryRequired` | Task aggregate and typed `codexRecoveryBlockers` | `recovering`, empty actions, warning/attention text | Diagnostic suppresses safe controls and leaks internal language | keep internal |
+| `codexRecoveryBlockers` | Exact authority-class/correlation records | No direct useful customer semantics | Correct safety evidence needs consequence-level presentation | keep as authority |
+| `codex.turn` / `turnId` | Qualified App Server observations/history | `conversation.turnStatus`, active work and duration | Stale `in_progress` can masquerade as Working; provider turn IDs do not equal customer segments | keep as authority |
+| `continuation` / attentions | TaskEngine plus attention store | handoff response, return control, Needs input | Genuine attention and recovery can be conflated; request-family copy is generic | project through customer layer |
+| Runtime truth | Runtime session/control/effect authorities | Browser state, ownership, follower | Must remain exact; main and follower interpret it differently | keep as authority |
+| Launch/initial operation | Durable launch config and bootstrap stages | Empty/start state and first dispatch | Customer can see bootstrap as separate lifecycle | keep internal |
+| `interrupt` versus `finish` | Native reducer distinguishes turn interrupt from resource cleanup/legacy close | LocalProductApi Stop uses interrupt; renderer Stop checks finish | Production projection removes finish while fixtures inject it | replace |
+| `reduceLifecycleInventory` | Generated native contract | New Task admission | Blocks launch when any nonterminal task exists, contradicting independent Tasks | investigate before change |
+| `ProductTaskSnapshot` | `task-coordinator.ts`, ProductTaskPort/LocalProductApi projection | Main renderer contract | Exposes lifecycle/actions/runtime but no typed interaction or presentation state | replace |
+| `productLifecycleReason` | `product-task-port.ts` | Empty state, warnings, sidebar/detail copy | Emits Starting/Waiting/Codex/internal recovery language | replace |
+| `executionActions` filtering | ProductTaskPort removes finish/archive/resume then recombines organization actions | Composer and task controls | Makes Stop drift invisible; retains generic action model | replace |
+| `availableActions` | Product snapshot | Direct React layout condition | Does not separate submit/queue/steer/stop/respond/control | replace |
+| `conversation.turnStatus` | Codex turn mapped in ProductTaskPort | Working, elapsed timer, Stop gate | Insufficient customer active-work truth | project through customer layer |
+| Browser/attention projection | ProductTaskPort and LocalProductApi | Inspector, composer replacement, requested takeover | Voluntary Companion takeover not represented consistently | replace |
+| `task.start` boundary | LocalProductApi → ProductTaskPort launch | Creates Task and starts first work | First message waits for later App Server item | replace |
+| `task.message` boundary | LocalProductApi → message intent | Follow-up; active dispatch selects `turn/steer` | No durable Queue; ordinary submit steers | replace |
+| `task.stop` boundary | LocalProductApi checks `interrupt` then submits interrupt | Stop command | Renderer often cannot reach it because it checks finish | keep as authority |
+| `clientUserMessageId` | App Server `turn/start`/`turn/steer` operation identity | Message correlation | Correct basis for deduplication but not used to create local item at acceptance | keep as authority |
+| Thread-history reconstruction | `codex-thread-truth-reconciler.ts`, normalizers, TaskEngine fold | Restart/reconnect convergence | Must reconcile local accepted items rather than append provider copies | keep as authority |
+| `product-surface-state` | React-side derived state | selection, Task control and history helpers | `taskControlProjection` allows Take Over only for actionable requested handoff; active/terminal still phase-driven | replace |
+| `ProductSurface` timeline segmentation | React groups items around user messages/provider turns | Conversation layout | Provider items determine segmentation; queued/promoted/steered distinctions absent | replace |
+| `activityCopy` | React raw `title` and tool-name mapping | Activity text | Renderer owns semantics and exposes unbounded tool identifiers | replace |
+| `openWorkTurnIds` | React session state | Expand/collapse | Active groups are opened but terminal transition never removes them automatically | keep as presentation state |
+| Elapsed calculation | React min/max timestamps plus `Date.now()` while `in_progress` | Worked/Working duration | Counts wall time through waiting, human control, and recovery | replace |
+| Composer rendering gate | React `availableActions` and attention | Send/Stop/return controls | Stop shares composer and depends on finish; blocked message hides other capabilities | replace |
+| Attention rendering | React generic `attentionCopy` and forms | Approval/input UI | Raw statuses and Codex/mechanism wording leak; geometry can shift | replace |
+| Browser inspector | React ProductSurface | Browser identity/control and metrics | Exposes Observations/Evidence and can duplicate handoff presentation | remove from customer surface |
+| Task sidebar | React ProductSurface | Title plus workflow/phase/mode line | Shows Completed, raw phases, Standalone, and mode noise | replace |
+| `unified-session-state` / follower | Runtime session presentation model | Compact follower Take Over/Return/Pause/Stop | Has voluntary Companion takeover but browser-session concepts and Pause differ from main Task | project through customer layer |
+| `pauseAgentControl` | Runtime API | Follower Pause | Pauses browser mutation, not whole Task execution | keep internal |
+| Return-control transition | TaskEngine/Runtime exact handoff and fresh inspection | Resume automation/Return Control | Copy differs; checking page is not a shared customer state | keep as authority |
+| Renderer fixtures with `finish` | `product-surface*.test*`, state tests and LocalProductApi fixtures | Make Stop/ready cases render | Synthetic action combinations do not match ProductTaskPort production output | replace |
+| Fake working/ready phases | Renderer unit fixtures | Visual state coverage | Can pass while production projection has different semantics | replace |
+| Independent follower fixtures | `unified-session-state` and `follower-state` tests | Browser follower coverage | Do not prove main/follower parity from one production Task projection | replace |
+
+### Stale assumptions requiring correction
+
+1. `reduceLifecycleInventory` considers every nonterminal task a global launch blocker, despite Product Direction requiring resource-scoped concurrency.
+2. `currentTaskId` and active-task helpers still risk conflating current execution with selected presentation.
+3. `allowedActions` is treated as both engine permission and renderer composition.
+4. `finish` survives in synthetic projections as a Stop proxy even though production filtering removes it.
+5. A provider active turn is treated as sufficient evidence for Working and duration.
+6. Runtime browser session presentation is treated as a whole-Task control model in the follower.
+
+## 8. Architectural correction
+
+```text
+durable execution truth
+  TaskEngine + SQLite + App Server reconciliation + Runtime/effect authority
+        |
+        v
+customer interaction-capability projection
+  submit | queue | steer | stop | respond | take | return | retry | archive
+        |
+        v
+customer presentation projection
+  accepted message | working | waiting | checking | stopped | failure
+  semantic activity | duration intervals | browser collaboration | sidebar
+        |
+        v
+renderer
+  layout, focus, animation, scroll, expansion preference, responsive behavior
+```
+
+The capability projection is derived from authority and is not another lifecycle engine. The presentation projection translates consequences and semantic work; it cannot authorize commands, clear blockers, move browser ownership, or settle effects. The renderer consumes typed customer state and sends explicit intents. It retains only ephemeral presentation preferences.
+
+## 9. Implementation slices
+
+### Slice A — immediate durable conversation input
+
+- Extend Task-owned accepted instruction representation with stable operation/client identity, delivery state, attachments, and timestamps.
+- Commit the local conversation item atomically with acceptance.
+- Reconcile live/history App Server materialization into that item without duplication.
+- Project definite non-submission and unresolved delivery safely.
+- Cover first Task message, follow-up, restart, duplicate and reordered materialization.
+
+### Slice B — customer interaction/control projection
+
+- Define the typed capability projection independently of lifecycle actions.
+- Map Stop to current-work interrupt across pre-turn, active turn, waiting, and safe recovery.
+- Remove `finish` as a customer Stop proxy while preserving internal cleanup compatibility.
+- Retain safe controls through recovery and separate attention from blockers.
+- Audit and correct global launch admission where it contradicts resource-scoped multi-Task behavior.
+
+### Slice C — durable Queue and explicit Steer
+
+- Add a bounded Task-owned ordered queue with edit/remove and practical reorder operations.
+- Normalize legacy aggregates without queue state to an empty queue.
+- Recover queue across restart without dispatch.
+- Promote exactly one queued entry at a committed execution boundary, then create/deliver its conversation message.
+- Add explicit Steer with exact active-turn identity and keyboard contract.
+- Preserve queued entries after Stop.
+
+### Slice D — customer execution/activity presentation
+
+- Introduce typed customer Task state and active-duration interval projection.
+- Move semantic activity mapping/coalescing out of React.
+- Preserve truthful outcome tense and effect uncertainty.
+- Drive customer segments from accepted instructions and interventions, not raw provider turns alone.
+- Implement anti-flicker Working, forced-open active work, terminal auto-collapse, bounded scrolling, **Latest**, and scroll anchoring.
+
+### Slice E — attention and browser collaboration
+
+- Project attention families and exact action labels/material.
+- Create one browser-control projection shared by main Task and follower.
+- Support Agent requested handoff and Companion voluntary takeover without expanding Runtime authority.
+- Present Take Over, human ownership, Return to Rove, return failure, and fresh-page checking.
+- Remove generic whole-Task Pause from customer surfaces while retaining required Runtime primitive.
+
+### Slice F — recovery, completion, failure, and sidebar
+
+- Project checking-state consequences without diagnostic leakage or false attention.
+- Reconcile ordinary completion, Stop, confirmed failure, uncertain effects, and model unavailability.
+- Apply the bounded sidebar vocabulary and multi-Task isolation.
+- Remove customer Browser inspector counters and duplicate handoff UI.
+- Remove stale phase/mode labels and ensure background changes never steal selection.
+
+### Slice G — rendered experience qualification
+
+- Add production-composition Electron journeys through the preload bridge.
+- Cover normal/narrow widths, long titles and content, attachments, many activities, multiple Tasks, keyboard/focus, hover/disabled/submitting states, reduced motion, stable geometry, auto-follow, anchoring, queue/steer/stop, attention, handoff, return/checking, recovery, failure, and uncertainty.
+- Retain DOM/state assertions alongside screenshots and manual development acceptance.
+
+## 10. Migration and compatibility
+
+The likely persistence path is an additive field in Task aggregate JSON plus normalization to an empty queue and accepted-message metadata defaults. Confirm this against all SQLite aggregate readers, projections, backup/export, process-cut recovery, legacy imports, and fixtures before choosing it. Prefer normalization over destructive SQL migration when it preserves existing local work.
+
+Existing conversation items may lack local acceptance/delivery metadata and must remain readable. Provider-materialized `user_message` items with `clientId` remain authoritative correlation evidence. Legacy items without client IDs cannot be guessed into new accepted instructions; retain them as historical transcript items.
+
+Queue promotion needs an atomic marker that distinguishes queued, promotion accepted, dispatch not started, possible dispatch, materialized, failed, and unresolved. Restart may resume truth reconciliation but must not promote another entry or redispatch possible work. Bound queue count and payload size consistently with Task input and attachment limits.
+
+App Server client IDs and current operation IDs are compatibility identifiers. Preserve exact `turn/start`, `turn/steer`, and `turn/interrupt` wire behavior. Generated App Server schemas and installed migrations are not renamed cosmetically.
+
+Old fixtures and snapshots that inject `finish`, ready/working phases, or Runtime-only control semantics must be replaced with production projection builders. Retain negative cases; do not weaken assertions. Backup/export must include new local queue/accepted-message state but never turn it into portable Workflow data.
+
+## 11. Qualification matrix
+
+| Journey | Underlying truth evidence | Rendered customer evidence |
+| --- | --- | --- |
+| Immediate Send | Acceptance and local item commit are atomic; exact materialization deduplicates | Message appears immediately in final position; no startup item flash |
+| Start timing | Active projection begins only from authoritative facts; anti-flicker is presentation-only | Fast start does not flicker; sustained work becomes Working |
+| Work history | Active/terminal customer state and duration intervals are correct | Active forced open; terminal auto-collapsed; manual reopen retained; anchor stable |
+| Activity | Semantic kinds and outcome states derive from authoritative events/effects | Commentary hierarchy differs; no raw tool/Runtime strings; coalescing truthful |
+| Queue | Ordered state persists, edits safely, and restart dispatches nothing | Queue chips render/edit/remove/reorder; no transcript copy before promotion |
+| Steer | Exact active turn and client operation reach `turn/steer` once | Send now is explicit; message appears and customer segment changes |
+| Stop | Pre-turn cancel, exact interrupt, and uncertain boundary preserve truth; queue retained | Stable Stop → Stopping → Stopped; composer returns; no Finish semantics |
+| Attention | Exact request generation/material and response state remain authoritative | Family-specific copy/actions; stable response surface; Stop remains |
+| Browser handoff | Exact session/handoff/ownership generations transition once | Waiting for you → Take Over → You're in control |
+| Companion takeover | Runtime accepts voluntary exact-task takeover only in Companion | Main and follower both offer Take Over with same state |
+| Return | Exact return plus fresh inspection before continuation | Return to Rove → Checking page → Working/ready; truthful retry on failure |
+| Recovery | Typed blocker families clear only from matching authority | Checking state, no false Needs input, internal diagnostics absent, safe controls present |
+| Failure/uncertainty | Definite failure and unresolved effect remain distinct; replay fence retained | Distinct copy and actions; no unsafe generic Retry |
+| Multi-Task | Events, queue, attention, control, and selection remain exact-Task-bound | A Working, B Needs input, C ready remain selectable; no selection theft |
+| Responsive/accessibility | Same capability projection at all widths and input modes | Stable controls, focus, labels, keyboard, reduced motion, long-content behavior |
+| Main/follower parity | Both consume one browser-control/customer-state projection | Same owner, handoff, Take Over, Return, Stop consequence and copy family |
+
+Synthetic unit tests remain useful for isolated presentation behavior, but every critical row needs at least one production projection path. Screenshots are review evidence, not a substitute for state and DOM assertions.
+
+## 12. Manual acceptance
+
+After implementation, exercise the development application through:
+
+```text
+Send
+  -> immediate message
+  -> Working
+  -> semantic activity
+  -> Queue
+  -> Steer
+  -> Stop
+  -> follow-up after Stop
+  -> approval
+  -> Agent browser handoff
+  -> Take Over
+  -> Return to Rove
+  -> checking/recovery
+  -> completion
+  -> multi-Task switching
+```
+
+Repeat relevant states at normal and narrow widths, with long text/titles, attachments, many activities, keyboard-only use, reduced motion, and background Task attention. Use fixture accounts and safe local/browser fixtures. Do not package until this full private-beta journey is satisfactory. Live external-account acceptance remains separately authorized.
+
+## 13. Completion conditions
+
+This plan becomes complete only when:
+
+- accepted user messages appear immediately and exact App Server materialization never duplicates them;
+- no ordinary startup or recovery mechanism language leaks into customer UI;
+- Queue is durable and distinct from transcript/delivery, and Steer is explicit;
+- Stop is reliable, independent, stable, and never Finish/archive;
+- active work is truthful and forced open, terminal work auto-compacts, and scrolling/anchoring respect the user;
+- activity is customer-semantic and preserves outcome truth;
+- attention means genuine user action with request-specific presentation;
+- main Task and follower share browser collaboration semantics, including Companion takeover and Return checking;
+- recovery does not masquerade as attention and retains safe controls;
+- active duration excludes waiting, human ownership, checking, stopping, and stopped time;
+- sidebar and multi-Task presentation are coherent and do not expose mode/lifecycle noise;
+- important journeys pass through production projections with functional, interaction, visual, responsive, accessibility, and recovery evidence; and
+- manual development-app acceptance is satisfactory.

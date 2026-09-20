@@ -37,13 +37,19 @@ These concepts must remain distinct. A task is not a browser session; a workflow
 
 Tasks should feel as approachable and flexible as ordinary conversational threads. Users can start unrelated work, switch between tasks, return to previous results, and continue a conversation without satisfying a rigid follow-up procedure.
 
+Once Rove durably accepts a user instruction, that instruction appears immediately in its final conversation position. The customer does not wait for model-provider history to repeat material that Rove has already accepted. Task creation and its first instruction are one customer interaction: internal bootstrap, thread association, dispatch, and reconciliation remain implementation work rather than ordinary conversation content.
+
+Execution truth, the controls currently safe for the customer, and customer presentation are related but separate. Ordinary startup and recovery mechanisms must not leak as lifecycle narration. The interface distinguishes useful active work, genuine waiting for the user, internal checking, stopping, stopped work, confirmed failure, and uncertainty without treating a stale provider status or selected view as authority.
+
 Starting a task or sending a message must not automatically open a browser. Rove opens one only when an authorized operation requires it or when the user explicitly chooses Open Browser. Closing a browser must not close the conversation.
 
-Completing a response leaves the task available for another message. **Stop** interrupts current execution; it does not permanently close the task, delete its history, or prevent continuation. A later message can resume previous work, revise the request, or discuss something else entirely.
+Completing a response leaves the task available for another message. **Stop** interrupts current execution; it does not finish, close, archive, or delete the task and does not prevent continuation. Stop remains a stable current-work control whenever accepted work is still nonterminal, independently of whether new message submission is currently allowed. A later message can resume previous work, revise the request, or discuss something else entirely.
 
-Multiple tasks can coexist and perform independent work. A task waiting for human attention must not make unrelated tasks inaccessible. Resource contention may delay a particular operation, but it must not become a global prohibition on creating, viewing, or using other tasks.
+During active work, an ordinary follow-up may be queued durably for later execution, while an explicit **Send now** action may steer the active turn at a safe engine boundary. A queued instruction is not yet a delivered conversation message; steering is. Stopping preserves queued instructions without running them automatically.
 
-The interface must make important distinctions visible: working, waiting for a user decision, waiting for a resource, interrupted, unable to execute, and ready for another message. It must not make users infer these conditions from a spinner or an unavailable control.
+Multiple tasks can coexist and perform independent work. A task working, checking state, or waiting for human attention must not make unrelated tasks inaccessible or steal selection. Resource contention may delay a particular operation, but it must not become a global prohibition on creating, viewing, or using other tasks.
+
+The interface must make important distinctions visible: working, waiting for a user decision, waiting for a resource, checking state, stopping, stopped, unable to execute, and ready for another message. Attention is reserved for a real customer action, not automatic reconciliation. Customer presentation projects these facts and available controls; it never authorizes execution or browser ownership.
 
 Local task history, results, and artifacts remain durable across ordinary application restarts. An interrupted process is not a reason to discard the conversation.
 

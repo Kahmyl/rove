@@ -44,5 +44,9 @@ Use descriptive filenames based on the work itself. Remove or archive obsolete p
 
 ## Active plans
 
-- [Adaptive Browser Execution and Reconciliation](adaptive-browser-execution-and-reconciliation.md)
-- [Codex Event Ingestion and Task-State Reconciliation](codex-event-ingestion-and-task-state-reconciliation.md)
+- [Conversation and Task Experience](conversation-and-task-experience.md)
+
+## Completed plans
+
+- [Adaptive Browser Execution and Reconciliation](adaptive-browser-execution-and-reconciliation.md) — complete implementation plan; remaining bounded capability gaps are tracked by Implementation Status.
+- [Codex Event Ingestion and Task-State Reconciliation](codex-event-ingestion-and-task-state-reconciliation.md) — complete for its qualified fact families; remaining live-only and packaged qualification boundaries are tracked by Implementation Status.
