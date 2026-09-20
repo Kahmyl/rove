@@ -61,6 +61,7 @@
     "test:desktop:codex-components": "node scripts/verify-codex-component-set-fixtures.mjs",
     "customer-journey:first-launch": "pnpm --filter @rove/companion build && node experiments/agent-execution/first-launch-customer-journey.mjs",
     "customer-journey:workflow": "pnpm --filter @rove/companion build && node experiments/agent-execution/workflow-customer-journey.mjs",
+    "customer-journey:conversation-task": "pnpm --filter @rove/companion build && node experiments/agent-execution/conversation-task-rendered-qualification.mjs",
     "browser:perception-benchmark": "pnpm --filter @rove/browser perception:benchmark",
     "browser:perception-baseline:inspect": "pnpm --filter @rove/browser perception:baseline:inspect",
     "browser:perception:research:evidence": "pnpm --filter @rove/browser perception:research:evidence",

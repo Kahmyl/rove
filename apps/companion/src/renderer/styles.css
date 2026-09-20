@@ -4760,6 +4760,10 @@ span.composer-control-icon {
   font-size: 11px;
 }
 
+.product-app .task-independent-controls .composer-stop {
+  width: 96px;
+}
+
 .followup.composer-input-shell {
   position: static;
   display: grid;
