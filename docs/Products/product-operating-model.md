@@ -37,7 +37,7 @@ The implementation may bound simultaneous execution for memory or account limits
 
 ### Conversation acceptance and startup
 
-Submitting a new task or follow-up is one conversation action. After durable local acceptance, the user's instruction appears immediately in its final transcript position while bootstrap and provider delivery continue asynchronously. A later exactly correlated provider `userMessage` corroborates that item rather than duplicating it. Rejection before durable acceptance preserves the draft and creates no false running task. Definite dispatch failure retains the accepted message with a customer-safe not-sent or failed state; uncertain delivery retains it while Rove reconciles existing delivery truth and never blindly redispatches.
+Submitting a new task or follow-up is one conversation action. Durable local acceptance creates exactly one user-authored conversation item in its final transcript position while bootstrap and provider delivery continue asynchronously. That item is the accepted instruction and owns its operation/client identity and delivery state. A later exactly correlated provider `userMessage` corroborates or updates the same item rather than replacing or duplicating it. Rejection before durable acceptance preserves the draft and creates no false running task. Definite dispatch failure changes that accepted item's customer-safe not-sent or failed state; uncertain delivery changes the state of that same item while Rove reconciles existing delivery truth and never blindly redispatches.
 
 Ordinary internal startup is hidden. Brief starts should not flash a separate lifecycle row; an anti-flicker delay around 200–300 ms is a reasonable value to qualify, not execution authority. Customer surfaces do not narrate bootstrap, Runtime or thread binding, capability issuance, dispatch intent, database commits, or reconciliation mechanics.
 
@@ -55,9 +55,9 @@ Ordinary completion adds no generic completion banner: final activity settles, t
 
 ### Queue, steer, and keyboard behavior
 
-During active work, the default submit action adds a durable, ordered follow-up to that exact task. Queued instructions appear immediately above the composer, survive ordinary restart, and may be edited or removed; reordering should be supported where practical. They are not delivered transcript messages and are not automatically dispatched after restart. A queued instruction becomes a real user message only when its execution begins.
+During active work, the default submit action adds a durable, ordered follow-up to that exact task. Queued instructions appear immediately above the composer, survive ordinary restart, and may be edited or removed; reordering should be supported where practical. They are not conversation items or provider input and are not automatically dispatched after restart. At the committed execution boundary, promotion atomically turns that exact queued instruction into the accepted user conversation item once.
 
-**Send now** explicitly steers active work at the next safe Codex boundary and immediately creates a real user conversation message. Customer work grouping follows meaningful interventions rather than assuming one group for every provider turn identifier. Target keyboard behavior is Enter for the state-default action, Command/Ctrl+Enter for Send now while active, and Shift+Enter for a newline, subject to platform and accessibility qualification.
+**Send now** explicitly steers active work at the next safe Codex boundary and immediately creates the accepted user conversation item for that intervention. Customer work grouping follows meaningful interventions rather than assuming one group for every provider turn identifier. Target keyboard behavior is Enter for the state-default action, Command/Ctrl+Enter for Send now while active, and Shift+Enter for a newline, subject to platform and accessibility qualification.
 
 ### Stop and interaction capabilities
 

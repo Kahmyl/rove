@@ -53,7 +53,7 @@ The adopted direction is therefore narrow: conversational acknowledgement, compa
 ### Accepted input and delivery
 
 1. Send validates pre-acceptance model availability and input.
-2. Durable local acceptance creates the Task if needed and places the user instruction immediately in its final conversation position.
+2. Durable local acceptance creates the Task if needed and creates exactly one accepted user conversation item immediately in its final transcript position. That item is the accepted instruction and owns its stable operation/client identity and delivery state; there is no separate pre-delivery accepted-instruction record.
 3. Bootstrap and delivery proceed asynchronously.
 4. Exact App Server `userMessage` materialization with matching client/operation identity corroborates the local item and advances delivery evidence without duplication.
 5. Rejection before durable acceptance creates no running Task and preserves the draft.
@@ -86,8 +86,8 @@ The adopted direction is therefore narrow: conversational acknowledgement, compa
 - A queued follow-up is bounded, durable, exact-Task-owned, ordered, restart-safe, editable/removable, and reorderable where practical.
 - It appears above the composer but is not provider input or a delivered conversation message.
 - Restart never dispatches it merely because it exists.
-- Promotion creates the real user message only when execution begins.
-- **Send now** explicitly calls qualified `turn/steer` at the next safe boundary and immediately becomes a real user message.
+- Promotion atomically turns that exact queued instruction into the single accepted user conversation item only when execution begins; it does not create an intermediate accepted-message entity.
+- **Send now** explicitly calls qualified `turn/steer` at the next safe boundary and immediately creates the single accepted user conversation item for that intervention.
 - Work segmentation follows meaningful customer intervention rather than requiring a one-to-one mapping with provider turn IDs.
 - Target keyboard behavior: Enter performs the state default; Command/Ctrl+Enter steers while active; Shift+Enter inserts a newline. Final shortcuts require platform/accessibility qualification.
 
@@ -174,7 +174,7 @@ The inventory below describes source at the plan's starting point, `4b6ede4400d5
 | --- | --- | --- | --- | --- |
 | `TaskAggregate` | `packages/protocol/src/task-engine.ts`; SQLite aggregate JSON | Indirect source of Task projection | Mixes durable execution facts with fields later presented almost directly | keep as authority |
 | `conversation.items` / `TaskConversationItem` | Task aggregate folded from Codex item observations | Transcript and work rows | User item generally appears only after App Server materialization; activity lacks customer-semantic type | project through customer layer |
-| Accepted `task_launch_requested` / `task_message_requested` | TaskEngine event ledger | Acceptance and dispatch intent | Does not create immediate local user conversation item | replace |
+| Accepted `task_launch_requested` / `task_message_requested` | TaskEngine event ledger | Acceptance and dispatch intent | Does not atomically create the durable user `TaskConversationItem` that is the accepted instruction | extend existing conversation-item representation |
 | `messageDeliveries` | Task aggregate, operation/client correlation | Mostly recovery/dispatch truth | Has states needed for immediate-message failure/uncertainty but no complete customer projection | keep as authority |
 | `requestedOperation` | Native lifecycle input | Drives reducer and recovery | One engine operation is overloaded as UI capability source | keep internal |
 | `lifecycle.phase` / `allowedActions` | Native lifecycle reducer | Status copy, composer gate, Stop/return/archive layout | Engine state is treated as presentation and action layout | project through customer layer |
@@ -234,7 +234,7 @@ customer interaction-capability projection
         |
         v
 customer presentation projection
-  accepted message | working | waiting | checking | stopped | failure
+  accepted user conversation item | working | waiting | checking | stopped | failure
   semantic activity | duration intervals | browser collaboration | sidebar
         |
         v
@@ -248,9 +248,9 @@ The capability projection is derived from authority and is not another lifecycle
 
 ### Slice A — immediate durable conversation input
 
-- Extend Task-owned accepted instruction representation with stable operation/client identity, delivery state, attachments, and timestamps.
-- Commit the local conversation item atomically with acceptance.
-- Reconcile live/history App Server materialization into that item without duplication.
+- Extend and use the Task's existing `TaskConversationItem` user-item representation as the accepted user conversation item, with stable operation/client identity, delivery state, attachments, and timestamps. Do not introduce a parallel accepted-message collection unless repository investigation proves the existing representation cannot safely carry that metadata.
+- Atomically commit `task_launch_requested` or `task_message_requested` acceptance and exactly one durable user conversation item; that item is immediately renderable in its final transcript position before asynchronous provider dispatch.
+- Reconcile exact live/history App Server `userMessage` materialization into that same item without replacement or duplication.
 - Project definite non-submission and unresolved delivery safely.
 - Cover first Task message, follow-up, restart, duplicate and reordered materialization.
 
@@ -267,7 +267,7 @@ The capability projection is derived from authority and is not another lifecycle
 - Add a bounded Task-owned ordered queue with edit/remove and practical reorder operations.
 - Normalize legacy aggregates without queue state to an empty queue.
 - Recover queue across restart without dispatch.
-- Promote exactly one queued entry at a committed execution boundary, then create/deliver its conversation message.
+- At a committed execution boundary, atomically promote exactly one queued entry into the single accepted user conversation item, then deliver and reconcile that item through the normal path; create no intermediate accepted-message entity.
 - Add explicit Steer with exact active-turn identity and keyboard contract.
 - Preserve queued entries after Stop.
 
@@ -276,7 +276,7 @@ The capability projection is derived from authority and is not another lifecycle
 - Introduce typed customer Task state and active-duration interval projection.
 - Move semantic activity mapping/coalescing out of React.
 - Preserve truthful outcome tense and effect uncertainty.
-- Drive customer segments from accepted instructions and interventions, not raw provider turns alone.
+- Drive customer segments from accepted user conversation items and interventions, not raw provider turns alone.
 - Implement anti-flicker Working, forced-open active work, terminal auto-collapse, bounded scrolling, **Latest**, and scroll anchoring.
 
 ### Slice E — attention and browser collaboration
@@ -303,15 +303,15 @@ The capability projection is derived from authority and is not another lifecycle
 
 ## 10. Migration and compatibility
 
-The likely persistence path is an additive field in Task aggregate JSON plus normalization to an empty queue and accepted-message metadata defaults. Confirm this against all SQLite aggregate readers, projections, backup/export, process-cut recovery, legacy imports, and fixtures before choosing it. Prefer normalization over destructive SQL migration when it preserves existing local work.
+The likely persistence path is additive metadata on the existing Task conversation-item representation plus normalization to an empty queue and accepted user-item metadata defaults. Confirm this against all SQLite aggregate readers, projections, backup/export, process-cut recovery, legacy imports, and fixtures before choosing it. Prefer normalization over destructive SQL migration when it preserves existing local work.
 
-Existing conversation items may lack local acceptance/delivery metadata and must remain readable. Provider-materialized `user_message` items with `clientId` remain authoritative correlation evidence. Legacy items without client IDs cannot be guessed into new accepted instructions; retain them as historical transcript items.
+Existing conversation items may lack local acceptance/delivery metadata and must remain readable. Provider-materialized `user_message` items with `clientId` remain authoritative correlation evidence. Legacy items without client IDs cannot be inferred to have local acceptance metadata; retain them as historical transcript items.
 
 Queue promotion needs an atomic marker that distinguishes queued, promotion accepted, dispatch not started, possible dispatch, materialized, failed, and unresolved. Restart may resume truth reconciliation but must not promote another entry or redispatch possible work. Bound queue count and payload size consistently with Task input and attachment limits.
 
 App Server client IDs and current operation IDs are compatibility identifiers. Preserve exact `turn/start`, `turn/steer`, and `turn/interrupt` wire behavior. Generated App Server schemas and installed migrations are not renamed cosmetically.
 
-Old fixtures and snapshots that inject `finish`, ready/working phases, or Runtime-only control semantics must be replaced with production projection builders. Retain negative cases; do not weaken assertions. Backup/export must include new local queue/accepted-message state but never turn it into portable Workflow data.
+Old fixtures and snapshots that inject `finish`, ready/working phases, or Runtime-only control semantics must be replaced with production projection builders. Retain negative cases; do not weaken assertions. Backup/export must include new local queue and accepted user conversation-item state but never turn either into portable Workflow data.
 
 ## 11. Qualification matrix
 
