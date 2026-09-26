@@ -13,7 +13,8 @@ Qualify the repaired system as a market candidate, not merely a development buil
 
 ## Required evidence
 
-- repository checks, typecheck, lint, build and full deterministic suite;
+- repository checks, typecheck, lint, build and a repeatable full deterministic suite;
+- qualification-CI determinism: process-backed tests used as release gates must stop failing different cases on unchanged/docs-only code; known nondeterminism is either fixed or explicitly removed from the blocking gate with a bounded replacement test;
 - TaskEngine process-cut/restart and production traces;
 - managed Runtime recovery/chaos matrix;
 - real App Server attention family characterization;

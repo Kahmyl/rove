@@ -14,12 +14,13 @@ Convert the 26 September acceptance report, prior hard-Stop evidence, current re
 ## Completed work
 
 - Established the eight root problem families used by the sprint.
-- Created stable finding IDs MR-001 through MR-028.
+- Created stable finding IDs MR-001 through MR-029.
 - Mapped every confirmed defect and live qualification gap to one primary ticket.
 - Recorded cross-stage consolidations so the same authority/state problem is not fixed repeatedly.
 - Preserved passing behavior and explicit non-issues.
 - Performed read-only source inspection of recovery, Runtime polling, customer execution projection, approval configuration/decision projection, attention classification, task-scoped MCP, unmatched Runtime presentation, browser foreground coordination, and Stop provider state.
 - Rechecked upstream Codex hard-Stop status on 26 September 2026.
+- Ran the remote repository qualification. Repository checks, typecheck and build passed, while two docs-only verify attempts failed in different pre-existing process-backed tests; recorded this as MR-029 instead of treating a flaky signal as product evidence.
 - Recorded reproduction preservation requirements and unresolved questions without modifying product source.
 
 Canonical outputs:
@@ -39,6 +40,7 @@ Canonical outputs:
 - [x] Hard Stop is isolated as a provider/architecture blocker rather than folded into ordinary UI remediation.
 - [x] Current upstream hard-Stop evidence is dated and bounded.
 - [x] Implementation Status is corrected so source qualification no longer overstates live acceptance.
+- [x] Remote verification was actually exercised and its nondeterministic process-backed failures are captured as a stabilization finding rather than ignored.
 - [x] No production source changes are included.
 
 ## Verification

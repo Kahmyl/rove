@@ -47,6 +47,7 @@
 | MR-026 | Hard Stop can interrupt the Codex turn while a yielded local process continues running | Confirmed provider blocker | G | STAB-12 |
 | MR-027 | Deterministic renderer coverage exists for request families that the real development path cannot deliberately trigger | Qualification architecture gap | H/E | STAB-09 |
 | MR-028 | Current implementation-status source claims overstate live recovery/handoff qualification relative to development-app evidence | Documentation/status defect | H | STAB-01 |
+| MR-029 | Repository verify is nondeterministic on a docs-only branch: separate runs failed in different process-backed tests while repository checks, typecheck and build passed | Qualification-infrastructure defect | H | STAB-14 |
 
 ## Cross-stage consolidations
 
@@ -69,6 +70,7 @@
 8. `main.ts` intentionally closes the full Rove surface when the owned browser is foregrounded. The black/full-surface symptom therefore belongs to surface coordination.
 9. `unmatchedRuntimeSession` is computed from the global Companion snapshot versus all projected Tasks. Presentation must not visually transfer one unmatched resource to whichever Task happens to be selected.
 10. Upstream Codex issue #42717 remains open as of 26 September 2026, and current upstream `ProcessEntry` still lacks owning-turn identity. No current release is accepted as solving MR-026.
+11. STAB-01 PR qualification exposed a separate release-signal problem: the first docs-only verify run failed Runtime integration cleanup with `ENOTEMPTY`, while the rerun failed a TaskEngine process-cut handoff case with `Task is not ready for a handoff`. Repository checks, typecheck and build passed in both attempts. Because the code delta is documentation-only and the failures differ, the suite itself is currently not a deterministic market gate; STAB-14 owns that qualification-infrastructure defect rather than hiding it.
 
 ## Preserved passes / explicit non-issues
 
