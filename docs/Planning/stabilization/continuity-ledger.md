@@ -83,10 +83,18 @@ Its first gate is read-only: trace at least one affected Task across Task record
 
 Do **not** begin with a patch for the unbound callback. Reproduce and trace the entire authority chain first.
 
-### ROVE-STAB-02 — READY, NOT STARTED
+### ROVE-STAB-02 — IN PROGRESS — READ-ONLY DIAGNOSIS
 
-**Inherited checkpoint:** STAB-01 merge `0ed941ce1b2f4fd734d2f56aeb136813cbee41d6` plus this continuity-process change once merged.  
-**Exact implementation start SHA:** to be recorded immediately before STAB-02 production work after `pnpm codex:context`.
+**Inherited checkpoint:** STAB-01 merge `0ed941ce1b2f4fd734d2f56aeb136813cbee41d6` plus continuity-process merge `ed156afd0c2874927900279900165b6cae160650`.  
+**Exact ticket start SHA:** `ed156afd0c2874927900279900165b6cae160650`  
+**Start worktree state:** local `main`, clean, exactly aligned to `origin/main` after a fast-forward from `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`.  
+**Local editor state:** untracked `.vscode/mcp.json` was preserved unchanged and locally excluded through `.git/info/exclude`; it is not tracked by remote main.
+
+**Reproduction availability:** original acceptance home `/private/tmp/rove-stage2.NZ9umP` was confirmed present and inactive, size about 208 MB.  
+**Preserved snapshot:** `/private/tmp/rove-stage2-stab02-baseline` created with `cp -a`, about 207 MB and 3,256 files.  
+**Authority stores observed in snapshot:** four Runtime bootstrap claims, four Runtime session records, and `codex-product/task-process.v1.sqlite3`.  
+**Analysis DB:** `/private/tmp/rove-stage2-stab02-analysis/task-process.v1.sqlite3`, SHA-256 `f0e12e240c0017144165dd9a6b2aa03af0df0a4d692bc56d17a30950cae2b5a0`.  
+**Diagnostic command issue:** the first `sqlite3 -readonly` integrity invocation failed with SQLite error 14 (`unable to open database file`). This is a diagnostic-tool/open-mode issue against the analysis copy, not yet a product defect and not evidence that the preserved source fixture is corrupt. No product source was modified.
 
 Required reading:
 
@@ -99,7 +107,7 @@ Required reading:
 - corrected `docs/Engineering/implementation-status.md`;
 - responsible Product/Engineering authority documents routed by the Rove engineering skill.
 
-**Do not mark STAB-02 in progress until the exact current-main start SHA and reproduction availability are recorded here.**
+The entry gate is satisfied. Continue read-only diagnosis from the preserved snapshot. Do not modify production source until the Task → Codex → Runtime → browser/handoff authority chain has been traced and the first divergence identified.
 
 ## Future ticket rows
 

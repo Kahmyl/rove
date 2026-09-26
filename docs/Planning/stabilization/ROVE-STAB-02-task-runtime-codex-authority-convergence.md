@@ -1,7 +1,7 @@
 # ROVE-STAB-02 — Task / Runtime / Codex authority convergence
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready  
+**Status:** In Progress — read-only diagnosis  
 **Dependencies:** STAB-01  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -25,6 +25,15 @@ Consume STAB-01 before any new investigation:
 STAB-01 established one concrete source defect—historical handoff reconstruction passes `getControlStatus` without preserving object binding—but explicitly did **not** establish that this explains every recovery/authority failure. Do not collapse the investigation to that one fix.
 
 The exact implementation baseline is **not** the original planning baseline. At ticket start, run `pnpm codex:context`, reconcile current `main`/worktree against the continuity ledger, and record the exact start SHA before editing.
+
+### Established ticket start state
+
+- exact start SHA: `ed156afd0c2874927900279900165b6cae160650`;
+- local main aligned and clean at ticket start;
+- original acceptance home confirmed present/inactive and copied to `/private/tmp/rove-stage2-stab02-baseline`;
+- analysis SQLite backup created at `/private/tmp/rove-stage2-stab02-analysis/task-process.v1.sqlite3`, SHA-256 `f0e12e240c0017144165dd9a6b2aa03af0df0a4d692bc56d17a30950cae2b5a0`;
+- four persisted Runtime session records and four bootstrap claims are available for the authority trace;
+- initial SQLite read-only CLI open failed with error 14 against the analysis copy; this is being diagnosed without touching product source or the preserved fixture.
 
 ### First gate
 
