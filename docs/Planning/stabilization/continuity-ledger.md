@@ -109,6 +109,34 @@ Required reading:
 
 The entry gate is satisfied. Continue read-only diagnosis from the preserved snapshot. Do not modify production source until the Task → Codex → Runtime → browser/handoff authority chain has been traced and the first divergence identified.
 
+#### Read-only authority evidence — persisted snapshot
+
+The preserved TaskEngine database opens cleanly from a disposable copy: SQLite integrity check is `ok`, foreign-key check reports no violations, and 16 Task aggregates are present.
+
+A cross-store trace established:
+
+- every one of the 16 persisted Task aggregates currently carries `recoveryRequired = "Persisted task workspace is outside the protected per-task root and requires explicit recovery."`;
+- each Task's Codex thread identity remains exact and `threadExists: true` with an exact `threadSource = rove:<taskId>:<bootstrapId>`;
+- four persisted Runtime sessions exist and exactly match four Task launch bootstrap IDs:
+  - `boot_4740... → ses_60f8... → task_04f5...` (Agent, completed);
+  - `boot_79e9... → ses_19f5... → task_52d8...` (Agent, completed);
+  - `boot_c351... → ses_da04... → task_b362...` (Agent, `awaiting_human`, controller null, active handoff generation 2);
+  - `boot_4216... → ses_fa53... → task_350f...` (Companion, active, controller agent);
+- `task_b362...` persists the exact Runtime session ID `ses_da04...` in `record.identity.sessionId`, while `task_350f...` has no persisted Runtime session ID even though its bootstrap ID exactly identifies active Runtime session `ses_fa53...`;
+- the Task aggregate Runtime truth for the four browser-associated Tasks is `availability: unavailable`, `bootstrapLookup: unknown`, `status/attachment: unknown` even though Runtime session files are present in the same product home;
+- bootstrap-claim JSON files are creation receipts, not current session truth: they still show `status: starting`, controller agent, ownership generation 1 while the corresponding session records have advanced to completed/awaiting_human/active and later generations.
+
+This narrows the investigation but does not yet establish the first causal divergence. In particular, the global persisted-workspace recovery blocker may mask later Runtime/Codex recovery behavior, and the Companion missing-session-ID case must be traced through TaskEngine events before deciding whether session binding failed or was never required/persisted in that path.
+
+#### Source observations added after the persisted trace
+
+Current source explains two important facts:
+
+- `SqliteTaskEngineStore.migratePersistedSchema()` sets the exact global recovery message when a persisted `launch.cwd` is not equal to `<taskWorkspaceRoot>/<taskId>`. The actual persisted `launch.cwd` values still need to be compared with the expected root before classifying this as a compatibility migration defect.
+- Runtime `listSessionInventory()` reads current `session.json` records, while bootstrap claims are not the inventory source. Therefore stale bootstrap-claim status is expected creation-receipt behavior and is not itself the authority defect.
+
+Next read-only gate: inspect persisted `launch.cwd`, archive/visibility state, Codex recovery blockers, and the TaskEngine event history for `task_b362...` and `task_350f...` to determine (a) why all Tasks received the workspace blocker, and (b) where Runtime session binding diverged between requested Agent handoff and successful Companion browser use.
+
 ## Future ticket rows
 
 ROVE-STAB-03 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
