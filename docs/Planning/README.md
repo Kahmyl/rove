@@ -30,7 +30,8 @@ A planning document may contain:
 - migration/compatibility considerations;
 - verification requirements and regression evidence;
 - stop conditions and completion criteria;
-- explicit non-goals that prevent scope drift.
+- explicit non-goals that prevent scope drift;
+- a bounded ticket set and continuity ledger when an explicitly authorized active plan requires independent checkpoints with durable handoff state.
 
 A planning document should not become:
 
@@ -40,7 +41,7 @@ A planning document should not become:
 - a hidden source of permissions or security policy;
 - a permanent milestone/version taxonomy for a pre-release product.
 
-Use descriptive filenames based on the work itself. Remove or archive obsolete planning guidance through normal Git history when the implementation and canonical contracts no longer need an active sequence.
+Use descriptive filenames based on the work itself. Stable ticket IDs are a bounded exception only when the active plan explicitly authorizes them for execution continuity; they are planning metadata, not product versions or domain names. Remove or archive obsolete planning guidance, ticket files, and continuity records through normal Git history when the implementation and canonical contracts no longer need the active sequence.
 
 ## Active plans
 
