@@ -3,9 +3,20 @@
 **Sprint:** Rove Market-Readiness Stabilization  
 **Status:** Ready for characterization  
 **Dependencies:** STAB-01; product-policy fixes may depend on STAB-07/08  
-**Baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
+**Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
 This ticket is part of one stabilization sprint. It is not a separate sprint or release phase. Work must stay within this ticket's invariant, receive ticket-level verification, and be checkpointed before the next ticket begins.
+
+## Continuity entry contract
+
+A prior ticket handoff is **continuation state, not live repository truth**. Before acting, run `pnpm codex:context`, verify the intended checkout/branch/HEAD/worktree, compare it with [continuity-ledger.md](continuity-ledger.md), and reconcile any difference. Do not ask a new agent to rediscover settled evidence unless current repository/runtime facts contradict it.
+
+### Required inherited state
+
+Consume STAB-07/STAB-08 decisions when those tickets are complete; if provider characterization work begins earlier, it remains read-only/fixture work and must not preempt their product contract. Preserve STAB-01's distinction between a product defect and an unqualified request family.
+
+At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
+
 
 ## Invariant
 
@@ -41,3 +52,25 @@ If the pinned provider cannot emit a family, record the exact version/schema/run
 Provider characterization harness → live App Server/MCP fixture → LocalProductApi/attention broker integration → Electron attention journey.
 
 Checkpoint before STAB-13.
+
+## Continuity exit / handoff contract
+
+This ticket is **not complete** merely because its implementation and tests pass. Before changing its status to Complete, make the resulting engineering state durable for the next ticket.
+
+Update [continuity-ledger.md](continuity-ledger.md) with:
+
+- exact ticket start SHA and final ticket commit/PR/merge SHA;
+- MR findings closed, narrowed, superseded, or newly discovered;
+- confirmed root cause(s) and important hypotheses disproved;
+- invariant actually established by the implementation;
+- exact production/schema/persistence/contract files changed;
+- migration, compatibility, provider-version, or fixture consequences;
+- focused verification and affected-subsystem verification with exact commands/results;
+- real-boundary/E2E evidence, including paths/hashes where material;
+- failures, flakiness, and anything not qualified;
+- preserved reproduction state and whether it remains valid;
+- residual blockers/open questions;
+- direct downstream tickets whose assumptions or entry contracts changed;
+- the exact next stop point and next verification gate.
+
+Then update every directly dependent ticket's **Continuity entry contract** when the new evidence changes what that ticket must inherit. The next ticket must be able to continue from repository-owned state without reconstructing this investigation from chat history.
