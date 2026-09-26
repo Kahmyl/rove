@@ -3,9 +3,33 @@
 **Sprint:** Rove Market-Readiness Stabilization  
 **Status:** Ready  
 **Dependencies:** STAB-01  
-**Baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
+**Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
 This ticket is part of one stabilization sprint. It is not a separate sprint or release phase. Work must stay within this ticket's invariant, receive ticket-level verification, and be checkpointed before the next ticket begins.
+
+## Continuity entry contract
+
+A prior ticket handoff is **continuation state, not live repository truth**. Before acting, run `pnpm codex:context`, verify the intended checkout/branch/HEAD/worktree, compare it with [continuity-ledger.md](continuity-ledger.md), and reconcile any difference. Do not ask a new agent to rediscover settled evidence unless current repository/runtime facts contradict it.
+
+### Required inherited state
+
+Consume STAB-01 before any new investigation:
+
+- STAB-01 merge checkpoint: `0ed941ce1b2f4fd734d2f56aeb136813cbee41d6`;
+- [issue-registry.md](issue-registry.md), especially MR-001, MR-003, MR-020, MR-022, and the authority portion of MR-023;
+- [acceptance-baseline-2026-09-26.md](acceptance-baseline-2026-09-26.md);
+- the STAB-01 source-boundary observations and preserved passes/non-issues;
+- the corrected live qualification status in Implementation Status;
+- the persistent acceptance reproduction state, if still available, without mutating it before a safe copy/reproduction is established.
+
+STAB-01 established one concrete source defect—historical handoff reconstruction passes `getControlStatus` without preserving object binding—but explicitly did **not** establish that this explains every recovery/authority failure. Do not collapse the investigation to that one fix.
+
+The exact implementation baseline is **not** the original planning baseline. At ticket start, run `pnpm codex:context`, reconcile current `main`/worktree against the continuity ledger, and record the exact start SHA before editing.
+
+### First gate
+
+Before production edits, produce a read-only authority trace for at least one affected Task covering Task record → bootstrap identity → Codex thread/session → Runtime inventory/session → browser attachment → handoff/control generation, and identify where the live/persisted chain diverges.
+
 
 ## Invariant
 
@@ -36,3 +60,25 @@ MR-001, MR-003, MR-020, MR-022 and the authority portion of MR-023.
 Focused identity/reconciler tests → task-runtime control-authority tests → SQLite restart → real Runtime browser session in Agent and Companion → original authority-loss E2E.
 
 Checkpoint before STAB-03.
+
+## Continuity exit / handoff contract
+
+This ticket is **not complete** merely because its implementation and tests pass. Before changing its status to Complete, make the resulting engineering state durable for the next ticket.
+
+Update [continuity-ledger.md](continuity-ledger.md) with:
+
+- exact ticket start SHA and final ticket commit/PR/merge SHA;
+- MR findings closed, narrowed, superseded, or newly discovered;
+- confirmed root cause(s) and important hypotheses disproved;
+- invariant actually established by the implementation;
+- exact production/schema/persistence/contract files changed;
+- migration, compatibility, provider-version, or fixture consequences;
+- focused verification and affected-subsystem verification with exact commands/results;
+- real-boundary/E2E evidence, including paths/hashes where material;
+- failures, flakiness, and anything not qualified;
+- preserved reproduction state and whether it remains valid;
+- residual blockers/open questions;
+- direct downstream tickets whose assumptions or entry contracts changed;
+- the exact next stop point and next verification gate.
+
+Then update every directly dependent ticket's **Continuity entry contract** when the new evidence changes what that ticket must inherit. The next ticket must be able to continue from repository-owned state without reconstructing this investigation from chat history.

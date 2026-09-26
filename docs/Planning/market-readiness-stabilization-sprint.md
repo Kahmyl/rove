@@ -63,7 +63,34 @@ The canonical issue mapping is [stabilization/issue-registry.md](stabilization/i
 
 Dependency order is intentional. It is not permission to combine unrelated tickets into one implementation change.
 
-## 5. Ticket execution protocol
+## 5. Ticket-to-ticket continuity
+
+The sprint is one continuous engineering investigation. Ticket boundaries are checkpoints, not resets.
+
+The canonical continuation state is [stabilization/continuity-ledger.md](stabilization/continuity-ledger.md). Every ticket also contains a **Continuity entry contract** and **Continuity exit / handoff contract**.
+
+The continuity rule is:
+
+```text
+previous ticket durable state
+  -> read-only current repository/runtime baseline
+  -> reconcile
+  -> current ticket diagnosis
+  -> implementation
+  -> ticket-level qualification
+  -> durable exit handoff
+  -> next ticket
+```
+
+A previous-ticket handoff is continuation state, **not live repository truth**. At the start of every ticket, the executing agent must run `pnpm codex:context`, verify branch/HEAD/status/worktree, inspect relevant current source/runtime state, and reconcile that truth with the ledger before editing.
+
+A ticket is not complete when code merely passes tests. It is complete only when its root-cause conclusions, disproved hypotheses, changed contracts, verification evidence, residual gaps, preserved fixtures, exact checkpoint SHA, and next-ticket implications are durable in the ledger and downstream entry contracts.
+
+When a completed ticket changes a downstream assumption, update the downstream ticket before work begins. Do not force later work to rediscover settled evidence from Git history, chat transcripts, screenshots, or intuition.
+
+The original ticket text is a planning hypothesis. Later evidence may refine it. Product and Engineering contracts remain authoritative; ticket updates may refine implementation sequencing but cannot silently change those contracts.
+
+## 6. Ticket execution protocol
 
 Every implementation ticket follows the same sequence:
 
@@ -79,7 +106,7 @@ Every implementation ticket follows the same sequence:
 
 Do **not** run the full repository suite after every narrow ticket unless the change crosses repository-wide boundaries. The final ticket runs the complete suite and market qualification. Each ticket still runs every verification materially affected by that ticket.
 
-## 6. Change discipline
+## 7. Change discipline
 
 - One ticket may contain several symptoms when diagnosis proves they share the same authority/invariant.
 - Do not merge tickets merely because the same file is touched.
@@ -91,7 +118,7 @@ Do **not** run the full repository suite after every narrow ticket unless the ch
 - Preserve persistent reproduction state until the owning ticket has qualified the fix.
 - Existing Product and Engineering contracts are not rewritten from a failing implementation. If the approved contract itself is wrong, stop and update the responsible canonical document first.
 
-## 7. Verification classes
+## 8. Verification classes
 
 Use the narrowest class that can actually prove the ticket:
 
@@ -106,7 +133,7 @@ Use the narrowest class that can actually prove the ticket:
 
 A higher-level test does not remove the need for a lower-level invariant test; a lower-level test does not qualify a boundary it never exercises.
 
-## 8. Sprint completion conditions
+## 9. Sprint completion conditions
 
 The sprint is complete only when:
 

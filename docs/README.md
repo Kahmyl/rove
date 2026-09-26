@@ -1,6 +1,6 @@
 # Rove documentation
 
-Rove is a task and workflow assistant. These documents describe the product being built, the design that should serve it, and how changes are verified. Rove has not shipped a production release. Document titles and filenames identify their subject, not a product version, implementation milestone, phase, gate, or ticket.
+Rove is a task and workflow assistant. These documents describe the product being built, the design that should serve it, and how changes are verified. Rove has not shipped a production release. Canonical Product and Engineering document titles and filenames identify their subject, not a product version, implementation milestone, phase, gate, or ticket. An explicitly authorized bounded active plan may use stable ticket IDs and a continuity ledger as temporary execution metadata; those identifiers do not become product/runtime/test nomenclature and are retired with the plan.
 
 ## Authority and reading order
 
