@@ -10,6 +10,20 @@ Status terms are deliberately distinct:
 - **Qualification gap** means the implementation or dependency set still needs evidence in its intended operating environment.
 - **Explicit authority blocker** means product or provider authority is required before implementation can be completed truthfully.
 
+## Development-app acceptance correction — 26 September 2026
+
+Human acceptance against `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d` is newer than several source-qualified claims in the matrix below and narrows them where the two conflict.
+
+- Conversation interaction/presentation Stage 1 walkthrough completed, but market-readiness remediation remains open.
+- Persistent Task startup/history recovery is **partial in the live development application**: multiple persisted Tasks remained indefinitely on Checking State, retained `thread_history_reconstructible`, and lost safe continuation controls.
+- Codex startup/application recovery is **partial** until bounded reconciliation and Runtime failure containment are proven against the preserved persistent reproduction state.
+- Agent requested handoff is **partial/live-blocked**: repeated development runs produced unmatched `awaiting_human/controller:none` sessions rather than actionable takeover.
+- Companion browser collaboration is **partial/live-blocked**: a successful browser run could later project **No browser attached**, preventing voluntary takeover.
+- Attention/approval behavior is **partial**: command approval omitted refusal/scope, an explicit file mutation bypassed the visible Always ask decision boundary, and several request families remain live-unqualified.
+- Hard Stop has an **explicit provider authority blocker**: provider turn interruption does not prove termination of a yielded local process.
+
+These corrections do not discard deterministic evidence; they prevent lower-level/source qualification from being read as end-to-end product qualification. The owning work is the [Rove Market-Readiness Stabilization Sprint](../Planning/market-readiness-stabilization-sprint.md) and its [issue registry](../Planning/stabilization/issue-registry.md).
+
 ## Product capability matrix
 
 | Capability                                     | Status                                                                    | Current evidence and boundary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |

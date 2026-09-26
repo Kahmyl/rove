@@ -44,7 +44,8 @@ Use descriptive filenames based on the work itself. Remove or archive obsolete p
 
 ## Active plans
 
-- [Conversation and Task Experience](conversation-and-task-experience.md)
+- [Rove Market-Readiness Stabilization Sprint](market-readiness-stabilization-sprint.md) — current umbrella sprint for acceptance-driven diagnosis, correction, and market qualification. Tickets and the canonical issue registry live under [stabilization/](stabilization/README.md).
+- [Conversation and Task Experience](conversation-and-task-experience.md) — retained supporting plan for the interaction contract; new acceptance findings are sequenced through the stabilization sprint rather than ad-hoc remediation.
 
 ## Completed plans
 

@@ -8,6 +8,14 @@
 
 This plan sequences an approved product and engineering correction. It is not evidence that the target behavior is implemented, and it does not replace the canonical contracts.
 
+## Current acceptance status — 26 September 2026
+
+The development-app human walkthrough against `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d` completed the Stage 1 conversation interaction/presentation walkthrough. Later findings do not reopen that completed walkthrough; they are market-readiness remediation inputs. Stage 2 closed with confirmed approval/attention defects and live qualification gaps, Stage 3 closed with blocking browser authority/handoff defects, and Stage 4 closed with blocking persisted-recovery/Runtime-resilience defects.
+
+Those findings are no longer sequenced as repeated Stage-specific patches in this document. The single [Rove Market-Readiness Stabilization Sprint](market-readiness-stabilization-sprint.md) owns their cross-stage classification, ticket ordering, verification, and final market qualification. The canonical issue map is [stabilization/issue-registry.md](stabilization/issue-registry.md).
+
+Hard Stop remains a separate release-level provider blocker: completion of the Stage 1 interaction walkthrough does not constitute evidence that `turn/interrupt` terminates a yielded local process. That boundary is owned by ROVE-STAB-12.
+
 ## 1. Why this work exists
 
 Private-beta use exposed a structural coupling between execution lifecycle, execution permission, customer interaction, and renderer presentation:
