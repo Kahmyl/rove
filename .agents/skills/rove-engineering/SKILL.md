@@ -19,6 +19,19 @@ Read [repository-map.md](references/repository-map.md) to route context without 
 
 Ordinary feature and bug work must not edit `AGENTS.md`, `.agents/**`, `.codex/**`, or engineering-agent governance documentation. Modify governance only when the objective explicitly concerns this environment, or repeated concrete evidence establishes a recurring environment failure and its correction is explicitly in scope. Never weaken policy to escape friction. Normal tasks may still update owning contracts, implementation status, tests, and code documentation.
 
+## Continue an active stabilization ticket
+
+When the objective belongs to the Rove Market-Readiness Stabilization Sprint:
+
+1. Read `docs/Planning/market-readiness-stabilization-sprint.md`, `docs/Planning/stabilization/continuity-ledger.md`, the current `ROVE-STAB-XX` ticket, and each directly upstream completed ticket named by its entry contract.
+2. Treat that handoff as continuation state, not live truth. The working-boundary checks above are mandatory, and current source/runtime/persistence facts win when they conflict.
+3. Do not repeat settled research merely because this is a new Codex session. Reopen a conclusion only when new evidence contradicts it; record both the old conclusion and the contradiction.
+4. The original downstream ticket is provisional planning. Refine its entry assumptions from upstream evidence before implementation when needed.
+5. Before completing a ticket, update the continuity ledger and every directly affected downstream entry contract. Include exact start/end/merge identity, root cause, disproved hypotheses, invariant, changed boundaries, verification, residual gaps, preserved fixtures, and the next gate.
+6. If a ticket stops before a coherent completion checkpoint, combine the repository continuity ledger with the ignored continuation note described later in this skill; the ledger records durable established state, while the ignored note may record unfinished local execution details.
+
+This bounded planning/continuity record is explicitly authorized for the active sprint. It does not permit ticket IDs to leak into product/runtime/test naming or create a permanent second source of product truth.
+
 ## Recover authority and current truth
 
 Read `AGENTS.md`, `CONTRIBUTING.md`, and `docs/README.md`. Before changing product behavior, also read the Product Brief and Product Direction, then the product and engineering contracts responsible for the affected behavior.
@@ -51,7 +64,7 @@ Choose the smallest coherent change that satisfies the objective and existing co
 
 Return escalations as `Decision required`, `Recommended option`, `Credible alternatives`, `Consequences`, and `Supporting evidence`. Do not ask vague architecture questions when implementation evidence can resolve them.
 
-Document meaningful architectural decisions in the canonical document that owns the responsibility. Do not create implementation diaries, milestone documents, or a second source of product truth.
+Document meaningful architectural decisions in the canonical document that owns the responsibility. Do not create implementation diaries, milestone documents, or a second source of product truth. Explicitly authorized bounded planning tickets and the stabilization continuity ledger may record execution state, but remain subordinate to canonical contracts and are retired with the active plan.
 
 Codex may independently use bounded subagents for independent investigation, external technical research, disjoint subsystem analysis, read-only exploration, or independent review when this materially improves speed or confidence. Do not simulate a standing organization or delegate to avoid understanding the work. The root agent owns design selection, integration, and final verification. Read [parallel-execution.md](references/parallel-execution.md) before parallel writes or mutable test execution.
 

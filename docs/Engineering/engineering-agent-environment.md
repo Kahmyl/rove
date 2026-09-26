@@ -45,6 +45,19 @@ Human/product authority is required when a proposal materially changes product s
 
 Ordinary feature and bug work must not modify `AGENTS.md`, `.agents/**`, `.codex/**`, or this governance document. Those surfaces change only when the engineering environment is explicitly in scope, or repeated concrete evidence identifies a recurring environment failure and its correction is explicitly authorized. Normal work may update the product/engineering contract that owns its behavior, implementation status, tests, and code documentation; it may not weaken its own operating policy to bypass friction.
 
+## Stabilization ticket continuity
+
+When work belongs to the active Rove Market-Readiness Stabilization Sprint, continuity is repository-owned:
+
+1. Read the sprint, `docs/Planning/stabilization/continuity-ledger.md`, the current ticket, and every directly upstream completed ticket named by its entry contract.
+2. Treat the prior handoff as continuation state, not live repository truth. Run `pnpm codex:context` and reconcile branch, HEAD, status, worktree, current source, persisted fixtures, and provider/runtime facts before editing.
+3. Reuse settled root-cause evidence and disproved hypotheses. Reopen them only when current evidence contradicts the handoff, and record that contradiction.
+4. Do not let the original ticket wording override evidence produced by earlier tickets. Update the current/downstream ticket when an inherited assumption changes.
+5. Before marking a ticket complete, update the continuity ledger with exact checkpoint/merge identity, findings, root causes, changes, verification, residual gaps, preserved fixtures, and the exact next gate; update directly dependent ticket entry contracts when affected.
+6. A new Codex task/session continues from that durable handoff. It must not require chat memory to understand why the repository is in its current state.
+
+This continuity record is subordinate to canonical Product/Engineering contracts and current repository/runtime truth. It is not a second product specification.
+
 ## Normal engineering flow
 
 1. Start in the intended checkout and run `pnpm codex:context`.
