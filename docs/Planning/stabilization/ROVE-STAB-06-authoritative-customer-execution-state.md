@@ -1,7 +1,8 @@
 # ROVE-STAB-06 — Authoritative customer execution-state model
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready after authority/recovery facts  
+**Status:** Complete
+
 **Dependencies:** STAB-02/03 facts established  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -49,6 +50,18 @@ Represent at least the semantic distinction among active, waiting_for_customer, 
 Pure projection transition table → command-approval live E2E → browser handoff/checking fixture → rendered duration/compaction journey.
 
 Checkpoint before STAB-10.
+
+## Completion evidence
+
+Implementation checkpoint: `fac74fb1facd1e5f29ae20afdea03c48fc570dfa` (`Project authoritative customer execution state`).
+
+The customer projection now carries explicit active, waiting-for-customer, checking, human-control, stopping and terminal segment states. Only active work accrues duration; every nonterminal state remains expanded with exact customer copy while its duration is frozen. Authoritative Codex turn state no longer depends on a timing interval being open.
+
+New Stop commands carry the exact requested operation ID so normal command settlement can clear the matching intent. Persisted compatibility also repairs the bounded legacy case where the same Task has an exact interrupt request followed by a succeeded interrupt command. It does not clear the independent recovery blocker or infer Codex truth from the command.
+
+The pure projection and rendered transition tables pass. Credential-free process-backed production-composition traces prove approval waiting and human browser control remain nonterminal, and the complete six-trace suite passes. A disposable copy of the preserved STAB-03 database proves the stale Stop changes from `interrupt` to `observe`, leaving its independently authoritative exhausted-recovery state as `unresolved`; the preserved source database remains byte-identical with SHA-256 `a6e215e557d4ae30d07b38e188652eed39ee8f4538bf3937cb04d6498f2badf6`.
+
+Repository checks, lint, typecheck, build, experiment tests and the complete 202-file / 1,724-test suite pass. One process cut-point case transiently reached terminal state before requesting handoff on the first full run; the exact case passed on rerun and all 22 cut-point cases passed in the clean full-suite rerun. No live model, credentialed provider, packaged application or human acceptance was run.
 
 ## Continuity exit / handoff contract
 

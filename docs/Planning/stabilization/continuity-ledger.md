@@ -345,6 +345,36 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not add another recovery state, make provider reconciliation a prerequisite for local conversation readability, or reopen Runtime retry taxonomy.
 
+### ROVE-STAB-06 — COMPLETE
+
+**Exact stacked start SHA:** `e8de4068b23d2c7e5c6feb7b815efb9296e46a93` (final pushed `codex/stab05-startup-hydration` head).
+
+**Branch:** `codex/stab06-authoritative-execution-state`; clean at entry. No predecessor PR was merged.
+
+**Inherited invariants:** STAB-02 exact Task/Runtime/Codex authority, STAB-03 bounded recovery and the isolated stale Stop, and STAB-05's separation between pre-snapshot hydration, Task-owned Product truth and the independent Runtime warning.
+
+**Owned findings:** MR-009 and MR-024, plus the execution-state portion of MR-010. These findings are closed at the local projection, persistence compatibility and rendered customer-journey boundaries.
+
+**Confirmed root causes:** customer work-segment status had only `active` and `terminal`, with terminality inferred from the absence of an open duration interval. That compacted approval waiting, checking, human control and stopping even though their owning work was nonterminal. The working state independently required the same interval, so an authoritative active Codex turn could render as idle/terminal when timing evidence was stale. The preserved STAB-03 Task exposed a separate settlement defect: its succeeded legacy `interrupt_codex_turn` command carried no operation ID, while requested-operation settlement requires the exact operation ID.
+
+**Disproved hypotheses:** the generated lifecycle reducer is not the correct place to add command correlation; it must remain byte-for-byte aligned with its locked oracle. The exact operation ID is therefore bound when TaskEngine assembles the command. The preserved Stop is not evidence that the STAB-03 Codex blocker should be cleared: after Stop compatibility repair, the Task correctly remains `unresolved` from its independent exhausted recovery authority.
+
+**Implemented invariant:** current work derives semantic segment state from authoritative Task/Codex/Runtime/recovery state, not duration bookkeeping. Active, waiting-for-customer, checking, human-control and stopping segments remain expanded; only active work advances duration, while all other nonterminal states freeze it. Prior segments remain terminal and new work does not rewrite their history. Active Codex/bootstrap/message authority projects working even when no interval is open. New interrupt commands carry their exact operation ID. Persisted compatibility clears only an exact legacy requested Stop with a same-Task request event and a succeeded interrupt command recorded at or after that request.
+
+**Files and compatibility:** production changes are in `packages/protocol/src/task-engine.ts`, `apps/companion/src/main/codex/customer-task-execution.ts`, `sqlite-task-engine-store.ts`, and `apps/companion/src/renderer/product-surface.tsx`; focused, renderer and process-backed tests changed beside those boundaries. `experiments/agent-execution/authoritative-execution-state-qualification.mjs` provides the disposable-copy legacy probe. No schema version, migration identity, wire format, provider version, dependency, recovery blocker or Runtime warning contract changed. Existing legacy databases normalize on open; current commands settle through the existing exact operation contract.
+
+**Real-boundary evidence:** both affected process-backed production-composition traces passed, proving approval waiting and browser human control publish nonterminal semantic segments with no active timer. The complete six-trace suite also passed in the full run. A disposable copy of `/private/tmp/rove-stab03-diagnosis.zPVKhI/task-process.v1.sqlite3` repaired Task `task_d7fe2288-bb43-453d-8527-8ac9a60af753` from requested `interrupt` to `observe`, then projected its independent exhausted-recovery state as `unresolved`. The preserved source stayed byte-identical at SHA-256 `a6e215e557d4ae30d07b38e188652eed39ee8f4538bf3937cb04d6498f2badf6` and remains valid.
+
+**Verification:** the focused affected suite passed 5 files / 120 tests; the two selected process traces passed; `pnpm check:repository`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `pnpm test:experiments` (24 tests) passed. The first full run passed 1,723/1,724 tests and transiently failed the pre-existing `repeatable_read: after_terminal_change_before_observation` process cut because the Task became terminal before its handoff request. The exact case passed immediately on rerun; a clean complete rerun then passed 202 files / 1,724 tests, including all 22 cut-point cases. No assertion or timeout was weakened.
+
+**Implementation checkpoint:** `fac74fb1facd1e5f29ae20afdea03c48fc570dfa` (`Project authoritative customer execution state`).
+
+**Residual boundary:** no live model, credentialed provider, packaged application or human acceptance was run. STAB-10 now owns the complete browser ownership/return/checking journey and must preserve these semantic segment states; it is no longer blocked on STAB-06. STAB-12 still owns hard process Stop authority beyond customer intent settlement.
+
+**Next handoff:** commit and push this durable record, attempt the stacked PR against `codex/stab05-startup-hydration` without merging, then branch STAB-07 from the exact final STAB-06 head. STAB-07's first gate remains a read-only proof of the effective provider approval configuration and its separation from Rove reviewer choice.
+
+**Non-goals:** do not infer terminality from a frozen timer, clear independent recovery authority while settling Stop, modify the locked generated lifecycle reducer, or absorb browser return-control qualification from STAB-10.
+
 ## Future ticket rows
 
-ROVE-STAB-05 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
+ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
