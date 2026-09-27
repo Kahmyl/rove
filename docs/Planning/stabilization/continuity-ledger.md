@@ -601,6 +601,8 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **STAB-14 residual gates:** machine qualification found no new correctness or authorization defect. Market readiness remains blocked on the provider-owned exact elevated-grant seam; representative Windows/Linux packaged process trees; the exact STAB-13 human development-app checklist; packaged live provider-attention and task-bound browser/follower composition; and final distribution evidence for signing/notarization, authentication, outage/OS-permission behavior, native ABI breadth and recording/playback. The current package evidence is unsigned darwin/arm64 only. Because elevated execution is not the sole residual gate, do not ask for the final release-scope decision yet. No PR is merged.
 
+**STAB-14 machine checkpoint:** commit `0bb7d53` (`Qualify STAB-14 release matrix`) is published on `origin/codex/stab14-market-release-qualification`. It contains the durable bounded release/CI test gate, MR-029 closure, complete evidence record and blocker ledger. This checkpoint is not sprint completion, market readiness, human acceptance, provider-grant qualification, cross-platform package qualification or merge authorization.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
