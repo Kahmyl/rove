@@ -335,6 +335,10 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `a98882d69af44d4b30dbaedc9254d2cc9e7a146e` (`Hydrate local tasks before provider startup`).
 
+**Durable handoff checkpoint:** `35fb6d33ed5312a4ce60ac9dd9dc9da295b31737` (`Record STAB-05 startup hydration handoff`), pushed to `origin/codex/stab05-startup-hydration`.
+
+**PR state:** stacked PR creation against `codex/stab04-runtime-failure-containment` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-06.
+
 **Residual boundary:** packaged-application and human acceptance remain unrun. The preserved original acceptance home and `/private/tmp/rove-stab04-process.9fBJvP` remain untouched and valid. Managed Runtime process health is still an earlier local-service prerequisite; STAB-05 decouples the local Product surface from provider reconciliation and renders already-classified Runtime degradation, rather than inventing a second host-start recovery path.
 
 **Downstream handoff:** STAB-06 must preserve neutral hydration as pre-snapshot-only. Once Product truth exists, its authoritative execution-state changes must remain Task-owned, keep unrelated Tasks interactive, and remain independent of the Runtime warning. Its first gate is the persisted successful-interrupt / still-requested-Stop case already isolated by STAB-03.

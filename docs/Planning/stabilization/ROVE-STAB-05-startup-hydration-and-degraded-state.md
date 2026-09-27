@@ -55,6 +55,10 @@ At ticket start, reconcile current `main` with the continuity ledger and record 
 
 **Implementation checkpoint:** `a98882d69af44d4b30dbaedc9254d2cc9e7a146e` (`Hydrate local tasks before provider startup`).
 
+**Durable handoff checkpoint:** `35fb6d33ed5312a4ce60ac9dd9dc9da295b31737` (`Record STAB-05 startup hydration handoff`), pushed to `origin/codex/stab05-startup-hydration`.
+
+**PR state:** stacked PR creation against `codex/stab04-runtime-failure-containment` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-06.
+
 ## Invariant
 
 Startup hides only incoherent pre-snapshot composition. Once coherent local state exists, the conversation is readable while provider reconciliation proceeds independently and boundedly.
