@@ -61,6 +61,12 @@
 - **Narrowed:** MR-020 and MR-022 have repaired handoff reconstruction and Runtime inventory convergence; STAB-10 retains real browser takeover/return qualification.
 - **Narrowed:** MR-023 no longer lacks exact authority because of Runtime inventory starvation; browser recovery eligibility and customer-safe failure presentation remain STAB-10/STAB-11.
 
+### STAB-03 disposition
+
+- **Closed:** MR-001 at the exact Codex blocker-lifecycle boundary. Active reconciliation and exhausted recovery are distinct, blocker/reason compatibility is restored on read, and exhausted recovery no longer projects indefinite Checking.
+- **Closed:** MR-002. Exact success records a durable bounded per-blocker ordering watermark, so delayed older failure cannot recreate cleared uncertainty and older success cannot clear newer failure.
+- **New evidence for existing owners:** the preserved fixture contains one Task whose `interrupt_codex_turn` command is durably succeeded while its requested operation remains `interrupt`. This is not a Codex blocker-lifecycle defect; MR-009/MR-024 remain the STAB-06 owner for that persisted Stop/customer-state discrepancy.
+
 - **MR-001, MR-002, MR-003, MR-020, MR-022 and part of MR-023** share the Task/Runtime/Codex authority-convergence boundary.
 - **MR-009 and MR-024** are one customer execution-state model problem, exposed in different acceptance stages.
 - **MR-007, MR-008 and MR-011** are one approval-policy/decision-contract family, not three renderer fixes.

@@ -316,6 +316,26 @@ describe("customer Task execution projection", () => {
       "checking",
     ],
     [
+      "exhausted recovery",
+      (value: ReturnType<typeof aggregate>) => {
+        value.recoveryRequired = "Reconcile exact truth";
+        value.codexRecoveryBlockers = {
+          history: {
+            blockerId: "history",
+            recoveryClass: "thread_history_reconstructible",
+            family: "thread_history_reconstructible",
+            threadId: "thread-1",
+            unresolvedAt: "2026-09-09T12:00:00.000Z",
+            lastObservedAt: "2026-09-09T12:00:01.000Z",
+            state: "unresolved",
+            attempt: 3,
+            attemptLimit: 3,
+          },
+        };
+      },
+      "unresolved",
+    ],
+    [
       "stopping",
       (value: ReturnType<typeof aggregate>) => {
         value.requestedOperation = {

@@ -56,8 +56,13 @@ const RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID =
   "0006_atomically_consume_selected_results";
 const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
+const MAX_CODEX_RECOVERY_RESOLUTIONS = 128;
 const OUTSIDE_PROTECTED_TASK_WORKSPACE =
   "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+const CODEX_RECOVERY_REQUIRED =
+  "Codex external truth requires authoritative reconciliation.";
+const LEGACY_CODEX_RECOVERY_REQUIRED =
+  "Codex history reconciliation could not establish current durable task truth.";
 
 function hasCanonicalTaskWorkspaceAuthority(
   cwd: string,
@@ -105,6 +110,15 @@ function normalizeAggregate(value: string): TaskAggregate {
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
   aggregate.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(aggregate);
+  aggregate.codexRecoveryBlockers = normalizeCodexRecoveryBlockers(
+    aggregate.codexRecoveryBlockers,
+    aggregate.codexReconciliation,
+  );
+  aggregate.codexRecoveryResolutions = normalizeCodexRecoveryResolutions(
+    aggregate.codexRecoveryResolutions ?? {},
+    aggregate.codexReconciliation,
+  );
+  normalizeCodexRecoveryRequired(aggregate);
   return aggregate;
 }
 
@@ -126,7 +140,73 @@ function normalizeProjection(value: string): TaskProjection {
   projection.conversation.terminalTurns ??= {};
   projection.codexReconciliation ??= [];
   projection.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(projection);
+  projection.codexRecoveryBlockers = normalizeCodexRecoveryBlockers(
+    projection.codexRecoveryBlockers,
+    projection.codexReconciliation,
+  );
+  normalizeCodexRecoveryRequired(projection);
   return projection;
+}
+
+function normalizeCodexRecoveryRequired(value: {
+  recoveryRequired: string | null;
+  codexRecoveryBlockers?: Readonly<Record<string, TaskCodexRecoveryBlocker>>;
+}): void {
+  const ownsRecoveryString =
+    value.recoveryRequired === CODEX_RECOVERY_REQUIRED ||
+    value.recoveryRequired === LEGACY_CODEX_RECOVERY_REQUIRED;
+  if (Object.keys(value.codexRecoveryBlockers ?? {}).length > 0) {
+    if (value.recoveryRequired === null || ownsRecoveryString)
+      value.recoveryRequired = CODEX_RECOVERY_REQUIRED;
+  } else if (ownsRecoveryString) value.recoveryRequired = null;
+}
+
+function normalizeCodexRecoveryResolutions(
+  resolutions: Readonly<Record<string, string>>,
+  diagnostics: TaskAggregate["codexReconciliation"],
+): Readonly<Record<string, string>> {
+  const next = { ...resolutions };
+  for (const diagnostic of diagnostics ?? []) {
+    if (diagnostic.outcome !== "succeeded" || !diagnostic.blockerId) continue;
+    const existing = next[diagnostic.blockerId];
+    if (
+      !existing ||
+      Date.parse(existing) < Date.parse(diagnostic.observedAt)
+    )
+      next[diagnostic.blockerId] = diagnostic.observedAt;
+  }
+  return Object.fromEntries(
+    Object.entries(next)
+      .sort(([, left], [, right]) => Date.parse(right) - Date.parse(left))
+      .slice(0, MAX_CODEX_RECOVERY_RESOLUTIONS),
+  );
+}
+
+function normalizeCodexRecoveryBlockers(
+  blockers: Readonly<Record<string, TaskCodexRecoveryBlocker>>,
+  diagnostics: TaskAggregate["codexReconciliation"],
+): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
+  return Object.fromEntries(
+    Object.entries(blockers).map(([blockerId, blocker]) => {
+      const diagnostic = [...(diagnostics ?? [])]
+        .reverse()
+        .find((entry) => entry.blockerId === blockerId);
+      const attemptLimit =
+        diagnostic?.attemptLimit ??
+        (blocker.recoveryClass === "thread_history_reconstructible" ? 3 : 1);
+      return [
+        blockerId,
+        {
+          ...blocker,
+          state:
+            blocker.state ??
+            (diagnostic?.outcome === "scheduled" ? "checking" : "unresolved"),
+          attempt: blocker.attempt ?? diagnostic?.attempt ?? attemptLimit,
+          attemptLimit: blocker.attemptLimit ?? attemptLimit,
+        },
+      ];
+    }),
+  );
 }
 
 function legacyConversationItemOrder(
@@ -147,11 +227,7 @@ function legacyCodexRecoveryBlockers(value: {
   recoveryRequired: string | null;
   codexReconciliation?: TaskAggregate["codexReconciliation"];
 }): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
-  if (
-    value.recoveryRequired !==
-    "Codex history reconciliation could not establish current durable task truth."
-  )
-    return {};
+  if (value.recoveryRequired !== LEGACY_CODEX_RECOVERY_REQUIRED) return {};
   const diagnostic = [...(value.codexReconciliation ?? [])]
     .reverse()
     .find((entry) => entry.outcome === "unresolved");
@@ -187,6 +263,11 @@ function legacyCodexRecoveryBlockers(value: {
         : {}),
       unresolvedAt: diagnostic.observedAt,
       lastObservedAt: diagnostic.observedAt,
+      state: "unresolved",
+      attempt: diagnostic.attempt,
+      attemptLimit:
+        diagnostic.attemptLimit ??
+        (recoveryClass === "thread_history_reconstructible" ? 3 : 1),
     },
   };
 }

@@ -260,6 +260,7 @@ export class CodexThreadTruthReconciler {
         blockerId: threadHistoryBlockerId(threadId),
         threadId,
         attempt,
+        attemptLimit: 3,
         observedAt,
         ...hint,
       },

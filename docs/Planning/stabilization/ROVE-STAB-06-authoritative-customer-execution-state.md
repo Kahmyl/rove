@@ -15,6 +15,8 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 Consume the authority/recovery conclusions already established by STAB-02 and STAB-03 before changing customer execution projection. In particular, terminality must be derived from the authoritative turn/recovery model that exists after those tickets, not from the original pre-stabilization projection.
 
+The STAB-03 disposable preserved fixture adds one exact entry case: a Task has a durably succeeded `interrupt_codex_turn` outbox command but still persists `requestedOperation.type === "interrupt"`, so it projects Stopping independently of its exhausted Codex blocker. Diagnose that persisted Stop settlement under MR-009/MR-024; do not weaken or clear the exact recovery blocker to hide it.
+
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
 

@@ -15,6 +15,8 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 Consume STAB-01's Runtime-failure findings and any STAB-02 observations that change Runtime ownership/addressing. In particular, retain the distinction between the observed `INVALID_CONFIGURATION` responses and later transport failures; do not infer their common cause without Runtime-side evidence.
 
+Also consume STAB-03's distinction between active checking and exhausted bounded uncertainty. Runtime containment must feed that existing customer-safe model rather than creating another recovery state, and must not disturb the STAB-02 monotonic Runtime inventory transport coordinate.
+
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
 

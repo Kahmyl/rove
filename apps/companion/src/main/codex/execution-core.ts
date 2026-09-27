@@ -952,6 +952,7 @@ export class CodexExecutionCore {
         blockerId: recovery.blockerId,
         threadId: recovery.threadId,
         attempt: 1,
+        attemptLimit: 1,
         observedAt,
         eventFamily: recovery.family,
         ...(recovery.correlationId

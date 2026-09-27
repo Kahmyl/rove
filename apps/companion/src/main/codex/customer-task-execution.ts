@@ -51,6 +51,7 @@ export interface CustomerTaskExecutionProjection {
     | "waiting_for_you"
     | "human_control"
     | "checking"
+    | "unresolved"
     | "stopping"
     | "stopped"
     | "failed";
@@ -181,7 +182,15 @@ function executionState(
   aggregate: TaskAggregate,
 ): CustomerTaskExecutionProjection["state"] {
   if (aggregate.requestedOperation.type === "interrupt") return "stopping";
-  if (aggregate.recoveryRequired !== null) return "checking";
+  if (aggregate.recoveryRequired !== null) {
+    const blockers = Object.values(aggregate.codexRecoveryBlockers ?? {});
+    if (
+      blockers.length > 0 &&
+      blockers.every((blocker) => blocker.state !== "checking")
+    )
+      return "unresolved";
+    return "checking";
+  }
   if (aggregate.runtime.controller === "human") return "human_control";
   if (
     aggregate.runtime.status === "awaiting_human" ||

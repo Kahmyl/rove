@@ -224,15 +224,58 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 - Exact next stop point: push this PR-tooling record, then branch STAB-03 from the resulting exact STAB-02 head. PR creation can be retried later by an authenticated collaborator without rewriting the branch.
 - STAB-03 first gate: restart a disposable copy of the preserved database with STAB-02 authority fixes, trace each remaining blocker to its creating and clearing authority, and prove the first stale-success shadow before editing recovery behavior.
 
-### ROVE-STAB-03 — READY
+### ROVE-STAB-03 — IMPLEMENTATION VERIFIED — CHECKPOINT PENDING
 
 **Dependency state:** STAB-02 implementation checkpoint `6758dfb3b47138670e498e6f99c290d1ea919956`; consume the final pushed handoff/PR head before editing.
 
-**Inherited fixture state:** a disposable preserved-database copy clears all 16 false workspace blockers, while all 16 Tasks retain independent Codex recovery state.
+**Exact stacked start SHA:** `af5c1a0de9bcd265b163d493364900f7d7822e04` (final pushed `codex/stab02-authority-convergence` head).
+
+**Branch:** `codex/stab03-recovery-lifecycle`, created directly from that exact head. STAB-02 PR creation remains unavailable to the current GitHub identity; no PR was merged.
+
+**Inherited fixture state:** disposable fixture `/private/tmp/rove-stab03-diagnosis.zPVKhI/task-process.v1.sqlite3` was copied from the preserved STAB-02 baseline and migrated independently. The original acceptance home and preserved baseline remain untouched.
 
 **Owned remaining findings:** MR-001 exact Codex blocker lifecycle and MR-002 stale blocker shadowing.
 
-**First gate:** map every remaining blocker in a fresh disposable fixture copy to its exact creation evidence and matching clearing authority; establish a failing MR-002 case before implementation.
+#### Diagnosis
+
+- all 16 Tasks retained one exact `thread_history_reconstructible` blocker. The ledger held 96 startup scheduled attempts and 32 terminal startup unresolved observations, with no successful reconciliation observation;
+- three Tasks also retained an earlier event-delivery failure. Later same-thread item/request traffic did not prove the missed exact history and therefore was correctly rejected as clearing authority;
+- MR-002 was reproduced before implementation: newer exact success removed the matching blocker, then a delayed older unresolved diagnostic recreated it because success had no durable ordering watermark;
+- persisted blocker/reason normalization was inconsistent: after STAB-02 removed the false workspace reason, typed Codex blockers could coexist with `recoveryRequired: null` until another event happened;
+- the preserved fixture also has one independent stale Stop presentation: its historical `interrupt_codex_turn` command succeeded while the requested operation remains `interrupt`. That is not a Codex blocker-lifecycle cause and stays with MR-009/MR-024 in STAB-06.
+
+#### Implemented invariant
+
+- recovery diagnostics expose the attempt and attempt limit; scheduled attempts are active checking and exhausted attempts are terminal unresolved;
+- a bounded durable per-blocker success watermark orders delayed diagnostics across restart. Older failure cannot shadow newer exact success, and older success cannot clear newer failure;
+- compatibility normalization reconstructs legacy blocker lifecycle and synchronizes the owned recovery reason without overwriting another authority;
+- exhausted recovery projects bounded customer-safe inability to confirm, while exact conversation history remains readable and per-Task safe controls remain available;
+- blocker identity remains exact. No nearby thread traffic, unrelated Task fact, or customer copy clears it.
+
+#### Files and compatibility
+
+- protocol/reducer: `packages/protocol/src/task-engine.ts`;
+- persistence compatibility: `apps/companion/src/main/codex/sqlite-task-engine-store.ts`;
+- producers: `codex-thread-truth-reconciler.ts`, `execution-core.ts`;
+- customer execution/presentation: `customer-task-execution.ts`, `customer-task-presentation.ts`, `product-task-port.ts`;
+- tests cover stale failure after success, stale success after newer failure, active versus exhausted attempts, durable restart watermark, legacy normalization, safe Stop, presentation, exact clearing and unrelated-Task isolation;
+- persisted schema version remains 3. All new fields are additive and legacy payloads normalize on read/migration.
+
+#### Verification
+
+- required MR-002 regression was first observed failing;
+- affected focused suite: 10 files / 171 tests passed;
+- `pnpm test:recovery:contract`: 63,417 assertions passed;
+- `pnpm test:recovery:processes`: passed all process/restart scenarios outside the restricted loopback sandbox, contacted no external services, and left no stale local resources;
+- disposable preserved SQLite read: 16 synchronized recovery markers; all blockers terminal `unresolved:3/3`; 15 customer states bounded unresolved plus one independent historical Stop state assigned to STAB-06;
+- `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `pnpm test:experiments` passed;
+- no live model, credentialed provider, packaged application, original acceptance-home relaunch, or human acceptance was run.
+
+**Implementation checkpoint:** pending commit on `codex/stab03-recovery-lifecycle`.
+
+**MR disposition:** MR-001 is closed for exact Codex blocker lifecycle and bounded terminal recovery; MR-002 is closed. MR-009/MR-024 retain the independent persisted Stop/customer execution-state discrepancy for STAB-06.
+
+**Next handoff:** after the implementation checkpoint and final diff audit, update STAB-04 with the exact stacked start SHA. STAB-04 must preserve the Runtime inventory transport identity from STAB-02 and the bounded recovery/presentation distinction from STAB-03.
 
 **Non-goals:** do not reopen canonical workspace identity, Runtime callback binding, or Runtime inventory transport identity without contradictory evidence; do not absorb STAB-04 failure taxonomy/backoff.
 

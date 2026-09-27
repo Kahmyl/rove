@@ -1,7 +1,7 @@
 # ROVE-STAB-03 — Recovery lifecycle and bounded reconciliation
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready
+**Status:** Implementation verified — checkpoint pending
 
 **Dependencies:** STAB-01, STAB-02  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
@@ -29,6 +29,26 @@ At ticket start, reconcile current `main` with the continuity ledger and record 
 
 First gate: on a fresh disposable copy of the preserved database, map every remaining blocker to the exact diagnostic/event that created it and the exact later evidence that should or should not clear it. Establish a failing case for MR-002 before changing reducer or reconciliation behavior.
 
+### Actual entry state
+
+- exact stacked start SHA: `af5c1a0de9bcd265b163d493364900f7d7822e04`;
+- branch: `codex/stab03-recovery-lifecycle`;
+- worktree clean at entry and based directly on the final pushed STAB-02 head;
+- STAB-02 PR creation was attempted but unavailable because the authenticated GitHub account is not a collaborator; no PR was created or merged;
+- read-only diagnosis will use a fresh disposable copy of the preserved fixture, never the original acceptance home or preserved baseline.
+
+### Diagnosis and implementation evidence
+
+- disposable fixture: `/private/tmp/rove-stab03-diagnosis.zPVKhI/task-process.v1.sqlite3`, copied from the preserved STAB-02 baseline and migrated independently;
+- all 16 Tasks had one `thread_history_reconstructible` blocker; the ledger contained 96 startup `scheduled` observations and 32 terminal startup `unresolved` observations, with no successful reconciliation observation;
+- three Tasks additionally retained an earlier event-delivery failure. The requested-handoff Task recorded the live `item/completed` failure, three failed repair attempts, and later unrelated item/request traffic. Nearby later traffic is not authority to clear missing exact history;
+- MR-002 was reproduced before production edits: an exact successful reconciliation deleted its blocker, but a delayed older `unresolved` observation with the same blocker ID recreated it because the aggregate retained no success watermark;
+- persisted compatibility normalization exposed a second MR-001 cause: clearing the false workspace reason left typed Codex blockers present while `recoveryRequired` remained null, so the blocker and customer state could disagree;
+- recovery observations now carry an explicit attempt limit. `scheduled` means active checking, the final `unresolved` means exhausted recovery, and exact success records a bounded durable per-blocker watermark. Older failures cannot recreate newer resolved uncertainty, and older success cannot erase a newer failure;
+- aggregate/projection normalization reconstructs blocker lifecycle and re-synchronizes the owned recovery reason without overwriting an unrelated recovery authority;
+- exhausted Codex recovery projects customer-safe `Task state unclear` / `Couldn't continue` rather than indefinite Checking. Conversation remains readable and safe per-Task controls remain governed by the existing product authority;
+- the disposable preserved fixture now normalizes 15 Tasks to bounded `unresolved` and one Task to its independent persisted `stopping` intent, while all 16 retain the exact terminal `unresolved:3/3` blocker. The Stop intent's command had already succeeded in the historical ledger; that separate customer execution-state defect remains with MR-009/MR-024 in STAB-06 rather than broadening this ticket.
+
 ## Invariant
 
 A recovery blocker is created and cleared by exact matching authority. Recovery attempts are bounded. Exhausted recovery becomes a truthful bounded customer state; it does not remain Checking forever and does not freeze unrelated Tasks.
@@ -52,6 +72,19 @@ The preserved persistent acceptance home must restart into either resolved Tasks
 ## Verification
 
 Reconciler/TaskEngine focused tests → process-cut/restart tests → preserved SQLite home → multi-Task recovery Electron run.
+
+Completed evidence:
+
+- required failing MR-002 test failed before implementation, recreating the older blocker after newer exact success;
+- focused affected subsystem: 10 files, 171 tests passed;
+- `pnpm test:recovery:contract`: 63,417 assertions passed;
+- `pnpm test:recovery:processes`: passed every local process/restart scenario after the expected restricted-sandbox loopback denial; no external services were contacted and terminal cleanup reported no stale processes, ports, profile locks, browsers, or Runtime sessions;
+- disposable preserved SQLite read: 16 Tasks, all recovery markers synchronized, blocker shape `unresolved:3/3`, customer execution `unresolved` for 15 Tasks and the independent historical Stop intent for one;
+- `pnpm check:repository`, `pnpm typecheck`, and `pnpm build`: passed;
+- `pnpm test`: passed outside the restricted local-bind sandbox;
+- `pnpm test:experiments`: 24 tests passed.
+
+Not qualified here: original acceptance-home mutation/relaunch, credentialed or live model/provider work, packaged application, or human acceptance. The original acceptance home and preserved STAB-02 baseline remain untouched.
 
 Checkpoint before STAB-05.
 

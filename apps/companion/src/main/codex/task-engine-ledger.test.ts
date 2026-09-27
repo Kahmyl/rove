@@ -162,9 +162,130 @@ describe("SQLite task engine ledger", () => {
         recoveryClass: "live_attention",
         family: "live_attention",
         threadId: "thread_legacy",
+        state: "unresolved",
+        attempt: 1,
+        attemptLimit: 1,
       }),
     ]);
     store.close();
+  });
+
+  it("restores Codex recovery authority when an older reason marker was cleared", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const aggregate = structuredClone(accepted.aggregate);
+    const projection = structuredClone(accepted.projection);
+    const blocker = {
+      blockerId: "codex-recovery:thread-history:preserved",
+      recoveryClass: "thread_history_reconstructible" as const,
+      family: "thread_history_reconstructible",
+      threadId: "thread_preserved",
+      unresolvedAt: "2026-09-09T12:00:01.000Z",
+      lastObservedAt: "2026-09-09T12:00:02.000Z",
+    };
+    aggregate.codexRecoveryBlockers = { [blocker.blockerId]: blocker };
+    projection.codexRecoveryBlockers = { [blocker.blockerId]: blocker };
+    aggregate.recoveryRequired = null;
+    projection.recoveryRequired = null;
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        "UPDATE task_engine_projection SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(projection), aggregate.taskId);
+    database.close();
+
+    await expect(store.aggregate(aggregate.taskId)).resolves.toMatchObject({
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
+      codexRecoveryBlockers: {
+        [blocker.blockerId]: {
+          state: "unresolved",
+          attempt: 3,
+          attemptLimit: 3,
+        },
+      },
+    });
+    await expect(store.projection(aggregate.taskId)).resolves.toMatchObject({
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
+    });
+    store.close();
+  });
+
+  it("persists exact recovery success so delayed older failure cannot re-block after restart", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const blockerId = "codex-recovery:thread-history:restart";
+    const observe = (
+      suffix: string,
+      outcome: "unresolved" | "succeeded",
+      observedAt: string,
+    ): TaskEvent => ({
+      schemaVersion: 1,
+      type: "codex_reconciliation_observed",
+      eventId: `recovery:${suffix}`,
+      taskId: accepted.aggregate.taskId,
+      source: {
+        kind: "host",
+        id: `recovery:${suffix}`,
+        generation: 1,
+        position: 1,
+      },
+      observedAt,
+      diagnostic: {
+        trigger: "startup",
+        outcome,
+        recoveryClass: "thread_history_reconstructible",
+        blockerId,
+        threadId: "thread_restart",
+        attempt: 3,
+        attemptLimit: 3,
+        observedAt,
+      },
+    });
+    await engine.accept(
+      observe("unresolved", "unresolved", "2026-09-09T12:00:10.000Z"),
+    );
+    await engine.accept(
+      observe("success", "succeeded", "2026-09-09T12:00:20.000Z"),
+    );
+    store.close();
+
+    const database = new Database(path);
+    const row = database
+      .prepare(
+        "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+      )
+      .get(accepted.aggregate.taskId) as { payload_json: string };
+    const legacyAggregate = JSON.parse(row.payload_json) as TaskAggregate & {
+      codexRecoveryResolutions?: unknown;
+    };
+    delete legacyAggregate.codexRecoveryResolutions;
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(legacyAggregate), accepted.aggregate.taskId);
+    database.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    await new TaskEngine(reopened).accept(
+      observe("delayed", "unresolved", "2026-09-09T12:00:15.000Z"),
+    );
+    await expect(
+      reopened.aggregate(accepted.aggregate.taskId),
+    ).resolves.toMatchObject({
+      recoveryRequired: null,
+      codexRecoveryBlockers: {},
+      codexRecoveryResolutions: {
+        [blockerId]: "2026-09-09T12:00:20.000Z",
+      },
+    });
+    reopened.close();
   });
 
   it("commits mismatched handoff truth as fail-closed recovery", async () => {

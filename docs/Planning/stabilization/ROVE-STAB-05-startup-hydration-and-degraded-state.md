@@ -17,6 +17,8 @@ This ticket may begin only after the STAB-03 recovery state machine and STAB-04 
 
 The startup UI must render those proven states. It must not invent a third recovery model or conceal an unresolved provider state behind a loader.
 
+STAB-03 specifically establishes `checking` only while a bounded attempt is active and `Task state unclear` after the attempt limit is exhausted. Persisted blocker authority is reconstructed independently of obsolete reason strings. Hydration must preserve that distinction and keep conversation history readable.
+
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
 

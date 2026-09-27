@@ -629,6 +629,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
           !genuineAttention &&
           aggregate.runtime.controller !== "human" &&
           aggregate.runtime.status !== "awaiting_human";
+        const customerExecution = customerTaskExecution(aggregate);
         return {
           context: {
             roveTaskId: aggregate.taskId,
@@ -708,7 +709,9 @@ export class LedgerProductTaskPort implements ProductTaskPort {
                     aggregate.codex.turn,
                     projection.operationDisposition.reason,
                   )
-                : "Checking task state.",
+                : customerExecution.state === "unresolved"
+                  ? "Task state could not be confirmed."
+                  : "Checking task state.",
           },
           availableActions: [
             ...executionActions,
@@ -744,7 +747,7 @@ export class LedgerProductTaskPort implements ProductTaskPort {
             canRetry: executionActions.includes("retry_cleanup"),
             canArchive: !archived && aggregate.codex.turn !== "active",
           }),
-          customerExecution: customerTaskExecution(aggregate),
+          customerExecution,
           runtime: {
             status: aggregate.runtime.status,
             controller: aggregate.runtime.controller,
