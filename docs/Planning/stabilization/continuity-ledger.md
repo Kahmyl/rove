@@ -303,11 +303,15 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `078a674cc1d51b479f21e00ba3655b83107abdbd` (`Contain Runtime dependency failures`).
 
+**Durable handoff checkpoint:** `3f96b094354344e9e4c4bf1b2c1dc5c145677b94` (`Record STAB-04 Runtime containment handoff`), pushed to `origin/codex/stab04-runtime-failure-containment`.
+
+**PR state:** stacked PR creation against `codex/stab03-recovery-lifecycle` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-05.
+
 **Finding disposition:** MR-004 and MR-005 are closed. The preserved original acceptance home remains valid and untouched; the disposable fixture is the STAB-05 unavailable/invalid Runtime input.
 
 **Residual boundary:** packaged application relaunch and human-visible startup qualification remain unrun. STAB-05 owns coherent first hydration and presentation of this established degraded state; it must not add a new Runtime retry taxonomy or hide local conversation history behind Runtime recovery.
 
-**Next handoff:** checkpoint and push this completion record; attempt a stacked PR against `codex/stab03-recovery-lifecycle` without merging; record its exact result; then start STAB-05 from the exact final STAB-04 head.
+**Next handoff:** push this PR-tooling record, then branch STAB-05 from the resulting exact final STAB-04 head. STAB-05 must preserve the bounded recovery and Runtime degraded-state contracts while making first local hydration coherent.
 
 **Non-goals:** do not change Task/Runtime identity, invent another recovery model, or reinterpret all transport errors as the retained configuration failure.
 

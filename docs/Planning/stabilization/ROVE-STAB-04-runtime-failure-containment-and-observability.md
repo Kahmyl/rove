@@ -38,6 +38,10 @@ No task, artifact, credential, provider wire format, database schema or migratio
 
 **Implementation checkpoint:** `078a674cc1d51b479f21e00ba3655b83107abdbd` (`Contain Runtime dependency failures`).
 
+**Durable handoff checkpoint:** `3f96b094354344e9e4c4bf1b2c1dc5c145677b94` (`Record STAB-04 Runtime containment handoff`), pushed to `origin/codex/stab04-runtime-failure-containment`.
+
+**PR state:** stacked PR creation against `codex/stab03-recovery-lifecycle` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged.
+
 ### Verification evidence
 
 - Required regressions failed first for canonical alias acceptance, single session discovery, permanent configuration containment and transient backoff.
