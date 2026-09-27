@@ -791,7 +791,6 @@ function registerIpc(
       throw new Error("Browser attachment returned mismatched task authority.");
     const shown = await runtime.showBrowserForSession(sessionId, authority);
     if (shown) {
-      closeFullSurface();
       await browserFollowController?.reconcileNow();
     }
     return shown;
@@ -1604,8 +1603,7 @@ async function startDesktop(): Promise<void> {
   unifiedSurfaceCoordinator.present(unifiedSurfaceState.snapshot());
 
   const controlledFollowerSurface: BrowserFollowSurface = {
-    isFollowEnabled: () =>
-      followerSurface.isFollowEnabled() && !surface.isVisible(),
+    isFollowEnabled: () => followerSurface.isFollowEnabled(),
     isFocused: () => followerSurface.isFocused(),
     isVisible: () => followerSurface.isVisible(),
     followPresentation: (windowState) => {

@@ -848,12 +848,9 @@ export class BrowserFollowController {
 
       const [windowResult, browserIdentity, foregroundProcessId] = result;
 
-      if (
+      const ownedBrowserForeground =
         browserIdentity !== null &&
-        foregroundProcessId === browserIdentity.processId
-      ) {
-        this.onOwnedBrowserForeground?.();
-      }
+        foregroundProcessId === browserIdentity.processId;
 
       const presentation = this.surface.followPresentation(
         windowResult?.windowState ?? null,
@@ -882,6 +879,10 @@ export class BrowserFollowController {
             }),
         gap: this.gap,
       });
+
+      if (decision.kind === "visible" && ownedBrowserForeground) {
+        this.onOwnedBrowserForeground?.();
+      }
 
       this.apply(decision);
     } catch {

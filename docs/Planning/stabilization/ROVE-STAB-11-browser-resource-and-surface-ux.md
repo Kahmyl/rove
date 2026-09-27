@@ -1,7 +1,7 @@
 # ROVE-STAB-11 — Browser resource and surface UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready after authority prerequisites  
+**Status:** In progress
 **Dependencies:** STAB-02 where authority-related; STAB-10 for handoff state  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 

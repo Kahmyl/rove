@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import type { ProductTaskProjection } from "../main/codex/local-product-api.js";
 import type { ProductTaskCapabilities } from "../main/codex/task-coordinator.js";
 import {
   RUNTIME_CONFIGURATION_WARNING,
@@ -15,6 +16,8 @@ import {
   ProductSurface,
   SettingsNavigation,
   TaskArchiveConfirmation,
+  browserResourcePresentation,
+  browserOpenFailureMessage,
   browserIdentityLabel,
   canRemoveWorkflowFromCloud,
   compatibleReasoningEffort,
@@ -1124,6 +1127,74 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
   });
 
+  it("guides exact task browser recovery without offering an invalid open action", () => {
+    const value = snapshot();
+    const task = {
+      taskId: "task_profile_recovery",
+      executionMode: "agent",
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-27T12:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      results: [],
+      lifecycle: { phase: "ready", reason: "Ready." },
+      availableActions: [],
+      capabilities: taskCapabilities(),
+    } satisfies ProductTaskProjection;
+
+    value.workspaces = { workspaces: [] };
+    expect(browserResourcePresentation(value, task)).toEqual({
+      kind: "profile_required",
+      title: "Choose a browser profile",
+      description:
+        "Create or select a browser profile, then retry this task. Its conversation will stay here.",
+      action: "manage_profiles",
+    });
+
+    const missingWorkspaceTask = {
+      ...task,
+      browserIdentity: {
+        mode: "workspace",
+        workspaceId: "wrk_00000000-0000-4000-8000-000000000099",
+      },
+    } satisfies ProductTaskProjection;
+    expect(
+      browserResourcePresentation(snapshot(), missingWorkspaceTask),
+    ).toEqual({
+      kind: "profile_missing",
+      title: "This task's browser profile is unavailable",
+      description:
+        "The conversation is safe, but its frozen browser profile cannot be replaced. Start a new task with an available profile.",
+      action: "new_task",
+    });
+
+    const recoveringTask = {
+      ...task,
+      roveSessionId: "ses_recovering",
+      runtime: {
+        status: "missing",
+        controller: null,
+        attachment: "missing",
+        recovery: "cleanup_required",
+        profileOwnership: "released",
+      },
+    } satisfies ProductTaskProjection;
+    expect(
+      browserResourcePresentation(snapshot(), recoveringTask),
+    ).toMatchObject({
+      kind: "runtime_recovery",
+      action: null,
+    });
+
+    const safeError = browserOpenFailureMessage(
+      new Error(
+        "Error invoking remote method 'rove:show-browser': Rove runtime request failed (404): PROFILE_NOT_FOUND /secret/profile",
+      ),
+    );
+    expect(safeError).toContain("Browser could not open");
+    expect(safeError).not.toMatch(/PROFILE_NOT_FOUND|remote method|\/secret/);
+  });
+
   it("marks only pending task-scoped conversational attention as needing input", () => {
     const value = snapshot();
     value.product!.tasks = [
@@ -1906,7 +1977,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Rove needs attention");
   });
 
-  it("shows an unmatched Runtime cleanup card without inventing a product task", () => {
+  it("keeps unmatched Runtime cleanup in a global resource region", () => {
     const value = snapshot();
     value.product!.catalog.account = {
       status: "logged_in",
@@ -1931,11 +2002,14 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain('aria-label="Unmatched browser session"');
-    expect(html).toContain("Browser session needs cleanup");
+    expect(html).toContain('aria-label="Device browser recovery"');
+    expect(html).toContain("A device browser session needs cleanup");
     expect(html).toContain("Status: active. Controller: agent.");
     expect(html).toContain("Finish session");
     expect(html).toContain('aria-label="Desired outcome"');
+    expect(html.indexOf('aria-label="Device browser recovery"')).toBeLessThan(
+      html.indexOf('class="product-layout"'),
+    );
 
     value.surface.presentation = "expanded";
     value.surface.activeHost = "browser_follower";
@@ -1947,9 +2021,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(expanded).toContain("Browser session needs cleanup");
-    expect(expanded).toContain("Automate · Agent mode · active");
-    expect(expanded).toContain("Finish session");
+    expect(expanded).not.toContain("Browser session needs cleanup");
+    expect(expanded).not.toContain("Finish session");
+    expect(expanded).toContain("Open Rove to start a task");
 
     value.surface.presentation = "chip";
     const chip = renderToStaticMarkup(
@@ -1960,9 +2034,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(chip).toContain(
-      'aria-label="Expand Rove. Browser session needs cleanup"',
-    );
+    expect(chip).not.toContain("Browser session needs cleanup");
   });
 
   it("renders distinct Codex approval and Rove handoff actions with current task identity", () => {

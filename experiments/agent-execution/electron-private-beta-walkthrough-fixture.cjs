@@ -10,6 +10,7 @@ const calls = [];
 const stateChanges = [];
 let backupOutcome = "created";
 let connectionFailure = false;
+let publicationRevision = 1;
 
 function baseSnapshot(
   account = { status: "logged_in", authMode: "chatgpt", planType: "Plus" },
@@ -269,7 +270,9 @@ function browserSnapshot(state) {
         ? { mode: "temporary" }
         : { mode: "workspace", workspaceId },
   });
-  primary.roveSessionId = "session_vendor_research";
+  if (state !== "absent") {
+    primary.roveSessionId = "session_vendor_research";
+  }
   primary.conversation.items.browser_progress = {
     id: "browser_progress",
     turnId: "turn_task_vendor_research",
@@ -337,6 +340,45 @@ function browserSnapshot(state) {
       },
     ];
   }
+  return value;
+}
+
+function browserRecoverySnapshot(state) {
+  const value = baseSnapshot();
+  const recoveryTask = task({
+    taskId: "task_browser_recovery",
+    request: "Continue the browser research",
+    browserIdentity:
+      state === "profile_missing"
+        ? {
+            mode: "workspace",
+            workspaceId: "wrk_00000000-0000-4000-8000-000000000099",
+          }
+        : undefined,
+  });
+  if (state === "profile_required") {
+    delete recoveryTask.browserIdentity;
+    value.workspaces = { workspaces: [] };
+  }
+  value.product.tasks = [recoveryTask];
+  value.product.currentTaskId = recoveryTask.taskId;
+  return value;
+}
+
+function unmatchedBrowserResourceSnapshot() {
+  const value = multiTaskSnapshot();
+  value.product.currentTaskId = "task_launch_checklist";
+  value.companion = {
+    session: {
+      id: "ses_unmatched_device_resource",
+      mode: "agent",
+      status: "active",
+      controller: "agent",
+    },
+    observationCount: 2,
+    evidenceCount: 1,
+    browserOpen: true,
+  };
   return value;
 }
 
@@ -456,6 +498,9 @@ const scenarios = {
   browser_handoff: () => browserSnapshot("handoff"),
   browser_human: () => browserSnapshot("human"),
   browser_returned: () => browserSnapshot("returned"),
+  browser_profile_required: () => browserRecoverySnapshot("profile_required"),
+  browser_profile_missing: () => browserRecoverySnapshot("profile_missing"),
+  browser_unmatched_resource: () => unmatchedBrowserResourceSnapshot(),
   recording_none: () => recordingSnapshot("none"),
   recording_requested: () => recordingSnapshot("requested"),
   recording_active: () => recordingSnapshot("recording"),
@@ -509,8 +554,9 @@ function applyCustomerCapabilities(value) {
 
 function publish(label) {
   applyCustomerCapabilities(snapshot);
-  snapshot.revision += 1;
-  snapshot.surface.revision += 1;
+  publicationRevision += 1;
+  snapshot.revision = publicationRevision;
+  snapshot.surface.revision = publicationRevision;
   stateChanges.push({
     sequence: stateChanges.length + 1,
     label,
@@ -592,7 +638,12 @@ if (process.type === "renderer") {
     takeControl: async () => takeControl(),
     returnControl: async () => returnControl(),
     pauseSession: async () => structuredClone(snapshot.companion),
-    finishSession: async () => null,
+    finishSession: async (sessionId) => {
+      calls.push({ type: "finishSession", sessionId });
+      snapshot.companion = null;
+      publish("browser.unmatched_finished");
+      return null;
+    },
     setFollowerExpanded: async () => "windowed_expanded",
     beginFollowerDrag: async () => undefined,
     updateFollowerDrag: async () => undefined,
