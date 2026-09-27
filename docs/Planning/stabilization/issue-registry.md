@@ -48,6 +48,7 @@
 | MR-027 | Deterministic renderer coverage exists for request families that the real development path cannot deliberately trigger | Qualification architecture gap | H/E | STAB-09 |
 | MR-028 | Current implementation-status source claims overstate live recovery/handoff qualification relative to development-app evidence | Documentation/status defect | H | STAB-01 |
 | MR-029 | Repository verify is nondeterministic on a docs-only branch: separate runs failed in different process-backed tests while repository checks, typecheck and build passed | Qualification-infrastructure defect | H | STAB-14 |
+| MR-030 | Persisted task workspace migration treats the macOS `/tmp` and `/private/tmp` aliases as different roots, forcing all preserved Tasks into recovery despite equivalent underlying workspace authority | Confirmed compatibility/authority defect | A | STAB-02 |
 
 ## Cross-stage consolidations
 
@@ -57,6 +58,7 @@
 - **MR-012 through MR-015 and MR-027** are primarily live capability/fixture reachability until provider behavior proves a product defect.
 - **MR-017 through MR-019 and MR-021** remain browser/surface UX work after exact authority is repaired.
 - **MR-026** remains separate from ordinary Task state because provider turn interruption does not prove process death.
+- **MR-030** is the deterministic first startup divergence in the preserved fixture: it is a workspace-authority equivalence defect, not evidence that the persisted Task workspaces are actually outside Rove's protected root.
 
 ## Source-boundary observations from STAB-01
 

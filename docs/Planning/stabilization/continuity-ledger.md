@@ -137,6 +137,20 @@ Current source explains two important facts:
 
 Next read-only gate: inspect persisted `launch.cwd`, archive/visibility state, Codex recovery blockers, and the TaskEngine event history for `task_b362...` and `task_350f...` to determine (a) why all Tasks received the workspace blocker, and (b) where Runtime session binding diverged between requested Agent handoff and successful Companion browser use.
 
+#### Root causes established before implementation
+
+The next read-only trace established three concrete authority defects:
+
+1. **Workspace identity false negative (MR-030).** Every persisted Task stores `launch.cwd` under `/tmp/rove-stage2.NZ9umP/task-workspaces/<taskId>`, while the current Desktop home resolves from the qualification override as `/private/tmp/rove-stage2.NZ9umP`. The persisted-schema migration compares `path.resolve(launch.cwd)` with `path.resolve(taskWorkspaceRoot/taskId)`, which is lexical and does not resolve filesystem aliases/symlinks. On this macOS fixture, this marks all 16 Tasks as outside the protected root even though `/tmp` and `/private/tmp` refer to the same underlying temporary hierarchy. All 16 customer projections therefore enter `recovering`; most lose all allowed actions. This is the first deterministic startup divergence in the preserved fixture and masks the separate Codex blocker string.
+
+2. **Requested Agent handoff history reconstruction loses Runtime method binding (MR-003 / MR-020).** For `task_b362...`, Runtime was durably bound to `ses_da04...`, progressed to active Agent control, and then exposed handoff `handoff_2de8...` generation 2. Eight milliseconds later, the live `item/completed` path recorded a `TypeError` and scheduled thread-history reconciliation. All three reconciliation attempts then remained unresolved. Source passes `this.runtime.getControlStatus` as an unbound callback; `CompanionRuntimeClient.getControlStatus()` dereferences `this.request`. This directly explains the TypeError on completed handoff material and prevents reconstruction/acknowledgement of the exact requested handoff.
+
+3. **Lazy Companion browser attachment has no durable Task Runtime-identity bind path (MR-022 / authority part of MR-023).** `task_350f...` launched as Companion without Runtime and therefore has no `bind_runtime_identity` command in its bootstrap history. A Runtime session `ses_fa53...` later exists with the Task's exact bootstrap ID and active Agent controller, proving browser work occurred. However `record.identity.sessionId` remains absent. Runtime polling can find by bootstrap ID and project a Runtime session, but it does not bind that session into the durable Task record. `resolveTaskRuntimeControlAuthority()` requires a durable `record.identity.sessionId` plus matching projected Runtime session, so voluntary Take Over/Open Browser cannot obtain exact live authority after lazy attachment.
+
+The startup Codex side remains independently unhealthy: every persisted Task has one `thread_history_reconstructible` blocker and repeated startup retries. The workspace blocker hides that string in the customer projection. STAB-02 will correct the authority defects above; STAB-03 remains responsible for bounded blocker lifecycle/clearing semantics after exact authority can be reconstructed.
+
+Before implementation, verify filesystem identity for the `/tmp` versus `/private/tmp` fixture and define a symlink-safe canonical workspace-equivalence rule.
+
 ## Future ticket rows
 
 ROVE-STAB-03 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

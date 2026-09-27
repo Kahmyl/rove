@@ -46,7 +46,7 @@ For every open Task, Rove can prove the exact Codex thread and Runtime session/b
 
 ## Owns
 
-MR-001, MR-003, MR-020, MR-022 and the authority portion of MR-023.
+MR-001, MR-003, MR-020, MR-022, MR-030 and the authority portion of MR-023.
 
 ## Read-only diagnosis first
 
@@ -54,6 +54,16 @@ MR-001, MR-003, MR-020, MR-022 and the authority portion of MR-023.
 - Trace Task record identity, bootstrap ID, Codex thread/session, Runtime inventory receipt, task capability scope, browser attachment and handoff generation.
 - Verify the concrete unbound `getControlStatus` callback failure and audit similar method-reference boundaries.
 - Explain why a successful task-scoped MCP browser run can cease to be resolvable through the Task projection before changing code.
+
+## Diagnosis conclusions before implementation
+
+The preserved fixture has established three implementation roots within this ticket:
+
+- persisted workspace authority uses lexical path equality and falsely rejects the macOS `/tmp` ↔ `/private/tmp` alias;
+- completed requested-handoff reconstruction passes Runtime `getControlStatus` without its owning object binding, producing the observed TypeError and unresolved thread-history repair;
+- lazy Runtime sessions created after a Task's Codex bootstrap can be discovered by bootstrap ID but are never durably rebound into `record.identity.sessionId`, while exact control authority requires that durable session identity.
+
+These conclusions are evidence-backed, but implementation must still preserve the original security intent: path equivalence must not authorize a workspace that resolves outside the protected per-Task root, and lazy Runtime binding must require exactly one bootstrap-correlated live receipt rather than current UI selection or newest-session heuristics.
 
 ## Acceptance criteria
 
