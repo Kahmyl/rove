@@ -153,6 +153,14 @@ Filesystem identity verification is complete: `/tmp` is a symlink to `private/tm
 
 Workspace and requested-handoff implementation may begin after their focused test design is fixed. The Companion Runtime-binding symptom still requires one more read-only trace because the canonical lifecycle already contains the durable bind transition; adding another bind path would duplicate authority. Preserve the security invariant that canonicalized Task workspaces must still resolve inside the canonicalized protected task-workspace root.
 
+#### Runtime-poll starvation evidence
+
+A full projection-order trace shows the production store iterates Tasks in projection row order. Runtime inventory observations exist for rows 1–11 only; `task_b362...` is row 11 and is the last Task ever to receive a Runtime inventory observation. Rows 12–16, including `task_350f...`, have none. The Companion Runtime session `ses_fa53...` was durably created at 10:18:22.628Z and updated at 10:18:22.823Z, while its Task continued to receive Codex events through 10:18:32.361Z, yet no Runtime inventory event was accepted for that Task.
+
+Current `pollRuntimeTruth()` reads one Runtime inventory and then processes every Task inside one outer `try`; any per-Task `getControlStatus` or ingress failure aborts the remainder of that poll. This makes one earlier Task capable of starving all later Task authority convergence. The preserved ordering strongly localizes the starvation boundary to `task_b362...`, the first nonterminal Runtime-bound Task before rows 12–16.
+
+This establishes the starvation mechanism but not yet the exact exception at row 11. Before changing code, inspect `ses_da04...` Runtime observation sequence and the last accepted TaskEngine Runtime source coordinate. A repeated source coordinate with changed Runtime truth would prove the likely event-identity collision; otherwise route generic per-Task Runtime read containment to STAB-04 rather than duplicating it in STAB-02.
+
 ## Future ticket rows
 
 ROVE-STAB-03 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
