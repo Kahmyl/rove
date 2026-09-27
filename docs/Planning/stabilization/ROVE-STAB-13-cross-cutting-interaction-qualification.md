@@ -61,7 +61,7 @@ Deterministic Electron projection tests plus development-app human-visible runs.
 
 ### Active qualification evidence — 27 September 2026
 
-- Start state: local STAB-12 checkpoint `1bc980e` on `codex/stab13-cross-cutting-qualification`; the checkpoint was not merged or published.
+- Start state: STAB-12 checkpoint `1bc980e` on `codex/stab13-cross-cutting-qualification`; both checkpoint branches are published to `origin` and neither is merged.
 - The 28-step production-projection Electron journey passes at 1180×780 and 820×700. It covers Working/Queue/Steer/Stop presentation, background attention, recovery/outcome distinctions, long content, multiple Tasks without selection theft, reduced motion, Latest/reading-position preservation and main/follower parity.
 - MR-016 is now covered by a retained combined check: every supported attention family is keyboard-reachable with `:focus-visible` controls and no horizontal/document-dialog overflow at 820×700. This is renderer qualification; live family reachability remains the inherited STAB-09 provider matrix.
 - MR-032 and MR-033 were recorded before correction. The manifest now derives its real Git branch, the manual Stop boundary distinguishes this fixture from process-backed base-profile proof and the open elevated blocker, and scoped approval labels/consequences retain an automated stacked-layout guard plus screenshot evidence.
