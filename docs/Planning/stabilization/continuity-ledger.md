@@ -403,7 +403,9 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `4d41f60b0a39d79c35ea0465a0483037390c0f14` (`Align approval policy contract`).
 
-**Durable handoff checkpoint:** this record's commit, to be filled by the final branch checkpoint before push.
+**Durable handoff checkpoint:** `6456056505ea98c3c41f3f9cbd13e5804db6511a` (`Record STAB-07 handoff`), pushed to `origin/codex/stab07-approval-policy-contract`.
+
+**PR state:** stacked PR creation against `codex/stab06-authoritative-execution-state` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-08.
 
 **Residual boundary:** live provider attention emission and exact decision families remain unqualified. STAB-08 owns refusal and exact one-time/session/policy-amendment decision fidelity only for requests the provider actually emits; STAB-09 owns deliberate live reachability. Neither ticket may reopen the frozen policy mapping without contradictory provider evidence.
 
