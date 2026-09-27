@@ -585,6 +585,8 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **STAB-13 real/package evidence and residuals:** `pnpm surface:native-foreground` qualified an exact native Chromium PID, exact CDP page/window identity and viable full-surface-to-follower transfer on macOS; unrelated-foreground revocation remains deterministic-only. `pnpm package:desktop:dir` produced an unsigned darwin/arm64 directory package and `pnpm test:desktop:package` passed. The first sandboxed package attempt was interrupted during expected registry retries, and the first smoke attempt was denied loopback bind permission; both permission-correct reruns passed. After the final scoped style/harness change, the focused projection/surface suite passed 12 files / 201 tests, `pnpm check:repository` passed 720 files / 1,316 relative imports / 113 links, and `pnpm lint`, `pnpm typecheck` and `pnpm test:experiments` (25 tests) passed. Development-app human acceptance, the broader packaged interaction matrix and unrelated-foreground revocation remain open. No elevated-execution or market-readiness claim is made.
 
+**Durable STAB-13 partial checkpoint:** commit `f8e51cf` (`Qualify cross-cutting task interactions`) contains the MR-016 combined accessibility matrix, MR-032/MR-033 corrections, exact provenance, native foreground evidence and package qualification record. STAB-13 remains in progress at the residual gates above. The checkpoint is local only; it has not been published or merged.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
