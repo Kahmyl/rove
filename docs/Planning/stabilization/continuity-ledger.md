@@ -523,6 +523,30 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Next handoff:** commit and push this PR-tooling boundary, then continue to the independent STAB-12 provider-authority gate without reopening browser authority.
 
+### ROVE-STAB-12 — BLOCKED ON PRODUCT/ARCHITECTURE AUTHORITY
+
+**Exact stacked start SHA:** `448923348145966879a7ccb3155a71320b82b851` (final pushed `codex/stab11-browser-resource-surface-ux` head).
+
+**Branch:** `codex/stab12-hard-stop-provider-qualification`; clean at entry. No predecessor PR was merged.
+
+**Inherited authority boundary:** pinned Codex App Server `0.154.0-alpha.6.2` accepted exact `turn/interrupt` and reported the turn interrupted while a yielded local command still reached its completion sentinel. The preserved investigation remains local branch `codex/stop-process-cancellation-blocker`, commit `2723642`; it was inspected without merging or publishing it. Current upstream issue #42717 remains open, and upstream protocol still defines ordinary turn interrupt without background-terminal termination while exposing only thread-wide terminal cleanup. Neither an opaque provider process ID nor broad process killing is exact Rove authority.
+
+**Current gate:** qualify the only locally available newer candidate, exact `0.155.0-alpha.9.2` executable SHA-256 `9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9`, through one opt-in live model turn in both default and supported `--disable unified_exec` modes. Record exact thread/turn/process metadata, interrupt acknowledgement, terminal status and delayed filesystem-sentinel evidence before any architecture decision.
+
+**Candidate result:** both opt-in live runs used temporary workspaces and ephemeral threads, requested one harmless exact command, archived the thread best-effort and removed the workspace. Default mode acknowledged the interrupt and reported the exact turn `interrupted` in 13 ms, but the command wrote its sentinel after eight seconds. Supported `--disable unified_exec` mode reported `interrupted` in 8 ms and also wrote the sentinel. Both runs exposed a string `commandExecution.processId` bound to the exact turn and emitted no unexpected server request. Neither process ID was treated as OS authority; no external account, consequential service or broad kill was used.
+
+**Disproved hypothesis:** the locally available newer provider or its non-unified execution mode does not convert turn interruption into exact local-process termination. MR-026 remains open and is no longer merely waiting for this candidate characterization.
+
+**Decision boundary:** `docs/Engineering/hard-stop-execution-decision.md` records the three truthful options without selecting one: authorize a narrow Rove-owned exact execution/cancellation boundary, explicitly weaken and rename the customer promise, or retain Hard Stop as a release blocker pending provider support. Thread-wide terminal cleanup, PID guessing, process-name killing and UI-only settlement are rejected as non-authoritative.
+
+**Files and compatibility:** STAB-12 adds only the opt-in `experiments/agent-execution/hard-stop-provider-qualification.mjs` harness, its root command and repository-owned decision/evidence documentation. No production source, schema, migration, persistence, wire contract, generated provider binding, approved-component selection, installed component or credential store changed. Candidate `0.155.0-alpha.9.2` was characterized in place; it was not qualified, installed or promoted as Rove's selected component.
+
+**Verification:** both exact live commands (`pnpm agent:stop-live` and `pnpm agent:stop-live -- --disable-unified-exec` with the explicit opt-in and candidate executable) completed and returned structured `blocked` evidence. `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:experiments` (25 tests), and `pnpm check:repository` (715 files, 1,306 relative imports, 111 local document links) passed. The complete bounded-pressure matrix `pnpm vitest run --maxWorkers=4` passed 202 files / 1,729 tests in 122.00 seconds.
+
+**Preserved reproduction:** the harness is self-cleaning, uses a fresh temporary workspace and delayed local sentinel on every run, requires `ROVE_ALLOW_LIVE_STOP=1`, accepts an explicit executable, records its digest and does not persist account data or command output. The prior local investigation branch/commit remains untouched.
+
+**Next gate:** durably publish this blocked research boundary, then stop for explicit product/architecture authority. Do not implement an executor, weaken the customer contract, or advance STAB-13 as though the market-readiness blocker were resolved without that decision.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

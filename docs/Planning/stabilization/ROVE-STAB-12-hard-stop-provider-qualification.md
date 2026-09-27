@@ -1,7 +1,7 @@
 # ROVE-STAB-12 — Hard Stop provider qualification / execution ownership decision
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Externally blocked; research continues  
+**Status:** Externally blocked; candidate research complete, product/architecture decision required
 **Dependencies:** STAB-01  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -17,7 +17,6 @@ Carry forward the exact Stop blocker evidence from STAB-01 and the separately pr
 
 At every provider requalification, record provider version/hash, exact process-backed reproduction, termination receipt/evidence, and whether the result changes the architectural decision. Reconcile current `main` with the continuity ledger before integrating any Stop work.
 
-
 ## Invariant
 
 Rove may say local work is Stopped only when it has evidence that the exact owned local operation can no longer continue normal execution.
@@ -26,13 +25,15 @@ Rove may say local work is Stopped only when it has evidence that the exact owne
 
 MR-026.
 
-## Current provider evidence — 26 September 2026
+## Current provider evidence — 27 September 2026
 
 - Pinned Rove baseline remains Codex App Server `0.154.0-alpha.6.2`.
 - Prior Rove live probe: `turn/interrupt` succeeded and the turn became interrupted, but the long local command still reached natural completion.
 - openai/codex issue #42717 remains open.
 - Current upstream `ProcessEntry` still has no owning-turn identity.
-- Newer prereleases exist, including `0.159.0-alpha.6`, but Rove has not qualified any candidate as proving exact process termination.
+- Exact locally available candidate `0.155.0-alpha.9.2` (SHA-256 `9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9`) was live-qualified in default and supported `--disable unified_exec` modes. Both runs accepted `turn/interrupt`, reported the exact turn `interrupted`, retained exact command-process metadata, and still wrote the delayed completion sentinel. It does not prove exact process termination.
+- Upstream issue #42717 remains open. Current upstream protocol explicitly separates ordinary turn interruption from thread-wide background-terminal cleanup; neither supplies exact Task/turn/process termination authority to Rove.
+- The unresolved product/architecture alternatives are recorded in [hard-stop-execution-decision.md](../../Engineering/hard-stop-execution-decision.md).
 - Rove does not use `pkill`, process-name killing, guessed OS PIDs, or UI-only settlement.
 
 ## Work

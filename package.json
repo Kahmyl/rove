@@ -17,6 +17,7 @@
     "agent:live": "node experiments/agent-execution/live-app-server.mjs",
     "agent:attention-boundary": "node experiments/agent-execution/live-app-server.mjs --attention-boundary",
     "agent:attention-live": "node experiments/agent-execution/live-app-server.mjs --attention-live",
+    "agent:stop-live": "node experiments/agent-execution/hard-stop-provider-qualification.mjs",
     "codex:component:inspect": "node scripts/codex-component-manager.mjs inspect",
     "codex:component:qualify": "node scripts/codex-component-manager.mjs qualify",
     "codex:component:install": "node scripts/codex-component-manager.mjs install",
