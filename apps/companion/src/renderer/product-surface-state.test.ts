@@ -24,7 +24,7 @@ function product(
   account: "unavailable" | "logged_out" | "logged_in" = "logged_in",
 ): LocalProductSnapshot {
   return {
-    version: 9,
+    version: 10,
     host: { state: "ready", ready: true, restartAttempt: 0 },
     catalog: {
       account: { status: account },

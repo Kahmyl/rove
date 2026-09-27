@@ -47,7 +47,7 @@ function product(
   tasks: readonly ProductTaskProjection[],
 ): LocalProductSnapshot {
   return {
-    version: 9,
+    version: 10,
     host: {
       state: "ready",
       ready: true,

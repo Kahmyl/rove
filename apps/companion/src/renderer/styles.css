@@ -4788,6 +4788,22 @@ span.composer-control-icon {
   margin-top: 2px;
 }
 
+.attention-actions button:has(> small) {
+  align-items: flex-start;
+  flex-direction: column;
+  max-width: 260px;
+  text-align: left;
+}
+
+.attention-actions button > small {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.78;
+  white-space: normal;
+}
+
 @media (max-height: 600px) {
   .task-detail-dock {
     padding-top: 10px;

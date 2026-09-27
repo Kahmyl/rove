@@ -93,7 +93,7 @@ function snapshot(
       ],
     },
     product: {
-      version: 9,
+      version: 10,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out" },
@@ -2203,6 +2203,91 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(humanOwnedCompact).not.toContain(reason);
     expect(humanOwnedCompact).toContain("Return Control");
     expect(humanOwnedCompact).not.toContain("Retry cleanup");
+  });
+
+  it("renders only exact approval choices and explains broader scope before acceptance", () => {
+    const value = snapshot();
+    value.product!.catalog.account = {
+      status: "logged_in",
+      authMode: "chatgpt",
+    };
+    value.product!.tasks = [
+      {
+        taskId: "task_approval",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-27T09:00:00.000Z",
+        approvalsReviewer: "user",
+        bootstrapStage: "complete",
+        results: [],
+        codexThreadId: "thread_approval",
+        lifecycle: { phase: "waiting_for_human", reason: "Waiting." },
+        availableActions: ["interrupt"],
+        capabilities: taskCapabilities({ canStop: true, canRespond: true }),
+        conversation: {
+          turnStatus: "in_progress",
+          archived: false,
+          items: {},
+          turnOrder: ["turn_approval"],
+          activeTurnId: "turn_approval",
+        },
+      },
+    ];
+    value.product!.currentTaskId = "task_approval";
+    value.product!.attention = [
+      {
+        authority: "codex",
+        kind: "command_approval",
+        requestId: "approval_exact",
+        taskId: "task_approval",
+        threadId: "thread_approval",
+        turnId: "turn_approval",
+        itemId: "item_approval",
+        generation: 2,
+        status: "pending",
+        sequence: 1,
+        title: "Command approval",
+        context: [{ label: "Command", value: "git status" }],
+        approvalDecisions: [
+          {
+            id: "approval_0",
+            decision: "accept",
+            label: "Approve once",
+            description: "Allows only this command request.",
+            scope: "once",
+          },
+          {
+            id: "approval_1",
+            decision: "acceptForSession",
+            label: "Approve for session",
+            description: "Applies for the current Codex session.",
+            scope: "session",
+          },
+          {
+            id: "approval_2",
+            decision: "decline",
+            label: "Decline",
+            description: "Does not allow this command request.",
+            scope: "none",
+          },
+        ],
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Approve once");
+    expect(html).toContain("Allows only this command request.");
+    expect(html).toContain("Approve for session");
+    expect(html).toContain("Applies for the current Codex session.");
+    expect(html).toContain("Decline");
+    expect(html).not.toContain(">Approve</");
   });
 
   it("presents one bounded user question as a focused choice response", () => {

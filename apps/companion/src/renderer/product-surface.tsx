@@ -12,6 +12,7 @@ import remarkGfm from "remark-gfm";
 import type {
   RendererProductIntent,
   LocalProductSnapshot,
+  ProductAttentionDecision,
   ProductAttentionProjection,
   ProductElicitationField,
   ProductTaskProjection,
@@ -2942,7 +2943,7 @@ export function ProductSurface({
   };
   const answerAttention = async (
     entry: ProductAttentionProjection,
-    decision: "accept" | "decline" | "cancel",
+    decision: ProductAttentionDecision,
   ) => {
     if (
       viewedTask?.taskId !== entry.taskId ||
@@ -3595,14 +3596,27 @@ export function ProductSurface({
                   </button>
                 ) : (
                   <button
-                    key={action.decision}
+                    key={action.id ?? String(action.decision)}
                     className={
-                      action.decision === "accept" ? "primary" : undefined
+                      action.scope !== undefined
+                        ? action.scope === "none"
+                          ? undefined
+                          : "primary"
+                        : action.decision === "accept"
+                          ? "primary"
+                          : undefined
                     }
                     disabled={busy}
                     onClick={() => void answerAttention(entry, action.decision)}
                   >
-                    {action.label}
+                    {action.description ? (
+                      <>
+                        <span>{action.label}</span>
+                        <small>{action.description}</small>
+                      </>
+                    ) : (
+                      action.label
+                    )}
                   </button>
                 ),
               )}

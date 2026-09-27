@@ -299,7 +299,7 @@ function baseSnapshot(tasks, currentTaskId, attention = [], companion = null) {
       ],
     },
     product: {
-      version: 9,
+      version: 10,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_in", authMode: "chatgpt", planType: "Plus" },
@@ -538,6 +538,41 @@ const attentionFamilies = {
   attention_command: attention("command_approval", {
     title: "Approve local command",
     context: [{ label: "Command", value: "Generate the local report" }],
+    approvalDecisions: [
+      {
+        id: "approval_once",
+        decision: "accept",
+        label: "Approve once",
+        description: "Allows only this command request.",
+        scope: "once",
+      },
+      {
+        id: "approval_session",
+        decision: "acceptForSession",
+        label: "Approve for session",
+        description: "Applies for the current Codex session.",
+        scope: "session",
+      },
+      {
+        id: "approval_policy",
+        decision: {
+          acceptWithExecpolicyAmendment: {
+            execpolicy_amendment: ["allow Generate the local report"],
+          },
+        },
+        label: "Approve and update command policy",
+        description:
+          "Approves this request and persists this command policy: allow Generate the local report.",
+        scope: "persistent_policy",
+      },
+      {
+        id: "approval_decline",
+        decision: "decline",
+        label: "Decline",
+        description: "Does not allow this command request.",
+        scope: "none",
+      },
+    ],
   }),
   attention_file: attention("file_approval", {
     title: "Approve file change",
@@ -1025,7 +1060,9 @@ try {
   assertCanonicalComposerGeometry(existingComposerGeometry, "Existing Task");
   assert(
     JSON.stringify(newComposerGeometry.groups.map((group) => group.name)) ===
-      JSON.stringify(existingComposerGeometry.groups.map((group) => group.name)),
+      JSON.stringify(
+        existingComposerGeometry.groups.map((group) => group.name),
+      ),
     "New and existing Task composer structures diverged.",
   );
   await capture(
@@ -1075,9 +1112,8 @@ try {
     "Semantic activity is missing.",
   );
   const scrollOwnership = await page.evaluate(() => ({
-    timeline: getComputedStyle(
-      document.querySelector(".task-timeline"),
-    ).overflowY,
+    timeline: getComputedStyle(document.querySelector(".task-timeline"))
+      .overflowY,
     work: getComputedStyle(
       document.querySelector(".timeline-work-active .timeline-work-items"),
     ).overflowY,
@@ -1409,6 +1445,24 @@ try {
       !/requestId|generation|MCP|Runtime/.test(requestText),
       `${name} leaked request internals.`,
     );
+    if (name === "attention_command") {
+      for (const label of [
+        "Approve once",
+        "Approve for session",
+        "Approve and update command policy",
+        "Decline",
+      ])
+        assert(
+          await page
+            .getByRole("button", { name: new RegExp(label) })
+            .isVisible(),
+          `Command approval omitted ${label}.`,
+        );
+      assert(
+        requestText.includes("persists this command policy"),
+        "Persistent command-policy scope was not explained before acceptance.",
+      );
+    }
     await capture(
       page,
       name,

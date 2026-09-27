@@ -119,11 +119,56 @@ describe("customer Task collaboration projection", () => {
     expect(
       customerTaskCollaboration(task(), [
         attention("command", "command_approval", 1, {
-          allowedDecisions: ["decline"],
+          approvalDecisions: [
+            {
+              id: "decision_0",
+              decision: "accept",
+              label: "Approve once",
+              description: "Allows only this command request.",
+              scope: "once",
+            },
+            {
+              id: "decision_1",
+              decision: "acceptForSession",
+              label: "Approve for session",
+              description: "Applies for the current Codex session.",
+              scope: "session",
+            },
+            {
+              id: "decision_2",
+              decision: "decline",
+              label: "Decline",
+              description: "Does not allow this command request.",
+              scope: "none",
+            },
+          ],
         }),
       ]).request?.actions,
     ).toEqual([
-      { kind: "respond", decision: "decline", label: "Decline" },
+      {
+        kind: "respond",
+        id: "decision_0",
+        decision: "accept",
+        label: "Approve once",
+        description: "Allows only this command request.",
+        scope: "once",
+      },
+      {
+        kind: "respond",
+        id: "decision_1",
+        decision: "acceptForSession",
+        label: "Approve for session",
+        description: "Applies for the current Codex session.",
+        scope: "session",
+      },
+      {
+        kind: "respond",
+        id: "decision_2",
+        decision: "decline",
+        label: "Decline",
+        description: "Does not allow this command request.",
+        scope: "none",
+      },
     ]);
     expect(
       customerTaskCollaboration(task(), [
@@ -202,22 +247,20 @@ describe("customer Task collaboration projection", () => {
       generation: 6,
       continuationPolicy: "resume_after_control_return",
     });
-    expect(customerTaskCollaboration(takeoverTask, [exact]).browser).toMatchObject(
-      {
-        state: "takeover_required",
-        canTakeOver: true,
-        handoffGeneration: 6,
-      },
-    );
     expect(
-      customerTaskCollaboration(takeoverTask, [
-        { ...exact, generation: 5 },
-      ]).browser.canTakeOver,
+      customerTaskCollaboration(takeoverTask, [exact]).browser,
+    ).toMatchObject({
+      state: "takeover_required",
+      canTakeOver: true,
+      handoffGeneration: 6,
+    });
+    expect(
+      customerTaskCollaboration(takeoverTask, [{ ...exact, generation: 5 }])
+        .browser.canTakeOver,
     ).toBe(false);
     expect(
-      customerTaskCollaboration(takeoverTask, [
-        { ...exact, taskId: "task_b" },
-      ]).browser.canTakeOver,
+      customerTaskCollaboration(takeoverTask, [{ ...exact, taskId: "task_b" }])
+        .browser.canTakeOver,
     ).toBe(false);
   });
 
@@ -279,10 +322,8 @@ describe("customer Task collaboration projection", () => {
       canTakeOver: true,
     });
     expect(
-      customerTaskCollaboration(
-        { ...companion, executionMode: "agent" },
-        [],
-      ).browser.canTakeOver,
+      customerTaskCollaboration({ ...companion, executionMode: "agent" }, [])
+        .browser.canTakeOver,
     ).toBe(false);
   });
 });

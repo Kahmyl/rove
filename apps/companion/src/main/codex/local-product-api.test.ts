@@ -2533,8 +2533,22 @@ describe("LocalProductApi native product seam", () => {
     );
   });
 
-  it("preserves the exact supported command-approval decision set", async () => {
+  it("preserves and submits the exact supported command-approval decisions", async () => {
     const { api, attention, broker } = fixture();
+    const sessionDecision = "acceptForSession" as const;
+    const policyDecision = {
+      acceptWithExecpolicyAmendment: {
+        execpolicy_amendment: ["allow git status"],
+      },
+    } as const;
+    const networkDecision = {
+      applyNetworkPolicyAmendment: {
+        network_policy_amendment: {
+          action: "allow" as const,
+          host: "api.example.test",
+        },
+      },
+    } as const;
     attention.enqueue({
       authority: "codex",
       kind: "command_approval",
@@ -2542,21 +2556,86 @@ describe("LocalProductApi native product seam", () => {
       requestId: "decline_only",
       taskId: "task_existing",
       generation: 4,
-      payload: { availableDecisions: ["decline"] },
+      payload: {
+        availableDecisions: [
+          "accept",
+          sessionDecision,
+          "decline",
+          "cancel",
+          policyDecision,
+          networkDecision,
+        ],
+      },
     });
-    expect((await api.readSnapshot()).attention[0]?.allowedDecisions).toEqual([
-      "decline",
+    expect((await api.readSnapshot()).attention[0]?.approvalDecisions).toEqual([
+      expect.objectContaining({
+        decision: "accept",
+        label: "Approve once",
+        scope: "once",
+      }),
+      expect.objectContaining({
+        decision: sessionDecision,
+        label: "Approve for session",
+        scope: "session",
+      }),
+      expect.objectContaining({ decision: "decline", label: "Decline" }),
+      expect.objectContaining({ decision: "cancel", label: "Cancel request" }),
+      expect.objectContaining({
+        decision: policyDecision,
+        label: "Approve and update command policy",
+        description: expect.stringContaining("allow git status"),
+        scope: "persistent_policy",
+      }),
+      expect.objectContaining({
+        decision: networkDecision,
+        label: "Approve and allow api.example.test",
+        description: expect.stringMatching(/network policy.*persist/i),
+        scope: "persistent_policy",
+      }),
     ]);
+
     await expect(
-      api.execute({
+      api.executeRendererIntent({
         type: "attention.decide",
         requestId: "decline_only",
         taskId: "task_existing",
         generation: 4,
-        decision: "accept",
+        decision: {
+          acceptWithExecpolicyAmendment: {
+            execpolicy_amendment: ["different rule"],
+          },
+        },
       }),
     ).rejects.toThrow(/not available/);
     expect(broker.respond).not.toHaveBeenCalled();
+
+    await api.executeRendererIntent({
+      type: "attention.decide",
+      requestId: "decline_only",
+      taskId: "task_existing",
+      generation: 4,
+      decision: sessionDecision,
+    });
+    expect(broker.respond).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestId: "decline_only" }),
+      { decision: sessionDecision },
+    );
+    attention.beginResponse({
+      authority: "codex",
+      requestId: "decline_only",
+      taskId: "task_existing",
+      generation: 4,
+    });
+    await expect(
+      api.executeRendererIntent({
+        type: "attention.decide",
+        requestId: "decline_only",
+        taskId: "task_existing",
+        generation: 4,
+        decision: sessionDecision,
+      }),
+    ).rejects.toThrow(/stale or mismatched/i);
+    expect(broker.respond).toHaveBeenCalledTimes(1);
   });
 
   it("composes Task attention into the typed customer collaboration projection", async () => {
@@ -3604,6 +3683,15 @@ describe("LocalProductApi native product seam", () => {
       expect.arrayContaining([
         expect.objectContaining({ label: "Host", value: "api.example" }),
       ]),
+    );
+    expect(
+      projected.find((entry) => entry.requestId === "network")
+        ?.approvalDecisions?.[0],
+    ).toEqual(
+      expect.objectContaining({
+        label: "Approve once",
+        description: "Allows only this network access request.",
+      }),
     );
     expect(
       projected.find((entry) => entry.requestId === "permission")?.context,

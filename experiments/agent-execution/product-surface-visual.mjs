@@ -137,7 +137,7 @@ function baseSnapshot(presentation, accountStatus) {
       ],
     },
     product: {
-      version: 9,
+      version: 10,
       host: {
         state: "ready",
         ready: true,

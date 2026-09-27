@@ -1,7 +1,7 @@
 # ROVE-STAB-08 — Approval decision fidelity and UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready after STAB-07 checkpoint
+**Status:** In progress
 **Dependencies:** STAB-07  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 

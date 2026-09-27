@@ -456,6 +456,30 @@ describe("generated boundary", () => {
         scope: "turn",
       }),
     ).toThrow(/strictAutoReview/);
+    for (const decision of [
+      "accept",
+      "acceptForSession",
+      "decline",
+      "cancel",
+      {
+        acceptWithExecpolicyAmendment: {
+          execpolicy_amendment: ["allow git status"],
+        },
+      },
+      {
+        applyNetworkPolicyAmendment: {
+          network_policy_amendment: {
+            action: "allow",
+            host: "api.example.test",
+          },
+        },
+      },
+    ])
+      expect(() =>
+        validateServerRequestResponse("item/commandExecution/requestApproval", {
+          decision,
+        }),
+      ).not.toThrow();
   });
   it("rejects an unknown field for every reviewed request, response, notification, server request, and server response", () => {
     for (const method of CODEX_REVIEWED_METHODS)

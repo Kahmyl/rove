@@ -57,7 +57,7 @@ import {
   type TaskResultKind,
 } from "./results.js";
 
-export const LOCAL_PRODUCT_API_VERSION = 9 as const;
+export const LOCAL_PRODUCT_API_VERSION = 10 as const;
 export interface ProductTaskLaunchInput {
   outcome: string;
   executionMode: ExecutionMode;
@@ -254,7 +254,7 @@ export type LocalProductCommand =
       turnId?: string;
       itemId?: string;
       generation: number;
-      decision: "accept" | "decline" | "cancel";
+      decision: ProductAttentionDecision;
       answers?: Record<string, readonly string[]>;
       form?: Record<string, string | number | boolean | readonly string[]>;
     }
@@ -343,7 +343,7 @@ export type RendererProductIntent =
       taskId: string;
       requestId: string;
       generation: number;
-      decision: "accept" | "decline" | "cancel";
+      decision: ProductAttentionDecision;
       answers?: Record<string, readonly string[]>;
       form?: Record<string, string | number | boolean | readonly string[]>;
     };
@@ -375,8 +375,33 @@ export interface ProductAttentionProjection {
   context?: readonly { label: string; value: string }[];
   questions?: readonly ProductAttentionQuestion[];
   elicitation?: ProductElicitationProjection;
-  allowedDecisions?: readonly ("accept" | "decline" | "cancel")[];
+  approvalDecisions?: readonly ProductApprovalDecisionProjection[];
   continuationPolicy?: "resume_after_control_return" | "explicit_user_response";
+}
+export type ProductBasicAttentionDecision = "accept" | "decline" | "cancel";
+export type ProductProviderApprovalDecision =
+  | ProductBasicAttentionDecision
+  | "acceptForSession"
+  | {
+      acceptWithExecpolicyAmendment: {
+        execpolicy_amendment: readonly string[];
+      };
+    }
+  | {
+      applyNetworkPolicyAmendment: {
+        network_policy_amendment: {
+          action: "allow" | "deny";
+          host: string;
+        };
+      };
+    };
+export type ProductAttentionDecision = ProductProviderApprovalDecision;
+export interface ProductApprovalDecisionProjection {
+  id: string;
+  decision: ProductProviderApprovalDecision;
+  label: string;
+  description: string;
+  scope: "none" | "once" | "session" | "persistent_policy";
 }
 export interface ProductAttentionQuestion {
   id: string;
@@ -1156,22 +1181,140 @@ function attentionTitle(kind: AttentionKind): string {
     control_handoff: "Browser control handoff",
   }[kind];
 }
-function supportedAttentionDecisions(
+function isBasicAttentionDecision(
+  value: ProductAttentionDecision,
+): value is ProductBasicAttentionDecision {
+  return value === "accept" || value === "decline" || value === "cancel";
+}
+function commandApprovalDecision(
+  value: unknown,
+): ProductProviderApprovalDecision | undefined {
+  if (
+    value === "accept" ||
+    value === "acceptForSession" ||
+    value === "decline" ||
+    value === "cancel"
+  )
+    return value;
+  const candidate = record(value);
+  const exec = record(candidate?.acceptWithExecpolicyAmendment);
+  if (
+    candidate &&
+    Object.keys(candidate).length === 1 &&
+    exec &&
+    Object.keys(exec).length === 1 &&
+    Array.isArray(exec.execpolicy_amendment) &&
+    exec.execpolicy_amendment.every((rule) => typeof rule === "string")
+  )
+    return {
+      acceptWithExecpolicyAmendment: {
+        execpolicy_amendment: [...exec.execpolicy_amendment] as string[],
+      },
+    };
+  const applyNetwork = record(candidate?.applyNetworkPolicyAmendment);
+  const amendment = record(applyNetwork?.network_policy_amendment);
+  if (
+    candidate &&
+    Object.keys(candidate).length === 1 &&
+    applyNetwork &&
+    Object.keys(applyNetwork).length === 1 &&
+    amendment &&
+    Object.keys(amendment).length === 2 &&
+    (amendment.action === "allow" || amendment.action === "deny") &&
+    typeof amendment.host === "string"
+  )
+    return {
+      applyNetworkPolicyAmendment: {
+        network_policy_amendment: {
+          action: amendment.action,
+          host: amendment.host,
+        },
+      },
+    };
+  return undefined;
+}
+function approvalDecisionProjection(
+  decision: ProductProviderApprovalDecision,
+  index: number,
+  subject: "command" | "file change" | "network access",
+): ProductApprovalDecisionProjection {
+  if (decision === "accept")
+    return {
+      id: `approval_${index}`,
+      decision,
+      label: "Approve once",
+      description: `Allows only this ${subject} request.`,
+      scope: "once",
+    };
+  if (decision === "acceptForSession")
+    return {
+      id: `approval_${index}`,
+      decision,
+      label: "Approve for session",
+      description: "Applies for the current Codex session.",
+      scope: "session",
+    };
+  if (decision === "decline")
+    return {
+      id: `approval_${index}`,
+      decision,
+      label: "Decline",
+      description: `Does not allow this ${subject} request.`,
+      scope: "none",
+    };
+  if (decision === "cancel")
+    return {
+      id: `approval_${index}`,
+      decision,
+      label: "Cancel request",
+      description: `Cancels this ${subject} request without allowing it.`,
+      scope: "none",
+    };
+  if ("acceptWithExecpolicyAmendment" in decision) {
+    const rules = decision.acceptWithExecpolicyAmendment.execpolicy_amendment;
+    return {
+      id: `approval_${index}`,
+      decision,
+      label: "Approve and update command policy",
+      description: `Approves this request and persists this command policy: ${rules.join("; ") || "empty amendment"}.`,
+      scope: "persistent_policy",
+    };
+  }
+  const amendment =
+    decision.applyNetworkPolicyAmendment.network_policy_amendment;
+  return {
+    id: `approval_${index}`,
+    decision,
+    label: `Approve and ${amendment.action} ${amendment.host}`,
+    description: `A network policy rule to ${amendment.action} ${amendment.host} will persist after this request is approved.`,
+    scope: "persistent_policy",
+  };
+}
+function supportedApprovalDecisions(
   entry: Pick<AttentionRequest, "kind" | "payload" | "method">,
-): readonly ("accept" | "decline" | "cancel")[] {
-  if (entry.kind === "user_input") return ["accept"];
-  if (entry.kind === "mcp_elicitation")
-    return ["accept", "decline", "cancel"];
-  if (entry.kind === "command_approval") {
+): readonly ProductApprovalDecisionProjection[] | undefined {
+  if (entry.kind === "command_approval" || entry.kind === "network_approval") {
     const available = Array.isArray(entry.payload.availableDecisions)
       ? entry.payload.availableDecisions
       : undefined;
-    if (available)
-      return ["accept", "decline"].filter((decision) =>
-        available.includes(decision),
-      ) as ("accept" | "decline")[];
+    const raw = available ?? ["accept", "decline"];
+    const subject =
+      entry.kind === "network_approval" ? "network access" : "command";
+    return raw.flatMap((value, index) => {
+      const decision = commandApprovalDecision(value);
+      if (decision === undefined) return [];
+      return [approvalDecisionProjection(decision, index, subject)];
+    });
   }
-  return ["accept", "decline"];
+  if (entry.kind === "file_approval")
+    return ["accept", "decline"].map((decision, index) =>
+      approvalDecisionProjection(
+        decision as "accept" | "decline",
+        index,
+        "file change",
+      ),
+    );
+  return undefined;
 }
 function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
   const context: { label: string; value: string }[] = [];
@@ -1224,7 +1367,10 @@ function projectAttention(entry: AttentionRequest): ProductAttentionProjection {
     status: entry.status,
     sequence: entry.sequence,
     title: attentionTitle(entry.kind),
-    allowedDecisions: supportedAttentionDecisions(entry),
+    ...(() => {
+      const approvalDecisions = supportedApprovalDecisions(entry);
+      return approvalDecisions === undefined ? {} : { approvalDecisions };
+    })(),
     ...(context.length === 0 ? {} : { context: context.slice(0, 8) }),
     ...(questions === undefined ? {} : { questions }),
     ...(elicitation === undefined ? {} : { elicitation }),
@@ -2605,12 +2751,8 @@ export class LocalProductApi {
     const requestId = nonempty(value.requestId, "request id");
     if (!Number.isInteger(value.generation) || Number(value.generation) < 0)
       throw new Error("Invalid request generation.");
-    if (
-      value.decision !== "accept" &&
-      value.decision !== "decline" &&
-      value.decision !== "cancel"
-    )
-      throw new Error("Invalid attention decision.");
+    const decision = commandApprovalDecision(value.decision);
+    if (decision === undefined) throw new Error("Invalid attention decision.");
     const answers =
       value.answers === undefined ? undefined : record(value.answers);
     const form = value.form === undefined ? undefined : record(value.form);
@@ -2658,7 +2800,7 @@ export class LocalProductApi {
       ...(entry.turnId === undefined ? {} : { turnId: entry.turnId }),
       ...(entry.itemId === undefined ? {} : { itemId: entry.itemId }),
       generation: Number(value.generation),
-      decision: value.decision,
+      decision,
       ...(answers === undefined
         ? {}
         : { answers: answers as Record<string, readonly string[]> }),
@@ -3438,24 +3580,30 @@ export class LocalProductApi {
           entry.kind === "file_approval" ||
           entry.kind === "network_approval"
         ) {
-          if (command.decision === "cancel")
-            throw new Error("Approval requests do not support cancel.");
-          if (!supportedAttentionDecisions(entry).includes(command.decision))
+          const supported = supportedApprovalDecisions(entry) ?? [];
+          if (
+            !supported.some(
+              (candidate) =>
+                JSON.stringify(candidate.decision) ===
+                JSON.stringify(command.decision),
+            )
+          )
             throw new Error("This approval decision is not available.");
           const legacy =
             entry.method === "execCommandApproval" ||
             entry.method === "applyPatchApproval";
+          if (legacy && !isBasicAttentionDecision(command.decision))
+            throw new Error("This approval decision is not available.");
           result = {
-            decision:
-              command.decision === "accept"
-                ? legacy
-                  ? "approved"
-                  : "accept"
-                : legacy
-                  ? "abort"
-                  : "decline",
+            decision: legacy
+              ? command.decision === "accept"
+                ? "approved"
+                : "abort"
+              : command.decision,
           };
         } else if (entry.kind === "permission_approval") {
+          if (!isBasicAttentionDecision(command.decision))
+            throw new Error("This permission decision is not available.");
           if (command.decision === "cancel")
             throw new Error("Permission approvals do not support cancel.");
           result = {
@@ -3469,6 +3617,8 @@ export class LocalProductApi {
             strictAutoReview: false,
           };
         } else if (entry.kind === "mcp_elicitation") {
+          if (!isBasicAttentionDecision(command.decision))
+            throw new Error("This elicitation decision is not available.");
           const mode = entry.payload.mode;
           result = {
             _meta: null,
@@ -3481,6 +3631,8 @@ export class LocalProductApi {
                 : null,
           };
         } else {
+          if (!isBasicAttentionDecision(command.decision))
+            throw new Error("This input decision is not available.");
           if (command.decision !== "accept")
             throw new Error("User-input requests require submitted answers.");
           result = {

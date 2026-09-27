@@ -13,7 +13,7 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 ### Required inherited state
 
-Consume STAB-07/STAB-08 decisions when those tickets are complete; if provider characterization work begins earlier, it remains read-only/fixture work and must not preempt their product contract. Preserve STAB-01's distinction between a product defect and an unqualified request family.
+Consume STAB-07/STAB-08 decisions without reopening them. Permission modes share `on-request` and `rove_task`, with reviewer `user` versus `auto_review`. Once an approval request is emitted, Rove preserves its exact advertised one-time, session, refusal/cancel and policy-amendment decisions; requests without an advertised richer set do not invent broader scope. Provider characterization must prove actual family emission and the emitted decision set, not merely replay the deterministic renderer fixture. Preserve STAB-01's distinction between a product defect and an unqualified request family.
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 

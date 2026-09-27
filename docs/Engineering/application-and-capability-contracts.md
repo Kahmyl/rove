@@ -127,6 +127,10 @@ The selected reviewer, `on-request` policy, and named permission profile must be
 
 Codex permission review is not Rove authorization for a consequential external action. The customer still authorizes the exact action, target, content, attachments, and scope through Rove's action contract. Neither reviewer choice can manufacture that authorization, widen it, convert a decline into execution, or authorize a different adapter.
 
+When Codex emits an approval request with `availableDecisions`, Rove preserves that exact ordered decision set through the host projection and response. `accept` is presented as **Approve once**. `acceptForSession` is presented only when emitted and is described as applying to the current Codex session. `decline` and `cancel` remain distinct refusal outcomes when emitted. Command-policy and network-policy amendment objects are sent back byte-for-structure equivalent to the offered decision and must show the exact rule or host, action, and persistent-policy consequence before acceptance. Rove never constructs a broader amendment from customer wording.
+
+Requests without an advertised richer decision set expose only the response choices Rove has qualified for that request family. Once a response starts, all choices disappear while the Task shows submitting/checking truth; the exact task/request/generation can settle once, and a duplicate or stale decision fails before another provider response. Decline, deny, and cancel cannot be converted into execution through a different capability.
+
 Human ownership and action authorization are related but different: permission to send a message does not allow agent mutation while the human controls the page. Declining an action must not be converted into execution through another adapter.
 
 ## Errors and retries
