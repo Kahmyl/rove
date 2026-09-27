@@ -517,7 +517,11 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Residual boundary and downstream handoff:** the real native harness proved exact browser foreground and viable follower transfer but not live unrelated-foreground revocation. STAB-13 inherits the repaired profile/resource/surface behavior and retains the combined development-app, narrow-layout, accessibility, packaged/native-surface matrix plus that live revocation check. STAB-12 remains independent and externally blocked on exact provider process-termination authority.
 
-**Next handoff:** commit and push the durable STAB-11 record, attempt the authorized stacked PR against `codex/stab10-handoff-browser-attachment-authority`, record the resulting boundary, then continue to STAB-12 without reopening browser authority.
+**Durable handoff:** `2f4c199` (`Record STAB-11 browser surface handoff`) is pushed on `codex/stab11-browser-resource-surface-ux`.
+
+**PR boundary:** the authorized stacked PR attempt against `codex/stab10-handoff-browser-attachment-authority` failed with GitHub GraphQL `must be a collaborator`. No PR was created and nothing was merged.
+
+**Next handoff:** commit and push this PR-tooling boundary, then continue to the independent STAB-12 provider-authority gate without reopening browser authority.
 
 ## Future ticket rows
 
