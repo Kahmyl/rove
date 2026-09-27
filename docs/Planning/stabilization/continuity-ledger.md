@@ -435,11 +435,15 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `54d0ef02e5dd6388dcf85431475ef21d44f9b80f` (`Preserve exact approval decisions`).
 
+**Durable handoff checkpoint:** `32da33d65f00d9ddb814efe016570f79f4425345` (`Record STAB-08 approval handoff`), pushed to `origin/codex/stab08-approval-decision-fidelity`.
+
+**PR state:** stacked PR creation against `codex/stab07-approval-policy-contract` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-09.
+
 **Qualification boundary:** no live model, credentialed provider, external-service mutation, packaged application or human acceptance was run. The Electron journey is a credential-free deterministic rendering qualification, not evidence that a live provider emits each attention family. No preserved acceptance home was mutated.
 
 **Finding disposition:** MR-007 and MR-008 are closed at schema/adapter/collaboration/renderer boundaries. STAB-09 owns deliberate live reachability, emitted-family characterization and actual decision-set evidence; it must preserve exact decisions and must not count the deterministic renderer fixture as live qualification.
 
-**Next handoff:** checkpoint and push this durable record, attempt the stacked PR against `codex/stab07-approval-policy-contract` without merging, then branch STAB-09 from the exact final STAB-08 head. STAB-09's first gate is to distinguish request families the provider can deliberately emit from those that remain unqualified, without reopening the STAB-07 policy mapping or STAB-08 response vocabulary.
+**Next handoff:** push this PR-tooling record, then branch STAB-09 from the exact final STAB-08 head. STAB-09's first gate is to distinguish request families the provider can deliberately emit from those that remain unqualified, without reopening the STAB-07 policy mapping or STAB-08 response vocabulary.
 
 **Non-goals:** do not synthesize approval requests, invent session/persistent scope, widen provider amendments, conflate permission review with consequential-action authorization, or claim live reachability from deterministic fixtures.
 
