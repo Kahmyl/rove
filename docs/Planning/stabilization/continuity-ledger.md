@@ -315,7 +315,7 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not change Task/Runtime identity, invent another recovery model, or reinterpret all transport errors as the retained configuration failure.
 
-### ROVE-STAB-05 — IN PROGRESS — READ-ONLY DIAGNOSIS
+### ROVE-STAB-05 — COMPLETE
 
 **Exact stacked start SHA:** `d642822d0a00516ff32fec86d2fdfd35e5cbf6b9` (final pushed `codex/stab04-runtime-failure-containment` head).
 
@@ -323,11 +323,21 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Inherited invariants:** STAB-03 distinguishes active bounded checking from exhausted `Task state unclear`; STAB-04 preserves local Product truth behind one classified Runtime degraded state and customer-safe warning.
 
-**Owned finding:** MR-006 initial hydration coherence and presentation of the established STAB-03/04 states.
+**Owned finding:** MR-006 initial hydration coherence and presentation of the established STAB-03/04 states. MR-006 is closed.
 
-**First gate:** trace Electron window/IPC publication order and renderer `null` / product-null transitions, then reproduce any contradictory pre-snapshot shell before changing startup behavior.
+**Confirmed root cause:** `startDesktop()` awaited the complete Codex execution-core startup path before IPC registration and native surface presentation. Independently, `desktop === null` rendered the full empty shell and a coherent product-null/error-null envelope was misclassified as startup failure. Existing non-null Product snapshots already carried the correct STAB-03 per-Task and STAB-04 Runtime states; no new recovery state was needed.
 
-**Diagnosis:** `startDesktop()` currently waits for managed Runtime plus complete execution-core startup, account refresh and bounded provider reconciliation before IPC registration/window presentation. Renderer `desktop === null` nevertheless renders the full empty shell; a product-null/error-null envelope is misclassified as startup failure. Current non-null local Product projections already carry the correct STAB-03 per-Task and STAB-04 degraded-warning states, narrowing MR-006 to startup ordering and coherent initial presentation.
+**Implemented invariant:** Desktop IPC and the native surface are presented before awaited provider startup. Null and coherent product-null/error-null snapshots render only centered neutral hydration; initial IPC failure becomes one bounded retry surface. Once coherent local Product truth exists, persisted conversation and Task-owned recovery render immediately, unrelated Tasks remain interactive, and exactly the established customer-safe Runtime warning may appear without leaking internal diagnostics or changing Task state.
+
+**Files and compatibility:** startup ordering in `apps/companion/src/main/main.ts`; hydration classification and rendering in `product-surface-state.ts`, `product-surface.tsx`, and `styles.css`; focused renderer/architecture tests; credential-free Electron qualification entry and experiment. No schema, migration, provider-version contract, Runtime retry taxonomy, Task identity, or recovery authority changed. Qualification sources remain excluded from packaged application files by the existing package rule.
+
+**Verification:** required renderer regressions failed first, then 3 files / 67 focused tests passed. `node experiments/agent-execution/startup-hydration-qualification.mjs` passed healthy and permanently degraded real built Electron launches over one disposable persisted snapshot; both proved neutral hydration, readable persisted conversation, exact Task-owned `Task state unclear`, and an unrelated interactive Task, while only the degraded launch rendered the safe browser-service warning. The fixture self-deleted and used no credential, model, installed Codex component, external provider, or preserved acceptance state. `pnpm check:repository` passed (708 files, 1,303 relative imports, 107 local document links); `pnpm lint`, `pnpm typecheck`, `pnpm build`, full `pnpm test` (202 files / 1,723 tests), and `pnpm test:experiments` (24 tests) passed.
+
+**Implementation checkpoint:** `a98882d69af44d4b30dbaedc9254d2cc9e7a146e` (`Hydrate local tasks before provider startup`).
+
+**Residual boundary:** packaged-application and human acceptance remain unrun. The preserved original acceptance home and `/private/tmp/rove-stab04-process.9fBJvP` remain untouched and valid. Managed Runtime process health is still an earlier local-service prerequisite; STAB-05 decouples the local Product surface from provider reconciliation and renders already-classified Runtime degradation, rather than inventing a second host-start recovery path.
+
+**Downstream handoff:** STAB-06 must preserve neutral hydration as pre-snapshot-only. Once Product truth exists, its authoritative execution-state changes must remain Task-owned, keep unrelated Tasks interactive, and remain independent of the Runtime warning. Its first gate is the persisted successful-interrupt / still-requested-Stop case already isolated by STAB-03.
 
 **Non-goals:** do not add another recovery state, make provider reconciliation a prerequisite for local conversation readability, or reopen Runtime retry taxonomy.
 

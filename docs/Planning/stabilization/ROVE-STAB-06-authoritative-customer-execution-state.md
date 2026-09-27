@@ -17,8 +17,9 @@ Consume the authority/recovery conclusions already established by STAB-02 and ST
 
 The STAB-03 disposable preserved fixture adds one exact entry case: a Task has a durably succeeded `interrupt_codex_turn` outbox command but still persists `requestedOperation.type === "interrupt"`, so it projects Stopping independently of its exhausted Codex blocker. Diagnose that persisted Stop settlement under MR-009/MR-024; do not weaken or clear the exact recovery blocker to hide it.
 
-At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
+STAB-05 establishes that pre-snapshot startup alone owns the neutral hydration surface. Once local Product truth exists, the owning Task's execution presentation must render immediately, unrelated Tasks must remain interactive, and an independent Runtime warning must not alter Task terminality. Preserve that separation while changing the execution-state projection.
 
+At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
 ## Invariant
 

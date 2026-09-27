@@ -1,7 +1,7 @@
 # ROVE-STAB-05 — Startup hydration and degraded-state UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** In Progress — read-only diagnosis
+**Status:** Complete
 **Dependencies:** STAB-03, STAB-04  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -37,6 +37,23 @@ At ticket start, reconcile current `main` with the continuity ledger and record 
 - `startDesktop()` awaits managed Runtime startup and the complete `CodexExecutionCore.start()` path—including account refresh and bounded provider reconciliation—before registering IPC or creating/presenting the full surface. A slow provider therefore delays even the neutral local window instead of allowing local history to hydrate independently.
 - The renderer starts with `desktop === null`, but `ProductSurface` renders the complete empty task shell immediately. A coherent desktop envelope with `product === null` and no `productError` is also classified as `startup_failed`, so a normal in-progress local hydration can flash New Task / composer and “Codex couldn't start” before the first local Product snapshot.
 - Once `LocalProductSnapshot` exists, current Task/customer projections already preserve STAB-03 per-Task unresolved state and STAB-04 bounded recovery warnings. The owning defect is startup composition and initial rendering, not another Task or Runtime state.
+
+### Implemented contract
+
+- Desktop IPC and the native surface are registered and presented before awaited Codex/provider startup. Provider reconciliation can no longer prevent the local window from opening.
+- `desktop === null` and a coherent product-null/error-null envelope render one centered neutral hydration surface. The empty composer, Worked/Checking status, and startup-failure recovery do not render before coherent local truth exists.
+- Initial IPC failure replaces the loader with one bounded, customer-safe retry action; it does not reveal raw host diagnostics or spin indefinitely.
+- The established STAB-04 Runtime messages are the only recovery warnings admitted to the global browser-service banner. Internal recovery diagnostics remain hidden, conversation history stays readable, and the owning STAB-03 Task still renders `Task state unclear` independently.
+- No persistence schema, migration, provider protocol, Runtime retry interval, Task identity, or recovery authority changed.
+
+### Verification result
+
+- The required renderer regressions failed first; the focused suite then passed 3 files / 67 tests.
+- `node experiments/agent-execution/startup-hydration-qualification.mjs` passed two real built Electron launches over one disposable persisted local snapshot: healthy and permanently degraded Runtime presentation. Both observed neutral hydration, readable persisted conversation, Task-owned unresolved state, and an unrelated interactive Task; only the degraded launch rendered the bounded browser-service warning. The fixture was deleted after the run and used no credentials, installed Codex component, model, or external service.
+- `pnpm check:repository` passed (708 files, 1,303 relative imports, 107 local document links); `pnpm lint`, `pnpm typecheck`, `pnpm build`, full `pnpm test` (202 files / 1,723 tests), and `pnpm test:experiments` (24 tests) passed.
+- Packaged-application and human acceptance remain unqualified. The preserved original acceptance home and the STAB-04 process fixture were not mutated.
+
+**Implementation checkpoint:** `a98882d69af44d4b30dbaedc9254d2cc9e7a146e` (`Hydrate local tasks before provider startup`).
 
 ## Invariant
 
