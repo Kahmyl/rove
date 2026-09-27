@@ -471,6 +471,22 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Next handoff:** push the final PR-tooling boundary, then branch STAB-10 only from that exact final STAB-09 head. STAB-13 must consume the recorded provider matrix without requiring unavailable families to masquerade as live passes.
 
+### ROVE-STAB-10 — IN PROGRESS
+
+**Exact stacked start SHA:** `56ac23d3426a2c8ee3ccbf32ff3aa5848966253d` (final pushed `codex/stab09-attention-family-reachability` head).
+
+**Branch:** `codex/stab10-handoff-browser-attachment-authority`; clean at entry. No predecessor PR was merged.
+
+**Current checkpoint:** `c1b7fab52e1914db46994a90f59daf53613196b4` (`Qualify browser control handoffs`).
+
+**First gate:** the existing `control:demo` qualification was not runnable: its root script overrode any caller-supplied temporary `ROVE_HOME` with a repository-local demo home, and the demo started a browser Task without creating/selecting the now-required browser workspace. The failed pre-fix run created only two generated files under `.rove-control-demo`; that untracked directory was removed after inspection.
+
+**Established so far:** `control:demo` now creates a self-cleaning temporary Rove home and a selected non-sensitive browser workspace, then exercises real Runtime HTTP and Chromium boundaries. The live fixture qualified requested handoff → exact durable acknowledgement → wait → takeover, Agent mutation fencing, exact return, mandatory fresh inspection, stale pre-handoff target rejection, same-page identity, voluntary Companion takeover without a synthetic handoff, mutation fencing during human ownership, and return to Agent control. Structured output reported `requestedHandoff`, `voluntaryTakeover`, and `returnFreshness` as qualified on `page_01`.
+
+**Verification to date:** `pnpm control:demo` passed after the harness corrections and includes the full repository build. Focused Runtime/control/task-projection/main/follower coverage passed 8 files / 176 tests when run with the loopback and Chromium permissions those integration tests require. The first sandboxed focused attempt produced only expected `listen EPERM` and Chromium sandbox launch failures; its escalated rerun passed. No external site, real account, preserved home, credential or consequential action was used.
+
+**Next gate:** compose the real Runtime control evidence with the Task command/continuation path, exact browser foreground request, main/follower agreement, and restart/recovery authority. Do not close MR-020, MR-022, MR-023 or MR-025 from the Runtime-only live harness.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
