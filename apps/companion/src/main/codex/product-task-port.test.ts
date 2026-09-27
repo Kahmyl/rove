@@ -2295,7 +2295,10 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
     expect(stopped.command).toMatchObject({
       type: "interrupt_codex_turn",
-      payload: { turnId: "turn_recovering" },
+      payload: {
+        turnId: "turn_recovering",
+        operationId: "intent_92345678-1234-4123-8123-123456789abc",
+      },
     });
     store.close();
   });

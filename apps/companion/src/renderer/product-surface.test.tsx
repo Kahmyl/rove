@@ -529,9 +529,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       ...stopping.customerExecution!,
       state: "stopping",
       segments: stopping.customerExecution!.segments.map(
-        ({ activeSince: _activeSince, ...segment }) => ({
+        ({ activeSince: _activeSince, ...segment }, index, segments) => ({
           ...segment,
-          status: "terminal",
+          status: index === segments.length - 1 ? "stopping" : "terminal",
         }),
       ),
     };
@@ -545,10 +545,52 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
-    expect(stoppingHtml).toContain("Stopping… for 0s");
+    expect(stoppingHtml).toContain("Stopping… · 0s worked");
     expect(stoppingHtml).toContain(
       'class="primary composer-submit composer-stop" aria-label="Stop current work" title="Stop current work" disabled=""',
     );
+
+    for (const [state, status, ariaLabel, heading] of [
+      [
+        "waiting_for_you",
+        "waiting_for_customer",
+        "Work waiting for you",
+        "Waiting for you · 0s worked",
+      ],
+      [
+        "checking",
+        "checking",
+        "Work state checking",
+        "Checking task state… · 0s worked",
+      ],
+      [
+        "human_control",
+        "human_control",
+        "Work under human control",
+        "You&#x27;re in control · 0s worked",
+      ],
+    ] as const) {
+      stopping.customerExecution = {
+        ...stopping.customerExecution!,
+        state,
+        segments: stopping.customerExecution!.segments.map(
+          (segment, index, segments) => ({
+            ...segment,
+            status: index === segments.length - 1 ? status : "terminal",
+          }),
+        ),
+      };
+      const semanticHtml = renderToStaticMarkup(
+        <ProductSurface
+          desktop={value}
+          connectionError={null}
+          follower={false}
+          refresh={async () => undefined}
+        />,
+      );
+      expect(semanticHtml).toContain(`aria-label="${ariaLabel}"`);
+      expect(semanticHtml).toContain(heading);
+    }
   });
 
   it("discloses optional Workflow synchronization without broadening its data boundary", () => {
@@ -2562,7 +2604,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Structured progress");
     expect(html).not.toContain(">CODEX<");
     expect(html).toContain("Worked for 0s");
-    expect(html).not.toContain(">Working for ");
+    expect(html).toContain('aria-label="Active work"');
+    expect(html).toContain(">Working for 0s");
     expect(html).toContain("The Drive folder is organized.");
     expect(html).toContain("<h2>Result</h2>");
     expect(html).toContain("<li>The Drive folder is organized.</li>");

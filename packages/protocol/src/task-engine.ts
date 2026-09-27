@@ -2501,6 +2501,10 @@ function makeCommand(
     type,
     payload: structuredClone({
       ...output.nextCommand,
+      ...(type === "interrupt_codex_turn" &&
+      aggregate.requestedOperation.type === "interrupt"
+        ? { operationId: aggregate.requestedOperation.operationId }
+        : {}),
       ...((event.type === "task_message_requested" ||
         event.type === "explicit_continuation_response_requested") &&
       event.workflowContext

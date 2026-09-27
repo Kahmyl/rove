@@ -169,10 +169,7 @@ function normalizeCodexRecoveryResolutions(
   for (const diagnostic of diagnostics ?? []) {
     if (diagnostic.outcome !== "succeeded" || !diagnostic.blockerId) continue;
     const existing = next[diagnostic.blockerId];
-    if (
-      !existing ||
-      Date.parse(existing) < Date.parse(diagnostic.observedAt)
-    )
+    if (!existing || Date.parse(existing) < Date.parse(diagnostic.observedAt))
       next[diagnostic.blockerId] = diagnostic.observedAt;
   }
   return Object.fromEntries(
@@ -400,6 +397,37 @@ export class SqliteTaskEngineStore
             if (aggregate.recoveryRequired === OUTSIDE_PROTECTED_TASK_WORKSPACE)
               aggregate.recoveryRequired = null;
           } else aggregate.recoveryRequired = OUTSIDE_PROTECTED_TASK_WORKSPACE;
+        }
+        if (
+          aggregate.requestedOperation.type === "interrupt" &&
+          aggregate.requestedOperation.operationId
+        ) {
+          const request = this.db
+            .prepare(
+              `SELECT accepted_at FROM task_engine_event
+               WHERE task_id = ?
+                 AND json_extract(payload_json, '$.type') = 'task_interrupt_requested'
+                 AND json_extract(payload_json, '$.operationId') = ?
+               ORDER BY accepted_at DESC, rowid DESC LIMIT 1`,
+            )
+            .get(row.task_id, aggregate.requestedOperation.operationId) as
+            { accepted_at: string } | undefined;
+          const succeeded = request
+            ? (this.db
+                .prepare(
+                  `SELECT command_id FROM task_engine_outbox
+                   WHERE task_id = ? AND command_type = 'interrupt_codex_turn'
+                     AND status = 'succeeded' AND updated_at >= ?
+                   ORDER BY aggregate_revision DESC LIMIT 1`,
+                )
+                .get(row.task_id, request.accepted_at) as
+                { command_id: string } | undefined)
+            : undefined;
+          if (succeeded)
+            aggregate.requestedOperation = {
+              type: "observe",
+              taskId: aggregate.taskId,
+            };
         }
         this.db
           .prepare(

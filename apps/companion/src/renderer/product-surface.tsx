@@ -6377,7 +6377,7 @@ export function ProductSurface({
                         </footer>
                       </article>
                     )}
-                    {(segment.status === "active" ||
+                    {(segment.status !== "terminal" ||
                       segment.commentary.length > 0 ||
                       segment.activities.length > 0) &&
                       (segment.status !== "active" || workingVisible) &&
@@ -6426,33 +6426,55 @@ export function ProductSurface({
                           segment.id ===
                             viewedTaskExecution?.segments.at(-1)?.id &&
                           viewedPresentation?.state === "stopping";
-                        if (segment.status === "active" || currentStopping)
+                        const nonterminal =
+                          segment.status !== "terminal" || currentStopping;
+                        if (nonterminal) {
+                          const status = currentStopping
+                            ? "stopping"
+                            : segment.status;
+                          const heading = {
+                            active: "Working",
+                            waiting_for_customer: "Waiting for you",
+                            checking: "Checking task state…",
+                            human_control: "You're in control",
+                            stopping: "Stopping…",
+                            terminal: "Worked",
+                          }[status];
+                          const ariaLabel = {
+                            active: "Active work",
+                            waiting_for_customer: "Work waiting for you",
+                            checking: "Work state checking",
+                            human_control: "Work under human control",
+                            stopping: "Stopping work",
+                            terminal: "Completed work",
+                          }[status];
                           return (
                             <section
                               className="timeline-work timeline-work-active"
-                              aria-label={
-                                currentStopping
-                                  ? "Stopping work"
-                                  : "Active work"
-                              }
+                              aria-label={ariaLabel}
                             >
                               <header className="timeline-work-heading">
-                                {!currentStopping && (
+                                {["active", "checking", "stopping"].includes(
+                                  status,
+                                ) && (
                                   <span
                                     className="activity-spinner"
                                     aria-hidden="true"
                                   />
                                 )}
                                 <strong>
-                                  {currentStopping ? "Stopping…" : "Working"}
+                                  {heading}
                                   {segment.elapsed
-                                    ? ` for ${segment.elapsed}`
+                                    ? status === "active"
+                                      ? ` for ${segment.elapsed}`
+                                      : ` · ${segment.elapsed} worked`
                                     : ""}
                                 </strong>
                               </header>
                               {content}
                             </section>
                           );
+                        }
                         return (
                           <details
                             className="timeline-work"

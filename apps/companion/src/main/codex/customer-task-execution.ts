@@ -38,7 +38,13 @@ export interface CustomerWorkSegmentProjection {
     type: "commentary" | "activity";
     id: string;
   }[];
-  status: "active" | "terminal";
+  status:
+    | "active"
+    | "waiting_for_customer"
+    | "checking"
+    | "human_control"
+    | "stopping"
+    | "terminal";
   accumulatedActiveMs: number;
   activeSince?: string;
   completedAt?: string;
@@ -202,13 +208,28 @@ function executionState(
   if (aggregate.codex.turn === "interrupted") return "stopped";
   if (aggregate.codex.turn === "failed") return "failed";
   if (
-    aggregate.customerActiveIntervals?.at(-1)?.endedAt === undefined &&
-    (aggregate.codex.turn === "active" ||
-      aggregate.requestedOperation.type === "message" ||
-      aggregate.record?.bootstrap.stage !== "complete")
+    aggregate.codex.turn === "active" ||
+    aggregate.requestedOperation.type === "message" ||
+    aggregate.record?.bootstrap.stage !== "complete"
   )
     return "working";
   return "idle";
+}
+
+function currentSegmentStatus(
+  state: CustomerTaskExecutionProjection["state"],
+): CustomerWorkSegmentProjection["status"] {
+  return {
+    working: "active",
+    waiting_for_you: "waiting_for_customer",
+    checking: "checking",
+    human_control: "human_control",
+    stopping: "stopping",
+    idle: "terminal",
+    unresolved: "terminal",
+    stopped: "terminal",
+    failed: "terminal",
+  }[state] as CustomerWorkSegmentProjection["status"];
 }
 
 export function customerTaskExecution(
@@ -239,6 +260,7 @@ export function customerTaskExecution(
     state === "working" && openInterval?.endedAt === undefined
       ? openInterval?.segmentId
       : undefined;
+  const currentSegmentId = raw.at(-1)?.id;
   const segments = raw.map((segment) => {
     const assistants = segment.items.filter(
       (item) => item.kind === "assistant_message",
@@ -315,7 +337,10 @@ export function customerTaskExecution(
         .map((item) => item.id),
       activities,
       workOrder,
-      status: active ? ("active" as const) : ("terminal" as const),
+      status:
+        segment.id === currentSegmentId
+          ? currentSegmentStatus(state)
+          : ("terminal" as const),
       accumulatedActiveMs,
       ...(active ? { activeSince: active.startedAt } : {}),
       ...(completedAt ? { completedAt } : {}),

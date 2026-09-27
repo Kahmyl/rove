@@ -216,6 +216,82 @@ describe("SQLite task engine ledger", () => {
     store.close();
   });
 
+  it("settles a legacy Stop intent only from a later succeeded interrupt command", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const operationId = "intent_92345678-1234-4123-8123-123456789abc";
+    const aggregate = structuredClone(accepted.aggregate);
+    aggregate.requestedOperation = {
+      type: "interrupt",
+      taskId: aggregate.taskId,
+      operationId,
+    };
+    store.close();
+
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        `INSERT INTO task_engine_event(task_id, event_id, source_kind, source_id,
+         source_generation, source_position, digest, payload_json,
+         acceptance_json, accepted_at)
+         VALUES (?, ?, 'product', ?, 1, 2, ?, ?, ?, ?)`,
+      )
+      .run(
+        aggregate.taskId,
+        `product:v2:interrupt:${operationId}`,
+        `operation:${operationId}`,
+        "legacy-interrupt-request",
+        JSON.stringify({
+          schemaVersion: 1,
+          type: "task_interrupt_requested",
+          eventId: `product:v2:interrupt:${operationId}`,
+          taskId: aggregate.taskId,
+          source: {
+            kind: "product",
+            id: `operation:${operationId}`,
+            generation: 1,
+            position: 2,
+          },
+          observedAt: "2026-09-09T12:00:01.000Z",
+          operationId,
+        }),
+        JSON.stringify({ aggregate, projection: accepted.projection }),
+        "2026-09-09T12:00:01.000Z",
+      );
+    database
+      .prepare(
+        `INSERT INTO task_engine_outbox(command_id, task_id, aggregate_revision,
+         command_type, classification_json, payload_json, status, attempts,
+         created_at, updated_at)
+         VALUES (?, ?, 2, 'interrupt_codex_turn', ?, ?, 'succeeded', 1, ?, ?)`,
+      )
+      .run(
+        `command:${aggregate.taskId}:legacy-interrupt`,
+        aggregate.taskId,
+        JSON.stringify({ execute: "uncertain_write", reconcile: "read_truth" }),
+        JSON.stringify({
+          type: "interrupt_codex_turn",
+          taskId: aggregate.taskId,
+          threadId: "thread-1",
+          turnId: "turn-1",
+        }),
+        "2026-09-09T12:00:01.000Z",
+        "2026-09-09T12:00:02.000Z",
+      );
+    database.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(
+      (await reopened.aggregate(aggregate.taskId))?.requestedOperation,
+    ).toEqual({ type: "observe", taskId: aggregate.taskId });
+    reopened.close();
+  });
+
   it("persists exact recovery success so delayed older failure cannot re-block after restart", async () => {
     const { path, store, engine } = await fixture();
     const accepted = await engine.accept(launch());

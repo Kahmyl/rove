@@ -55,6 +55,14 @@ function availableActions(value: ProductValue): string[] {
   return (value.availableActions as string[]) ?? [];
 }
 
+function customerExecution(value: ProductValue): ProductValue {
+  return value.customerExecution as ProductValue;
+}
+
+function currentWorkSegment(value: ProductValue): ProductValue {
+  return ((customerExecution(value).segments as ProductValue[]) ?? []).at(-1)!;
+}
+
 function processAlive(processId: number): boolean {
   try {
     process.kill(processId, 0);
@@ -239,6 +247,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     )!;
     expect(request.itemId).toBe("item_approval_trace_2");
     expect(secondRequest.itemId).toBe("item_approval_trace_2b");
+    const pendingTask = task(pending, taskId(ids.attention));
+    expect(customerExecution(pendingTask).state).toBe("waiting_for_you");
+    expect(currentWorkSegment(pendingTask).status).toBe("waiting_for_customer");
+    expect(currentWorkSegment(pendingTask).activeSince).toBeUndefined();
     await current.request({
       type: "attention.decide",
       taskId: taskId(ids.attention),
@@ -348,6 +360,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     expect(task(handedOff, taskId(ids.handoff)).availableActions).toContain(
       "return_control",
     );
+    const handedOffTask = task(handedOff, taskId(ids.handoff));
+    expect(customerExecution(handedOffTask).state).toBe("human_control");
+    expect(currentWorkSegment(handedOffTask).status).toBe("human_control");
+    expect(currentWorkSegment(handedOffTask).activeSince).toBeUndefined();
     const handoffAttention = attention(handedOff).find(
       (request) =>
         request.taskId === taskId(ids.handoff) &&
@@ -439,10 +455,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
     const database = new Database(
       join(current.home, "codex-product", "task-process.v1.sqlite3"),
     );
-    for (const table of [
-      "task_engine_aggregate",
-      "task_engine_projection",
-    ]) {
+    for (const table of ["task_engine_aggregate", "task_engine_projection"]) {
       const row = database
         .prepare(`SELECT payload_json FROM ${table} WHERE task_id = ?`)
         .get(taskId(ids.handoff)) as { payload_json: string };
