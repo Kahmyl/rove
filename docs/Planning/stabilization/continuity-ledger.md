@@ -369,6 +369,10 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `fac74fb1facd1e5f29ae20afdea03c48fc570dfa` (`Project authoritative customer execution state`).
 
+**Durable handoff checkpoint:** `ebe5b17014cf48d0546e68c4df05191d20383d11` (`Record STAB-06 execution-state handoff`), pushed to `origin/codex/stab06-authoritative-execution-state`.
+
+**PR state:** stacked PR creation against `codex/stab05-startup-hydration` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block STAB-07.
+
 **Residual boundary:** no live model, credentialed provider, packaged application or human acceptance was run. STAB-10 now owns the complete browser ownership/return/checking journey and must preserve these semantic segment states; it is no longer blocked on STAB-06. STAB-12 still owns hard process Stop authority beyond customer intent settlement.
 
 **Next handoff:** commit and push this durable record, attempt the stacked PR against `codex/stab05-startup-hydration` without merging, then branch STAB-07 from the exact final STAB-06 head. STAB-07's first gate remains a read-only proof of the effective provider approval configuration and its separation from Rove reviewer choice.
