@@ -467,7 +467,9 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Finding disposition:** MR-010 and MR-027 are closed. MR-012 and MR-013 are closed as characterized pinned-provider compatibility limitations. MR-014 and MR-015 are closed as fixture defects and characterized provider-version gaps: candidate live support exists, pinned model-catalog exposure does not. MR-016's keyboard-only 820×700 presentation qualification remains owned by STAB-13.
 
-**Next handoff:** commit and push this durable handoff, attempt the stacked PR against `codex/stab08-approval-decision-fidelity`, then record the exact PR boundary. STAB-10 must branch only from that final STAB-09 head; STAB-13 must consume the recorded provider matrix without requiring unavailable families to masquerade as live passes.
+**Durable handoff:** `84920cb343c52d9c4a843224037a8ea43c0fc2f4` (`Record STAB-09 attention handoff`) was pushed after the complete verification result. Stacked PR creation against `codex/stab08-approval-decision-fidelity` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged.
+
+**Next handoff:** push the final PR-tooling boundary, then branch STAB-10 only from that exact final STAB-09 head. STAB-13 must consume the recorded provider matrix without requiring unavailable families to masquerade as live passes.
 
 ## Future ticket rows
 
