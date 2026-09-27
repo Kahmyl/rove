@@ -1,7 +1,7 @@
 # ROVE-STAB-05 — Startup hydration and degraded-state UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Blocked on STAB-03/04  
+**Status:** Ready
 **Dependencies:** STAB-03, STAB-04  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -13,11 +13,15 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 ### Required inherited state
 
-This ticket may begin only after the STAB-03 recovery state machine and STAB-04 Runtime degraded-state contract are durable and merged. Consume both exit handoffs, including their exact customer-safe states, retry/terminal semantics, diagnostic boundaries, and verification fixtures.
+This ticket begins from the final pushed STAB-04 stacked head after reconciling it with current repository truth. Consume both STAB-03 and STAB-04 exit handoffs, including their exact customer-safe states, retry/terminal semantics, diagnostic boundaries, and verification fixtures. No predecessor PR needs to be merged for this bounded stacked workflow.
 
 The startup UI must render those proven states. It must not invent a third recovery model or conceal an unresolved provider state behind a loader.
 
 STAB-03 specifically establishes `checking` only while a bounded attempt is active and `Task state unclear` after the attempt limit is exhausted. Persisted blocker authority is reconstructed independently of obsolete reason strings. Hydration must preserve that distinction and keep conversation history readable.
+
+STAB-04 establishes one Runtime dependency circuit: permanent configuration failure probes every 30 seconds, transient failure backs off exponentially from 750 ms to 30 seconds, and a successful probe clears the state. The desktop snapshot preserves local Product truth and last Runtime-owned surface portions, while projecting at most one customer-safe browser-service warning. Hydration must render that contract; it must not expose low-level codes, restart aggressive polling, or wait for Runtime before showing local conversation history.
+
+Use disposable fixture `/private/tmp/rove-stab04-process.9fBJvP` for invalid/unavailable Runtime startup when it remains present. Its invalid-catalog copy has SHA-256 `97f063da8cabce602f3115c4e1ee16f3eb5c0f532f37d4b07997c71485f0741d`. The preserved original acceptance home remains read-only.
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 

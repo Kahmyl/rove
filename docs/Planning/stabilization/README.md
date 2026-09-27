@@ -19,6 +19,6 @@ The canonical ticket-to-ticket handoff state is [continuity-ledger.md](continuit
 
 ## Current status
 
-ROVE-STAB-01 is complete as a planning/evidence ticket. ROVE-STAB-02 established exact Task/Runtime/Codex authority convergence. ROVE-STAB-03 has verified the exact recovery-blocker lifecycle, durable stale-observation ordering, persisted compatibility, and bounded unresolved customer state; its final checkpoint is recorded in the continuity ledger.
+ROVE-STAB-01 is complete as a planning/evidence ticket. ROVE-STAB-02 established exact Task/Runtime/Codex authority convergence. ROVE-STAB-03 verified the exact recovery-blocker lifecycle, durable stale-observation ordering, persisted compatibility, and bounded unresolved customer state. ROVE-STAB-04 established canonical browser-workspace validation plus classified, bounded Runtime failure containment with clean recovery and zero process-level rejection leakage in its managed-process fixture. Their checkpoints are recorded in the continuity ledger.
 
-The next production ticket is ROVE-STAB-04 unless new evidence changes the dependency graph. It must consume the STAB-02 Runtime transport-identity handoff and STAB-03 bounded recovery/presentation handoff, run `pnpm codex:context`, and record its exact stacked start SHA before production edits.
+The next production ticket is ROVE-STAB-05 unless new evidence changes the dependency graph. It must consume the STAB-03 bounded recovery/presentation handoff and STAB-04 Runtime degraded-state contract, run `pnpm codex:context`, and record its exact stacked start SHA before production edits.

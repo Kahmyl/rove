@@ -283,7 +283,7 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not reopen canonical workspace identity, Runtime callback binding, or Runtime inventory transport identity without contradictory evidence; do not absorb STAB-04 failure taxonomy/backoff.
 
-### ROVE-STAB-04 — IMPLEMENTATION VERIFIED; DURABLE EXIT PENDING
+### ROVE-STAB-04 — COMPLETE
 
 **Exact stacked start SHA:** `a76cce8c9b7d703a62d43dc938193b74f6ff02b4` (final pushed `codex/stab03-recovery-lifecycle` head).
 
@@ -301,12 +301,16 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Verification:** required regressions failed first. The affected suite passed 9 files / 49 tests including real browser restart and Runtime HTTP integration. Disposable managed-process fixture `/private/tmp/rove-stab04-process.9fBJvP`, invalid-catalog copy SHA-256 `97f063da8cabce602f3115c4e1ee16f3eb5c0f532f37d4b07997c71485f0741d`, proved one request across a 240-call permanent burst, one transport probe across a 120-call outage burst, healthy restart recovery, and zero process-level unhandled rejections. The first full run passed 1,718/1,719 tests and exposed one inherited pre-STAB-03 assertion that expected active Checking after bounded legacy-attention recovery had exhausted; the test was reconciled to the already-established unresolved / `Task state unclear` contract, with no production change. `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, full `pnpm test` (201 files / 1,719 tests), and `pnpm test:experiments` (24 tests) passed.
 
-**Finding disposition:** MR-004 and MR-005 are implementation-closed pending the final repository gate and durable commit. The preserved original acceptance home remains valid and untouched; the disposable fixture is the STAB-05 unavailable/invalid Runtime input.
+**Implementation checkpoint:** `078a674cc1d51b479f21e00ba3655b83107abdbd` (`Contain Runtime dependency failures`).
 
-**Next handoff:** inspect the complete diff; checkpoint and push; attempt a stacked PR without merging; record its exact result; then start STAB-05 from the exact final STAB-04 head.
+**Finding disposition:** MR-004 and MR-005 are closed. The preserved original acceptance home remains valid and untouched; the disposable fixture is the STAB-05 unavailable/invalid Runtime input.
+
+**Residual boundary:** packaged application relaunch and human-visible startup qualification remain unrun. STAB-05 owns coherent first hydration and presentation of this established degraded state; it must not add a new Runtime retry taxonomy or hide local conversation history behind Runtime recovery.
+
+**Next handoff:** checkpoint and push this completion record; attempt a stacked PR against `codex/stab03-recovery-lifecycle` without merging; record its exact result; then start STAB-05 from the exact final STAB-04 head.
 
 **Non-goals:** do not change Task/Runtime identity, invent another recovery model, or reinterpret all transport errors as the retained configuration failure.
 
 ## Future ticket rows
 
-ROVE-STAB-04 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
+ROVE-STAB-05 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

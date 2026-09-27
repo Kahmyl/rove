@@ -1,7 +1,7 @@
 # ROVE-STAB-04 — Runtime failure containment and observability
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Implementation verified — durable handoff pending
+**Status:** Complete
 **Dependencies:** STAB-01  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -35,6 +35,8 @@ At ticket start, reconcile current `main` with the continuity ledger and record 
 - Desktop refresh preserves the last Runtime-owned snapshot portions while independently publishing local Product truth. One customer-safe warning is projected without low-level mechanism text and disappears after a healthy probe. Runtime inventory and surface monitors skip closed-circuit ticks; monitor, callback and Workflow publication failures are contained.
 
 No task, artifact, credential, provider wire format, database schema or migration changed.
+
+**Implementation checkpoint:** `078a674cc1d51b479f21e00ba3655b83107abdbd` (`Contain Runtime dependency failures`).
 
 ### Verification evidence
 

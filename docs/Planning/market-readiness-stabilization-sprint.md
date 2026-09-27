@@ -47,10 +47,10 @@ The canonical issue mapping is [stabilization/issue-registry.md](stabilization/i
 | Ticket | Title | Current status |
 | --- | --- | --- |
 | [ROVE-STAB-01](stabilization/ROVE-STAB-01-issue-registry-and-reproduction-baseline.md) | Issue registry and reproduction baseline | Complete |
-| [ROVE-STAB-02](stabilization/ROVE-STAB-02-task-runtime-codex-authority-convergence.md) | Task / Runtime / Codex authority convergence | Ready |
-| [ROVE-STAB-03](stabilization/ROVE-STAB-03-recovery-lifecycle-and-bounded-reconciliation.md) | Recovery lifecycle and bounded reconciliation | Depends on STAB-02 |
-| [ROVE-STAB-04](stabilization/ROVE-STAB-04-runtime-failure-containment-and-observability.md) | Runtime failure containment and observability | Ready after baseline |
-| [ROVE-STAB-05](stabilization/ROVE-STAB-05-startup-hydration-and-degraded-state.md) | Startup hydration and degraded-state UX | Depends on STAB-03/04 |
+| [ROVE-STAB-02](stabilization/ROVE-STAB-02-task-runtime-codex-authority-convergence.md) | Task / Runtime / Codex authority convergence | Complete |
+| [ROVE-STAB-03](stabilization/ROVE-STAB-03-recovery-lifecycle-and-bounded-reconciliation.md) | Recovery lifecycle and bounded reconciliation | Complete |
+| [ROVE-STAB-04](stabilization/ROVE-STAB-04-runtime-failure-containment-and-observability.md) | Runtime failure containment and observability | Complete |
+| [ROVE-STAB-05](stabilization/ROVE-STAB-05-startup-hydration-and-degraded-state.md) | Startup hydration and degraded-state UX | Ready |
 | [ROVE-STAB-06](stabilization/ROVE-STAB-06-authoritative-customer-execution-state.md) | Authoritative customer execution-state model | Depends on authority/recovery facts |
 | [ROVE-STAB-07](stabilization/ROVE-STAB-07-approval-policy-contract.md) | Approval policy contract | Ready after characterization |
 | [ROVE-STAB-08](stabilization/ROVE-STAB-08-approval-decision-fidelity-and-ux.md) | Approval decision fidelity and UX | Depends on STAB-07 |
