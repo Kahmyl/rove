@@ -52,7 +52,7 @@
     "browser:capabilities:integration": "vitest run packages/browser/src/experiments/capability-atlas-governance.test.ts packages/browser/src/experiments/capability-atlas-baseline.test.ts packages/browser/src/experiments/drag-move-strategies.test.ts packages/browser/src/playwright-browser-actions.test.ts apps/runtime/src/interaction/verified-interaction.test.ts apps/mcp/src/tools/browser.tools.test.ts",
     "browser:semantic-transactions": "vitest run packages/protocol/test/semantic-transaction.test.ts apps/runtime/src/interaction/semantic-transaction-store.test.ts apps/runtime/src/interaction/verified-interaction.test.ts apps/mcp/src/tools/browser.tools.test.ts apps/mcp/src/server/tool-catalog.test.ts apps/companion/src/main/host/hub-command-executor.test.ts apps/runtime/src/runtime.integration.test.ts apps/runtime/src/runtime-http.integration.test.ts",
     "runtime:demo": "pnpm build && ROVE_HOME=../../.rove-demo pnpm --filter @rove/runtime runtime-demo",
-    "control:demo": "pnpm build && ROVE_HOME=../../.rove-control-demo pnpm --filter @rove/runtime control-demo",
+    "control:demo": "pnpm build && node experiments/agent-execution/browser-control-live.mjs",
     "test:e2e": "pnpm build && vitest run apps/mcp/test/e2e/session-lifecycle.e2e.test.ts",
     "auth:profile": "node scripts/auth-profile.mjs",
     "dev:desktop": "pnpm --filter @rove/companion dev:desktop",
