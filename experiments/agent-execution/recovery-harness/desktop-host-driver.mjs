@@ -23,7 +23,7 @@ const runtimeDirectory = join(root, "apps/runtime");
 const runtimeEntrypoint = join(runtimeDirectory, "dist/main.js");
 const mcpEntrypoint = join(root, "apps/mcp/dist/main.js");
 const expectedDigest =
-  "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb";
+  "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9";
 const cutPoint = process.env.ROVE_TASK_ENGINE_CUT_POINT;
 const cutCommand = process.env.ROVE_TASK_ENGINE_CUT_COMMAND;
 const cutOccurrence = Number(process.env.ROVE_TASK_ENGINE_CUT_OCCURRENCE ?? 1);
@@ -63,12 +63,12 @@ function host() {
       developmentCodeModeHostPath: process.execPath,
       platform: "darwin",
       architecture: "arm64",
-      readVersion: async () => "0.154.0-alpha.6.2",
+      readVersion: async () => "0.155.0-alpha.9.2",
       hashFile: async (path) =>
         path === standin
           ? expectedDigest
-          : "fd36f7c8fc53de66008b9238b5ae24eec686edaf774083fa6e0158385a886626",
-      fileSize: async () => 62_787_200,
+          : "5cdad3ab0191f404ac8e6313b2c173d8068f946806d3c798707674469563a81a",
+      fileSize: async () => 62_787_088,
     }),
     clientVersion: "0.1.0",
     environment: {
@@ -663,6 +663,7 @@ async function execute(command) {
               continuationPolicy: "resume_after_control_return",
             },
             appContext: null,
+            mcpAppUi: null,
             pluginId: null,
             readOnlyHint: false,
             result: {

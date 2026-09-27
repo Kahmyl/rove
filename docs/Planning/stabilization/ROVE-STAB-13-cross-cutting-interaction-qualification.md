@@ -23,6 +23,8 @@ Inherit STAB-10's qualified browser-control authority rather than reconstructing
 
 Inherit STAB-11's browser resource and surface presentation rather than reopening it: identity-less Tasks can retry after selecting a later profile, deleted frozen profile identities recover through a new Task, bound sessions without confirmed attachment present bounded recovery, unmatched cleanup is device-global, and the full surface yields only after exact browser foreground plus a visible follower decision. The fixture Electron walkthrough passed its multi-Task recovery presentations, and a real macOS/Playwright Chromium harness qualified exact foreground PID, CDP window/page identity and viable transfer twice. STAB-13 retains the combined packaged matrix and live unrelated-foreground revocation; the latter remained deterministic-only because scripted application activation could not reliably displace Chromium during STAB-11.
 
+Inherit STAB-12's completed base-profile exact-execution boundary without treating its provider-contract blocker as a dependency for unrelated composition checks. Selected `0.155.0-alpha.9.2` routes local commands only through Rove-owned `rove_exec`; exact macOS termination, receipt, restart and owner-crash behavior are qualified. Elevated permission execution remains fail-closed because `command/exec` cannot consume the exact provider-issued approval grant. This ticket may exercise supported `rove_task` journeys and all non-execution interaction/accessibility work, but must exclude elevated execution from pass claims and must not close or bypass STAB-12.
+
 ## Objective
 
 Prove that individually repaired authorities compose into one coherent product.

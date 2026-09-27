@@ -20,6 +20,7 @@ import type {
   JsonRpcId,
   InitializeResponse,
 } from "./protocol.js";
+import { CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS } from "./local-execution-supervision.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -279,6 +280,7 @@ export class CodexAppServerHost implements CodexRpcPort {
           stdio: ["pipe", "pipe", "pipe"],
         }))
     )(this.executable.executablePath, [
+      ...CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS,
       "app-server",
       "--enable",
       "default_mode_request_user_input",

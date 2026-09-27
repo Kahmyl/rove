@@ -18,6 +18,8 @@
     "agent:attention-boundary": "node experiments/agent-execution/live-app-server.mjs --attention-boundary",
     "agent:attention-live": "node experiments/agent-execution/live-app-server.mjs --attention-live",
     "agent:stop-live": "node experiments/agent-execution/hard-stop-provider-qualification.mjs",
+    "agent:command-exec-stop": "node experiments/agent-execution/command-exec-termination-qualification.mjs",
+    "agent:provider-grant-boundary": "node experiments/agent-execution/command-exec-termination-qualification.mjs --provider-grant-boundary",
     "codex:component:inspect": "node scripts/codex-component-manager.mjs inspect",
     "codex:component:qualify": "node scripts/codex-component-manager.mjs qualify",
     "codex:component:install": "node scripts/codex-component-manager.mjs install",

@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 import { URL } from "node:url";
 
 if (process.argv.includes("--version")) {
-  process.stdout.write("codex-cli 0.154.0-alpha.6.2\n");
+  process.stdout.write("codex-cli 0.155.0-alpha.9.2\n");
   process.exit(0);
 }
 
@@ -108,7 +108,7 @@ function createThread(params) {
     updatedAt: Date.now(),
     recencyAt: Date.now(),
     cwd: params.cwd ?? codexHome,
-    cliVersion: "0.154.0-alpha.6.2",
+    cliVersion: "0.155.0-alpha.9.2",
     status: { type: "idle" },
     path: null,
     source: "appServer",
@@ -145,6 +145,7 @@ function threadStartResponse(thread) {
     approvalPolicy: "on-request",
     approvalsReviewer: state.approvalsReviewers[thread.id] ?? "user",
     cwd: thread.cwd,
+    disabledPluginIds: [],
     instructionSources: [],
     model: thread.model ?? "l2-model",
     modelProvider: "openai",
@@ -272,7 +273,7 @@ async function handle(method, params = {}) {
   commands.push({ method, params, at: Date.now() });
   if (method === "initialize")
     return {
-      userAgent: "codex-cli 0.154.0-alpha.6.2",
+      userAgent: "codex-cli 0.155.0-alpha.9.2",
       codexHome,
       platformFamily: "unix",
       platformOs: "macos",
@@ -285,6 +286,7 @@ async function handle(method, params = {}) {
         planType: "pro",
       },
       requiresOpenaiAuth: true,
+      workspaceRouting: null,
     };
   if (method === "model/list")
     return {
@@ -296,6 +298,7 @@ async function handle(method, params = {}) {
           upgrade: null,
           upgradeInfo: null,
           availabilityNux: null,
+          availableAccessPrograms: null,
           displayName: "L2 deterministic model",
           description: "Local protocol stand-in",
           modelSpecialty: null,
@@ -393,6 +396,7 @@ async function handle(method, params = {}) {
     return method === "thread/resume"
       ? {
           ...threadStartResponse(thread),
+          collaborationMode: null,
           initialTurnsPage: null,
           itemsBackwardsCursor: null,
           turnsBackwardsCursor: null,
@@ -454,6 +458,7 @@ async function handle(method, params = {}) {
               name: "rove",
               runtimeStatus: "connected",
               pluginId: null,
+              serverCapabilities: null,
               serverInfo: {
                 name: "rove",
                 title: null,

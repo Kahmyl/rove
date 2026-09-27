@@ -15,6 +15,8 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 This is the accumulated sprint gate. Consume every completed ticket's exit handoff, every open/new MR finding, every accepted provider limitation, the current packaged/runtime dependency baselines, and MR-029 qualification-CI nondeterminism.
 
+STAB-12's base-profile exact-execution boundary may enter the release matrix, but elevated local execution remains an explicit provider-contract blocker. Codex owns permission profiles, review and amendments; Rove will not add a second grant authority. If the final release contract requires elevated execution, this ticket cannot declare market readiness until a supported provider seam passes the retained exact grant-consumption qualification. A release scope that omits elevated execution would require a separate explicit product decision; fail-closed implementation alone is not that decision.
+
 Do not infer release readiness from the original sprint plan. The release matrix must be generated from the continuity ledger as it exists when STAB-14 starts.
 
 

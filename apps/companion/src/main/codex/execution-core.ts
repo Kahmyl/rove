@@ -50,6 +50,10 @@ import {
 } from "../runtime-failure-containment.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
 import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
+import {
+  LocalExecutionSupervisor,
+  ROVE_TASK_PERMISSION_PROFILE_ID,
+} from "./local-execution-supervision.js";
 export { composeCompletedRequestHumanHandoff } from "./codex-task-observations.js";
 
 export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
@@ -154,6 +158,8 @@ export class CodexExecutionCore {
   private ingress: OrderedTaskIngress | undefined;
   private detachEvents: (() => void) | undefined;
   private detachHealth: (() => void) | undefined;
+  private detachExecutionSupervisor: (() => void) | undefined;
+  private executionSupervisor: LocalExecutionSupervisor | undefined;
   private reconciler: CodexThreadTruthReconciler | undefined;
   private readonly reconciliationByTask = new Map<string, Promise<void>>();
   private recoveryWarnings: string[] = [];
@@ -263,6 +269,49 @@ export class CodexExecutionCore {
     const sessionSupervisor = new CodexThreadSessionSupervisor(rpc);
     if (this.connectionGeneration > 1)
       sessionSupervisor.replaceConnectionGeneration(this.connectionGeneration);
+    const executionSupervisor = new LocalExecutionSupervisor({
+      rpc,
+      store,
+      ownerInstanceId: this.hostInstanceId,
+      connectionGeneration: () => this.connectionGeneration,
+      resolveTaskAuthority: async (threadId, turnId) => {
+        const matches = [];
+        for (const projection of await store.projections()) {
+          const aggregate = await store.aggregate(projection.taskId);
+          if (
+            aggregate?.record?.identity.threadId !== threadId ||
+            aggregate.codex.turn !== "active" ||
+            aggregate.codex.turnId !== turnId ||
+            !aggregate.launch
+          )
+            continue;
+          const deliveries = Object.values(aggregate.messageDeliveries).filter(
+            (delivery) =>
+              delivery.threadId === threadId && delivery.turnId === turnId,
+          );
+          if (deliveries.length !== 1)
+            throw new Error(
+              "Codex execution lacks one exact Task operation binding.",
+            );
+          matches.push({
+            taskId: aggregate.taskId,
+            taskOperationId: deliveries[0]!.operationId,
+            threadId,
+            turnId,
+            cwd: aggregate.launch.cwd,
+            permissionProfile: ROVE_TASK_PERMISSION_PROFILE_ID,
+          });
+        }
+        if (matches.length !== 1)
+          throw new Error(
+            "Codex execution lacks one exact Rove Task authority.",
+          );
+        return matches[0]!;
+      },
+    });
+    await executionSupervisor.recoverPriorOwners();
+    this.executionSupervisor = executionSupervisor;
+    this.detachExecutionSupervisor = executionSupervisor.attach();
     const adapter = new CodexRuntimeTaskAdapter({
       rpc,
       sessionSupervisor,
@@ -270,6 +319,7 @@ export class CodexExecutionCore {
       store,
       mcpLaunch: this.options.mcpLaunch,
       capabilityIssuer,
+      executionSupervisor,
       ...(this.options.attachmentAuthority && this.options.attachmentRuntime
         ? {
             attachments: {
@@ -383,7 +433,22 @@ export class CodexExecutionCore {
       this.connectionGeneration = store.nextHostGeneration("codex");
       sessionSupervisor.replaceConnectionGeneration(this.connectionGeneration);
       ingress.replaceGeneration(this.connectionGeneration);
-      void this.recover("App Server");
+      void executionSupervisor
+        .recoverPriorOwners()
+        .then(() => this.recover("App Server"))
+        .catch(async (error) => {
+          const detail =
+            error instanceof Error ? error.message : String(error);
+          this.recoveryWarnings = [
+            ...this.recoveryWarnings,
+            `Exact execution recovery: ${detail}`,
+          ].slice(-64);
+          try {
+            await this.options.onProductStateChanged?.();
+          } catch {
+            // Recovery remains failed closed even if warning publication fails.
+          }
+        });
     });
     this.detachEvents = rpc.onEvent(async (event) => {
       const recovery = classifyCodexEventRecovery(
@@ -1247,8 +1312,10 @@ export class CodexExecutionCore {
   async stop(): Promise<void> {
     if (this.runtimePoll) clearInterval(this.runtimePoll);
     this.runtimePoll = undefined;
+    await this.executionSupervisor?.shutdown();
     this.detachEvents?.();
     this.detachHealth?.();
+    this.detachExecutionSupervisor?.();
     await Promise.allSettled(this.reconciliationByTask.values());
     await this.ingress?.drain();
     await this.host.drainEvents();
@@ -1258,6 +1325,8 @@ export class CodexExecutionCore {
     this.taskPort = undefined;
     this.ingress = undefined;
     this.reconciler = undefined;
+    this.executionSupervisor = undefined;
+    this.detachExecutionSupervisor = undefined;
     this.store?.close();
     this.store = undefined;
     await this.host.stop();

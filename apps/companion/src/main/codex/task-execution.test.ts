@@ -18,6 +18,7 @@ import {
   CodexAppServerHost,
   codexAppServerEnvironment,
 } from "./app-server-host.js";
+import { CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS } from "./local-execution-supervision.js";
 import {
   browserAlternateCapabilityDisposition,
   browserRoutePageDisposition,
@@ -165,7 +166,7 @@ function thread(id = "thread_1", source = "rove:test"): CodexThread {
     updatedAt: 1,
     recencyAt: 1,
     cwd: "/work",
-    cliVersion: "0.154.0-alpha.6.2",
+    cliVersion: "0.155.0-alpha.9.2",
     status: { type: "idle" },
     path: null,
     source: "appServer",
@@ -527,7 +528,7 @@ describe("generated boundary", () => {
     });
     const outbound = JSON.parse(stdin.read().toString()) as { id: string };
     stdout.write(
-      `${JSON.stringify({ id: outbound.id, result: { userAgent: "codex-cli 0.154.0-alpha.6.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
+      `${JSON.stringify({ id: outbound.id, result: { userAgent: "codex-cli 0.155.0-alpha.9.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
     );
     await expect(pending).resolves.toMatchObject({ platformOs: "macos" });
     stdout.write(`${JSON.stringify({ id: "orphan", result: {} })}\n`);
@@ -646,7 +647,7 @@ describe("generated boundary", () => {
       if (message.method === "initialize") {
         initializeParams = message.params;
         stdout.write(
-          `${JSON.stringify({ id: message.id, result: { userAgent: "codex-cli 0.154.0-alpha.6.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
+          `${JSON.stringify({ id: message.id, result: { userAgent: "codex-cli 0.155.0-alpha.9.2", codexHome: "/tmp/codex", platformFamily: "unix", platformOs: "macos" } })}\n`,
         );
       }
     });
@@ -659,12 +660,12 @@ describe("generated boundary", () => {
         developmentCodeModeHostPath: process.execPath,
         platform: "darwin",
         architecture: "arm64",
-        readVersion: async () => "0.154.0-alpha.6.2",
+        readVersion: async () => "0.155.0-alpha.9.2",
         hashFile: async () =>
           ++hashProbeCount === 1
-            ? "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb"
-            : "fd36f7c8fc53de66008b9238b5ae24eec686edaf774083fa6e0158385a886626",
-        fileSize: async () => 62_787_200,
+            ? "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9"
+            : "5cdad3ab0191f404ac8e6313b2c173d8068f946806d3c798707674469563a81a",
+        fileSize: async () => 62_787_088,
       }),
       clientVersion: "0.1.0",
       spawnProcess: (_path, args) => {
@@ -678,6 +679,7 @@ describe("generated boundary", () => {
       capabilities: { experimentalApi: true, requestAttestation: false },
     });
     expect(spawnArgs).toEqual([
+      ...CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS,
       "app-server",
       "--enable",
       "default_mode_request_user_input",

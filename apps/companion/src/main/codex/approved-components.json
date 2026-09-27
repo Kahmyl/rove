@@ -1,16 +1,56 @@
 {
   "schemaVersion": 2,
   "component": "codex-app-server",
-  "selection": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
+  "selection": "codex-0.155.0-alpha.9.2-macos-arm64-9280c0754e8f",
   "components": [
     {
-      "id": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
+      "id": "codex-0.155.0-alpha.9.2-macos-arm64-9280c0754e8f",
       "status": "qualified",
+      "cliVersion": "0.155.0-alpha.9.2",
+      "platformOs": "macos",
+      "nodePlatform": "darwin",
+      "architecture": "arm64",
+      "historyMode": "legacy",
+      "capabilities": {
+        "exactLocalExecution": true
+      },
+      "executable": {
+        "filename": "codex",
+        "sha256": "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9",
+        "bytes": 234063312
+      },
+      "codeModeHost": {
+        "filename": "codex-code-mode-host",
+        "sha256": "5cdad3ab0191f404ac8e6313b2c173d8068f946806d3c798707674469563a81a",
+        "bytes": 62787088
+      },
+      "schema": {
+        "filename": "app-server-0.155.0-alpha.9.2.schemas.generated.json",
+        "sha256": "05f41eb9ff46307c86daddaaaf6c4cb452d8526e1159fb7b06bb6f5e3c75b67a",
+        "compiledRuntimeSha256": "1fdc88d9d020e8c2417dbbee16e2d134c4b3e9e68e3810aa7a4c505b7e818975",
+        "aggregateSha256": "aa59c91333de37d2fd81cb3ffcc0075266e1b45ab52813d3b1786d116a78f59d",
+        "generatedTsAggregateSha256": "aecec61189ee331bd45bc22cde9bf30f4dbb1016c69b16e53b43d5cdd7d1bf0d"
+      },
+      "qualification": {
+        "date": "2026-09-27",
+        "sourceKind": "explicit-external-candidate",
+        "sourceProduct": "Codex desktop",
+        "isolatedAppServerLifecycle": true,
+        "liveModelTurn": true,
+        "exactLocalExecutionPrimitive": true
+      }
+    },
+    {
+      "id": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
+      "status": "retained-qualified",
       "cliVersion": "0.154.0-alpha.6.2",
       "platformOs": "macos",
       "nodePlatform": "darwin",
       "architecture": "arm64",
       "historyMode": "legacy",
+      "capabilities": {
+        "exactLocalExecution": true
+      },
       "executable": {
         "filename": "codex",
         "sha256": "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb",
@@ -34,12 +74,13 @@
         "sourceProduct": "ChatGPT",
         "sourceProductVersion": "26.908.40834",
         "isolatedAppServerLifecycle": true,
-        "liveModelTurn": false
+        "liveModelTurn": false,
+        "exactLocalExecutionPrimitive": true
       }
     },
     {
       "id": "codex-0.153.4-macos-arm64-87a08119b8ef",
-      "status": "retained-qualified",
+      "status": "historical-qualified",
       "cliVersion": "0.153.4",
       "platformOs": "macos",
       "nodePlatform": "darwin",

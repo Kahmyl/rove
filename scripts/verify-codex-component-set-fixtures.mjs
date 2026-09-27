@@ -52,7 +52,7 @@ try {
   }
 
   const selected = selectedComponent(manifest);
-  assert.equal(selected.cliVersion, "0.154.0-alpha.6.2");
+  assert.equal(selected.cliVersion, "0.155.0-alpha.9.2");
   await verifyCompiledSchemaBinding(selected, schemaBindings);
   const retained = manifest.components.find(
     (entry) => entry.status === "retained-qualified",
@@ -228,6 +228,91 @@ try {
   );
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
   await verifyQualificationReceipt(receiptPath, component);
+  const inspectedFixtureCandidate = await inspectExternalCandidate(executable);
+  const exactComponent = {
+    ...component,
+    id: "codex-fixture-exact-execution",
+    capabilities: { exactLocalExecution: true },
+  };
+  assert.throws(
+    () =>
+      createQualificationReceipt(
+        exactComponent,
+        inspectedFixtureCandidate,
+        "2026-09-14T00:00:00.000Z",
+      ),
+    /Exact local execution qualification evidence is incomplete/,
+  );
+  const exactReceipt = createQualificationReceipt(
+    exactComponent,
+    inspectedFixtureCandidate,
+    "2026-09-14T00:00:00.000Z",
+    {
+      status: "qualified",
+      provider: {
+        executableSha256: exactComponent.executable.sha256,
+        version: `codex-cli ${exactComponent.cliVersion}`,
+      },
+      permissionProfile: {
+        name: "rove_task",
+        outsideSecretDenied: true,
+        workspaceWriteObserved: true,
+        networkEnabled: false,
+      },
+      threadBoundary: {
+        startAccepted: true,
+        exactReadAccepted: true,
+        dynamicToolName: "rove_exec",
+        providerExecutionFeaturesDisabled: true,
+        permissionProfile: "rove_task",
+      },
+      providerGrantBoundary: {
+        status: "blocked",
+        requestRejected: false,
+        exactBindingRejected: false,
+        requestCompleted: true,
+        providerExitCode: 1,
+        elevatedEffectObserved: false,
+        authority: "provider",
+        requiredBeforeElevatedAdoption: true,
+        humanAndAutomaticGrantConsumptionQualified: false,
+      },
+      ownerCrash: {
+        controllerKilled: true,
+        sentinelPresent: false,
+        appServerExited: true,
+      },
+      authority: {
+        identitiesDistinct: true,
+        terminateAcknowledged: true,
+        finalExitObserved: true,
+        stoppedExitCode: 137,
+        terminateToExitMs: 7,
+        stoppedSentinelPresent: false,
+        unrelatedExitCode: 0,
+        unrelatedSentinelPresent: true,
+      },
+    },
+  );
+  const exactReceiptPath = join(root, "exact-qualification.json");
+  await writeFile(
+    exactReceiptPath,
+    `${JSON.stringify(exactReceipt, null, 2)}\n`,
+  );
+  await verifyQualificationReceipt(exactReceiptPath, exactComponent);
+  assert.equal(
+    exactReceipt.compatibility.exactLocalExecution
+      .elevatedPermissionGrantConsumption,
+    false,
+  );
+  await writeFile(
+    exactReceiptPath,
+    `${JSON.stringify({ ...exactReceipt, compatibility: { ...exactReceipt.compatibility, exactLocalExecution: undefined } }, null, 2)}\n`,
+  );
+  await assert.rejects(
+    verifyQualificationReceipt(exactReceiptPath, exactComponent),
+    /qualification receipt does not match/,
+  );
   const mismatchedReceiptPath = join(root, "mismatched-qualification.json");
   await writeFile(
     mismatchedReceiptPath,
