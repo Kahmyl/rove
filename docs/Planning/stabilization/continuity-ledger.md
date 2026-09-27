@@ -224,7 +224,7 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 - Exact next stop point: push this PR-tooling record, then branch STAB-03 from the resulting exact STAB-02 head. PR creation can be retried later by an authenticated collaborator without rewriting the branch.
 - STAB-03 first gate: restart a disposable copy of the preserved database with STAB-02 authority fixes, trace each remaining blocker to its creating and clearing authority, and prove the first stale-success shadow before editing recovery behavior.
 
-### ROVE-STAB-03 — IMPLEMENTATION VERIFIED — CHECKPOINT PENDING
+### ROVE-STAB-03 — COMPLETE
 
 **Dependency state:** STAB-02 implementation checkpoint `6758dfb3b47138670e498e6f99c290d1ea919956`; consume the final pushed handoff/PR head before editing.
 
@@ -271,11 +271,11 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 - `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `pnpm test:experiments` passed;
 - no live model, credentialed provider, packaged application, original acceptance-home relaunch, or human acceptance was run.
 
-**Implementation checkpoint:** pending commit on `codex/stab03-recovery-lifecycle`.
+**Implementation checkpoint:** `75b028e5f4d9336d342396472177cf1f2321fc47` (`Bound recovery lifecycle and stale evidence`).
 
 **MR disposition:** MR-001 is closed for exact Codex blocker lifecycle and bounded terminal recovery; MR-002 is closed. MR-009/MR-024 retain the independent persisted Stop/customer execution-state discrepancy for STAB-06.
 
-**Next handoff:** after the implementation checkpoint and final diff audit, update STAB-04 with the exact stacked start SHA. STAB-04 must preserve the Runtime inventory transport identity from STAB-02 and the bounded recovery/presentation distinction from STAB-03.
+**Next handoff:** checkpoint this durable completion record, push `codex/stab03-recovery-lifecycle`, attempt the stacked PR without merging, then branch STAB-04 from the exact final STAB-03 head. STAB-04 must preserve the Runtime inventory transport identity from STAB-02 and the bounded recovery/presentation distinction from STAB-03.
 
 **Non-goals:** do not reopen canonical workspace identity, Runtime callback binding, or Runtime inventory transport identity without contradictory evidence; do not absorb STAB-04 failure taxonomy/backoff.
 

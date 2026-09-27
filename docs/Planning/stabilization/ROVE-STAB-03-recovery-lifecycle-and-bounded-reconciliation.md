@@ -1,7 +1,7 @@
 # ROVE-STAB-03 — Recovery lifecycle and bounded reconciliation
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Implementation verified — checkpoint pending
+**Status:** Complete
 
 **Dependencies:** STAB-01, STAB-02  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
@@ -36,6 +36,7 @@ First gate: on a fresh disposable copy of the preserved database, map every rema
 - worktree clean at entry and based directly on the final pushed STAB-02 head;
 - STAB-02 PR creation was attempted but unavailable because the authenticated GitHub account is not a collaborator; no PR was created or merged;
 - read-only diagnosis will use a fresh disposable copy of the preserved fixture, never the original acceptance home or preserved baseline.
+- implementation checkpoint: `75b028e5f4d9336d342396472177cf1f2321fc47` (`Bound recovery lifecycle and stale evidence`).
 
 ### Diagnosis and implementation evidence
 
