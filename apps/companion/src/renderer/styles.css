@@ -4813,8 +4813,10 @@ span.composer-control-icon {
 }
 
 .attention-actions button:has(> small) {
+  display: flex;
   align-items: flex-start;
   flex-direction: column;
+  gap: 2px;
   max-width: 260px;
   text-align: left;
 }

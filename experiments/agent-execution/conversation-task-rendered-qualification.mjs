@@ -968,6 +968,10 @@ const commit = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: repositoryRoot,
   encoding: "utf8",
 }).trim();
+const branch = execFileSync("git", ["branch", "--show-current"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+}).trim();
 let application;
 let traceStarted = false;
 try {
@@ -1420,6 +1424,8 @@ try {
     "Stopping resolves to Stopped and ordinary follow-up returns",
   );
 
+  await setWindowSize(application, 820, 700);
+  const attentionKeyboardReachability = {};
   for (const name of Object.keys(attentionFamilies)) {
     await setScenario(page, name);
     await openTask(page, "task_attention");
@@ -1445,6 +1451,52 @@ try {
       !/requestId|generation|MCP|Runtime/.test(requestText),
       `${name} leaked request internals.`,
     );
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement)
+        document.activeElement.blur();
+    });
+    const keyboardControls = [];
+    let enteredRequest = false;
+    for (let index = 0; index < 80; index += 1) {
+      await page.keyboard.press("Tab");
+      const focus = await page.evaluate(() => {
+        const element = document.activeElement;
+        if (!(element instanceof HTMLElement))
+          return { inside: false, focusVisible: false, label: "" };
+        return {
+          inside:
+            element.closest('[aria-label="Current task request"]') !== null,
+          focusVisible: element.matches(":focus-visible"),
+          label:
+            element.getAttribute("aria-label") ||
+            ("labels" in element && element.labels
+              ? [...element.labels]
+                  .map((label) => label.innerText.trim())
+                  .filter(Boolean)
+                  .join(" / ")
+              : "") ||
+            element.getAttribute("name") ||
+            element.innerText.trim() ||
+            element.tagName.toLowerCase(),
+        };
+      });
+      if (focus.inside) {
+        enteredRequest = true;
+        assert(
+          focus.focusVisible,
+          `${name} request control lacks keyboard-visible focus.`,
+        );
+        if (!keyboardControls.includes(focus.label))
+          keyboardControls.push(focus.label);
+      } else if (enteredRequest) {
+        break;
+      }
+    }
+    assert(
+      keyboardControls.length > 0,
+      `${name} request controls were not reachable by keyboard at 820×700.`,
+    );
+    attentionKeyboardReachability[name] = keyboardControls;
     if (name === "attention_command") {
       for (const label of [
         "Approve once",
@@ -1462,6 +1514,29 @@ try {
         requestText.includes("persists this command policy"),
         "Persistent command-policy scope was not explained before acceptance.",
       );
+      const scopedApprovalLayout = await page
+        .locator(".attention-actions button:has(> small)")
+        .evaluateAll((buttons) =>
+          buttons.map((button) => {
+            const style = getComputedStyle(button);
+            return {
+              display: style.display,
+              flexDirection: style.flexDirection,
+              gap: style.rowGap,
+            };
+          }),
+        );
+      assert(
+        scopedApprovalLayout.length > 0 &&
+          scopedApprovalLayout.every(
+            ({ display, flexDirection, gap }) =>
+              ["flex", "inline-flex"].includes(display) &&
+              flexDirection === "column" &&
+              gap !== "0px" &&
+              gap !== "normal",
+          ),
+        "Scoped approval labels and consequences are not visibly separated.",
+      );
     }
     await capture(
       page,
@@ -1471,6 +1546,7 @@ try {
       "Request remains visible with matching actions",
     );
   }
+  await setWindowSize(application, 1180, 780);
   await setScenario(page, "attention_user");
   await openTask(page, "task_attention");
   await page.getByRole("radio", { name: /Leadership/ }).focus();
@@ -1759,7 +1835,7 @@ try {
   const manifest = {
     title: "Conversation and Task rendered experience qualification",
     baseline: {
-      branch: "codex/manual-acceptance-stop-work-history-remediation",
+      branch: branch || "detached-head",
       commit,
     },
     environment: {
@@ -1816,6 +1892,8 @@ try {
       stopPresentationOnly: true,
       stopProcessTerminationQualified: false,
       requestFamiliesQualified: Object.keys(attentionFamilies),
+      attentionFamiliesKeyboardReachableAt820x700:
+        attentionKeyboardReachability,
       exactHandoffGeneration: true,
       voluntaryCompanionTakeover: true,
       returnChecksBeforeResume: true,
@@ -1840,7 +1918,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "manual-acceptance.md"),
-    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; a failed internal command followed by a successful answer remains ready/Worked.\n- [ ] Composer: New and existing Tasks preserve Attach, Commands, Mode/Approval, then Model/primary grouping; active empty shows Stop in the primary slot.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop blocker: do not mark Stop accepted or Stage 1 complete until a process-backed long command is proven terminated after turn/interrupt; the current pinned App Server fails this requirement.\n- [ ] Late events: confirm late output stays under its historical turn and cannot mutate newer work or control state.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, genuine turn failure, delivery uncertainty, consequential-result uncertainty, and successful final answer remain distinct.\n- [ ] Completion: confirm the same active segment auto-compacts on terminal transition, reopens manually, uses only the main timeline scrollbar, and preserves Latest/reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, and checking.\n`,
+    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; a failed internal command followed by a successful answer remains ready/Worked.\n- [ ] Composer: New and existing Tasks preserve Attach, Commands, Mode/Approval, then Model/primary grouping; active empty shows Stop in the primary slot.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop boundary: this rendered fixture qualifies presentation only. Retain separate process-backed evidence from \`pnpm agent:command-exec-stop\` for exact base-profile termination, and keep elevated execution excluded while the provider grant-consumption contract remains blocked.\n- [ ] Late events: confirm late output stays under its historical turn and cannot mutate newer work or control state.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, genuine turn failure, delivery uncertainty, consequential-result uncertainty, and successful final answer remain distinct.\n- [ ] Completion: confirm the same active segment auto-compacts on terminal transition, reopens manually, uses only the main timeline scrollbar, and preserves Latest/reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, and checking.\n`,
   );
   await application
     .context()
