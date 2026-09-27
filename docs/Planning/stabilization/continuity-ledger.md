@@ -273,6 +273,10 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Implementation checkpoint:** `75b028e5f4d9336d342396472177cf1f2321fc47` (`Bound recovery lifecycle and stale evidence`).
 
+**Durable handoff checkpoint:** `9480dd48a97d42d76b4586c526c8505780746021` (`Record STAB-03 recovery handoff`), pushed to `origin/codex/stab03-recovery-lifecycle`.
+
+**PR state:** stacked PR creation against `codex/stab02-authority-convergence` was attempted and failed because the authenticated GitHub account is not a collaborator. No PR was created or merged. This external tooling boundary does not block the next independent ticket.
+
 **MR disposition:** MR-001 is closed for exact Codex blocker lifecycle and bounded terminal recovery; MR-002 is closed. MR-009/MR-024 retain the independent persisted Stop/customer execution-state discrepancy for STAB-06.
 
 **Next handoff:** checkpoint this durable completion record, push `codex/stab03-recovery-lifecycle`, attempt the stacked PR without merging, then branch STAB-04 from the exact final STAB-03 head. STAB-04 must preserve the Runtime inventory transport identity from STAB-02 and the bounded recovery/presentation distinction from STAB-03.

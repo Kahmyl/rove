@@ -37,6 +37,8 @@ First gate: on a fresh disposable copy of the preserved database, map every rema
 - STAB-02 PR creation was attempted but unavailable because the authenticated GitHub account is not a collaborator; no PR was created or merged;
 - read-only diagnosis will use a fresh disposable copy of the preserved fixture, never the original acceptance home or preserved baseline.
 - implementation checkpoint: `75b028e5f4d9336d342396472177cf1f2321fc47` (`Bound recovery lifecycle and stale evidence`).
+- durable handoff checkpoint: `9480dd48a97d42d76b4586c526c8505780746021` (`Record STAB-03 recovery handoff`), pushed to `origin/codex/stab03-recovery-lifecycle`;
+- the stacked PR creation attempt against `codex/stab02-authority-convergence` failed because the authenticated GitHub account is not a collaborator. No PR was created or merged.
 
 ### Diagnosis and implementation evidence
 
