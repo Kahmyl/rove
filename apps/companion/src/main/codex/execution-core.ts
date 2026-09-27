@@ -43,6 +43,11 @@ import type {
   TaskAttachmentAuthority,
 } from "./task-attachments.js";
 import type { LocalFileGrantSelection } from "../host/hub-command-executor.js";
+import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+  runtimeDependencyWarning,
+} from "../runtime-failure-containment.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
 import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
 export { composeCompletedRequestHumanHandoff } from "./codex-task-observations.js";
@@ -55,6 +60,11 @@ export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   projection: "sqlite",
   command: "sqlite",
 } as const);
+
+const RUNTIME_DEPENDENCY_WARNINGS = [
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+] as const;
 
 export function requiresRuntimeGenerationReconciliation(input: {
   sessionId?: string;
@@ -411,7 +421,7 @@ export class CodexExecutionCore {
     await this.options.onTaskProcessRecoveryPoint?.("outbox_recovery_started");
     worker.signal();
     this.runtimePoll = setInterval(() => {
-      void this.pollRuntimeTruth();
+      void this.pollRuntimeTruth().catch(() => undefined);
     }, 750);
     await attention.refresh();
     this.apiValue = new LocalProductApi(
@@ -1056,11 +1066,14 @@ export class CodexExecutionCore {
   }
 
   private async pollRuntimeTruth(): Promise<void> {
+    const dependencyHealth = this.options.runtime.getDependencyHealth?.();
     if (
       this.runtimePollActive ||
       !this.store ||
       !this.ingress ||
-      !this.options.runtime.listSessionInventory
+      !this.options.runtime.listSessionInventory ||
+      (dependencyHealth?.state === "degraded" &&
+        Date.now() < dependencyHealth.nextProbeAt)
     )
       return;
     this.runtimePollActive = true;
@@ -1072,6 +1085,20 @@ export class CodexExecutionCore {
         throw new Error(
           `inventory read failed: ${error instanceof Error ? error.message : String(error)}`,
         );
+      }
+      const retainedWarnings = this.recoveryWarnings.filter(
+        (warning) =>
+          !RUNTIME_DEPENDENCY_WARNINGS.some(
+            (runtimeWarning) => runtimeWarning === warning,
+          ),
+      );
+      if (retainedWarnings.length !== this.recoveryWarnings.length) {
+        this.recoveryWarnings = retainedWarnings;
+        try {
+          await this.options.onProductStateChanged?.();
+        } catch {
+          // A failed surface publication must not escape a background poll.
+        }
       }
       for (const projection of await this.store.projections()) {
         if (projection.phase === "closed") continue;
@@ -1199,12 +1226,19 @@ export class CodexExecutionCore {
             { eventFamily: "control.request_human" },
           );
       }
-    } catch (error) {
-      this.recoveryWarnings = [
-        ...this.recoveryWarnings,
-        `Runtime observation: ${error instanceof Error ? error.message : String(error)}`,
-      ].slice(-64);
-      await this.options.onProductStateChanged?.();
+    } catch {
+      const health = this.options.runtime.getDependencyHealth?.();
+      const warning = health
+        ? (runtimeDependencyWarning(health) ?? RUNTIME_TRANSIENT_WARNING)
+        : RUNTIME_TRANSIENT_WARNING;
+      if (!this.recoveryWarnings.includes(warning)) {
+        this.recoveryWarnings = [...this.recoveryWarnings, warning].slice(-64);
+        try {
+          await this.options.onProductStateChanged?.();
+        } catch {
+          // A failed surface publication must not escape a background poll.
+        }
+      }
     } finally {
       this.runtimePollActive = false;
     }

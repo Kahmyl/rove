@@ -468,8 +468,17 @@ describe("ledger-only lifecycle authority", () => {
             taskId,
             lifecycle: {
               phase: "recovering",
-              reason: "Checking task state.",
+              reason: "Task state could not be confirmed.",
             },
+            customerExecution: expect.objectContaining({
+              state: "unresolved",
+            }),
+            customerPresentation: expect.objectContaining({
+              state: "outcome_unclear",
+              conversationStatus: expect.objectContaining({
+                title: "Task state unclear",
+              }),
+            }),
             capabilities: expect.objectContaining({ canRespond: false }),
           }),
         ]),

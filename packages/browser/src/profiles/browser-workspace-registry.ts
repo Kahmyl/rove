@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import {
   mkdir,
   readFile,
@@ -95,6 +96,14 @@ function isMissing(error: unknown): boolean {
     "code" in error &&
     (error as NodeJS.ErrnoException).code === "ENOENT"
   );
+}
+
+function canonicalExistingPath(path: string): string | undefined {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -340,8 +349,20 @@ export class BrowserWorkspaceRegistry {
     const seenDirectories = new Set<string>();
     const workspaces = stored.workspaces.map((item) => {
       const userDataDir = resolve(item.userDataDir);
-      const managed = userDataDir === this.managedUserDataPath(item.id);
-      const legacyRelative = relative(this.legacyProfilesRoot, userDataDir);
+      const canonicalUserDataDir = canonicalExistingPath(userDataDir);
+      const managedPath = this.managedUserDataPath(item.id);
+      const canonicalManagedPath = canonicalExistingPath(managedPath);
+      const canonicalLegacyRoot = canonicalExistingPath(
+        this.legacyProfilesRoot,
+      );
+      const managed =
+        canonicalUserDataDir !== undefined &&
+        canonicalManagedPath !== undefined &&
+        canonicalUserDataDir === canonicalManagedPath;
+      const legacyRelative =
+        canonicalUserDataDir === undefined || canonicalLegacyRoot === undefined
+          ? ".."
+          : relative(canonicalLegacyRoot, canonicalUserDataDir);
       const legacy =
         legacyRelative.length > 0 &&
         !legacyRelative.startsWith(`..${sep}`) &&
@@ -352,7 +373,8 @@ export class BrowserWorkspaceRegistry {
         item.storageLayout ?? (managed ? "workspace" : "legacy_profile");
       if (
         seenIds.has(item.id) ||
-        seenDirectories.has(userDataDir) ||
+        canonicalUserDataDir === undefined ||
+        seenDirectories.has(canonicalUserDataDir) ||
         (storageLayout === "workspace" ? !managed : !legacy)
       ) {
         throw new RoveError({
@@ -361,8 +383,12 @@ export class BrowserWorkspaceRegistry {
         });
       }
       seenIds.add(item.id);
-      seenDirectories.add(userDataDir);
-      return { ...item, userDataDir, storageLayout };
+      seenDirectories.add(canonicalUserDataDir);
+      return {
+        ...item,
+        userDataDir: managed ? managedPath : userDataDir,
+        storageLayout,
+      };
     });
     if (
       stored.selectedWorkspaceId !== undefined &&

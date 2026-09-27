@@ -46,6 +46,10 @@ import {
   compactFollowerWindowOptions,
 } from "./compact-follower-window-options.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
+import {
+  runContainedRuntimeProbe,
+  withRuntimeDependencyWarning,
+} from "./runtime-failure-containment.js";
 import { resolveDesktopProductHome } from "./desktop-product-home.js";
 import { endUnmatchedRuntimeSession } from "./unmatched-runtime-session.js";
 import type { RuntimeCompanionSnapshot } from "./runtime-client.js";
@@ -187,28 +191,46 @@ async function refreshDesktopSurfaceSnapshot(
   companionOverride?: RuntimeCompanionSnapshot | null,
 ): Promise<DesktopSurfaceSnapshot> {
   return desktopSnapshotCoordinator.refresh(async () => {
+    const current = desktopSnapshotCoordinator.current();
     let nextProductError = codexProductError;
-    const [companion, workspaces, product] = await Promise.all([
-      companionOverride === undefined
-        ? runtime.getSnapshot()
-        : Promise.resolve(companionOverride),
-      runtime.getBrowserWorkspaceStatus(),
-      codexExecutionCore === undefined || codexExecutionCoreStarting
-        ? Promise.resolve(null)
-        : codexExecutionCore
-            .api()
-            .readSnapshot()
-            .catch((error) => {
-              nextProductError =
-                error instanceof Error ? error.message : String(error);
-              return null;
-            }),
-    ]);
+    const [companionResult, workspacesResult, productResult] =
+      await Promise.allSettled([
+        companionOverride === undefined
+          ? runtime.getSnapshot()
+          : Promise.resolve(companionOverride),
+        runtime.getBrowserWorkspaceStatus(),
+        codexExecutionCore === undefined || codexExecutionCoreStarting
+          ? Promise.resolve(null)
+          : codexExecutionCore
+              .api()
+              .readSnapshot()
+              .catch((error) => {
+                nextProductError =
+                  error instanceof Error ? error.message : String(error);
+                return null;
+              }),
+      ]);
+    const companion =
+      companionResult.status === "fulfilled"
+        ? projectCompanionSnapshot(companionResult.value)
+        : (current?.companion ?? null);
+    const workspaces =
+      workspacesResult.status === "fulfilled"
+        ? toDesktopBrowserWorkspaceStatus(workspacesResult.value)
+        : (current?.workspaces ?? { workspaces: [] });
+    let product =
+      productResult.status === "fulfilled"
+        ? productResult.value
+        : (current?.product ?? null);
+    product = withRuntimeDependencyWarning(
+      product,
+      runtime.getDependencyHealth(),
+    );
     return {
       surface: unifiedSurfaceState.snapshot(),
-      companion: projectCompanionSnapshot(companion),
+      companion,
       notice: desktopNotice,
-      workspaces: toDesktopBrowserWorkspaceStatus(workspaces),
+      workspaces,
       product,
       productError: nextProductError,
       ...(roveAccountService
@@ -590,7 +612,8 @@ function registerIpc(
         if (changed)
           void workflowSyncCoordinator
             ?.synchronize()
-            .then(() => refreshDesktopSurfaceSnapshot(runtime));
+            .then(() => refreshDesktopSurfaceSnapshot(runtime))
+            .catch(() => undefined);
       },
     ),
   );
@@ -1098,25 +1121,33 @@ function startSessionSurfaceMonitor(
     sessionSurfaceMonitorBusy = true;
 
     try {
-      const companion = await runtime.getSnapshot();
-      await refreshDesktopSurfaceSnapshot(runtime, companion);
-      const session = companion?.session ?? null;
+      await runContainedRuntimeProbe({
+        health: runtime.getDependencyHealth(),
+        probe: async () => {
+          const companion = await runtime.getSnapshot();
+          await refreshDesktopSurfaceSnapshot(runtime, companion);
+          const session = companion?.session ?? null;
 
-      const signal = toCompanionSurfaceSignal(session);
+          const signal = toCompanionSurfaceSignal(session);
 
-      if (signal !== null && signal.key !== previousSignalKey) {
-        if (signal.action === "attention") {
-          openFullSurface();
-        } else {
-          unifiedSurfaceCoordinator?.present(unifiedSurfaceState.snapshot());
-        }
-      }
+          if (signal !== null && signal.key !== previousSignalKey) {
+            if (signal.action === "attention") {
+              openFullSurface();
+            } else {
+              unifiedSurfaceCoordinator?.present(
+                unifiedSurfaceState.snapshot(),
+              );
+            }
+          }
 
-      onSession?.(session);
-
-      previousSignalKey = signal?.key;
-    } catch {
-      previousSignalKey = undefined;
+          onSession?.(session);
+          previousSignalKey = signal?.key;
+        },
+        onFailure: async () => {
+          previousSignalKey = undefined;
+          await refreshDesktopSurfaceSnapshot(runtime);
+        },
+      });
     } finally {
       sessionSurfaceMonitorBusy = false;
     }
@@ -1487,7 +1518,8 @@ async function startDesktop(): Promise<void> {
         )
           void workflowSyncCoordinator
             .synchronize()
-            .then(() => refreshDesktopSurfaceSnapshot(runtime));
+            .then(() => refreshDesktopSurfaceSnapshot(runtime))
+            .catch(() => undefined);
         workflowSyncMonitor = setInterval(() => {
           if (
             roveAccountService?.ownerId() &&
@@ -1496,7 +1528,8 @@ async function startDesktop(): Promise<void> {
           )
             void workflowSyncCoordinator
               ?.synchronize()
-              .then(() => refreshDesktopSurfaceSnapshot(runtime));
+              .then(() => refreshDesktopSurfaceSnapshot(runtime))
+              .catch(() => undefined);
         }, 60_000);
         workflowSyncMonitor.unref();
       }

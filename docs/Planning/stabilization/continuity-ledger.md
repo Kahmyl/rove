@@ -283,6 +283,30 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not reopen canonical workspace identity, Runtime callback binding, or Runtime inventory transport identity without contradictory evidence; do not absorb STAB-04 failure taxonomy/backoff.
 
+### ROVE-STAB-04 — IMPLEMENTATION VERIFIED; DURABLE EXIT PENDING
+
+**Exact stacked start SHA:** `a76cce8c9b7d703a62d43dc938193b74f6ff02b4` (final pushed `codex/stab03-recovery-lifecycle` head).
+
+**Branch:** `codex/stab04-runtime-failure-containment`; clean at entry. No predecessor PR was merged.
+
+**Inherited invariants:** Runtime inventory owns a monotonic Rove transport coordinate independent of provider observation sequence (STAB-02). Customer recovery distinguishes active bounded checking from exhausted inability to confirm and exact success/failure ordering is durable (STAB-03).
+
+**Owned findings:** MR-004 permanent Runtime configuration failure amplification and MR-005 unbounded polling/unhandled rejection containment.
+
+**Confirmed root cause:** the acceptance catalog stored the managed Chrome directory through `/tmp`, while restarted Runtime derivation used `/private/tmp`. They were the same existing filesystem object, but lexical validation rejected them. Three-mode session fan-out, coupled snapshot reads, 750 ms monitors and incomplete fire-and-forget rejection boundaries amplified the permanent response into fetch failures and process-level unhandled rejections.
+
+**Implemented invariant:** existing managed and legacy directories are authorized by canonical filesystem identity without admitting missing paths or escapes. Runtime dependency health is a single classified circuit: permanent configuration failure probes every 30 seconds, transient failure backs off exponentially from 750 ms to 30 seconds, and one probe is admitted at a time. Local Product history remains publishable with one customer-safe warning; closed-circuit ticks and failed background publication cannot escape as unhandled rejections; a successful probe clears the state and resumes reads.
+
+**Files and compatibility:** `packages/browser/src/profiles/browser-workspace-registry.ts`; `apps/companion/src/main/runtime-client.ts`; `runtime-failure-containment.ts`; `main.ts`; `codex/execution-core.ts`; and the structural Runtime port in `task-coordinator.ts`, plus focused tests. No persistence schema, migration, provider contract, credential, task identity or Runtime inventory coordinate changed.
+
+**Verification:** required regressions failed first. The affected suite passed 9 files / 49 tests including real browser restart and Runtime HTTP integration. Disposable managed-process fixture `/private/tmp/rove-stab04-process.9fBJvP`, invalid-catalog copy SHA-256 `97f063da8cabce602f3115c4e1ee16f3eb5c0f532f37d4b07997c71485f0741d`, proved one request across a 240-call permanent burst, one transport probe across a 120-call outage burst, healthy restart recovery, and zero process-level unhandled rejections. The first full run passed 1,718/1,719 tests and exposed one inherited pre-STAB-03 assertion that expected active Checking after bounded legacy-attention recovery had exhausted; the test was reconciled to the already-established unresolved / `Task state unclear` contract, with no production change. `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, full `pnpm test` (201 files / 1,719 tests), and `pnpm test:experiments` (24 tests) passed.
+
+**Finding disposition:** MR-004 and MR-005 are implementation-closed pending the final repository gate and durable commit. The preserved original acceptance home remains valid and untouched; the disposable fixture is the STAB-05 unavailable/invalid Runtime input.
+
+**Next handoff:** inspect the complete diff; checkpoint and push; attempt a stacked PR without merging; record its exact result; then start STAB-05 from the exact final STAB-04 head.
+
+**Non-goals:** do not change Task/Runtime identity, invent another recovery model, or reinterpret all transport errors as the retained configuration failure.
+
 ## Future ticket rows
 
 ROVE-STAB-04 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

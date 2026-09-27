@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -199,6 +206,52 @@ describe("durable browser workspace registry", () => {
     await expect(
       new BrowserWorkspaceRegistry(directory).status(),
     ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+  });
+
+  it("accepts a catalog path through a canonical alias of the managed workspace", async () => {
+    const root = await home();
+    const directory = resolve(root, "real-home");
+    const alias = resolve(root, "home-alias");
+    const workspaceId = "wrk_00000000-0000-0000-0000-000000000000";
+    const managedDirectory = resolve(
+      directory,
+      "browser-workspaces",
+      workspaceId,
+      "chrome-data",
+    );
+    await mkdir(managedDirectory, { recursive: true });
+    await symlink(directory, alias, "dir");
+    await writeFile(
+      resolve(directory, "browser-workspaces.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        selectedWorkspaceId: workspaceId,
+        workspaces: [
+          {
+            id: workspaceId,
+            displayName: "Canonical alias",
+            browser: "chrome",
+            userDataDir: resolve(
+              alias,
+              "browser-workspaces",
+              workspaceId,
+              "chrome-data",
+            ),
+            storageLayout: "workspace",
+            createdAt: "2026-09-01T00:00:00.000Z",
+            lastUsedAt: "2026-09-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      new BrowserWorkspaceRegistry(directory).resolveForSession(),
+    ).resolves.toMatchObject({
+      id: workspaceId,
+      userDataDir: managedDirectory,
+      storageLayout: "workspace",
+    });
   });
 
   it("uses the existing profile lease to reject concurrent writers", async () => {
