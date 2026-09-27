@@ -413,6 +413,36 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not introduce a new approval engine, make every workspace edit require confirmation, weaken the sandbox, infer external-action authority from automatic review, or redesign attention-family reachability in this ticket.
 
+### ROVE-STAB-08 — COMPLETE
+
+**Exact stacked start SHA:** `499378a20338b4ff90b5366cf632e0098f5c48e5` (final pushed `codex/stab07-approval-policy-contract` head).
+
+**Branch:** `codex/stab08-approval-decision-fidelity`; clean at entry. No predecessor PR was merged.
+
+**Inherited invariants:** **Ask for approval** and **Approve for me** both retain provider `on-request` and the writable `rove_task` profile; only the human versus automatic reviewer changes. Permission review remains separate from Rove authorization for consequential external actions. STAB-06 remains the authority for nonterminal/terminal Task presentation.
+
+**Owned findings:** MR-007 and the remaining decision/UX boundary of MR-008. Both are closed for requests that the provider actually emits. Live attention-family emission remains deliberately unqualified and belongs to STAB-09.
+
+**Confirmed root cause:** the pinned App Server schema can advertise six exact command-execution decisions: one-time accept, session accept, decline, cancel, command-policy amendment and network-policy amendment. Rove reduced that ordered set to generic accept/decline controls and labeled acceptance **Approve**, losing refusal, scope and amendment semantics before the response crossed the renderer boundary.
+
+**Disproved hypothesis:** a generic approval vocabulary is not sufficient merely because the provider response schema accepts it. Scope is request-specific authority: Rove may expose session or persistent-policy acceptance only when the exact emitted decision exists. File-change requests do not advertise an available-decision set, so Rove does not infer session scope from the broader response schema.
+
+**Implemented invariant:** an emitted `availableDecisions` list is structurally validated, projected in its original order with exact wire values, and submitted only if it is structurally identical to an offered decision. `accept` is **Approve once**; session acceptance is explicit; decline and cancel remain distinct; policy amendments state the exact command rule or network host/action and persistence consequence before acceptance. Requests without an advertised richer set expose only qualified one-time accept/refusal choices. Once response handling begins, the exact task/request/generation cannot dispatch a duplicate provider response.
+
+**Files and compatibility:** Local Product API version advances from 9 to 10 because `ProductAttentionProjection` replaces the reduced `allowedDecisions` vocabulary with typed `approvalDecisions`, and renderer intents accept the provider decision union. Production changes are in `local-product-api.ts`, `customer-task-collaboration.ts`, `product-surface.tsx` and `styles.css`; matching renderer and deterministic Electron fixtures advance to version 10. The generated App Server schema remains pinned and unchanged. No persistence schema, migration, provider version, sandbox profile, credential, Task identity or consequential-action authorization changed.
+
+**Verification:** the required focused regression failed first against the reduced projection and generic controls. The final focused suite passed 4 files / 207 tests. `pnpm customer-journey:conversation-task` passed in built Electron with 28 screenshots at `artifacts/customer-journeys/conversation-task-rendered-qualification`, proving visible one-time, session, persistent command-policy and decline choices before acceptance. `pnpm test:experiments` passed 24 tests; `pnpm check:repository` passed 709 files, 1,303 relative imports and 107 local document links; `pnpm lint`, `pnpm typecheck` and `pnpm build` passed. A full `pnpm test` run displayed all repository test files without a visible assertion failure, including all affected tests, but again retained idle Vitest workers without a final summary and was interrupted; MR-029 remains the owning runner-exit issue and this run is not represented as a pass.
+
+**Implementation checkpoint:** `54d0ef02e5dd6388dcf85431475ef21d44f9b80f` (`Preserve exact approval decisions`).
+
+**Qualification boundary:** no live model, credentialed provider, external-service mutation, packaged application or human acceptance was run. The Electron journey is a credential-free deterministic rendering qualification, not evidence that a live provider emits each attention family. No preserved acceptance home was mutated.
+
+**Finding disposition:** MR-007 and MR-008 are closed at schema/adapter/collaboration/renderer boundaries. STAB-09 owns deliberate live reachability, emitted-family characterization and actual decision-set evidence; it must preserve exact decisions and must not count the deterministic renderer fixture as live qualification.
+
+**Next handoff:** checkpoint and push this durable record, attempt the stacked PR against `codex/stab07-approval-policy-contract` without merging, then branch STAB-09 from the exact final STAB-08 head. STAB-09's first gate is to distinguish request families the provider can deliberately emit from those that remain unqualified, without reopening the STAB-07 policy mapping or STAB-08 response vocabulary.
+
+**Non-goals:** do not synthesize approval requests, invent session/persistent scope, widen provider amendments, conflate permission review with consequential-action authorization, or claim live reachability from deterministic fixtures.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
