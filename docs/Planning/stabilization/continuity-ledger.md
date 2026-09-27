@@ -109,7 +109,8 @@ Required reading:
 
 **Implementation checkpoint:** `6758dfb3b47138670e498e6f99c290d1ea919956` (`Converge persisted task runtime authority`).
 **Branch:** `codex/stab02-authority-convergence`.
-**PR:** pending creation against `main`; STAB-03 must record the exact PR/head after creation before its first production edit.
+**Handoff commit:** `c7a4230fada5917d1a91710fd332466c637af538` (`Record STAB-02 authority handoff`).
+**PR:** not created. `gh pr create --base main --head codex/stab02-authority-convergence` failed with `GraphQL: must be a collaborator (createPullRequest)`. The branch is pushed to `origin`; no PR was merged.
 
 #### Read-only authority evidence — persisted snapshot
 
@@ -220,7 +221,7 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 - No live model, credentialed provider, original acceptance-home relaunch, packaged application, or human acceptance was run. Those evidence classes remain explicitly unqualified.
 - The preserved acceptance home still contains exact `thread_history_reconstructible` blockers. STAB-03 owns why exact later success does not clear the matching older blocker, bounded retry/terminal recovery, preserved safe controls, and multi-Task isolation.
 - STAB-04 still owns generic Runtime permanent/transient failure classification, per-Task failure containment, backoff, observability, and amplification prevention; it must preserve the STAB-02 transport identity.
-- Exact next stop point: create/push the STAB-02 handoff commit and PR, then branch STAB-03 from that exact head.
+- Exact next stop point: push this PR-tooling record, then branch STAB-03 from the resulting exact STAB-02 head. PR creation can be retried later by an authenticated collaborator without rewriting the branch.
 - STAB-03 first gate: restart a disposable copy of the preserved database with STAB-02 authority fixes, trace each remaining blocker to its creating and clearing authority, and prove the first stale-success shadow before editing recovery behavior.
 
 ### ROVE-STAB-03 — READY

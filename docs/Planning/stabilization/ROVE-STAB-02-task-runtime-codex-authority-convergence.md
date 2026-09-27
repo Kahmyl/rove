@@ -94,6 +94,8 @@ Checkpoint before STAB-03.
 
 Production implementation is checkpointed at `6758dfb3b47138670e498e6f99c290d1ea919956` on `codex/stab02-authority-convergence`.
 
+The durable handoff is `c7a4230fada5917d1a91710fd332466c637af538`. The branch is pushed against `main`; GitHub PR creation was attempted and refused because the authenticated account is not a collaborator. No PR was created or merged, and downstream work continues as an explicit stacked branch from the final STAB-02 head.
+
 - persisted Task workspace migration proves canonical filesystem identity for the exact protected per-Task directory and remains fail-closed for outside, escaped, and unresolved paths;
 - historical completed-handoff reconstruction preserves Runtime client method binding;
 - Runtime inventory events use a Rove-owned monotonic transport position per Runtime host generation, skip unchanged complete truth, and no longer reuse a TaskEngine source coordinate when provider `observationSeq` is unchanged;
