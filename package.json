@@ -12,6 +12,7 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
+    "test:release": "vitest run --maxWorkers=4",
     "agent:fixtures": "node experiments/agent-execution/run-fixtures.mjs",
     "agent:schema": "node experiments/agent-execution/generate-schema-evidence.mjs",
     "agent:live": "node experiments/agent-execution/live-app-server.mjs",
