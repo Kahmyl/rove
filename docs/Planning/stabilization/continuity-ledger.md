@@ -491,7 +491,11 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Files and compatibility:** qualification changes are limited to `apps/runtime/src/demo/control-demo.ts`, the self-cleaning `experiments/agent-execution/browser-control-live.mjs` launcher, and the root `control:demo` script. No schema, persistence, wire format, provider version or production authority changed. MR-020 and MR-022 are closed. STAB-10's authority portion of MR-023 is closed; STAB-11 retains customer-safe browser recovery/presentation. STAB-10's authority/browser portion of MR-025 is closed; STAB-13 retains combined development-app, accessibility and packaged/native-surface qualification.
 
-**Next handoff:** complete repository verification, commit and push the durable handoff, attempt the stacked PR against `codex/stab09-attention-family-reachability`, and record the final PR boundary. STAB-11 must branch only from that exact final head and consume the established control authority without reopening it.
+**Durable handoff:** `f652a58` (`Record STAB-10 browser handoff`) is pushed on `codex/stab10-handoff-browser-attachment-authority`.
+
+**PR boundary:** the authorized stacked PR attempt against `codex/stab09-attention-family-reachability` failed with GitHub GraphQL `must be a collaborator`. No PR was created and nothing was merged.
+
+**Next handoff:** commit and push this PR-tooling boundary, then branch STAB-11 only from that exact final STAB-10 head. STAB-11 must consume the established control authority without reopening it.
 
 ## Future ticket rows
 
