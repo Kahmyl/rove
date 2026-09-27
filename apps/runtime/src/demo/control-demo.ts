@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { startFixtureServer } from "@rove/browser";
 import { loadConfig } from "@rove/config";
 import type {
+  BrowserWindowState,
   BrowserWorkspace,
   ControlMutationAuthority,
   ControlStatus,
@@ -126,7 +127,7 @@ try {
     verify(
       error instanceof Error &&
         "code" in error &&
-      error.code === "CONTROL_NOT_OWNED",
+        error.code === "CONTROL_NOT_OWNED",
       "requested handoff did not fence agent mutation",
     );
   }
@@ -148,6 +149,14 @@ try {
     (await tookWait).event === "human_took_control" &&
       taken.controller === "human",
     "takeover did not preserve the exact requested handoff",
+  );
+  const presentedWindow = await request<BrowserWindowState>(
+    `/sessions/${agent.id}/browser/window`,
+  );
+  verify(
+    presentedWindow.pageId === inspection.pageId &&
+      presentedWindow.documentFocused,
+    "takeover did not foreground the exact task-owned page",
   );
   await pauseForHuman();
   const returnWait = request<ControlWaitResult>(
@@ -172,7 +181,7 @@ try {
     verify(
       error instanceof Error &&
         "code" in error &&
-      error.code === "INSPECTION_REQUIRED",
+        error.code === "INSPECTION_REQUIRED",
       "return did not require fresh grounding",
     );
   }
@@ -237,7 +246,7 @@ try {
     verify(
       error instanceof Error &&
         "code" in error &&
-      error.code === "CONTROL_NOT_OWNED",
+        error.code === "CONTROL_NOT_OWNED",
       "voluntary takeover did not fence agent navigation",
     );
   }
