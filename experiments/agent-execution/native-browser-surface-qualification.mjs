@@ -20,6 +20,10 @@ const fixtureMain = resolve(
   repositoryRoot,
   "experiments/agent-execution/electron-private-beta-walkthrough-fixture.cjs",
 );
+const unrelatedFixtureMain = resolve(
+  repositoryRoot,
+  "experiments/agent-execution/electron-unrelated-foreground-fixture.cjs",
+);
 const requireBrowser = createRequire(
   resolve(repositoryRoot, "packages/browser/package.json"),
 );
@@ -47,7 +51,19 @@ async function foregroundBrowserPid(source, page) {
     }
     await delay(100);
   }
-  throw new Error("Launched Chromium never became the native foreground window.");
+  throw new Error(
+    "Launched Chromium never became the native foreground window.",
+  );
+}
+
+async function foregroundExactPid(source, page, expectedPid, label) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.bringToFront();
+    const pid = await source.getForegroundProcessId({ aborted: false });
+    if (pid === expectedPid) return pid;
+    await delay(100);
+  }
+  throw new Error(`${label} never became the exact native foreground process.`);
 }
 
 const session = {
@@ -61,6 +77,7 @@ const session = {
 };
 
 let application;
+let unrelatedApplication;
 let browser;
 try {
   application = await electron.launch({
@@ -162,8 +179,48 @@ try {
   );
   controller.setSession(session);
   await controller.reconcileNow();
-  assert(!fullSurfaceVisible, "Rove full surface did not yield after viable placement.");
-  assert(followerVisible, "Browser follower was not presented on the owned browser.");
+  assert(
+    !fullSurfaceVisible,
+    "Rove full surface did not yield after viable placement.",
+  );
+  assert(
+    followerVisible,
+    "Browser follower was not presented on the owned browser.",
+  );
+
+  unrelatedApplication = await electron.launch({
+    executablePath: electronExecutable,
+    cwd: repositoryRoot,
+    args: [unrelatedFixtureMain],
+  });
+  const unrelatedPage = await unrelatedApplication.firstWindow({
+    timeout: 30_000,
+  });
+  const unrelatedPid = unrelatedApplication.process().pid;
+  assert(
+    Number.isInteger(unrelatedPid) &&
+      unrelatedPid > 0 &&
+      unrelatedPid !== browserPid,
+    "Unrelated application did not have an independent process identity.",
+  );
+  await foregroundExactPid(
+    foreground,
+    unrelatedPage,
+    unrelatedPid,
+    "Unrelated application",
+  );
+  await controller.reconcileNow();
+  assert(
+    !followerVisible,
+    "Browser follower remained visible after an unrelated application became foreground.",
+  );
+
+  await foregroundBrowserPid(foreground, page);
+  await controller.reconcileNow();
+  assert(
+    followerVisible,
+    "Browser follower did not recover after the owned browser returned to foreground.",
+  );
 
   console.log(
     JSON.stringify({
@@ -172,10 +229,13 @@ try {
       browserProcessQualified: true,
       exactPageId: "page_native_surface",
       viableTransfer: true,
-      unrelatedForegroundRevocation: "deterministic_only",
+      unrelatedForegroundPid: unrelatedPid,
+      unrelatedForegroundRevocation: "qualified",
+      ownedBrowserForegroundRecovery: true,
     }),
   );
 } finally {
+  await unrelatedApplication?.close();
   await browser?.close();
   await application?.close();
 }

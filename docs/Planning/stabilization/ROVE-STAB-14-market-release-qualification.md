@@ -19,6 +19,7 @@ STAB-12's base-profile exact-execution boundary may enter the release matrix, bu
 
 Do not infer release readiness from the original sprint plan. The release matrix must be generated from the continuity ledger as it exists when STAB-14 starts.
 
+STAB-13 enters with its machine matrix complete: the 28-step development Electron projection, seven-family 820×700 keyboard/accessibility coverage, exact macOS native browser foreground/unrelated-application revocation/recovery, unsigned package smoke, and packaged persisted-Task critical interaction all pass. The packaged harness intentionally rejects stale provider attention and does not synthesize live provider or browser authority. STAB-14 must retain those limits, consume the short STAB-13 human checklist, and keep live packaged browser/follower composition distinct from deterministic evidence.
 
 ## Objective
 

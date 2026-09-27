@@ -1,7 +1,7 @@
 # ROVE-STAB-13 — Cross-cutting interaction and accessibility qualification
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** In progress; independent matrix started from local checkpoint `1bc980e`
+**Status:** Machine qualification complete; human acceptance pending
 
 **Dependencies:** STAB-02 through STAB-11 as applicable  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
@@ -65,10 +65,23 @@ Deterministic Electron projection tests plus development-app human-visible runs.
 - The 28-step production-projection Electron journey passes at 1180×780 and 820×700. It covers Working/Queue/Steer/Stop presentation, background attention, recovery/outcome distinctions, long content, multiple Tasks without selection theft, reduced motion, Latest/reading-position preservation and main/follower parity.
 - MR-016 is now covered by a retained combined check: every supported attention family is keyboard-reachable with `:focus-visible` controls and no horizontal/document-dialog overflow at 820×700. This is renderer qualification; live family reachability remains the inherited STAB-09 provider matrix.
 - MR-032 and MR-033 were recorded before correction. The manifest now derives its real Git branch, the manual Stop boundary distinguishes this fixture from process-backed base-profile proof and the open elevated blocker, and scoped approval labels/consequences retain an automated stacked-layout guard plus screenshot evidence.
-- The real macOS foreground fixture qualified the exact Chromium process/page and viable full-surface-to-follower transfer. Unrelated-foreground revocation remains deterministic-only.
-- A local unsigned darwin/arm64 directory package was built and its packaged smoke test passed. This does not substitute for the remaining development-app human acceptance or representative packaged interaction matrix.
+- The real macOS foreground fixture qualified the exact Chromium process/page, viable full-surface-to-follower transfer, revocation when a separately launched unrelated Electron application became the actual native foreground process, and recovery when the exact owned browser returned to foreground.
+- A local unsigned darwin/arm64 directory package was built and its packaged smoke test passed. The retained packaged critical-interaction harness launches that exact `.app`, opens its surface through the production single-instance path, hydrates a temporary production-format SQLite home, switches among three Tasks, renders persisted conversation, rejects a stale provider approval after restart, presents Stop only from reconciled production state, and passes keyboard-focus/overflow checks at 820×700. It does not manufacture a live provider request or task-bound browser authority, so live attention and browser/follower composition remain human-visible boundaries.
 
 Elevated local execution remains excluded. This evidence does not close STAB-12 or establish market readiness.
+
+## Remaining human acceptance checklist
+
+Run this checklist from the final STAB-13 checkpoint in the development app. Use disposable Task/runtime state and only harmless work. This is a human composition gate; do not replace an observation with fixture output.
+
+1. Open two Tasks. Start ordinary conversational work in the first, switch to the second while the first is active, then return. Expected: each transcript, status and controls remain attached to its own Task; no selection theft or cross-Task attention occurs.
+2. Produce one supported Needs Input request on the background Task and navigate to it using only the keyboard at approximately 820×700. Expected: the owning Task alone advertises attention; every offered choice, refusal and scope explanation is readable, reachable and visibly focused with no horizontal overflow.
+3. Run harmless base-profile work that exposes Stop, then choose Stop. Expected: the UI enters Stopping first and reports Stopped only after exact observed execution termination; interrupting a Codex turn alone never produces Stopped.
+4. Attach the managed browser to one Task, exercise requested or voluntary Take Over, switch to a real unrelated local application, return to the exact owned browser, then Return to Rove. Expected: the full surface yields only when follower placement is viable, the follower disappears over the unrelated application, returns only over the owned browser, and Return enters fresh Checking before agent control resumes.
+5. Repeat Task switching while the browser Task is in human control and while another Task needs input. Expected: main and follower identify the same owning Task and no current/newest UI selection changes execution or browser authority.
+6. Inspect the same flow at 1180×780 and 820×700 with reduced motion enabled. Expected: no clipped request/actions, hidden Stop, unstable reading position, inaccessible Latest control, or motion-dependent state explanation.
+
+Record the exact commit, operating-system build, provider/component version, window sizes, pass/fail for each step, and screenshots for any failure. A human pass closes only this composition gate; it does not close elevated execution or Windows/Linux packaged process-tree qualification.
 
 ## Continuity exit / handoff contract
 
