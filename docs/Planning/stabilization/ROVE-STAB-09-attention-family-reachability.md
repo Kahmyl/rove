@@ -1,7 +1,7 @@
 # ROVE-STAB-09 — Attention-family reachability and live fixtures
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready for characterization  
+**Status:** In progress — live model authorization required
 **Dependencies:** STAB-01; product-policy fixes may depend on STAB-07/08  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 

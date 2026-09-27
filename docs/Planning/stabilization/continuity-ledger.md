@@ -447,6 +447,22 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not synthesize approval requests, invent session/persistent scope, widen provider amendments, conflate permission review with consequential-action authorization, or claim live reachability from deterministic fixtures.
 
+### ROVE-STAB-09 — IN PROGRESS
+
+**Exact stacked start SHA:** `f390fae0e4c03ded6510b5749feee12fe740d896` (final pushed `codex/stab08-approval-decision-fidelity` head).
+
+**Branch:** `codex/stab09-attention-family-reachability`; clean at entry. No predecessor PR was merged.
+
+**Current checkpoint:** `ef5958a44286c4b36763f42830ac60ab9339af5b` (`Add attention reachability characterization`).
+
+**Established so far:** `attention-fixture-mcp-server.mjs` deliberately emits non-sensitive MCP form and trusted-URL elicitations and has a direct protocol regression. `agent:attention-boundary` runs a credential-free real App Server in an isolated temporary Codex home with common credential environment variables removed. Against Codex `0.155.0-alpha.9.2`, both direct MCP tool calls connect and complete, but App Server returns `decline` to the MCP server without emitting any `mcpServer/elicitation/request` to its application client. This disproves direct `mcpServer/tool/call` as a product-attention trigger and preserves MR-014/MR-015 as live-turn gaps.
+
+**Guarded next gate:** `agent:attention-live` contains seven bounded provider-turn scenarios for conversational input, command approval, file approval, network approval, additional permission, MCP form and MCP URL. Approval requests are declined, form input is fixed non-sensitive fixture data, URL elicitation is cancelled, alternate capabilities/retries are forbidden, and emitted method/decision/context/thread/turn evidence is recorded. The harness refuses to start unless `ROVE_ALLOW_LIVE_ATTENTION=1` is explicitly supplied.
+
+**Verification to date:** the fixture regression passed; `pnpm test:experiments` passed 25 tests; `pnpm agent:attention-boundary` passed the isolated real-App-Server characterization; `pnpm check:repository` passed 711 files, 1,303 relative imports and 107 local document links; `pnpm lint` passed. No model turn, real-account action, external-service mutation, file mutation, URL open or preserved-home use occurred.
+
+**Current blocker:** completing the ticket's live provider reachability matrix requires explicit authorization to run the guarded model-backed characterization against the current authenticated Codex account. Do not infer that authority from permission to push Git branches. Until that evidence exists, do not close MR-010, MR-012 through MR-015 or MR-027, and do not mark STAB-09 complete.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
