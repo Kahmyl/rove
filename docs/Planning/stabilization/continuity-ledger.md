@@ -471,21 +471,27 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Next handoff:** push the final PR-tooling boundary, then branch STAB-10 only from that exact final STAB-09 head. STAB-13 must consume the recorded provider matrix without requiring unavailable families to masquerade as live passes.
 
-### ROVE-STAB-10 — IN PROGRESS
+### ROVE-STAB-10 — COMPLETE
 
 **Exact stacked start SHA:** `56ac23d3426a2c8ee3ccbf32ff3aa5848966253d` (final pushed `codex/stab09-attention-family-reachability` head).
 
 **Branch:** `codex/stab10-handoff-browser-attachment-authority`; clean at entry. No predecessor PR was merged.
 
-**Current checkpoint:** `c1b7fab52e1914db46994a90f59daf53613196b4` (`Qualify browser control handoffs`).
+**Implementation checkpoints:** `c1b7fab52e1914db46994a90f59daf53613196b4` (`Qualify browser control handoffs`) and `324591793a26de400619851da82e6a337276cf7a` (`Verify exact handoff page focus`).
 
 **First gate:** the existing `control:demo` qualification was not runnable: its root script overrode any caller-supplied temporary `ROVE_HOME` with a repository-local demo home, and the demo started a browser Task without creating/selecting the now-required browser workspace. The failed pre-fix run created only two generated files under `.rove-control-demo`; that untracked directory was removed after inspection.
 
-**Established so far:** `control:demo` now creates a self-cleaning temporary Rove home and a selected non-sensitive browser workspace, then exercises real Runtime HTTP and Chromium boundaries. The live fixture qualified requested handoff → exact durable acknowledgement → wait → takeover, Agent mutation fencing, exact return, mandatory fresh inspection, stale pre-handoff target rejection, same-page identity, voluntary Companion takeover without a synthetic handoff, mutation fencing during human ownership, and return to Agent control. Structured output reported `requestedHandoff`, `voluntaryTakeover`, and `returnFreshness` as qualified on `page_01`.
+**Root cause and invariant:** the underlying Task/Runtime authority defects had already been repaired by STAB-02/03/06, but the retained real-browser qualification was itself invalid: it overrode temporary-home authority, omitted required browser-workspace setup, skipped durable handoff acknowledgement, and asserted the wrong two-stage return freshness errors. No second product authority was required. The corrected boundary proves one Task/session/page/handoff identity through requested or voluntary takeover, exact-page focus, return and fresh grounding without deriving authority from selection, newest session or ambient browser focus.
 
-**Verification to date:** `pnpm control:demo` passed after the harness corrections and includes the full repository build. Focused Runtime/control/task-projection/main/follower coverage passed 8 files / 176 tests when run with the loopback and Chromium permissions those integration tests require. The first sandboxed focused attempt produced only expected `listen EPERM` and Chromium sandbox launch failures; its escalated rerun passed. No external site, real account, preserved home, credential or consequential action was used.
+**Invariant established:** `control:demo` now creates a self-cleaning temporary Rove home and selected non-sensitive browser workspace, then exercises real Runtime HTTP and Chromium. The live fixture qualifies requested handoff → exact durable acknowledgement → wait → takeover; Agent mutation fencing; document focus on the exact task-owned page; exact return; pre-inspection `INSPECTION_REQUIRED`; post-inspection `TARGET_STALE`; same-page identity; voluntary Companion takeover without a synthetic handoff; mutation fencing during human ownership; and return to Agent control. Structured output reported `requestedHandoff`, `voluntaryTakeover`, and `returnFreshness` as qualified on `page_01`.
 
-**Next gate:** compose the real Runtime control evidence with the Task command/continuation path, exact browser foreground request, main/follower agreement, and restart/recovery authority. Do not close MR-020, MR-022, MR-023 or MR-025 from the Runtime-only live harness.
+**Composed evidence:** Task command/continuation recovery, exact Task Runtime authority, projection, main/follower parity and browser-window routing passed 11 files / 95 tests. That suite includes first-observation recovery after awaiting-human persistence, human takeover and Agent return across Desktop/App Server/Runtime restarts; older Task A routing despite newer Task B; exact-generation rejection; and main/follower takeover/return/checking agreement. Runtime/control/task projection coverage separately passed 8 files / 176 tests. `pnpm control:demo` passed repeatedly and includes the full repository build. The first sandboxed focused attempt produced only expected `listen EPERM` and Chromium sandbox launch failures; its permission-correct rerun passed. No external site, real account, preserved home, credential or consequential action was used.
+
+**Verification:** `pnpm check:repository` passed 712 files, 1,303 relative imports and 107 local document links. `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `pnpm test:experiments` (25 tests) passed. Full `pnpm test` passed 202 files / 1,726 tests in 135.63 seconds, including all 22 real process cut-point cases and all 117 Runtime integration cases. No assertion or timeout was weakened.
+
+**Files and compatibility:** qualification changes are limited to `apps/runtime/src/demo/control-demo.ts`, the self-cleaning `experiments/agent-execution/browser-control-live.mjs` launcher, and the root `control:demo` script. No schema, persistence, wire format, provider version or production authority changed. MR-020 and MR-022 are closed. STAB-10's authority portion of MR-023 is closed; STAB-11 retains customer-safe browser recovery/presentation. STAB-10's authority/browser portion of MR-025 is closed; STAB-13 retains combined development-app, accessibility and packaged/native-surface qualification.
+
+**Next handoff:** complete repository verification, commit and push the durable handoff, attempt the stacked PR against `codex/stab09-attention-family-reachability`, and record the final PR boundary. STAB-11 must branch only from that exact final head and consume the established control authority without reopening it.
 
 ## Future ticket rows
 

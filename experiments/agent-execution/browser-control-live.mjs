@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import process from "node:process";
 
 const home = await mkdtemp(join(tmpdir(), "rove-browser-control-"));
 const pnpmScript = process.env.npm_execpath;

@@ -1,7 +1,7 @@
 # ROVE-STAB-10 — Browser task ownership and handoff lifecycle
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** In progress
+**Status:** Complete
 
 **Dependencies:** STAB-02, STAB-03, STAB-06  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`

@@ -19,6 +19,8 @@ Before running the matrix, build the qualification checklist from the continuity
 
 Inherit STAB-09's provider matrix rather than requiring every deterministic request-family fixture to be emitted by the pinned provider. Pinned `0.154.0-alpha.6.2` live evidence covers structured conversational input, file approval and generic command approval; dedicated network context and additional permission are unavailable, while MCP form/URL live evidence comes from candidate `0.155.0-alpha.9.2`. STAB-13 still owns keyboard-only and 820×700 qualification for the supported product presentations and must not reinterpret an unavailable provider family as a failed renderer path.
 
+Inherit STAB-10's qualified browser-control authority rather than reconstructing it: requested and voluntary takeover preserve exact Task/session/page/handoff ownership; Return requires a fresh inspection and rejects stale targets; restart recovery and main/follower projections preserve the same identity. STAB-13 owns the combined development-app, narrow-layout, keyboard, reduced-motion, multi-Task and packaged/native-surface matrix, not another low-level control implementation.
+
 ## Objective
 
 Prove that individually repaired authorities compose into one coherent product.
