@@ -1,7 +1,8 @@
 # ROVE-STAB-02 — Task / Runtime / Codex authority convergence
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** In Progress — read-only diagnosis  
+**Status:** Complete
+
 **Dependencies:** STAB-01  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -38,7 +39,6 @@ The exact implementation baseline is **not** the original planning baseline. At 
 ### First gate
 
 Before production edits, produce a read-only authority trace for at least one affected Task covering Task record → bootstrap identity → Codex thread/session → Runtime inventory/session → browser attachment → handoff/control generation, and identify where the live/persisted chain diverges.
-
 
 ## Invariant
 
@@ -89,6 +89,17 @@ Implementation may now proceed. Do not broaden STAB-02 into STAB-04's general Ru
 Focused identity/reconciler tests → task-runtime control-authority tests → SQLite restart → real Runtime browser session in Agent and Companion → original authority-loss E2E.
 
 Checkpoint before STAB-03.
+
+## Implementation checkpoint
+
+Production implementation is checkpointed at `6758dfb3b47138670e498e6f99c290d1ea919956` on `codex/stab02-authority-convergence`.
+
+- persisted Task workspace migration proves canonical filesystem identity for the exact protected per-Task directory and remains fail-closed for outside, escaped, and unresolved paths;
+- historical completed-handoff reconstruction preserves Runtime client method binding;
+- Runtime inventory events use a Rove-owned monotonic transport position per Runtime host generation, skip unchanged complete truth, and no longer reuse a TaskEngine source coordinate when provider `observationSeq` is unchanged;
+- exact bootstrap-correlated later Tasks can therefore reach the existing `bind_runtime_identity` lifecycle path without adding a Companion-specific authority mechanism.
+
+Focused/affected companion tests, the recovery contract, process-backed recovery, repository checks, typecheck, build, the complete 1,708-test suite, and experiment tests passed. A disposable copy of the preserved 16-Task database cleared all 16 false workspace blockers; its remaining Codex blockers correctly carry into STAB-03. No live provider, credentialed service, packaged app, or human acceptance was claimed.
 
 ## Continuity exit / handoff contract
 

@@ -1,7 +1,8 @@
 # ROVE-STAB-03 — Recovery lifecycle and bounded reconciliation
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Blocked on STAB-02  
+**Status:** Ready
+
 **Dependencies:** STAB-01, STAB-02  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -17,6 +18,16 @@ Do not start from the original recovery hypothesis. Consume the completed STAB-0
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA. Recovery logic must be evaluated against the authority model actually established by STAB-02, not the model assumed when this ticket was first written.
 
+### Concrete STAB-02 handoff
+
+- consume implementation checkpoint `6758dfb3b47138670e498e6f99c290d1ea919956` plus the final STAB-02 handoff/PR head;
+- filesystem aliases that prove the same exact protected per-Task workspace are authoritative, while outside, escaped, or unresolved paths remain blocked;
+- historical request-human reconstruction now preserves exact Runtime client authority;
+- Runtime inventory has its own monotonic transport coordinate and unchanged polls do not append events; do not rebuild recovery around provider `observationSeq`;
+- the preserved 16-Task fixture copy clears all workspace blockers but every Task remains in recovery because of independent `thread_history_reconstructible` blockers;
+- MR-001 now belongs here only for exact Codex blocker creation/clearing, bounded retry/terminal state, safe controls, and unrelated-Task isolation. Do not reopen the three STAB-02 authority roots without contradictory evidence.
+
+First gate: on a fresh disposable copy of the preserved database, map every remaining blocker to the exact diagnostic/event that created it and the exact later evidence that should or should not clear it. Establish a failing case for MR-002 before changing reducer or reconciliation behavior.
 
 ## Invariant
 

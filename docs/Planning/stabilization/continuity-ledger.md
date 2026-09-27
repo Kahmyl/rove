@@ -83,7 +83,7 @@ Its first gate is read-only: trace at least one affected Task across Task record
 
 Do **not** begin with a patch for the unbound callback. Reproduce and trace the entire authority chain first.
 
-### ROVE-STAB-02 — IN PROGRESS — READ-ONLY DIAGNOSIS
+### ROVE-STAB-02 — COMPLETE
 
 **Inherited checkpoint:** STAB-01 merge `0ed941ce1b2f4fd734d2f56aeb136813cbee41d6` plus continuity-process merge `ed156afd0c2874927900279900165b6cae160650`.  
 **Exact ticket start SHA:** `ed156afd0c2874927900279900165b6cae160650`  
@@ -107,7 +107,9 @@ Required reading:
 - corrected `docs/Engineering/implementation-status.md`;
 - responsible Product/Engineering authority documents routed by the Rove engineering skill.
 
-The entry gate is satisfied. Continue read-only diagnosis from the preserved snapshot. Do not modify production source until the Task → Codex → Runtime → browser/handoff authority chain has been traced and the first divergence identified.
+**Implementation checkpoint:** `6758dfb3b47138670e498e6f99c290d1ea919956` (`Converge persisted task runtime authority`).
+**Branch:** `codex/stab02-authority-convergence`.
+**PR:** pending creation against `main`; STAB-03 must record the exact PR/head after creation before its first production edit.
 
 #### Read-only authority evidence — persisted snapshot
 
@@ -183,6 +185,56 @@ Implementation ownership is now:
 
 Generic Runtime transport/backoff/failure-domain hardening beyond the source-coordinate defect remains STAB-04.
 
+#### Implemented invariant and disposition
+
+- Persisted workspace authority now canonicalizes the protected root, exact per-Task directory, and persisted cwd through the filesystem. It accepts an alias only when all resolve to the exact protected child and fails closed for outside paths, symlink escapes, and missing/unresolvable paths. The migration clears only its own exact false-negative blocker after authority is proved.
+- Historical request-human reconstruction now passes a Runtime control-status callback bound to the exact Runtime client instance. A regression Runtime whose method calls `this.request()` proves the production failure mode is closed.
+- Runtime inventory transport now owns a monotonic position within each durable Runtime host generation rather than borrowing the provider domain's `observationSeq`. An unchanged complete Runtime truth is skipped; changed truth receives a new TaskEngine source coordinate even when `observationSeq` is unchanged. TaskEngine's conflicting-coordinate rejection remains unchanged and strict.
+- MR-003, MR-030, and the authority/event-identity portion of MR-031 are closed by executable evidence.
+- MR-001 is narrowed: the workspace blocker is removed, while exact Codex recovery blocker clearing and bounded terminal recovery remain STAB-03.
+- MR-020 and MR-022 are narrowed at their authority roots. Exact handoff reconstruction and later-task Runtime convergence are repaired; real Agent/Companion browser takeover and return remain STAB-10 qualification.
+- The authority portion of MR-023 is repaired. Customer-safe browser recovery/presentation remains STAB-10/STAB-11.
+
+#### Changed boundaries and compatibility
+
+- Production: `sqlite-task-engine-store.ts`, `codex-thread-truth-reconciler.ts`, and `execution-core.ts`.
+- Regression coverage: the matching persisted-store, reconciler, and Runtime-event tests.
+- No schema, wire format, provider version, dependency, or migration identity changed.
+- Existing TaskEngine duplicate/source-coordinate integrity was not weakened.
+- The original acceptance home and preserved baseline were not opened for mutation. A disposable database copy at `/private/tmp/rove-stab02-verify.G1XB1W/task-process.v1.sqlite3` was migrated for qualification only.
+
+#### Verification
+
+- Focused and affected authority/recovery: 116 tests passed across nine companion files.
+- Preserved-fixture copy: 16 Tasks loaded; false workspace blockers fell from 16 to 0; all 16 still projected recovery because the independent Codex blocker lifecycle remains for STAB-03.
+- `pnpm test:recovery:contract`: 63,417 assertions passed.
+- `pnpm test:recovery:processes`: all source-built local recovery scenarios passed; no external services contacted and terminal cleanup reported no stale process, port, profile lock, browser, Runtime session, or cleanup-required Task.
+- `pnpm check:repository`: passed (703 files, 1,293 relative imports, 107 local document links before this handoff edit).
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed through the process-recovery qualification.
+- `pnpm test`: 200 files and 1,708 tests passed after rerunning outside the restricted loopback sandbox. The first sandboxed attempt failed only because local IPC/browser fixture binds were denied.
+- `pnpm test:experiments`: 24 tests passed.
+
+#### Residual gaps and handoff
+
+- No live model, credentialed provider, original acceptance-home relaunch, packaged application, or human acceptance was run. Those evidence classes remain explicitly unqualified.
+- The preserved acceptance home still contains exact `thread_history_reconstructible` blockers. STAB-03 owns why exact later success does not clear the matching older blocker, bounded retry/terminal recovery, preserved safe controls, and multi-Task isolation.
+- STAB-04 still owns generic Runtime permanent/transient failure classification, per-Task failure containment, backoff, observability, and amplification prevention; it must preserve the STAB-02 transport identity.
+- Exact next stop point: create/push the STAB-02 handoff commit and PR, then branch STAB-03 from that exact head.
+- STAB-03 first gate: restart a disposable copy of the preserved database with STAB-02 authority fixes, trace each remaining blocker to its creating and clearing authority, and prove the first stale-success shadow before editing recovery behavior.
+
+### ROVE-STAB-03 — READY
+
+**Dependency state:** STAB-02 implementation checkpoint `6758dfb3b47138670e498e6f99c290d1ea919956`; consume the final pushed handoff/PR head before editing.
+
+**Inherited fixture state:** a disposable preserved-database copy clears all 16 false workspace blockers, while all 16 Tasks retain independent Codex recovery state.
+
+**Owned remaining findings:** MR-001 exact Codex blocker lifecycle and MR-002 stale blocker shadowing.
+
+**First gate:** map every remaining blocker in a fresh disposable fixture copy to its exact creation evidence and matching clearing authority; establish a failing MR-002 case before implementation.
+
+**Non-goals:** do not reopen canonical workspace identity, Runtime callback binding, or Runtime inventory transport identity without contradictory evidence; do not absorb STAB-04 failure taxonomy/backoff.
+
 ## Future ticket rows
 
-ROVE-STAB-03 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
+ROVE-STAB-04 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
