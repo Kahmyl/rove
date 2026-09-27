@@ -591,6 +591,8 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **STAB-13 handoff:** STAB-14 may branch only from the final published STAB-13 continuation head and must preserve the machine/human distinction above. Its first gates are repeated unchanged-code release-suite runs for MR-029 and the complete process/restart/provider/browser/package matrix. STAB-12 elevated execution remains fail-closed behind the provider-owned grant seam, and Windows/Linux packaged process-tree qualification remains open. No PR is merged.
 
+**STAB-13 publication:** machine implementation `64dc6cc` and continuation handoff `ef432a3` are published on `origin/codex/stab13-cross-cutting-qualification`. This is the authorized STAB-14 branch point; it does not represent human acceptance, elevated execution, cross-platform package qualification, market readiness or merge authorization.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
