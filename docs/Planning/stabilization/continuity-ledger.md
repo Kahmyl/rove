@@ -545,7 +545,11 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Preserved reproduction:** the harness is self-cleaning, uses a fresh temporary workspace and delayed local sentinel on every run, requires `ROVE_ALLOW_LIVE_STOP=1`, accepts an explicit executable, records its digest and does not persist account data or command output. The prior local investigation branch/commit remains untouched.
 
-**Next gate:** durably publish this blocked research boundary, then stop for explicit product/architecture authority. Do not implement an executor, weaken the customer contract, or advance STAB-13 as though the market-readiness blocker were resolved without that decision.
+**Durable blocked handoff:** `1b4bf15` (`Record hard stop authority blocker`) is pushed on `codex/stab12-hard-stop-provider-qualification`.
+
+**PR boundary:** the authorized stacked PR attempt against `codex/stab11-browser-resource-surface-ux` failed with GitHub GraphQL `must be a collaborator`. No PR was created and nothing was merged.
+
+**Next gate:** commit and push this PR-tooling record, then stop for explicit product/architecture authority. Do not implement an executor, weaken the customer contract, or advance STAB-13 as though the market-readiness blocker were resolved without that decision.
 
 ## Future ticket rows
 
