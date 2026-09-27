@@ -17,6 +17,7 @@ This ticket consumes the merged outputs and residual limitations of all repaired
 
 Before running the matrix, build the qualification checklist from the continuity ledger's actual end states. If a new defect appears, assign a new MR ID and route it back to its owning ticket/family rather than fixing it invisibly inside STAB-13.
 
+Inherit STAB-09's provider matrix rather than requiring every deterministic request-family fixture to be emitted by the pinned provider. Pinned `0.154.0-alpha.6.2` live evidence covers structured conversational input, file approval and generic command approval; dedicated network context and additional permission are unavailable, while MCP form/URL live evidence comes from candidate `0.155.0-alpha.9.2`. STAB-13 still owns keyboard-only and 820×700 qualification for the supported product presentations and must not reinterpret an unavailable provider family as a failed renderer path.
 
 ## Objective
 
