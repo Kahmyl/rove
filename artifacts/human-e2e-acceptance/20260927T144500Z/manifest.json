@@ -1,0 +1,1478 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260927T144500Z",
+  "generatedAt": "2026-09-27T18:15:22.092Z",
+  "conclusion": "RECORDED E2E ACCEPTANCE: PARTIAL",
+  "humanReview": "PENDING",
+  "scopeStatement": "Evidence distinguishes deterministic presentation, real development app, real packaged app, machine/process evidence, and blocked native full-surface capture. PASS never upgrades presentation-only evidence into live-provider or native-browser acceptance.",
+  "environment": {
+    "gitBranch": "codex/stab14-market-release-qualification",
+    "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+    "operatingSystem": "macOS 26.5.1 (25F80), arm64",
+    "applicationVersion": "0.1.0",
+    "electronVersion": "37.10.3",
+    "playwrightDeclaredVersion": "^1.54.2",
+    "selectedProviderVersion": "0.155.0-alpha.9.2",
+    "selectedProviderSha256": "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9",
+    "package": "release/artifacts/mac-arm64/Rove.app (unsigned darwin/arm64)",
+    "screenRecordingPermission": false
+  },
+  "summaryCounts": {
+    "PASS": 37,
+    "UNQUALIFIED": 6,
+    "BLOCKED": 1
+  },
+  "verification": [
+    {
+      "command": "pnpm customer-journey:conversation-task",
+      "result": "PASS",
+      "detail": "28 screenshots"
+    },
+    {
+      "command": "pnpm surface:native-foreground",
+      "result": "PASS",
+      "detail": "native browser process, exact page, unrelated-foreground revocation, and owned-browser recovery qualified"
+    },
+    {
+      "command": "pnpm surface:packaged-critical",
+      "result": "PASS",
+      "detail": "real unsigned mac-arm64 package; live attention and browser/follower correctly reported not exercised"
+    },
+    {
+      "command": "pnpm agent:command-exec-stop",
+      "result": "PASS",
+      "detail": "selected provider exact Stop, final exit, unrelated-process survival, owner-crash suppression; elevated grant remained fail-closed"
+    },
+    {
+      "command": "pnpm agent:attention-boundary",
+      "result": "PASS",
+      "detail": "isolated unauthenticated App Server; MCP direct calls correctly auto-declined without application-client request"
+    },
+    {
+      "command": "pnpm test:recovery:processes",
+      "result": "PASS",
+      "detail": "all restart/recovery scenarios; zero stale children, ports, locks, browser attachments, or nonterminal sessions"
+    },
+    {
+      "command": "pnpm check:repository",
+      "result": "PASS",
+      "detail": "722 files, 1,318 relative imports, 113 local document links"
+    },
+    {
+      "command": "pnpm test:release",
+      "result": "PASS",
+      "detail": "203 files, 1,737 tests, 122.01 seconds"
+    }
+  ],
+  "videos": [
+    {
+      "filename": "final-composition.mov",
+      "sha256": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "filename": "full-walkthrough.mov",
+      "sha256": "d5cb5a10292729d377cc410344e9a20ffee1cb710753b0d705b09b005ecaa7eb"
+    },
+    {
+      "filename": "packaged-composition.mov",
+      "sha256": "3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2"
+    },
+    {
+      "filename": "stage-1-conversation-presentation.mov",
+      "sha256": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "filename": "stage-2-attention-approvals.mov",
+      "sha256": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "filename": "stage-3-browser-collaboration.mov",
+      "sha256": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "filename": "stage-4-pre.mov",
+      "sha256": "c6ba71626aff36c5cc42ed161fe9661bf400774dad1ebecaca8ca77fb55c3671"
+    },
+    {
+      "filename": "stage-4-restart-recovery.mov",
+      "sha256": "fda74e069614e04c886d0c8cd8770b35218d55c2926d46cdd75c3f8056f4b420"
+    },
+    {
+      "filename": "stage-4-restart.mov",
+      "sha256": "09ec9c6456114f1aa896885bf99bb7f7e7f79dbfdfaa4f4cf11c90626b809cef"
+    }
+  ],
+  "steps": [
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-01",
+      "description": "New Task and Send",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Accepted instruction is immediate, final-positioned, and has no bootstrap narration.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 5255,
+        "endMs": 7255,
+        "display": "00:05–00:07"
+      },
+      "screenshots": [
+        "screenshots/stage-1-01-new-task-and-send.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-02",
+      "description": "Working",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Sustained work is visibly open after startup without a mechanism flash.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Working for 58m 46s + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 9416,
+        "endMs": 11416,
+        "display": "00:09–00:11"
+      },
+      "screenshots": [
+        "screenshots/stage-1-02-working.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-03",
+      "description": "Semantic activity",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Commentary and semantic activities remain distinct without raw Runtime names.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Working for 58m 50s I’m comparing the evidence and checking the most important differences. ✓ Read information ✓ Made a change Running a local operation Verifying the result — checking outcome Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 13542,
+        "endMs": 15542,
+        "display": "00:13–00:15"
+      },
+      "screenshots": [
+        "screenshots/stage-1-03-semantic-activity.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-04",
+      "description": "Queue",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Ordinary active Send creates one queued message object outside the transcript.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Working for 58m 56s I’m comparing the evidence and checking the most important differences. ✓ Read information ✓ Made a change Running a local operation Verifying the result — checking outcome Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More Add a readable queued follow-up Steer Delete More + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 19208,
+        "endMs": 21208,
+        "display": "00:19–00:21"
+      },
+      "screenshots": [
+        "screenshots/stage-1-04-queue.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-05",
+      "description": "Queue controls",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Edit is durable and the queue controls remain attached to the exact object.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Working for 59m 8s I’m comparing the evidence and checking the most important differences. ✓ Read information ✓ Made a change Running a local operation Verifying the result — checking outcome Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More Edited queued follow-up Steer Delete More + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 31545,
+        "endMs": 33545,
+        "display": "00:31–00:33"
+      },
+      "screenshots": [
+        "screenshots/stage-1-05-queue-controls.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-06",
+      "description": "Steer",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Exactly the queued instruction becomes one accepted intervention.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Working for 59m 14s I’m comparing the evidence and checking the most important differences. ✓ Read information ✓ Made a change Running a local operation Verifying the result — checking outcome Edited queued follow-up Working for 1s Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 36618,
+        "endMs": 38618,
+        "display": "00:36–00:38"
+      },
+      "screenshots": [
+        "screenshots/stage-1-06-steer.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-07",
+      "description": "Stop transition",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The same execution settles Stopped while queued material remains; the 80 ms deterministic Stopping state is not claimed as human-readable video evidence.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM ✓ Stopped for 0s 3:56 PM Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Stopped R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "UNQUALIFIED",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 43608,
+        "endMs": 45608,
+        "display": "00:43–00:45"
+      },
+      "screenshots": [
+        "screenshots/stage-1-07-stop-transition.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-08",
+      "description": "Terminal presentation",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Terminal work auto-compacts, reopens manually, and preserves final-answer position.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM ✓ Worked for 9s 1:00 PM I’m comparing the evidence and checking the most important differences. ✓ Read information ✓ Made a change Running a local operation Verifying the result — checking outcome The recommendation is ready. Option A best matches the stated constraints. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 50475,
+        "endMs": 52475,
+        "display": "00:50–00:52"
+      },
+      "screenshots": [
+        "screenshots/stage-1-08-terminal-presentation.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-09",
+      "description": "Reading position and Latest",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "New activity does not steal an upward reading position and Latest is available.",
+      "observed": "Rove Xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… Codex ready ••• xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 59220,
+        "endMs": 61220,
+        "display": "00:59–01:01"
+      },
+      "screenshots": [
+        "screenshots/stage-1-09-reading-position-and-latest.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-10",
+      "description": "Latest resumes follow",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Latest returns to the bottom and normal follow resumes.",
+      "observed": "Rove Xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… Codex ready ••• xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 64229,
+        "endMs": 66229,
+        "display": "01:04–01:06"
+      },
+      "screenshots": [
+        "screenshots/stage-1-10-latest-resumes-follow.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-11",
+      "description": "Ordinary failure",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Definite ordinary failure is presented as Couldn't continue.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM ✓ Couldn't continue for 9s 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Couldn't Continue R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 72910,
+        "endMs": 74910,
+        "display": "01:12–01:14"
+      },
+      "screenshots": [
+        "screenshots/stage-1-11-ordinary-failure.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-12",
+      "description": "Consequential uncertainty",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Outcome unclear remains distinct and offers no unsafe generic retry.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM ✓ Couldn't continue for 9s 1:00 PM Outcome unclear Rove could not confirm what happened. It will not repeat the affected action automatically. + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 79775,
+        "endMs": 81775,
+        "display": "01:19–01:21"
+      },
+      "screenshots": [
+        "screenshots/stage-1-12-consequential-uncertainty.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 1",
+      "stepId": "stage-1-13",
+      "description": "Multi-Task switching",
+      "sourceChecklistOrReference": [
+        "artifacts/customer-journeys/conversation-task-rendered-qualification/manual-acceptance.md",
+        "docs/Planning/stabilization/acceptance-baseline-2026-09-26.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "A remains Working, B retains Needs input, and C stays selected without authority transfer.",
+      "observed": "Rove Keep the completed notes available Codex ready ••• Keep the completed notes available. 1:00 PM The recommendation is ready. Option A best matches the stated constraints. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-1-conversation-presentation.mov",
+      "timestamps": {
+        "startMs": 86653,
+        "endMs": 88653,
+        "display": "01:26–01:28"
+      },
+      "screenshots": [
+        "screenshots/stage-1-13-multi-task-switching.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-1-conversation-presentation.mov.steps.json",
+        "traces/stage-1-conversation-presentation.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ab1e061e3ae0b8c8b13f94d64ec70b11aaa7a6a45b19f3b848437a62365156cf"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-14",
+      "description": "Conversational structured input",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. Who should receive the summary? Audience 1 Leadership A concise decision summary. 2 Product team Detail and supporting evidence. Something else Send ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 9730,
+        "endMs": 11730,
+        "display": "00:09–00:11"
+      },
+      "screenshots": [
+        "screenshots/stage-2-01-conversational-structured-input.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-15",
+      "description": "Command approval",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Approve local command Review the command and choose whether Rove may run it. Command: Generate the local report Approve once Allows only this command request. Approve for session Applies for the current Codex session. Approve and update command policy Approves this request and persists this command policy: allow Generate the local report. Decline Does not allow this command request. + / Agent Approve for me Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 16628,
+        "endMs": 18628,
+        "display": "00:16–00:18"
+      },
+      "screenshots": [
+        "screenshots/stage-2-02-command-approval.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-16",
+      "description": "File-change approval",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Approve file change Review the proposed file change before Rove continues. File: qualification-report.md Approve once Decline + / Agent Approve for me Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 23498,
+        "endMs": 25498,
+        "display": "00:23–00:25"
+      },
+      "screenshots": [
+        "screenshots/stage-2-03-file-change-approval.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-17",
+      "description": "Network approval",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Allow network access Choose whether Rove may use the requested network access. Host: example.test Approve once Decline + / Agent Approve for me Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "UNQUALIFIED",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 30393,
+        "endMs": 32393,
+        "display": "00:30–00:32"
+      },
+      "screenshots": [
+        "screenshots/stage-2-04-network-approval.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-18",
+      "description": "Additional-permission approval",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Allow access for this task Choose whether to grant this permission for the current work. Permission: Read the selected folder Allow Deny + / Agent Approve for me Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "UNQUALIFIED",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 37275,
+        "endMs": 39275,
+        "display": "00:37–00:39"
+      },
+      "screenshots": [
+        "screenshots/stage-2-05-additional-permission-approval.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-19",
+      "description": "MCP structured form",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Complete connection details A connected service needs these non-sensitive fixture values. Workspace Fixture secret Submit Decline Cancel ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 44168,
+        "endMs": 46168,
+        "display": "00:44–00:46"
+      },
+      "screenshots": [
+        "screenshots/stage-2-06-mcp-structured-form.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-20",
+      "description": "MCP trusted URL",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The exact request family is keyboard reachable, focus-visible, Task-bound, and fully contained at 820×700.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Connect the fixture account Open the trusted fixture page to continue. Open secure page Continue Decline Cancel ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 51052,
+        "endMs": 53052,
+        "display": "00:51–00:53"
+      },
+      "screenshots": [
+        "screenshots/stage-2-07-mcp-trusted-url.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-21",
+      "description": "Command decisions at normal width",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Approve-once, session/policy scope, and Decline consequences are readable.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Approve local command Review the command and choose whether Rove may run it. Command: Generate the local report Approve once Allows only this command request. Approve for session Applies for the current Codex session. Approve and update command policy Approves this request and persists this command policy: allow Generate the local report. Decline Does not allow this command request. + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 59748,
+        "endMs": 61748,
+        "display": "00:59–01:01"
+      },
+      "screenshots": [
+        "screenshots/stage-2-08-command-decisions-at-normal-width.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-22",
+      "description": "Exactly-once decision submission",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Decision controls enter the submitting/disabled state after one invocation.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. INPUT NEEDED Approve local command Submitting your response… Command: Generate the local report Submitting your response… + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Needs Input R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 64825,
+        "endMs": 66825,
+        "display": "01:04–01:06"
+      },
+      "screenshots": [
+        "screenshots/stage-2-09-exactly-once-decision-submission.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-23",
+      "description": "Background Needs Input",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Only Task B advertises Needs input while Task C remains selected and usable.",
+      "observed": "Rove Keep the completed notes available Codex ready ••• Keep the completed notes available. 1:00 PM The recommendation is ready. Option A best matches the stated constraints. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 71730,
+        "endMs": 73730,
+        "display": "01:11–01:13"
+      },
+      "screenshots": [
+        "screenshots/stage-2-10-background-needs-input.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 2",
+      "stepId": "stage-2-24",
+      "description": "Owning Task restoration",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-09-attention-family-reachability.md",
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Returning restores the same request once without stealing selection or authority.",
+      "observed": "Rove Prepare the launch summary Codex ready ••• Prepare the launch summary. 1:00 PM Waiting for you · 0s worked Who should receive the summary? Audience 1 Leadership A concise decision summary. 2 Product team Detail and supporting evidence. Something else Send ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-2-attention-approvals.mov",
+      "timestamps": {
+        "startMs": 76801,
+        "endMs": 78801,
+        "display": "01:16–01:18"
+      },
+      "screenshots": [
+        "screenshots/stage-2-11-owning-task-restoration.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-2-attention-approvals.mov.steps.json",
+        "traces/stage-2-attention-approvals.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "b8ac47293d6f1b7c4be7086f4b492a09727fb4ac7070b0a0ffa77a7a42a9922c"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-25",
+      "description": "Unmaterialized New Task",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "No misleading Browser attachment is shown before Task materialization.",
+      "observed": "Rove New task Codex ready ••• NEW TASK What would you like to get done? + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Working R Rove profile Local profile",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 3278,
+        "endMs": 5278,
+        "display": "00:03–00:05"
+      },
+      "screenshots": [
+        "screenshots/stage-3-01-unmaterialized-new-task.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-26",
+      "description": "Requested Agent handoff",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Waiting for you, exact owner identity, and Take Over are visible together.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM Waiting for you · 0s worked I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION Waiting for you Confirm the delivery address before Rove continues. Take Over + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission Needs Input R Rove profile Local profile Browser Qualification browser Awaiting handoff View Browser Take Over Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 10150,
+        "endMs": 12150,
+        "display": "00:10–00:12"
+      },
+      "screenshots": [
+        "screenshots/stage-3-02-requested-agent-handoff.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-27",
+      "description": "Human control",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "You're in control is explicit and remains bound to the exact Task.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM You're in control · 0s worked I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION You're in control Complete the browser step, then return control so Rove can continue. Return to Rove + / Agent Approve for me ✦ Codex Medium ▶ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission You're In Control R Rove profile Local profile Browser Qualification browser You View Browser Return to Rove Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 15193,
+        "endMs": 17193,
+        "display": "00:15–00:17"
+      },
+      "screenshots": [
+        "screenshots/stage-3-03-human-control.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-28",
+      "description": "Return and Checking",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Return to Rove enters fresh Checking before agent work resumes.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM Working for 62m 9s I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION Checking the page… Rove is checking the page before continuing. + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission Checking State R Rove profile Local profile Browser Qualification browser Agent View Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 20262,
+        "endMs": 22262,
+        "display": "00:20–00:22"
+      },
+      "screenshots": [
+        "screenshots/stage-3-04-return-and-checking.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-29",
+      "description": "Companion voluntary takeover",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Take Over is offered without fabricating a requested handoff.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM Working for 62m 16s I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION Rove controls the browser You can take over this Task's browser whenever you need to. Take Over + / Companion Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission Working R Rove profile Local profile Browser Qualification browser Agent View Browser Take Over Recording Companion",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 27099,
+        "endMs": 29099,
+        "display": "00:27–00:29"
+      },
+      "screenshots": [
+        "screenshots/stage-3-05-companion-voluntary-takeover.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-30",
+      "description": "Companion human ownership",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Voluntary takeover reaches truthful human ownership.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM You're in control · 0s worked I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION You're in control Complete the browser step, then return control so Rove can continue. Return to Rove + / Agent Approve for me ✦ Codex Medium ▶ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission You're In Control R Rove profile Local profile Browser Qualification browser You View Browser Return to Rove Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 32118,
+        "endMs": 34118,
+        "display": "00:32–00:34"
+      },
+      "screenshots": [
+        "screenshots/stage-3-06-companion-human-ownership.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-31",
+      "description": "Authority leak check",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Browser/attention state stays on owning rows when an unrelated Task is selected.",
+      "observed": "Rove Keep the completed notes available Codex ready ••• Keep the completed notes available. 1:00 PM The recommendation is ready. Option A best matches the stated constraints. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "stage-3-browser-collaboration.mov",
+      "timestamps": {
+        "startMs": 39002,
+        "endMs": 41002,
+        "display": "00:39–00:41"
+      },
+      "screenshots": [
+        "screenshots/stage-3-07-authority-leak-check.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/stage-3-browser-collaboration.mov.steps.json",
+        "traces/stage-3-browser-collaboration.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "35700bb24ec454ca3cc17194f44dba73b17fa9f23f716c9aef36a9090706a49d"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-32",
+      "description": "Two Tasks and background attention",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Active and Needs Input states remain on their owning Tasks during switching.",
+      "observed": "Rove Keep the completed notes available Codex ready ••• Keep the completed notes available. 1:00 PM The recommendation is ready. Option A best matches the stated constraints. 1:00 PM + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 7958,
+        "endMs": 9958,
+        "display": "00:07–00:09"
+      },
+      "screenshots": [
+        "screenshots/composition-01-two-tasks-and-background-attention.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-33",
+      "description": "Narrow keyboard attention",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "The request is focus-visible and contained at 820×700 with reduced motion.",
+      "observed": "Rove Prepare the launch summary Codex ready ••• Prepare the launch summary. 1:00 PM Waiting for you · 0s worked Who should receive the summary? Audience 1 Leadership A concise decision summary. 2 Product team Detail and supporting evidence. Something else Send ＋ New task WORKFLOWS ＋ TASK HISTORY Keep the completed notes available Prepare the launch summary Needs Input Analyze the interview themes Working R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 14865,
+        "endMs": 16865,
+        "display": "00:14–00:16"
+      },
+      "screenshots": [
+        "screenshots/composition-02-narrow-keyboard-attention.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-34",
+      "description": "Stop composition",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Stop settles Stopped while the deterministic 80 ms Stopping transition remains visually unqualified.",
+      "observed": "Rove Review the customer evidence and prepare a concise… Codex ready ••• Review the customer evidence and prepare a concise recommendation. 1:00 PM ✓ Stopped for 0s 4:00 PM Add a short executive summary and keep the evidence links. Steer Delete More Then compare the implementation cost in a table. Steer Delete More + / Agent Approve for me ✦ Codex Medium ↑ ＋ New task WORKFLOWS ＋ TASK HISTORY Review the customer evidence and prepare a concise… Stopped R Rove profile Local profile Browser No browser attached A browser can be attached to this exact task on demand. Open Browser Recording Agent",
+      "result": "UNQUALIFIED",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 23702,
+        "endMs": 25702,
+        "display": "00:23–00:25"
+      },
+      "screenshots": [
+        "screenshots/composition-03-stop-composition.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-35",
+      "description": "Browser takeover composition",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Human ownership is explicit and Task-bound.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM You're in control · 0s worked I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION You're in control Complete the browser step, then return control so Rove can continue. Return to Rove + / Agent Approve for me ✦ Codex Medium ▶ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission You're In Control R Rove profile Local profile Browser Qualification browser You View Browser Return to Rove Recording Agent",
+      "result": "PASS",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 33298,
+        "endMs": 35298,
+        "display": "00:33–00:35"
+      },
+      "screenshots": [
+        "screenshots/composition-04-browser-takeover-composition.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-36",
+      "description": "Browser return composition",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Fresh Checking precedes resumed authority.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM Working for 63m 14s I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION Checking the page… Rove is checking the page before continuing. + / Agent Approve for me ✦ Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission Checking State R Rove profile Local profile Browser Qualification browser Agent View Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 38347,
+        "endMs": 40347,
+        "display": "00:38–00:40"
+      },
+      "screenshots": [
+        "screenshots/composition-05-browser-return-composition.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Composition",
+      "stepId": "composition-37",
+      "description": "Repeated narrow composition",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "deterministic_presentation",
+      "expected": "Representative browser state remains contained at 820×700.",
+      "observed": "Rove Check the order and stop before the final submission Codex ready ••• Check the order and stop before the final submission. 1:00 PM Working for 63m 18s I’m comparing the evidence and checking the most important differences. BROWSER COLLABORATION Checking the page… Rove is checking the page before continuing. + / Agent Approve for me Codex Medium ■ ＋ New task WORKFLOWS ＋ TASK HISTORY Check the order and stop before the final submission Checking State R Rove profile Local profile Browser Qualification browser Agent View Browser Recording Agent",
+      "result": "PASS",
+      "videoFilename": "final-composition.mov",
+      "timestamps": {
+        "startMs": 42442,
+        "endMs": 44442,
+        "display": "00:42–00:44"
+      },
+      "screenshots": [
+        "screenshots/composition-06-repeated-narrow-composition.png"
+      ],
+      "traceOrLogReferences": [
+        "logs/final-composition.mov.steps.json",
+        "traces/final-composition.trace.zip"
+      ],
+      "authoritativeStateEvidence": "Production renderer projection fixture; presentation evidence only. It does not establish live provider, process, browser, or operating-system authority.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "human-paced pointer and keyboard automation at 1x playback",
+      "evidenceHash": "ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55"
+    },
+    {
+      "stage": "Stage 3",
+      "stepId": "stage-3-native-full-surface-capture",
+      "description": "Native browser handoff, unrelated foreground application, companion/follower and authority revocation on the complete desktop surface",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "native_application",
+      "expected": "Native browser handoff, unrelated foreground application, companion/follower and authority revocation on the complete desktop surface",
+      "observed": "Operating-system screen-recording preflight returned false; screencapture produced no file. The deterministic renderer video is not substituted for native surface proof.",
+      "result": "BLOCKED",
+      "videoFilename": null,
+      "timestamps": null,
+      "screenshots": [],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Operating-system screen-recording preflight returned false; screencapture produced no file. The deterministic renderer video is not substituted for native surface proof.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "native OS input and full-surface capture",
+      "evidenceHash": null
+    },
+    {
+      "stage": "Stage 4",
+      "stepId": "stage-4-pre-restart-persistence",
+      "description": "Persisted conversation and task switching before restart",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "development_app",
+      "expected": "Persisted conversation and task switching before restart",
+      "observed": "Real development Electron main process with production-format SQLite state in a temporary persistent home.",
+      "result": "PASS",
+      "videoFilename": "stage-4-pre.mov",
+      "timestamps": {
+        "display": "00:00–00:24"
+      },
+      "screenshots": [
+        "screenshots/stage-4-pre-restart.png"
+      ],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Real development Electron main process with production-format SQLite state in a temporary persistent home.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "CDP-injected pointer/keyboard with real app main process",
+      "evidenceHash": "c6ba71626aff36c5cc42ed161fe9661bf400774dad1ebecaca8ca77fb55c3671"
+    },
+    {
+      "stage": "Stage 4",
+      "stepId": "stage-4-restart-same-home",
+      "description": "Relaunch against the same home and restore persisted task state without stale attention",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "development_app",
+      "expected": "Relaunch against the same home and restore persisted task state without stale attention",
+      "observed": "Real development Electron main process and managed services were stopped and relaunched against the identical temporary home.",
+      "result": "PASS",
+      "videoFilename": "stage-4-restart-recovery.mov",
+      "timestamps": {
+        "display": "00:24–00:49"
+      },
+      "screenshots": [
+        "screenshots/stage-4-post-restart.png",
+        "screenshots/stage-4-restart-recovery-contact-sheet.png"
+      ],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Real development Electron main process and managed services were stopped and relaunched against the identical temporary home.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "CDP-injected pointer/keyboard with real app main process",
+      "evidenceHash": "fda74e069614e04c886d0c8cd8770b35218d55c2926d46cdd75c3f8056f4b420"
+    },
+    {
+      "stage": "Stage 4",
+      "stepId": "stage-4-startup-hydration",
+      "description": "Capture initial launch, hydration, loading, active work, waiting, browser authority, Stop, and failure recovery continuously",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md",
+        "docs/Planning/stabilization/continuity-ledger.md"
+      ],
+      "mode": "development_app",
+      "expected": "Capture initial launch, hydration, loading, active work, waiting, browser authority, Stop, and failure recovery continuously",
+      "observed": "Renderer capture could attach only after managed Runtime/Codex startup and second-instance activation; the complete launch interval and all requested state families were not captured.",
+      "result": "UNQUALIFIED",
+      "videoFilename": "stage-4-restart-recovery.mov",
+      "timestamps": null,
+      "screenshots": [],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Renderer capture could attach only after managed Runtime/Codex startup and second-instance activation; the complete launch interval and all requested state families were not captured.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "1180x780",
+      "inputMode": "CDP video capture after renderer availability",
+      "evidenceHash": "fda74e069614e04c886d0c8cd8770b35218d55c2926d46cdd75c3f8056f4b420"
+    },
+    {
+      "stage": "Packaged",
+      "stepId": "packaged-packaged-persistence",
+      "description": "Launch the real packaged application with production-format state and preserve persisted conversation/task switching",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "packaged_app",
+      "expected": "Launch the real packaged application with production-format state and preserve persisted conversation/task switching",
+      "observed": "Real release/artifacts/mac-arm64/Rove.app main process; no fixture injection into the package.",
+      "result": "PASS",
+      "videoFilename": "packaged-composition.mov",
+      "timestamps": {
+        "display": "00:00–00:24"
+      },
+      "screenshots": [
+        "screenshots/packaged-persisted-task.png",
+        "screenshots/packaged-composition-contact-sheet.png"
+      ],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Real release/artifacts/mac-arm64/Rove.app main process; no fixture injection into the package.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700 and 1180x780",
+      "inputMode": "CDP-injected pointer/keyboard with real packaged main process",
+      "evidenceHash": "3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2"
+    },
+    {
+      "stage": "Packaged",
+      "stepId": "packaged-packaged-narrow-focus",
+      "description": "Narrow-width keyboard focus and reconciled Stop presentation",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "packaged_app",
+      "expected": "Narrow-width keyboard focus and reconciled Stop presentation",
+      "observed": "Real packaged app at 820x700; stale provider attention was rejected and Stop presentation derived from reconciled task state.",
+      "result": "PASS",
+      "videoFilename": "packaged-composition.mov",
+      "timestamps": {
+        "display": "00:00–00:24"
+      },
+      "screenshots": [
+        "screenshots/packaged-narrow-focus.png"
+      ],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Real packaged app at 820x700; stale provider attention was rejected and Stop presentation derived from reconciled task state.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700 and 1180x780",
+      "inputMode": "keyboard and pointer",
+      "evidenceHash": "3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2"
+    },
+    {
+      "stage": "Packaged",
+      "stepId": "packaged-packaged-live-composition",
+      "description": "Live provider attention, task-bound browser/follower, authentication, outage, and OS-permission recovery in the packaged application",
+      "sourceChecklistOrReference": [
+        "docs/Planning/stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md",
+        "docs/Planning/stabilization/ROVE-STAB-14-market-release-qualification.md"
+      ],
+      "mode": "packaged_app",
+      "expected": "Live provider attention, task-bound browser/follower, authentication, outage, and OS-permission recovery in the packaged application",
+      "observed": "Not exercised without live provider requests, credentials, or an authoritative live browser binding; package is unsigned darwin/arm64.",
+      "result": "UNQUALIFIED",
+      "videoFilename": "packaged-composition.mov",
+      "timestamps": null,
+      "screenshots": [],
+      "traceOrLogReferences": [],
+      "authoritativeStateEvidence": "Not exercised without live provider requests, credentials, or an authoritative live browser binding; package is unsigned darwin/arm64.",
+      "gitSha": "42952a2bce699cee299a2bca6315d95d6181b54f",
+      "providerVersion": "0.155.0-alpha.9.2",
+      "viewport": "820x700 and 1180x780",
+      "inputMode": "not exercised",
+      "evidenceHash": "3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2"
+    }
+  ],
+  "residualGates": [
+    "Native full-desktop browser/follower/unrelated-application recording requires macOS Screen Recording permission.",
+    "Live provider network and additional-permission request families remain unavailable; live-family reachability remains governed by the STAB-09 matrix.",
+    "Live packaged provider attention and task-bound browser/follower composition were not exercised.",
+    "Complete initial-launch hydration, outage, authentication, and OS-permission recovery were not continuously recorded.",
+    "The package is unsigned darwin/arm64; representative Windows/Linux process trees and distribution signing/notarization remain open.",
+    "Human review of the recorded evidence remains pending."
+  ]
+}
