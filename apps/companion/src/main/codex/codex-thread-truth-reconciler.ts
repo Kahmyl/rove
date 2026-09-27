@@ -88,7 +88,7 @@ export class CodexThreadTruthReconciler {
             turnId: turn.id,
             item: value,
             boundRuntimeSessionId: aggregate.record?.identity.sessionId,
-            getControlStatus: this.runtime.getControlStatus,
+            getControlStatus: this.runtime.getControlStatus?.bind(this.runtime),
           },
           composeCompletedRequestHumanHandoff,
         );

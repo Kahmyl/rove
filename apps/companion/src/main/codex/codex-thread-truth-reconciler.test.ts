@@ -53,23 +53,31 @@ describe("Codex thread truth reconciliation", () => {
     });
     ingress.replaceGeneration(1);
     const acknowledgeDurableHandoff = vi.fn(async () => ({}));
-    const reconciler = new CodexThreadTruthReconciler(
-      new CodexThreadSessionSupervisor(rpc),
-      store,
-      ingress,
-      {
-        getControlStatus: async () => ({
+    class BoundRuntime {
+      readonly acknowledgeDurableHandoff = acknowledgeDurableHandoff;
+
+      private async request() {
+        return {
           sessionId,
           generation: 2,
-          status: "awaiting_human",
+          status: "awaiting_human" as const,
           controller: null,
           activeHandoffId: handoffId,
           activeHandoffGeneration: 2,
           observationSeq: 9,
           updatedAt: "2026-09-19T00:00:00.000Z",
-        }),
-        acknowledgeDurableHandoff,
-      } as never,
+        };
+      }
+
+      getControlStatus() {
+        return this.request();
+      }
+    }
+    const reconciler = new CodexThreadTruthReconciler(
+      new CodexThreadSessionSupervisor(rpc),
+      store,
+      ingress,
+      new BoundRuntime() as never,
       () => 1,
     );
 

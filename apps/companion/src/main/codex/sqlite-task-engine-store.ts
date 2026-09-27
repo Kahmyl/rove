@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 
 import Database from "better-sqlite3";
 import type {
@@ -56,6 +56,26 @@ const RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID =
   "0006_atomically_consume_selected_results";
 const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
+const OUTSIDE_PROTECTED_TASK_WORKSPACE =
+  "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+
+function hasCanonicalTaskWorkspaceAuthority(
+  cwd: string,
+  taskWorkspaceRoot: string,
+  taskId: string,
+): boolean {
+  try {
+    const canonicalRoot = realpathSync.native(taskWorkspaceRoot);
+    const canonicalExpected = realpathSync.native(join(canonicalRoot, taskId));
+    const canonicalPersisted = realpathSync.native(cwd);
+    return (
+      dirname(canonicalExpected) === canonicalRoot &&
+      canonicalPersisted === canonicalExpected
+    );
+  } catch {
+    return false;
+  }
+}
 
 function json(value: unknown): string {
   return JSON.stringify(value);
@@ -288,14 +308,18 @@ export class SqliteTaskEngineStore
           )
             item.phase = event.item.phase;
         }
-        if (
-          aggregate.launch &&
-          this.taskWorkspaceRoot &&
-          resolve(aggregate.launch.cwd) !==
-            resolve(join(this.taskWorkspaceRoot, aggregate.taskId))
-        )
-          aggregate.recoveryRequired =
-            "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+        if (aggregate.launch && this.taskWorkspaceRoot) {
+          if (
+            hasCanonicalTaskWorkspaceAuthority(
+              aggregate.launch.cwd,
+              this.taskWorkspaceRoot,
+              aggregate.taskId,
+            )
+          ) {
+            if (aggregate.recoveryRequired === OUTSIDE_PROTECTED_TASK_WORKSPACE)
+              aggregate.recoveryRequired = null;
+          } else aggregate.recoveryRequired = OUTSIDE_PROTECTED_TASK_WORKSPACE;
+        }
         this.db
           .prepare(
             "UPDATE task_engine_aggregate SET schema_version = ?, payload_json = ? WHERE task_id = ?",

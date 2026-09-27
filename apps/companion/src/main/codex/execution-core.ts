@@ -130,6 +130,10 @@ export function runtimeInventoryEventId(
   return `runtime:${taskId}:${generation}:${position}:${fingerprint}`;
 }
 
+export function runtimeInventorySourceId(runtimeIdentity: string): string {
+  return `inventory:${runtimeIdentity}`;
+}
+
 /** Sole production composition root for the event-sourced task engine. */
 export class CodexExecutionCore {
   readonly host: CodexAppServerHost;
@@ -143,6 +147,7 @@ export class CodexExecutionCore {
   private reconciler: CodexThreadTruthReconciler | undefined;
   private readonly reconciliationByTask = new Map<string, Promise<void>>();
   private recoveryWarnings: string[] = [];
+  private runtimeObservationPosition = 0;
   private connectionGeneration = 0;
   private connectionId: string | undefined;
   private codexPosition = 0;
@@ -198,6 +203,7 @@ export class CodexExecutionCore {
     this.store = store;
     this.connectionGeneration = store.nextHostGeneration("codex");
     this.runtimeGeneration = store.nextHostGeneration("runtime");
+    this.runtimeObservationPosition = 0;
     const engine = new TaskEngine(store);
     let rpc;
     try {
@@ -833,6 +839,7 @@ export class CodexExecutionCore {
     } else {
       this.runtimeGeneration =
         this.store?.nextHostGeneration("runtime") ?? this.runtimeGeneration + 1;
+      this.runtimeObservationPosition = 0;
       await this.enqueueGenerationFacts("runtime", this.runtimeGeneration);
     }
     if (source === "Desktop startup" || source.includes("App Server"))
@@ -1146,35 +1153,38 @@ export class CodexExecutionCore {
               recovery: "cleanup_required",
             };
         const fingerprint = digest(runtime);
-        const position = control?.observationSeq ?? 1;
         const sourceGeneration = this.runtimeGeneration;
         const observedAt =
           control?.updatedAt ??
           (match?.session as { updatedAt?: string } | undefined)?.updatedAt ??
           aggregate.launch.requestedAt;
-        await this.ingress.enqueue(Math.max(1, this.connectionGeneration), {
-          schemaVersion: 1,
-          type: "runtime_inventory_observed",
-          eventId: runtimeInventoryEventId(
-            projection.taskId,
-            sourceGeneration,
-            position,
-            fingerprint,
-          ),
-          taskId: projection.taskId,
-          source: {
-            kind: "runtime",
-            id:
-              control?.observationSeq === undefined
-                ? `inventory:${match?.session.id ?? aggregate.launch.bootstrapId}:${fingerprint}`
-                : `inventory:${match?.session.id ?? aggregate.launch.bootstrapId}`,
-            generation: sourceGeneration,
-            position,
-          },
-          observedAt,
-          runtime,
-        });
-        const refreshed = await this.store.aggregate(projection.taskId);
+        let refreshed = aggregate;
+        if (digest(aggregate.runtime) !== fingerprint) {
+          const position = ++this.runtimeObservationPosition;
+          await this.ingress.enqueue(Math.max(1, this.connectionGeneration), {
+            schemaVersion: 1,
+            type: "runtime_inventory_observed",
+            eventId: runtimeInventoryEventId(
+              projection.taskId,
+              sourceGeneration,
+              position,
+              fingerprint,
+            ),
+            taskId: projection.taskId,
+            source: {
+              kind: "runtime",
+              id: runtimeInventorySourceId(
+                match?.session.id ?? aggregate.launch.bootstrapId,
+              ),
+              generation: sourceGeneration,
+              position,
+            },
+            observedAt,
+            runtime,
+          });
+          refreshed =
+            (await this.store.aggregate(projection.taskId)) ?? aggregate;
+        }
         if (
           refreshed?.runtime.status === "awaiting_human" &&
           refreshed.runtime.handoffId &&

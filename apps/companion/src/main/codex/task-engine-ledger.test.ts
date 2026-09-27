@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -526,6 +526,86 @@ describe("SQLite task engine ledger", () => {
       (await reopened.aggregate(accepted.aggregate.taskId))?.launch?.cwd,
     ).toBe("/tmp/rove");
     reopened.close();
+  });
+
+  it("accepts only the canonical protected per-task workspace identity", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-task-engine-workspace-"));
+    roots.push(root);
+    const taskId = launch().taskId;
+    const taskWorkspaceRoot = join(root, "protected-task-workspaces");
+    const expectedWorkspace = join(taskWorkspaceRoot, taskId);
+    const aliasRoot = join(root, "workspace-alias");
+    await mkdir(expectedWorkspace, { recursive: true });
+    await symlink(taskWorkspaceRoot, aliasRoot, "dir");
+
+    const safePath = join(root, "safe.sqlite3");
+    const safeStore = new SqliteTaskEngineStore({ path: safePath });
+    const safeLaunch = launch();
+    safeLaunch.launch.cwd = join(aliasRoot, taskId);
+    await new TaskEngine(safeStore).accept(safeLaunch);
+    safeStore.close();
+    const safeDatabase = new Database(safePath);
+    const safeRow = safeDatabase
+      .prepare(
+        "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+      )
+      .get(taskId) as { payload_json: string };
+    const safeAggregate = JSON.parse(safeRow.payload_json) as TaskAggregate;
+    safeAggregate.recoveryRequired =
+      "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+    safeDatabase
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(safeAggregate), taskId);
+    safeDatabase.close();
+    const safeReopened = new SqliteTaskEngineStore({
+      path: safePath,
+      taskWorkspaceRoot,
+    });
+    expect((await safeReopened.aggregate(taskId))?.recoveryRequired).toBeNull();
+    safeReopened.close();
+
+    const outsideWorkspace = join(root, "outside-workspace");
+    await rm(expectedWorkspace, { recursive: true });
+    await mkdir(outsideWorkspace);
+    await symlink(outsideWorkspace, expectedWorkspace, "dir");
+    const escapedPath = join(root, "escaped.sqlite3");
+    const escapedStore = new SqliteTaskEngineStore({ path: escapedPath });
+    const escapedLaunch = launch();
+    escapedLaunch.launch.cwd = expectedWorkspace;
+    await new TaskEngine(escapedStore).accept(escapedLaunch);
+    escapedStore.close();
+    const escapedReopened = new SqliteTaskEngineStore({
+      path: escapedPath,
+      taskWorkspaceRoot,
+    });
+    expect(await escapedReopened.projection(taskId)).toMatchObject({
+      phase: "recovering",
+      recoveryRequired: expect.stringContaining(
+        "outside the protected per-task root",
+      ),
+    });
+    escapedReopened.close();
+
+    await rm(expectedWorkspace);
+    const missingPath = join(root, "missing.sqlite3");
+    const missingStore = new SqliteTaskEngineStore({ path: missingPath });
+    const missingLaunch = launch();
+    missingLaunch.launch.cwd = expectedWorkspace;
+    await new TaskEngine(missingStore).accept(missingLaunch);
+    missingStore.close();
+    const missingReopened = new SqliteTaskEngineStore({
+      path: missingPath,
+      taskWorkspaceRoot,
+    });
+    expect(await missingReopened.projection(taskId)).toMatchObject({
+      phase: "recovering",
+      recoveryRequired: expect.stringContaining(
+        "outside the protected per-task root",
+      ),
+    });
+    missingReopened.close();
   });
 
   it("rejects an unknown future persisted task schema", async () => {
