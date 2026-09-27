@@ -379,6 +379,38 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not infer terminality from a frozen timer, clear independent recovery authority while settling Stop, modify the locked generated lifecycle reducer, or absorb browser return-control qualification from STAB-10.
 
+### ROVE-STAB-07 — COMPLETE
+
+**Exact stacked start SHA:** `116cc668ffe9a1bfaeff06d5cae6fb4f117694be` (final pushed `codex/stab06-authoritative-execution-state` head).
+
+**Branch:** `codex/stab07-approval-policy-contract`; clean at entry. No predecessor PR was merged.
+
+**Inherited invariants:** Task launch policy is frozen and provider approval policy is distinct from reviewer choice. Rove consequential-action authorization remains bound to the exact operation, target, content, attachments and scope; it cannot be inferred from a provider permission reviewer.
+
+**Owned findings:** the policy-contract portion of MR-008 and MR-011. MR-011 is closed as a customer-label/provider-contract mismatch rather than an authorization-path bypass. MR-008 is narrowed to the emitted decision and UX fidelity retained by STAB-08.
+
+**Confirmed root cause:** both customer reviewer choices already launched and resumed Codex with provider `approvalPolicy: "on-request"` and the named `rove_task` profile, whose task workspace is writable. Only `approvalsReviewer` changed between `user` and `auto_review`. Provider `on-request` review applies when an operation crosses the sandbox/permission boundary; it is not confirmation before every permitted workspace-local edit. The visible **Always ask** label and “every request” copy therefore overstated the actual and intended behavior.
+
+**Disproved hypothesis:** the observed immediate workspace file mutation did not prove that the provider bypassed a required review. It was inside the frozen writable task profile. A stricter read-only profile or a synthetic React approval card would redefine ordinary Task behavior and conflate provider permission escalation with Rove consequential-action authorization.
+
+**Implemented invariant:** the human-reviewed mode is named **Ask for approval** and maps to `on-request` + reviewer `user` + `rove_task`; **Approve for me** maps to `on-request` + reviewer `auto_review` + the same profile. Both labels truthfully permit in-profile workspace operations. Crossing the permission boundary remains reviewed according to the selected reviewer, while Rove's independent exact-action authorization remains mandatory for consequential external effects. Capture starts no Codex turn and uses neither mode.
+
+**Files and compatibility:** customer copy and assertions changed in `apps/companion/src/renderer/product-surface.tsx` and its tests; the visual qualification selector changed with it. The process-backed request projection and lifecycle trace now assert approval policy, reviewer, named/default profile and workspace write access at both `thread/start` and `thread/resume`. The canonical application contract, implementation status, issue registry and STAB-08 entry state record the mapping. No persistence schema, migration, wire value, named permission profile, sandbox access, provider version, credential or action-authorization policy changed.
+
+**Provider evidence:** the pinned generated App Server schema accepts the existing values. OpenAI's official sandbox documentation defines the ask-for-approval configuration as workspace write plus `on-request` plus reviewer `user`, explains that `on-request` asks only beyond the sandbox, and states that automatic review does not change the sandbox. The credential-free process-backed fake App Server proves Rove emits and preserves the exact configuration at start and resume.
+
+**Verification:** the failing-first renderer assertion rejected the old label. The affected suite passed 4 files / 204 tests, including the new process restart/resume trace; `pnpm test:experiments` passed 24 tests; `pnpm check:repository` passed 709 files, 1,303 relative imports and 107 local document links; `pnpm typecheck` and `pnpm build` passed. A full `pnpm test` run reported no visible assertion failure and completed every displayed test file, including all affected tests, but retained idle Vitest workers without emitting a final summary and was interrupted after the hang; this is recorded under existing MR-029 and is not represented as a pass. No live model, credentialed provider, external-service mutation, packaged application or human acceptance was run.
+
+**Implementation checkpoint:** `4d41f60b0a39d79c35ea0465a0483037390c0f14` (`Align approval policy contract`).
+
+**Durable handoff checkpoint:** this record's commit, to be filled by the final branch checkpoint before push.
+
+**Residual boundary:** live provider attention emission and exact decision families remain unqualified. STAB-08 owns refusal and exact one-time/session/policy-amendment decision fidelity only for requests the provider actually emits; STAB-09 owns deliberate live reachability. Neither ticket may reopen the frozen policy mapping without contradictory provider evidence.
+
+**Next handoff:** checkpoint and push this durable record, attempt the stacked PR against `codex/stab06-authoritative-execution-state` without merging, then branch STAB-08 from the exact final STAB-07 head. STAB-08 must preserve **Ask for approval** versus **Approve for me**, the common writable `rove_task` sandbox, and the separation between permission review and consequential-action authorization.
+
+**Non-goals:** do not introduce a new approval engine, make every workspace edit require confirmation, weaken the sandbox, infer external-action authority from automatic review, or redesign attention-family reachability in this ticket.
+
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

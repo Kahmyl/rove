@@ -1,7 +1,7 @@
 # ROVE-STAB-07 — Approval policy contract
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** In progress
+**Status:** Complete
 **Dependencies:** STAB-01; provider characterization from STAB-09 may inform  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
