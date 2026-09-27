@@ -159,7 +159,29 @@ A full projection-order trace shows the production store iterates Tasks in proje
 
 Current `pollRuntimeTruth()` reads one Runtime inventory and then processes every Task inside one outer `try`; any per-Task `getControlStatus` or ingress failure aborts the remainder of that poll. This makes one earlier Task capable of starving all later Task authority convergence. The preserved ordering strongly localizes the starvation boundary to `task_b362...`, the first nonterminal Runtime-bound Task before rows 12–16.
 
-This establishes the starvation mechanism but not yet the exact exception at row 11. Before changing code, inspect `ses_da04...` Runtime observation sequence and the last accepted TaskEngine Runtime source coordinate. A repeated source coordinate with changed Runtime truth would prove the likely event-identity collision; otherwise route generic per-Task Runtime read containment to STAB-04 rather than duplicating it in STAB-02.
+#### Final read-only proof — Runtime source-coordinate collision
+
+The row-11 exception is now proven.
+
+For `task_b362...` / `ses_da04...`:
+
+- Runtime session state is `awaiting_human`, controller null, ownership generation 2, handoff generation 2.
+- The persisted observation log ends at sequence 2 (`human_requested`).
+- The last accepted TaskEngine Runtime event also uses source `inventory:ses_da04...`, generation 1, position 2, but carries the immediately earlier control truth `status: active`, controller `agent`, handoff generation 2.
+- The candidate next poll uses the **same source coordinate** generation 1 / position 2 while carrying different Runtime truth: `awaiting_human` / controller null.
+- TaskEngine correctly rejects a reused source coordinate whose content digest changed.
+
+Current `pollRuntimeTruth()` derives event source position from `control.observationSeq ?? 1`. Here `getControlStatus()` obtains `observationSeq` from the latest persisted Runtime observation, so the session/control state change to `awaiting_human` did not receive a new observation sequence beyond the already-persisted `human_requested` observation. The poll therefore attempts to publish two different authority states at the same idempotency coordinate. The rejection occurs while processing projection row 11 and aborts the outer poll, starving rows 12–16, including the Companion Task, from Runtime observation and durable binding.
+
+This closes the read-only diagnosis gate. STAB-02 implementation can begin.
+
+Implementation ownership is now:
+
+1. canonical filesystem identity for persisted Task workspace authority (MR-030);
+2. bound Runtime control-status callback for completed handoff reconstruction (MR-003 / MR-020);
+3. Runtime inventory observation identity that cannot reuse one TaskEngine source coordinate for changed truth, plus STAB-02-local proof that later Tasks are not starved by the row-11 transition (MR-031 / MR-022 authority path).
+
+Generic Runtime transport/backoff/failure-domain hardening beyond the source-coordinate defect remains STAB-04.
 
 ## Future ticket rows
 

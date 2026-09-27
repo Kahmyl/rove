@@ -49,7 +49,7 @@
 | MR-028 | Current implementation-status source claims overstate live recovery/handoff qualification relative to development-app evidence | Documentation/status defect | H | STAB-01 |
 | MR-029 | Repository verify is nondeterministic on a docs-only branch: separate runs failed in different process-backed tests while repository checks, typecheck and build passed | Qualification-infrastructure defect | H | STAB-14 |
 | MR-030 | Persisted task workspace migration treats the macOS `/tmp` and `/private/tmp` aliases as different roots, forcing all preserved Tasks into recovery despite equivalent underlying workspace authority | Confirmed compatibility/authority defect | A | STAB-02 |
-| MR-031 | Runtime truth polling processes all Tasks in one failure domain; the preserved run stops accepting Runtime observations at row 11, starving later Tasks including the active Companion session from authority convergence | Confirmed convergence/failure-isolation defect; exact row-11 exception still under diagnosis | A / B | STAB-02 / STAB-04 |
+| MR-031 | Runtime inventory polling reuses one TaskEngine source coordinate when control truth changes without a higher observation sequence; TaskEngine correctly rejects the changed digest, the row-11 failure aborts the poll, and later Tasks including the active Companion session are starved from authority convergence | Confirmed authority/event-identity defect; generic Runtime failure isolation remains downstream | A / B | STAB-02 / STAB-04 |
 
 ## Cross-stage consolidations
 

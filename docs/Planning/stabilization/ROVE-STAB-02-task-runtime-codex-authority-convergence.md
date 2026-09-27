@@ -65,6 +65,16 @@ The preserved fixture has established three implementation roots within this tic
 
 These conclusions are evidence-backed. Filesystem proof additionally confirmed `/tmp` → `/private/tmp`, identical device/inode for the acceptance home, Node lexical inequality but canonical realpath equality, and 16/16 persisted workspaces resolving to the same filesystem objects as their expected per-Task paths. A projection-order trace also established a Runtime-poll starvation boundary: runtime observations stop at projection row 11 (`task_b362...`), while rows 12–16 receive none even after the Companion Runtime session is created. The poll currently aborts the entire Task loop on one per-Task failure. One final trace must identify the exact row-11 exception before assigning the fix between STAB-02 event identity and STAB-04 generic failure containment. Implementation must still preserve the original security intent: path equivalence must not authorize a workspace that resolves outside the canonical protected per-Task root.
 
+## Implementation gate — open
+
+Read-only diagnosis is complete. The preserved fixture proves:
+
+- MR-030 is a canonical-filesystem identity false negative;
+- the requested Agent handoff reconstruction TypeError is caused by an unbound Runtime client method;
+- the Companion authority loss is caused by a Runtime inventory event source-coordinate collision at the preceding Agent Task, which aborts the poll before later Tasks can observe and durably bind their exact bootstrap-correlated Runtime sessions.
+
+Implementation may now proceed. Do not broaden STAB-02 into STAB-04's general Runtime failure taxonomy/backoff work.
+
 ## Acceptance criteria
 
 - Exact Task ↔ Runtime session ↔ Codex thread binding survives browser use and restart.
