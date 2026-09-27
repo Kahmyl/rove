@@ -29,7 +29,7 @@
 | MR-008 | Command approval does not faithfully present one-time/session/policy scope when provider decisions support richer semantics                                                                                                                                                                                            | Confirmed adapter/product gap                                                                   | D      | STAB-07 / STAB-08 |
 | MR-009 | Final-looking command result can appear while the Task remains Working, timer advances and Stop remains                                                                                                                                                                                                                | Confirmed defect                                                                                | C      | STAB-06           |
 | MR-010 | Structured conversational user-input request was not reached; bounded choice appeared as ordinary assistant transcript content                                                                                                                                                                                         | Confirmed live-path defect/gap                                                                  | E/C    | STAB-09           |
-| MR-011 | Under visible Always ask, explicit immediate file mutation completed without Needs Input or approval decision                                                                                                                                                                                                          | Confirmed authorization-path defect                                                             | D      | STAB-07           |
+| MR-011 | Under visible Always ask, explicit immediate file mutation completed without Needs Input or approval decision                                                                                                                                                                                                          | Closed by STAB-07 as a customer-label/provider-contract mismatch; the mutation was inside the frozen writable task profile, not a permission-review bypass | D      | STAB-07           |
 | MR-012 | Manual network approval family did not receive `networkApprovalContext`; generic command approval was reached instead                                                                                                                                                                                                  | Live qualification gap                                                                          | E      | STAB-09           |
 | MR-013 | Dedicated additional filesystem permission request could not be emitted in the live environment                                                                                                                                                                                                                        | Live qualification gap                                                                          | E      | STAB-09           |
 | MR-014 | MCP structured-form elicitation is not reachable with the bundled live fixture                                                                                                                                                                                                                                         | Qualification-fixture gap                                                                       | E/H    | STAB-09           |
@@ -73,6 +73,12 @@
 - **Closed:** MR-005. Transient dependency failure uses bounded exponential probes; surface, Runtime inventory and Workflow background paths contain rejection; a real managed-process invalid/outage/recovery fixture observed zero unhandled rejections.
 - **Narrowed downstream boundary:** STAB-05 owns initial hydration composition and rendering of the established customer-safe degraded warning, not Runtime retry taxonomy or another recovery state.
 
+### STAB-07 disposition
+
+- **Closed:** MR-011. The provider's `on-request` policy asks only when an operation crosses the frozen sandbox/permission profile; both reviewer choices intentionally allow workspace-local mutation. The prior **Always ask** label overstated that contract and is replaced by **Ask for approval**.
+- **Narrowed:** MR-008. STAB-07 freezes the customer-to-provider policy mapping and start/resume invariants. STAB-08 retains the decision vocabulary, refusal, session scope, and any policy-amendment UX for permission requests the provider actually emits.
+- **Preserved boundary:** `approvalsReviewer: "auto_review"` changes who reviews eligible requests, not the task sandbox. Neither reviewer choice supplies Rove authorization for a consequential external action.
+
 - **MR-001, MR-002, MR-003, MR-020, MR-022 and part of MR-023** share the Task/Runtime/Codex authority-convergence boundary.
 - **MR-009 and MR-024** are one customer execution-state model problem, exposed in different acceptance stages.
 - **MR-007, MR-008 and MR-011** are one approval-policy/decision-contract family, not three renderer fixes.
@@ -86,7 +92,7 @@
 1. `codex-thread-truth-reconciler.ts` passes `this.runtime.getControlStatus` as a callback during historical completed-handoff reconstruction without binding the runtime object. This is a concrete source defect but is not assumed to explain every recovery failure.
 2. `main.ts` runs the session surface monitor approximately every 750 ms. A failed inspection clears its signal key but has no backoff/circuit policy.
 3. `customer-task-execution.ts` marks a segment terminal whenever it has no open customer-active interval, even when the overall execution projection is waiting/checking/human-controlled rather than authoritatively terminal.
-4. Task policy stores `approvalPolicy: "on-request"` for both customer reviewer choices while `approvalsReviewer` varies separately. The current labels **Always ask** and **Approve for me** therefore require explicit contract verification before UI patching.
+4. Task policy stores `approvalPolicy: "on-request"` for both customer reviewer choices while `approvalsReviewer` varies separately. STAB-07 verified this as the intended provider mapping, replaced the overstated **Always ask** label with **Ask for approval**, and retained **Approve for me** for automatic review within the same sandbox.
 5. The pinned App Server schema can express command decisions beyond generic accept/decline, including `acceptForSession` and policy amendments. Rove's customer collaboration model reduces approval actions to a smaller decision vocabulary and labels acceptance generically as Approve.
 6. `attention.ts` recognizes the intended request families; network approval classification depends on App Server actually supplying `networkApprovalContext`.
 7. Task-scoped MCP already has capability scoping that prevents creation/addressing of another session, providing a foundation for STAB-02 rather than requiring a new browser architecture.
@@ -112,7 +118,7 @@ STAB-01 deliberately does not answer these by guess:
 
 - which exact Runtime configuration field produced INVALID_CONFIGURATION;
 - whether every persisted recovery failure shares the unbound callback cause;
-- what the market meaning of **Always ask** is and which App Server policy/configuration enforces it;
+- whether the provider's emitted request decisions can faithfully support the market meaning of **Ask for approval**, including refusal and bounded scope;
 - which current provider version can deliberately emit every attention family;
 - whether current/newer Codex provides an exact process-cancel/exit proof suitable for hard Stop;
 - whether existing-Task profile recovery should mutate launch configuration or require an explicit fresh Task.

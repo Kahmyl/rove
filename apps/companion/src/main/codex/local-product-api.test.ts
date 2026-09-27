@@ -1899,7 +1899,7 @@ describe("LocalProductApi native product seam", () => {
     });
   });
 
-  it("forwards Always ask and rejects omitted or unsupported review choices", async () => {
+  it("forwards human approval review and rejects omitted or unsupported choices", async () => {
     const { api, start, tasks } = fixture();
     tasks.productTasks.mockResolvedValue([]);
     await api.execute({

@@ -1,7 +1,7 @@
 # ROVE-STAB-07 — Approval policy contract
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready  
+**Status:** In progress
 **Dependencies:** STAB-01; provider characterization from STAB-09 may inform  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -17,7 +17,6 @@ Consume STAB-01's approval findings and any provider characterization already pr
 
 At ticket start, reconcile current `main` with the continuity ledger, record the exact start SHA, and verify the effective provider configuration from current source/schema before deciding product mapping.
 
-
 ## Invariant
 
 The customer-facing approval policy name describes the actual authorization behavior enforced by Rove and the provider.
@@ -28,24 +27,31 @@ The policy-contract portion of MR-008 and MR-011.
 
 ## Required decision
 
-Establish an ADR-level mapping for **Always ask** and **Approve for me**.
+Establish an ADR-level mapping for the human-reviewed and automatically reviewed permission modes. The human-reviewed label is **Ask for approval**; the earlier **Always ask** wording is retired because it falsely implied confirmation before operations already allowed by the frozen task permission profile. The automatic label remains **Approve for me**.
 
 The current frozen Task policy uses provider `approvalPolicy: "on-request"` while separately choosing `approvalsReviewer`. That must be proven compatible with the customer promise or changed.
 
-Do not solve MR-011 by forcing a React card when the provider/security policy still allows the mutation.
+The exact mapping is:
+
+- **Ask for approval** → provider `approvalPolicy: "on-request"`, `approvalsReviewer: "user"`, named `rove_task` permission profile, task workspace writable;
+- **Approve for me** → provider `approvalPolicy: "on-request"`, `approvalsReviewer: "auto_review"`, the same named `rove_task` permission profile and workspace boundary.
+
+Both choices permit operations already inside the task profile. The reviewer choice governs permission requests that cross that boundary; it does not grant or replace Rove's separately scoped authorization for consequential external actions.
+
+Do not solve MR-011 by forcing a React card for an operation the frozen provider/security profile already allows. Correct the customer promise and preserve the established sandbox. STAB-08 owns the fidelity and refusal UX for permission requests that are actually emitted.
 
 ## Acceptance criteria
 
 - Exact product meaning of both labels is documented.
 - Exact provider configuration and reviewer semantics are documented and regression-tested.
 - Thread start/resume evidence proves the effective configuration.
-- Under the chosen Always ask meaning, an in-scope mutation cannot occur without the required human boundary.
+- Under **Ask for approval**, a mutation beyond the frozen task permission boundary cannot occur without the required human review; workspace-local mutations already allowed by that boundary are not misrepresented as requiring per-edit confirmation.
 - Auto-review remains bounded to the policy explicitly promised to the customer.
 - Existing security/sandbox constraints are not weakened.
 
 ## Verification
 
-Configuration contract tests → live thread start/resume characterization → harmless command/file mutation scenarios under both policies.
+Configuration contract tests → credential-free process-backed thread start/resume characterization → harmless command/file mutation semantics under both policies. Live provider execution is qualification evidence only when separately authorized; it must not be substituted with an unapproved model or external-service run.
 
 Checkpoint before STAB-08.
 

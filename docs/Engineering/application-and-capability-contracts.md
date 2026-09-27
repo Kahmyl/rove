@@ -114,6 +114,19 @@ This adaptive execution architecture is implemented and deterministically genera
 
 An approval is tied to task, operation, recipient/resource scope, content/attachment digest, and live request generation. Changed content or a different target may require fresh authorization. Concrete batch approval is supported without presenting a confirmation for every ordinary navigation step.
 
+Task creation freezes one of two customer-facing permission-review modes. Both use Codex `approvalPolicy: "on-request"` with Rove's named `rove_task` permission profile, whose task workspace is writable and whose network and out-of-workspace access remain denied by default:
+
+| Customer label   | Codex reviewer | Meaning                                                                                                                                                                                                |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ask for approval | `user`         | Codex pauses for the customer when an operation needs permission beyond the frozen task profile. It does not ask before every workspace-local edit or routine command already allowed by that profile. |
+| Approve for me   | `auto_review`  | Eligible permission requests receive automatic policy review; requests outside that reviewer boundary or requiring a customer handoff may still pause.                                                 |
+
+This mapping follows the provider's documented `workspace-write` plus `on-request` model: sandboxed workspace operations can proceed, while an operation that goes beyond the sandbox enters approval review. Automatic review changes the reviewer, not the sandbox itself. See [OpenAI's sandbox and approval documentation](https://learn.chatgpt.com/docs/sandboxing?translationFallback=pt-BR).
+
+The selected reviewer, `on-request` policy, and named permission profile must be identical at thread start and resume. A conflicting or unsupported provider projection fails closed instead of silently changing the Task policy. Capture mode starts no Codex turn and therefore does not use permission review.
+
+Codex permission review is not Rove authorization for a consequential external action. The customer still authorizes the exact action, target, content, attachments, and scope through Rove's action contract. Neither reviewer choice can manufacture that authorization, widen it, convert a decline into execution, or authorize a different adapter.
+
 Human ownership and action authorization are related but different: permission to send a message does not allow agent mutation while the human controls the page. Declining an action must not be converted into execution through another adapter.
 
 ## Errors and retries

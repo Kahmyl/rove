@@ -82,9 +82,10 @@ const ids = {
   handoff: "intent_33333333-3333-4333-8333-333333333333",
   finish: "intent_44444444-4444-4444-8444-444444444444",
   restart: "intent_55555555-5555-4555-8555-555555555555",
+  approval: "intent_66666666-6666-4666-8666-666666666666",
 } as const;
 
-describe("five process-backed production-composition lifecycle traces", () => {
+describe("process-backed production-composition lifecycle traces", () => {
   it("1. launches browserlessly with local attachments and exact Rove MCP/model parameters, and rejects a bad catalog", async () => {
     const current = await product();
     const selected = await current.request({
@@ -145,8 +146,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
       model: "l2-model",
       reasoningEffort: "low",
       approvalsReviewer: "auto_review",
+      approvalPolicy: "on-request",
       permissions: "rove_task",
       defaultPermissions: "rove_task",
+      workspaceAccess: "write",
     });
     expect(start?.developerInstructions).toContain("Rove browser route policy");
     const rove = start?.rove as ProductValue | undefined;
@@ -190,6 +193,57 @@ describe("five process-backed production-composition lifecycle traces", () => {
         (action) => action.method === "turn/start",
       ),
     ).toHaveLength(0);
+  }, 120_000);
+
+  it("preserves the human-reviewed approval contract across thread start and resume", async () => {
+    const current = await product();
+    await current.request(
+      launchIntent(ids.approval, { approvalsReviewer: "user" }),
+    );
+    const started = await current.until(
+      (value) =>
+        task(value, taskId(ids.approval)).bootstrapStage === "complete",
+    );
+    const threadId = String(task(started, taskId(ids.approval)).codexThreadId);
+    let requests = (await current.request({
+      type: "appserver.requests",
+    })) as unknown as ProductValue[];
+    expect(
+      requests.find(
+        (request) =>
+          request.method === "thread/start" &&
+          (request.rove as ProductValue | null)?.taskId ===
+            taskId(ids.approval),
+      ),
+    ).toMatchObject({
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      permissions: "rove_task",
+      defaultPermissions: "rove_task",
+      workspaceAccess: "write",
+    });
+
+    await current.request({ type: "appserver.kill" });
+    requests = (await current.untilResult(
+      { type: "appserver.requests" },
+      (value) =>
+        (value as unknown as ProductValue[]).some(
+          (request) =>
+            request.method === "thread/resume" && request.threadId === threadId,
+        ),
+    )) as unknown as ProductValue[];
+    expect(
+      requests.find(
+        (request) =>
+          request.method === "thread/resume" && request.threadId === threadId,
+      ),
+    ).toMatchObject({
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      permissions: "rove_task",
+      defaultPermissions: "rove_task",
+      workspaceAccess: "write",
+    });
   }, 120_000);
 
   it("2. publishes conversation/progress and Codex attention through awaited ingress, response, and resolution", async () => {

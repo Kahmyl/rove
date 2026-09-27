@@ -70,7 +70,7 @@ A ticket is not complete until this handoff exists.
 
 - Which exact Runtime configuration field caused `INVALID_CONFIGURATION`?
 - Do all persisted recovery failures share the unbound callback cause?
-- What exact provider configuration enforces Rove's intended **Always ask** semantics?
+- Resolved by STAB-07: the intended provider mapping is `on-request` plus the writable `rove_task` profile and reviewer `user`; the truthful customer label is **Ask for approval**, not the retired **Always ask** wording.
 - Which provider versions can deliberately emit each attention family?
 - Will Codex expose exact process cancellation/exit proof, or does Rove need a different execution-ownership architecture?
 - What is the correct existing-Task recovery when a browser profile is created after that Task's launch configuration was frozen?

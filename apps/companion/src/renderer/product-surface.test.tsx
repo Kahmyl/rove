@@ -1838,7 +1838,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-label="Approval policy: Approve for me"');
     expect(html).toContain('aria-label="Model and reasoning effort:');
     expect(html).toContain('aria-pressed="true"><span>Approve for me</span>');
-    expect(html).toContain("Always ask");
+    expect(html).toContain("Ask for approval");
+    expect(html).toContain("You review requests that cross task permissions");
+    expect(html).not.toContain("Always ask");
     expect(html).not.toContain("Routine eligible requests are reviewed");
     expect(html).toContain("Codex ready");
     expect(html).not.toContain("ChatGPT account");
@@ -1852,6 +1854,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
   });
 
   it("states that permission review is unused by Capture and starts no Codex turn", () => {
+    expect(permissionReviewDescription("agent", "user")).toBe(
+      "Codex will pause and ask you to review permission requests.",
+    );
+    expect(permissionReviewDescription("agent", "auto_review")).toBe(
+      "Routine eligible requests are reviewed automatically; important handoffs can still pause for you.",
+    );
     expect(permissionReviewDescription("capture", "auto_review")).toBe(
       "Permission review is unused in Capture mode because Capture starts no Codex turn.",
     );

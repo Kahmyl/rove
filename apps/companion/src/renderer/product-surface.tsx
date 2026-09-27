@@ -1153,7 +1153,7 @@ function ComposerPermissionMenu({
   onChange?: (approvalsReviewer: ApprovalsReviewer) => void;
 }) {
   const label =
-    approvalsReviewer === "auto_review" ? "Approve for me" : "Always ask";
+    approvalsReviewer === "auto_review" ? "Approve for me" : "Ask for approval";
   return (
     <details className="composer-menu composer-permission-menu">
       <summary aria-label={`Approval policy: ${label}`}>
@@ -1199,8 +1199,8 @@ function ComposerPermissionMenu({
                 closeParentMenu(event);
               }}
             >
-              <span>Always ask</span>
-              <small>You review every request</small>
+              <span>Ask for approval</span>
+              <small>You review requests that cross task permissions</small>
             </button>
           </section>
         ) : (

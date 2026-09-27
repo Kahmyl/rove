@@ -1,7 +1,7 @@
 # ROVE-STAB-08 — Approval decision fidelity and UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Blocked on STAB-07  
+**Status:** Ready after STAB-07 checkpoint
 **Dependencies:** STAB-07  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -13,10 +13,9 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 ### Required inherited state
 
-Do not design approval buttons independently. Consume the completed STAB-07 approval-policy contract and the customer execution-state semantics from STAB-06. The exact provider decisions that STAB-07 establishes are the only decisions this ticket may render.
+Do not design approval buttons independently. Consume the completed STAB-07 approval-policy contract and the customer execution-state semantics from STAB-06. **Ask for approval** and **Approve for me** both use provider `approvalPolicy: "on-request"` and the writable `rove_task` profile; only `approvalsReviewer` changes from `user` to `auto_review`. Permission review does not replace Rove authorization for consequential external actions. The exact provider decisions that STAB-07 establishes are the only decisions this ticket may render.
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
-
 
 ## Invariant
 

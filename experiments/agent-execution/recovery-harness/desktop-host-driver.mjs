@@ -272,9 +272,14 @@ async function execute(command) {
           threadId: entry.params?.threadId ?? null,
           cwd: entry.params?.cwd ?? null,
           model: entry.params?.model ?? null,
+          approvalPolicy: entry.params?.approvalPolicy ?? null,
           approvalsReviewer: entry.params?.approvalsReviewer ?? null,
           permissions: entry.params?.permissions ?? null,
           defaultPermissions: entry.params?.config?.default_permissions ?? null,
+          workspaceAccess:
+            entry.params?.config?.permissions?.[
+              entry.params?.config?.default_permissions
+            ]?.filesystem?.[":workspace_roots"]?.["."] ?? null,
           reasoningEffort: entry.params?.config?.model_reasoning_effort ?? null,
           developerInstructions: entry.params?.developerInstructions ?? "",
           rove: rove

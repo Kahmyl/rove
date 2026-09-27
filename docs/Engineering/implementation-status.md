@@ -19,7 +19,7 @@ Human acceptance against `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d` is newer tha
 - Codex startup/application recovery and Runtime dependency containment are source-qualified against preserved and disposable restart fixtures; packaged application recovery remains unqualified.
 - Agent requested handoff is **partial/live-blocked**: repeated development runs produced unmatched `awaiting_human/controller:none` sessions rather than actionable takeover.
 - Companion browser collaboration is **partial/live-blocked**: a successful browser run could later project **No browser attached**, preventing voluntary takeover.
-- Attention/approval behavior is **partial**: command approval omitted refusal/scope, an explicit file mutation bypassed the visible Always ask decision boundary, and several request families remain live-unqualified.
+- Attention/approval behavior is **partial**: the Task permission modes now map **Ask for approval** and **Approve for me** to the same bounded on-request workspace profile with human versus automatic review, but emitted command decisions still omit refusal/scope fidelity and several request families remain live-unqualified. Workspace-local mutation is intentionally permitted by both modes and is not consequential-action authorization.
 - Hard Stop has an **explicit provider authority blocker**: provider turn interruption does not prove termination of a yielded local process.
 
 These corrections do not discard deterministic evidence; they prevent lower-level/source qualification from being read as end-to-end product qualification. The owning work is the [Rove Market-Readiness Stabilization Sprint](../Planning/market-readiness-stabilization-sprint.md) and its [issue registry](../Planning/stabilization/issue-registry.md).

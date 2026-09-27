@@ -2266,7 +2266,7 @@ describe("capability and bootstrap", () => {
       }),
     ).toThrow(/execution mode/);
   });
-  it("migrates only a missing legacy reviewer to Always ask and rejects explicit invalid values", () => {
+  it("migrates only a missing legacy reviewer to human review and rejects explicit invalid values", () => {
     const current = validContext();
     const legacyPolicy = { ...current.policy } as Partial<
       ResolvedTaskContext["policy"]
