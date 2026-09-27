@@ -5,7 +5,7 @@ import readline from "node:readline";
 import { accessSync, rmSync } from "node:fs";
 import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, isAbsolute, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, URL } from "node:url";
 
@@ -75,7 +75,11 @@ class AppServerClient {
   }
 
   async start() {
+    const executablePath = await resolveExecutable();
     const childEnv = { ...process.env };
+    childEnv.PATH = [dirname(executablePath), childEnv.PATH]
+      .filter(Boolean)
+      .join(delimiter);
     if (isolatedCodexHome) {
       for (const name of [
         "OPENAI_API_KEY",
@@ -85,7 +89,10 @@ class AppServerClient {
         delete childEnv[name];
       childEnv.CODEX_HOME = isolatedCodexHome;
     }
-    this.child = spawn(executable, ["app-server", "--stdio"], {
+    const appServerArgs = ["app-server", "--stdio"];
+    if (attentionLive)
+      appServerArgs.push("--enable", "default_mode_request_user_input");
+    this.child = spawn(executablePath, appServerArgs, {
       cwd,
       env: childEnv,
       stdio: ["pipe", "pipe", "pipe"],
@@ -198,9 +205,18 @@ class AppServerClient {
     let result;
     if (method === "item/permissions/requestApproval")
       result = { permissions: {}, scope: "turn", strictAutoReview: false };
-    else if (method.includes("requestApproval"))
-      result = { decision: "decline" };
-    else if (
+    else if (method.includes("requestApproval")) {
+      const available = Array.isArray(message.params?.availableDecisions)
+        ? message.params.availableDecisions
+        : [];
+      result = {
+        decision: available.includes("decline")
+          ? "decline"
+          : available.includes("cancel")
+            ? "cancel"
+            : "decline",
+      };
+    } else if (
       method === "tool/requestUserInput" ||
       method === "item/tool/requestUserInput"
     )
@@ -648,7 +664,7 @@ try {
       {
         name: "command_approval",
         prompt:
-          "Attempt this exact shell command once and do not use another tool: mkdir /private/tmp/rove-attention-fixture-command. Do not retry if permission is declined.",
+          "Call the execution tool exactly once with command `true` and request require_escalated sandbox permission in that first call. Do not use another tool and do not retry if permission is declined.",
       },
       {
         name: "file_approval",
@@ -658,7 +674,7 @@ try {
       {
         name: "network_approval",
         prompt:
-          "Attempt this exact shell command once and do not use another tool: curl --fail --silent https://example.com/rove-attention-fixture. Do not retry if network permission is declined.",
+          "Call the execution tool exactly once with command `curl --fail --silent https://example.com/rove-attention-fixture` and request require_escalated sandbox permission in that first call. Do not use another tool and do not retry if permission is declined.",
       },
       {
         name: "additional_permission",
@@ -668,17 +684,30 @@ try {
       {
         name: "mcp_form",
         prompt:
-          "Call attention_fixture.collect_preferences exactly once. Do not answer its elicitation yourself and do not call another tool.",
+          "Call mcp__attention_fixture__collect_preferences exactly once. Do not answer its elicitation yourself and do not call another tool.",
       },
       {
         name: "mcp_url",
         prompt:
-          "Call attention_fixture.connect_account exactly once. Do not open or visit its URL yourself and do not call another tool.",
+          "Call mcp__attention_fixture__connect_account exactly once. Do not open or visit its URL yourself and do not call another tool.",
       },
     ];
+    const requestedScenarioNames = new Set(
+      (process.env.ROVE_ATTENTION_SCENARIOS ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean),
+    );
+    const selectedScenarios =
+      requestedScenarioNames.size === 0
+        ? scenarios
+        : scenarios.filter((scenario) =>
+            requestedScenarioNames.has(scenario.name),
+          );
     const observations = [];
-    for (const scenario of scenarios) {
+    for (const scenario of selectedScenarios) {
       const requestOffset = client.serverRequests.length;
+      const notificationOffset = client.notifications.length;
       const turnStarted = await client.request("turn/start", {
         threadId,
         input: [{ type: "text", text: scenario.prompt, text_elements: [] }],
@@ -690,6 +719,7 @@ try {
           message.params?.turn?.id === turnId,
         120_000,
       );
+      const turnNotifications = client.notifications.slice(notificationOffset);
       observations.push({
         name: scenario.name,
         turnId,
@@ -705,10 +735,44 @@ try {
             request.params?.networkApprovalContext != null,
           permissionsPresent: request.params?.permissions != null,
         })),
+        items: turnNotifications
+          .filter((message) => message.method === "item/completed")
+          .map((message) => {
+            const item = message.params?.item ?? {};
+            return {
+              type: item.type ?? null,
+              status: item.status ?? null,
+              server: item.server ?? item.serverName ?? null,
+              tool: item.tool ?? item.name ?? null,
+              command: item.command ?? null,
+              changesCount: Array.isArray(item.changes)
+                ? item.changes.length
+                : null,
+              text:
+                typeof item.text === "string" ? item.text.slice(0, 800) : null,
+              error:
+                typeof item.error?.message === "string"
+                  ? item.error.message.slice(0, 400)
+                  : typeof item.error === "string"
+                    ? item.error.slice(0, 400)
+                    : null,
+            };
+          }),
+        warnings: turnNotifications
+          .filter((message) => message.method === "warning")
+          .map((message) => ({
+            message:
+              typeof message.params?.message === "string"
+                ? message.params.message.slice(0, 500)
+                : null,
+          })),
       });
     }
     evidence.attentionLive = {
       threadId,
+      requestedScenarioNames: selectedScenarios.map(
+        (scenario) => scenario.name,
+      ),
       scenarios: observations,
       observedMethods: [
         ...new Set(
@@ -1014,7 +1078,9 @@ if (attentionBoundary) {
 
 if (attentionLive) {
   verify(
-    evidence.attentionLive?.scenarios?.length === 7 &&
+    evidence.attentionLive?.scenarios?.length ===
+      evidence.attentionLive?.requestedScenarioNames?.length &&
+      evidence.attentionLive.scenarios.length > 0 &&
       evidence.attentionLive.scenarios.every(
         (scenario) => typeof scenario.terminalStatus === "string",
       ),

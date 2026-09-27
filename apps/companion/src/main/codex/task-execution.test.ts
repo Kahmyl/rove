@@ -14,7 +14,10 @@ import {
 import { TaskProcessWorker } from "./task-process-worker.js";
 
 import { CodexAccountCatalogService } from "./account-catalog.js";
-import { CodexAppServerHost } from "./app-server-host.js";
+import {
+  CodexAppServerHost,
+  codexAppServerEnvironment,
+} from "./app-server-host.js";
 import {
   browserAlternateCapabilityDisposition,
   browserRoutePageDisposition,
@@ -648,6 +651,7 @@ describe("generated boundary", () => {
       }
     });
     let hashProbeCount = 0;
+    let spawnArgs: readonly string[] | undefined;
     const host = new CodexAppServerHost({
       resolver: new CodexExecutableResolver({
         isPackaged: false,
@@ -663,13 +667,26 @@ describe("generated boundary", () => {
         fileSize: async () => 62_787_200,
       }),
       clientVersion: "0.1.0",
-      spawnProcess: () => fake as unknown as ChildProcessWithoutNullStreams,
+      spawnProcess: (_path, args) => {
+        spawnArgs = args;
+        return fake as unknown as ChildProcessWithoutNullStreams;
+      },
     });
     await host.start();
     expect(initializeParams).toEqual({
       clientInfo: { name: "rove", title: "Rove", version: "0.1.0" },
       capabilities: { experimentalApi: true, requestAttestation: false },
     });
+    expect(spawnArgs).toEqual([
+      "app-server",
+      "--enable",
+      "default_mode_request_user_input",
+    ]);
+    expect(
+      codexAppServerEnvironment("/opt/rove/codex", {
+        PATH: "/usr/bin:/bin",
+      }).PATH,
+    ).toBe("/opt/rove:/usr/bin:/bin");
     expect(host.getNegotiatedIdentity()).toMatchObject({ platformOs: "macos" });
     await host.stop();
   });
