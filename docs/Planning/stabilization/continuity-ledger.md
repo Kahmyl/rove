@@ -149,7 +149,9 @@ The next read-only trace established three concrete authority defects:
 
 The startup Codex side remains independently unhealthy: every persisted Task has one `thread_history_reconstructible` blocker and repeated startup retries. The workspace blocker hides that string in the customer projection. STAB-02 will correct the authority defects above; STAB-03 remains responsible for bounded blocker lifecycle/clearing semantics after exact authority can be reconstructed.
 
-Before implementation, verify filesystem identity for the `/tmp` versus `/private/tmp` fixture and define a symlink-safe canonical workspace-equivalence rule.
+Filesystem identity verification is complete: `/tmp` is a symlink to `private/tmp`; Python `samefile()` confirms the acceptance homes are the same inode/device; Node `path.resolve()` incorrectly treats them as different while `realpathSync.native()` resolves both to `/private/tmp/rove-stage2.NZ9umP`. All 16/16 persisted Task workspaces are the same filesystem objects as their expected `/private/tmp/.../task-workspaces/<taskId>` paths. Therefore MR-030 is confirmed as a lexical-path authority false negative rather than a genuine workspace escape.
+
+Implementation may now begin, preserving the security invariant that canonicalized Task workspaces must still resolve inside the canonicalized protected task-workspace root.
 
 ## Future ticket rows
 

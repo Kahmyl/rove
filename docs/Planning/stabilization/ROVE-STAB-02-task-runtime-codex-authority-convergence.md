@@ -63,7 +63,7 @@ The preserved fixture has established three implementation roots within this tic
 - completed requested-handoff reconstruction passes Runtime `getControlStatus` without its owning object binding, producing the observed TypeError and unresolved thread-history repair;
 - lazy Runtime sessions created after a Task's Codex bootstrap can be discovered by bootstrap ID but are never durably rebound into `record.identity.sessionId`, while exact control authority requires that durable session identity.
 
-These conclusions are evidence-backed, but implementation must still preserve the original security intent: path equivalence must not authorize a workspace that resolves outside the protected per-Task root, and lazy Runtime binding must require exactly one bootstrap-correlated live receipt rather than current UI selection or newest-session heuristics.
+These conclusions are evidence-backed. Filesystem proof additionally confirmed `/tmp` → `/private/tmp`, identical device/inode for the acceptance home, Node lexical inequality but canonical realpath equality, and 16/16 persisted workspaces resolving to the same filesystem objects as their expected per-Task paths. Implementation must still preserve the original security intent: path equivalence must not authorize a workspace that resolves outside the canonical protected per-Task root, and lazy Runtime binding must require exactly one bootstrap-correlated live receipt rather than current UI selection or newest-session heuristics.
 
 ## Acceptance criteria
 
