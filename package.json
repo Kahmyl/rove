@@ -15,6 +15,8 @@
     "agent:fixtures": "node experiments/agent-execution/run-fixtures.mjs",
     "agent:schema": "node experiments/agent-execution/generate-schema-evidence.mjs",
     "agent:live": "node experiments/agent-execution/live-app-server.mjs",
+    "agent:attention-boundary": "node experiments/agent-execution/live-app-server.mjs --attention-boundary",
+    "agent:attention-live": "node experiments/agent-execution/live-app-server.mjs --attention-live",
     "codex:component:inspect": "node scripts/codex-component-manager.mjs inspect",
     "codex:component:qualify": "node scripts/codex-component-manager.mjs qualify",
     "codex:component:install": "node scripts/codex-component-manager.mjs install",

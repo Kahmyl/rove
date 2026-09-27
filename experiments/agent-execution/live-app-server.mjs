@@ -12,10 +12,17 @@ import { fileURLToPath, URL } from "node:url";
 const executable = process.env.ROVE_CODEX_EXECUTABLE ?? "codex";
 const lifecycle = process.argv.includes("--lifecycle");
 const mcpBoundary = process.argv.includes("--mcp-boundary");
+const attentionBoundary = process.argv.includes("--attention-boundary");
+const attentionLive = process.argv.includes("--attention-live");
+if (attentionLive && process.env.ROVE_ALLOW_LIVE_ATTENTION !== "1")
+  throw new Error(
+    "live_attention_requires_explicit_ROVE_ALLOW_LIVE_ATTENTION_1",
+  );
 const cwd = resolve(process.cwd());
-const isolatedCodexHome = mcpBoundary
-  ? await mkdtemp(join(tmpdir(), "rove-agent-schema-codex-home-"))
-  : undefined;
+const isolatedCodexHome =
+  mcpBoundary || attentionBoundary
+    ? await mkdtemp(join(tmpdir(), "rove-agent-schema-codex-home-"))
+    : undefined;
 if (isolatedCodexHome) {
   process.once("exit", () => {
     try {
@@ -32,7 +39,7 @@ const expectedRoveCatalog = JSON.parse(
 
 function progress(phase) {
   console.error(
-    `[p50:${lifecycle ? "lifecycle" : mcpBoundary ? "mcp" : "read-only"}] ${phase}`,
+    `[p50:${lifecycle ? "lifecycle" : attentionLive ? "attention-live" : attentionBoundary ? "attention" : mcpBoundary ? "mcp" : "read-only"}] ${phase}`,
   );
 }
 
@@ -61,18 +68,26 @@ class AppServerClient {
     this.nextId = 1;
     this.pending = new Map();
     this.notifications = [];
+    this.serverRequests = [];
     this.waiters = [];
     this.stderr = [];
     this.protocolErrors = [];
   }
 
   async start() {
+    const childEnv = { ...process.env };
+    if (isolatedCodexHome) {
+      for (const name of [
+        "OPENAI_API_KEY",
+        "OPENAI_ACCESS_TOKEN",
+        "CODEX_API_KEY",
+      ])
+        delete childEnv[name];
+      childEnv.CODEX_HOME = isolatedCodexHome;
+    }
     this.child = spawn(executable, ["app-server", "--stdio"], {
       cwd,
-      env: {
-        ...process.env,
-        ...(isolatedCodexHome ? { CODEX_HOME: isolatedCodexHome } : {}),
-      },
+      env: childEnv,
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.child.stderr.on("data", (chunk) => {
@@ -179,15 +194,30 @@ class AppServerClient {
 
   respondToServerRequest(message) {
     const method = message.method;
+    this.serverRequests.push(JSON.parse(JSON.stringify(message)));
     let result;
-    if (method.includes("requestApproval")) result = { decision: "decline" };
+    if (method === "item/permissions/requestApproval")
+      result = { permissions: {}, scope: "turn", strictAutoReview: false };
+    else if (method.includes("requestApproval"))
+      result = { decision: "decline" };
     else if (
       method === "tool/requestUserInput" ||
       method === "item/tool/requestUserInput"
     )
       result = { answers: {} };
     else if (method === "mcpServer/elicitation/request")
-      result = { action: "cancel", content: null };
+      result =
+        message.params?.mode === "form"
+          ? {
+              action: "accept",
+              content: {
+                project: "Rove fixture",
+                urgency: "normal",
+                includeSummary: true,
+              },
+              _meta: null,
+            }
+          : { action: "cancel", content: null, _meta: null };
     else result = { decision: "decline" };
     this.send({ id: message.id, result });
   }
@@ -297,7 +327,15 @@ const malformedInput = await observeMalformedInput();
 const evidence = {
   date: new Date().toISOString().slice(0, 10),
   executable: await resolveExecutable(),
-  mode: lifecycle ? "lifecycle" : mcpBoundary ? "mcp-boundary" : "read-only",
+  mode: lifecycle
+    ? "lifecycle"
+    : attentionLive
+      ? "attention-live"
+      : attentionBoundary
+        ? "attention-boundary"
+        : mcpBoundary
+          ? "mcp-boundary"
+          : "read-only",
   preInitialize,
   malformedInput,
 };
@@ -472,6 +510,215 @@ try {
       visiblyFailed: unavailable.status === "error",
     };
     progress("completed required-MCP calls and unavailable-server check");
+  }
+
+  if (attentionBoundary) {
+    progress("starting isolated MCP attention boundary");
+    const fixturePath = resolve(here, "attention-fixture-mcp-server.mjs");
+    const started = await client.request("thread/start", {
+      cwd,
+      ephemeral: true,
+      approvalPolicy: "never",
+      sandbox: "read-only",
+      config: {
+        mcp_servers: {
+          attention_fixture: {
+            command: process.execPath,
+            args: [fixturePath],
+            enabled: true,
+            required: true,
+            startup_timeout_sec: 10,
+          },
+        },
+      },
+    });
+    const threadId = started.thread.id;
+    const status = await client.request("mcpServerStatus/list", {
+      threadId,
+      detail: "full",
+      limit: 100,
+    });
+    const server = status.data.find(
+      (candidate) => candidate.name === "attention_fixture",
+    );
+    const formCall = await statusOf(
+      client.request("mcpServer/tool/call", {
+        threadId,
+        server: "attention_fixture",
+        tool: "collect_preferences",
+        arguments: {},
+      }),
+    );
+    const urlCall = await statusOf(
+      client.request("mcpServer/tool/call", {
+        threadId,
+        server: "attention_fixture",
+        tool: "connect_account",
+        arguments: {},
+      }),
+    );
+    const elicitations = client.serverRequests.filter(
+      (request) => request.method === "mcpServer/elicitation/request",
+    );
+    const form = elicitations.find(
+      (request) => request.params?.mode === "form",
+    );
+    const url = elicitations.find((request) => request.params?.mode === "url");
+    const formCallText =
+      formCall.status === "ok" ? formCall.value?.content?.[0]?.text : undefined;
+    const urlCallText =
+      urlCall.status === "ok" ? urlCall.value?.content?.[0]?.text : undefined;
+    evidence.attentionMcp = {
+      serverConnected: server?.runtimeStatus === "connected",
+      serverInfoName: server?.serverInfo?.name ?? null,
+      toolNames: Object.keys(server?.tools ?? {}).sort(),
+      form: {
+        callStatus: formCall.status,
+        callIsError:
+          formCall.status === "ok" ? formCall.value?.isError === true : null,
+        callContent:
+          formCall.status === "ok" ? (formCall.value?.content ?? null) : null,
+        threadBound: form?.params?.threadId === threadId,
+        turnId: form?.params?.turnId ?? null,
+        message: form?.params?.message ?? null,
+        requestedFields: Object.keys(
+          form?.params?.requestedSchema?.properties ?? {},
+        ).sort(),
+      },
+      url: {
+        callStatus: urlCall.status,
+        callIsError:
+          urlCall.status === "ok" ? urlCall.value?.isError === true : null,
+        callContent:
+          urlCall.status === "ok" ? (urlCall.value?.content ?? null) : null,
+        threadBound: url?.params?.threadId === threadId,
+        turnId: url?.params?.turnId ?? null,
+        elicitationId: url?.params?.elicitationId ?? null,
+        message: url?.params?.message ?? null,
+        url: url?.params?.url ?? null,
+      },
+      exactServerRequestCount: elicitations.length,
+      directCallDisposition:
+        elicitations.length === 0 &&
+        typeof formCallText === "string" &&
+        typeof urlCallText === "string" &&
+        /"action":"decline"/.test(formCallText) &&
+        /"action":"decline"/.test(urlCallText)
+          ? "auto_declined_without_app_client_request"
+          : "unexpected",
+    };
+    progress("completed real App Server/MCP elicitation round trips");
+  }
+
+  if (attentionLive) {
+    progress("starting opt-in live attention characterization");
+    const fixturePath = resolve(here, "attention-fixture-mcp-server.mjs");
+    const visibleModel =
+      models.status === "ok"
+        ? models.value.data?.find((model) => !model.hidden)
+        : undefined;
+    const started = await client.request("thread/start", {
+      cwd,
+      model: visibleModel?.model ?? visibleModel?.id,
+      approvalPolicy: "on-request",
+      sandbox: "read-only",
+      ephemeral: true,
+      serviceName: "rove-attention-characterization",
+      baseInstructions:
+        "This is a bounded attention-family characterization. Follow each user request literally, call only the explicitly named tool, never substitute another capability, and do not retry a declined action.",
+      config: {
+        mcp_servers: {
+          attention_fixture: {
+            command: process.execPath,
+            args: [fixturePath],
+            enabled: true,
+            required: true,
+            startup_timeout_sec: 10,
+          },
+        },
+      },
+    });
+    const threadId = started.thread.id;
+    const scenarios = [
+      {
+        name: "user_input",
+        prompt:
+          "Use the built-in request_user_input interaction exactly once to ask which fixture option I prefer: Alpha or Beta. Do not answer the question yourself.",
+      },
+      {
+        name: "command_approval",
+        prompt:
+          "Attempt this exact shell command once and do not use another tool: mkdir /private/tmp/rove-attention-fixture-command. Do not retry if permission is declined.",
+      },
+      {
+        name: "file_approval",
+        prompt:
+          "Use apply_patch exactly once to add a file named artifacts/attention-fixture-probe.txt containing only fixture. Do not use shell and do not retry if permission is declined.",
+      },
+      {
+        name: "network_approval",
+        prompt:
+          "Attempt this exact shell command once and do not use another tool: curl --fail --silent https://example.com/rove-attention-fixture. Do not retry if network permission is declined.",
+      },
+      {
+        name: "additional_permission",
+        prompt:
+          "Request additional read-only filesystem permission for /private/tmp/rove-attention-fixture-permission through the provider permission interaction. Do not use shell, edit files, or substitute another capability.",
+      },
+      {
+        name: "mcp_form",
+        prompt:
+          "Call attention_fixture.collect_preferences exactly once. Do not answer its elicitation yourself and do not call another tool.",
+      },
+      {
+        name: "mcp_url",
+        prompt:
+          "Call attention_fixture.connect_account exactly once. Do not open or visit its URL yourself and do not call another tool.",
+      },
+    ];
+    const observations = [];
+    for (const scenario of scenarios) {
+      const requestOffset = client.serverRequests.length;
+      const turnStarted = await client.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: scenario.prompt, text_elements: [] }],
+      });
+      const turnId = turnStarted.turn.id;
+      const completed = await client.waitFor(
+        (message) =>
+          message.method === "turn/completed" &&
+          message.params?.turn?.id === turnId,
+        120_000,
+      );
+      observations.push({
+        name: scenario.name,
+        turnId,
+        terminalStatus: completed.params?.turn?.status ?? null,
+        requests: client.serverRequests.slice(requestOffset).map((request) => ({
+          method: request.method,
+          requestIdPresent: request.id !== undefined,
+          threadBound: request.params?.threadId === threadId,
+          turnBound: request.params?.turnId === turnId,
+          mode: request.params?.mode ?? null,
+          availableDecisions: request.params?.availableDecisions ?? null,
+          networkApprovalContextPresent:
+            request.params?.networkApprovalContext != null,
+          permissionsPresent: request.params?.permissions != null,
+        })),
+      });
+    }
+    evidence.attentionLive = {
+      threadId,
+      scenarios: observations,
+      observedMethods: [
+        ...new Set(
+          observations.flatMap((observation) =>
+            observation.requests.map((request) => request.method),
+          ),
+        ),
+      ].sort(),
+    };
+    progress("completed opt-in live attention characterization");
   }
 
   if (lifecycle) {
@@ -733,6 +980,53 @@ if (mcpBoundary) {
     evidence.requiredMcp?.unavailableStart?.visiblyFailed === true &&
       evidence.requiredMcp?.unavailableStart?.code === -32603,
     "unavailable required MCP failed thread start with -32603",
+  );
+}
+
+if (attentionBoundary) {
+  verify(
+    evidence.attentionMcp?.serverConnected === true &&
+      evidence.attentionMcp?.serverInfoName === "rove-attention-fixture",
+    "attention MCP fixture connected through App Server",
+  );
+  verify(
+    JSON.stringify(evidence.attentionMcp?.toolNames) ===
+      JSON.stringify(["collect_preferences", "connect_account"]),
+    "attention MCP fixture exposed both deliberate triggers",
+  );
+  verify(
+    evidence.attentionMcp?.form?.callStatus === "ok" &&
+      evidence.attentionMcp?.form?.callIsError === false,
+    "structured-form MCP tool completed through the real App Server",
+  );
+  verify(
+    evidence.attentionMcp?.url?.callStatus === "ok" &&
+      evidence.attentionMcp?.url?.callIsError === false,
+    "trusted-URL MCP tool completed through the real App Server",
+  );
+  verify(
+    evidence.attentionMcp?.directCallDisposition ===
+      "auto_declined_without_app_client_request" &&
+      evidence.attentionMcp?.exactServerRequestCount === 0,
+    "direct MCP calls are characterized as non-reachable product attention",
+  );
+}
+
+if (attentionLive) {
+  verify(
+    evidence.attentionLive?.scenarios?.length === 7 &&
+      evidence.attentionLive.scenarios.every(
+        (scenario) => typeof scenario.terminalStatus === "string",
+      ),
+    "all opt-in live attention scenarios reached a terminal provider state",
+  );
+  verify(
+    evidence.attentionLive?.scenarios?.every((scenario) =>
+      scenario.requests.every(
+        (request) => request.threadBound && request.turnBound,
+      ),
+    ),
+    "every emitted live attention request retained exact thread and turn binding",
   );
 }
 
