@@ -1472,83 +1472,88 @@ async function startDesktop(): Promise<void> {
     codexComponentRoot,
     codexBaseline.codeModeHostFilename,
   );
-  if (codexMcpLaunch !== undefined) {
-    console.info(
-      `[codex] Resolving ${codexSource} component ${codexBaseline.id} at ${configuredCodexExecutable}.`,
-    );
-    codexExecutionCore = new CodexExecutionCore({
-      isPackaged: app.isPackaged,
-      ...(app.isPackaged
-        ? { packagedExecutablePath: configuredCodexExecutable }
-        : {
-            developmentExecutablePath: configuredCodexExecutable,
-            developmentCodeModeHostPath: configuredCodeModeHost,
-          }),
-      clientVersion: COMPANION_PROVENANCE.version,
-      stateDirectory: join(desktopHome, "codex-product"),
-      taskWorkingDirectory: desktopHome,
-      taskWorkspaceRoot: join(desktopHome, "task-workspaces"),
-      runtime,
-      attachmentAuthority,
-      attachmentRuntime: runtime,
-      onFileAttention: () => openFullSurface(),
-      mcpLaunch: codexMcpLaunch,
-      onProductStateChanged: async () => {
-        await refreshDesktopSurfaceSnapshot(runtime);
-      },
-    });
-    codexExecutionCoreStarting = true;
-    try {
-      await codexExecutionCore.start();
-      if (roveAccountService.client) {
-        workflowSyncStateStore = new WorkflowSyncStateStore(
-          join(desktopHome, "identity", "workflow-sync.v1.sqlite3"),
-        );
-        workflowSyncCoordinator = new WorkflowSyncCoordinator(
-          codexExecutionCore.workflowStore(),
-          workflowSyncStateStore,
-          new SupabaseWorkflowConfigurationProvider(roveAccountService.client),
-          () => roveAccountService?.ownerId() ?? null,
-          () => roveAccountService?.authEpoch() ?? 0,
-        );
-        if (
-          roveAccountService.ownerId() &&
-          workflowSyncCoordinator.projection().boundOwnerId &&
-          workflowSyncCoordinator.projection().status !== "account_mismatch"
-        )
-          void workflowSyncCoordinator
-            .synchronize()
-            .then(() => refreshDesktopSurfaceSnapshot(runtime))
-            .catch(() => undefined);
-        workflowSyncMonitor = setInterval(() => {
+  const accountService = roveAccountService;
+  const startCodexExecutionCore = async (): Promise<void> => {
+    if (codexMcpLaunch !== undefined) {
+      console.info(
+        `[codex] Resolving ${codexSource} component ${codexBaseline.id} at ${configuredCodexExecutable}.`,
+      );
+      codexExecutionCore = new CodexExecutionCore({
+        isPackaged: app.isPackaged,
+        ...(app.isPackaged
+          ? { packagedExecutablePath: configuredCodexExecutable }
+          : {
+              developmentExecutablePath: configuredCodexExecutable,
+              developmentCodeModeHostPath: configuredCodeModeHost,
+            }),
+        clientVersion: COMPANION_PROVENANCE.version,
+        stateDirectory: join(desktopHome, "codex-product"),
+        taskWorkingDirectory: desktopHome,
+        taskWorkspaceRoot: join(desktopHome, "task-workspaces"),
+        runtime,
+        attachmentAuthority,
+        attachmentRuntime: runtime,
+        onFileAttention: () => openFullSurface(),
+        mcpLaunch: codexMcpLaunch,
+        onProductStateChanged: async () => {
+          await refreshDesktopSurfaceSnapshot(runtime);
+        },
+      });
+      codexExecutionCoreStarting = true;
+      try {
+        await codexExecutionCore.start();
+        if (accountService.client) {
+          workflowSyncStateStore = new WorkflowSyncStateStore(
+            join(desktopHome, "identity", "workflow-sync.v1.sqlite3"),
+          );
+          workflowSyncCoordinator = new WorkflowSyncCoordinator(
+            codexExecutionCore.workflowStore(),
+            workflowSyncStateStore,
+            new SupabaseWorkflowConfigurationProvider(accountService.client),
+            () => roveAccountService?.ownerId() ?? null,
+            () => roveAccountService?.authEpoch() ?? 0,
+          );
           if (
-            roveAccountService?.ownerId() &&
-            workflowSyncCoordinator?.projection().boundOwnerId &&
-            workflowSyncCoordinator?.projection().status !== "account_mismatch"
+            accountService.ownerId() &&
+            workflowSyncCoordinator.projection().boundOwnerId &&
+            workflowSyncCoordinator.projection().status !== "account_mismatch"
           )
             void workflowSyncCoordinator
-              ?.synchronize()
+              .synchronize()
               .then(() => refreshDesktopSurfaceSnapshot(runtime))
               .catch(() => undefined);
-        }, 60_000);
-        workflowSyncMonitor.unref();
+          workflowSyncMonitor = setInterval(() => {
+            if (
+              roveAccountService?.ownerId() &&
+              workflowSyncCoordinator?.projection().boundOwnerId &&
+              workflowSyncCoordinator?.projection().status !==
+                "account_mismatch"
+            )
+              void workflowSyncCoordinator
+                ?.synchronize()
+                .then(() => refreshDesktopSurfaceSnapshot(runtime))
+                .catch(() => undefined);
+          }, 60_000);
+          workflowSyncMonitor.unref();
+        }
+        codexExecutionCoreStarting = false;
+        codexProductError = null;
+        await refreshDesktopSurfaceSnapshot(runtime);
+        console.info(
+          `[codex] Trusted App Server execution core is ready (${codexBaseline.cliVersion}; ${codexBaseline.executableSha256}).`,
+        );
+      } catch (error) {
+        codexExecutionCoreStarting = false;
+        codexProductError =
+          error instanceof Error ? error.message : "Codex App Server failed.";
+        console.error(`[codex] ${codexProductError}`);
+        await refreshDesktopSurfaceSnapshot(runtime);
       }
-      codexExecutionCoreStarting = false;
-      codexProductError = null;
-      await refreshDesktopSurfaceSnapshot(runtime);
-      console.info(
-        `[codex] Trusted App Server execution core is ready (${codexBaseline.cliVersion}; ${codexBaseline.executableSha256}).`,
-      );
-    } catch (error) {
-      codexExecutionCoreStarting = false;
-      codexProductError =
-        error instanceof Error ? error.message : "Codex App Server failed.";
-      console.error(`[codex] ${codexProductError}`);
+    } else {
+      codexProductError = "Codex MCP launch configuration is unavailable.";
       await refreshDesktopSurfaceSnapshot(runtime);
     }
-  } else {
-    codexProductError = "Codex MCP launch configuration is unavailable.";
-  }
+  };
 
   registerIpc(
     runtime,
@@ -1677,6 +1682,8 @@ async function startDesktop(): Promise<void> {
 
     followController.setSession(followerSession);
   });
+
+  await startCodexExecutionCore();
 }
 
 if (!hasSingleInstanceLock) {

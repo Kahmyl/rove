@@ -662,6 +662,13 @@ describe("native product composer state", () => {
 
   it("projects exact customer Codex states without exposing technical failures", () => {
     expect(recoveryLabel(null)).toBe("Starting Codex");
+    const hydrating = desktop();
+    hydrating.product = null;
+    expect(codexCustomerStatus(hydrating)).toMatchObject({
+      kind: "starting",
+      label: "Starting Codex",
+      recovery: null,
+    });
     const starting = desktop();
     starting.product!.host = {
       state: "initializing",

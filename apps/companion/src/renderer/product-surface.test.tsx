@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { ProductTaskCapabilities } from "../main/codex/task-coordinator.js";
 import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+} from "../main/runtime-failure-containment.js";
+import {
   ArchivedTaskSettings,
   LocalBackupSettings,
   ProductSurface,
@@ -162,6 +166,74 @@ function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("shows only neutral local hydration before the first coherent Product snapshot", () => {
+    const nullHtml = renderToStaticMarkup(
+      <ProductSurface
+        desktop={null}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    const partial = snapshot();
+    partial.product = null;
+    const partialHtml = renderToStaticMarkup(
+      <ProductSurface
+        desktop={partial}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+
+    for (const html of [nullHtml, partialHtml]) {
+      expect(html).toContain('class="product-hydration"');
+      expect(html).toContain("Opening Rove");
+      expect(html).toContain("Loading your local tasks");
+      expect(html).not.toContain("New task");
+      expect(html).not.toContain("Codex couldn&#x27;t start");
+      expect(html).not.toContain('class="composer-card"');
+    }
+  });
+
+  it("turns initial host failure into a bounded local recovery action", () => {
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={null}
+        connectionError="raw IPC failure"
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Rove couldn&#x27;t open");
+    expect(html).toContain("Your local tasks are still on this device");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("raw IPC failure");
+    expect(html).not.toContain('aria-busy="true"');
+  });
+
+  it("shows only the customer-safe Runtime dependency warning", () => {
+    const value = snapshot();
+    value.product!.recoveryWarnings = [
+      "Codex event recovery: internal identity detail.",
+      RUNTIME_CONFIGURATION_WARNING,
+      RUNTIME_TRANSIENT_WARNING,
+    ];
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Browser service status"');
+    expect(html).toContain("Browser work is unavailable");
+    expect(html).toContain("Conversation history remains available");
+    expect(html).not.toContain("internal identity detail");
+    expect(html.match(/Browser service status/g)).toHaveLength(1);
+  });
+
   it("keeps one primary composer slot across ready, active, stopping, and stopped states", () => {
     expect(
       taskComposerPrimaryAction({

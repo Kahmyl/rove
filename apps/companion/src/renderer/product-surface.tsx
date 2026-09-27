@@ -40,6 +40,10 @@ import { customerTaskPresentation } from "../main/codex/customer-task-presentati
 import type { CustomerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
+import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+} from "../main/runtime-failure-containment.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
 import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
@@ -48,6 +52,7 @@ import {
   archivedProductTasks,
   codexCustomerStatus,
   composerGate,
+  initialProductHydrationPending,
   modeLabel,
   reconcileSelectedTaskId,
   selectableProductTasks,
@@ -3628,6 +3633,43 @@ export function ProductSurface({
     void window.rove.endFollowerDrag();
   };
 
+  const runtimeWarning = product?.recoveryWarnings.find(
+    (warning) =>
+      warning === RUNTIME_CONFIGURATION_WARNING ||
+      warning === RUNTIME_TRANSIENT_WARNING,
+  );
+
+  if (initialProductHydrationPending(desktop)) {
+    const failed = connectionError !== null;
+    return (
+      <main
+        className={`product-hydration${follower ? " product-hydration-follower" : ""}`}
+        aria-live="polite"
+        aria-busy={!failed}
+      >
+        <section>
+          <img src={roveMarkUrl} alt="" />
+          {!failed && <span className="activity-spinner" aria-hidden="true" />}
+          <strong>{failed ? "Rove couldn't open" : "Opening Rove"}</strong>
+          <p>
+            {failed
+              ? "Your local tasks are still on this device. Try again."
+              : "Loading your local tasks…"}
+          </p>
+          {failed && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void refresh()}
+            >
+              Try again
+            </button>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   if (presentation === "chip") {
     return (
       <div
@@ -4969,6 +5011,16 @@ export function ProductSurface({
           }
           tabIndex={0}
         >
+          {runtimeWarning !== undefined && (
+            <section
+              className="product-warning runtime-dependency-warning"
+              aria-label="Browser service status"
+              role="status"
+            >
+              <strong>Browser work is unavailable</strong>
+              <span>{runtimeWarning}</span>
+            </section>
+          )}
           {unmatchedSession !== null && (
             <section
               className="product-warning"
@@ -6852,74 +6904,74 @@ export function ProductSurface({
                             id="task-followup-command-palette"
                             data-composer-group="commands"
                           >
-                              <summary aria-label="Commands" title="Commands">
-                                <span aria-hidden="true">/</span>
-                              </summary>
-                              <div
-                                className="composer-command-palette"
-                                aria-label="Task commands and settings"
-                              >
-                                <label className="composer-command-search">
-                                  <span>Commands</span>
-                                  <input
-                                    type="search"
-                                    aria-label="Search commands"
-                                    placeholder="Search task settings"
-                                    value={commandPaletteQuery}
-                                    onChange={(event) =>
-                                      setCommandPaletteQuery(event.target.value)
-                                    }
-                                  />
-                                </label>
-                                {commandPaletteMatches(
-                                  commandPaletteQuery,
-                                  "task",
-                                  "mode",
-                                  "browser",
-                                  "approval",
-                                ) && (
-                                  <section>
-                                    <strong>Task</strong>
-                                    <div className="composer-control-rail">
-                                      <ComposerModeMenu
-                                        mode={viewedTask.executionMode}
-                                      />
-                                      <ComposerPermissionMenu
-                                        approvalsReviewer={
-                                          viewedTask.approvalsReviewer
-                                        }
-                                        mode={viewedTask.executionMode}
-                                      />
-                                      <details className="composer-menu composer-setup-menu">
-                                        <summary aria-label="Browser profile">
-                                          Browser profile
-                                        </summary>
-                                        <div className="composer-popover compact-popover task-settings-popover">
-                                          <div className="task-frozen-option">
-                                            <span>{identityLabel}</span>
-                                            <small>Fixed for this task</small>
-                                          </div>
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </section>
-                                )}
-                                {commandPaletteMatches(
-                                  commandPaletteQuery,
-                                  "model",
-                                  "reasoning",
-                                  "effort",
-                                ) && (
-                                  <section>
-                                    <strong>Model</strong>
-                                    <ComposerModelMenu
-                                      models={product?.catalog.models ?? []}
-                                      modelId={viewedTask.model ?? ""}
-                                      effort={viewedTask.reasoningEffort ?? ""}
+                            <summary aria-label="Commands" title="Commands">
+                              <span aria-hidden="true">/</span>
+                            </summary>
+                            <div
+                              className="composer-command-palette"
+                              aria-label="Task commands and settings"
+                            >
+                              <label className="composer-command-search">
+                                <span>Commands</span>
+                                <input
+                                  type="search"
+                                  aria-label="Search commands"
+                                  placeholder="Search task settings"
+                                  value={commandPaletteQuery}
+                                  onChange={(event) =>
+                                    setCommandPaletteQuery(event.target.value)
+                                  }
+                                />
+                              </label>
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "task",
+                                "mode",
+                                "browser",
+                                "approval",
+                              ) && (
+                                <section>
+                                  <strong>Task</strong>
+                                  <div className="composer-control-rail">
+                                    <ComposerModeMenu
+                                      mode={viewedTask.executionMode}
                                     />
-                                  </section>
-                                )}
-                              </div>
+                                    <ComposerPermissionMenu
+                                      approvalsReviewer={
+                                        viewedTask.approvalsReviewer
+                                      }
+                                      mode={viewedTask.executionMode}
+                                    />
+                                    <details className="composer-menu composer-setup-menu">
+                                      <summary aria-label="Browser profile">
+                                        Browser profile
+                                      </summary>
+                                      <div className="composer-popover compact-popover task-settings-popover">
+                                        <div className="task-frozen-option">
+                                          <span>{identityLabel}</span>
+                                          <small>Fixed for this task</small>
+                                        </div>
+                                      </div>
+                                    </details>
+                                  </div>
+                                </section>
+                              )}
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "model",
+                                "reasoning",
+                                "effort",
+                              ) && (
+                                <section>
+                                  <strong>Model</strong>
+                                  <ComposerModelMenu
+                                    models={product?.catalog.models ?? []}
+                                    modelId={viewedTask.model ?? ""}
+                                    effort={viewedTask.reasoningEffort ?? ""}
+                                  />
+                                </section>
+                              )}
+                            </div>
                           </details>
                           <ComposerAmbientControls>
                             <ComposerModeMenu mode={viewedTask.executionMode} />

@@ -18,6 +18,15 @@ export function newestDesktopSnapshot(
     : incoming;
 }
 
+export function initialProductHydrationPending(
+  desktop: DesktopSurfaceSnapshot | null,
+): boolean {
+  return (
+    desktop === null ||
+    (desktop.product === null && desktop.productError === null)
+  );
+}
+
 export interface ComposerSelection {
   outcome: string;
   mode: ExecutionMode;
@@ -66,21 +75,21 @@ export function codexCustomerStatus(
       ready: false,
       recovery: "retry",
     };
-  if (desktop === null)
+  if (initialProductHydrationPending(desktop))
     return {
       kind: "starting",
       label: "Starting Codex",
       ready: false,
       recovery: null,
     };
-  if (desktop.productError !== null)
+  if (desktop!.productError !== null)
     return {
       kind: "startup_failed",
       label: "Codex couldn't start",
       ready: false,
       recovery: "restart_rove",
     };
-  const product = desktop.product;
+  const product = desktop!.product;
   if (product === null || product.host.state === "failed")
     return {
       kind: "startup_failed",

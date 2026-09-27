@@ -1,7 +1,7 @@
 # ROVE-STAB-05 — Startup hydration and degraded-state UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready
+**Status:** In Progress — read-only diagnosis
 **Dependencies:** STAB-03, STAB-04  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -25,6 +25,18 @@ Use disposable fixture `/private/tmp/rove-stab04-process.9fBJvP` for invalid/una
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
+### Actual entry state
+
+- exact stacked start SHA: `d642822d0a00516ff32fec86d2fdfd35e5cbf6b9`, the final pushed STAB-04 head;
+- branch: `codex/stab05-startup-hydration`, clean at entry;
+- STAB-04 implementation and handoff are pushed, while PR creation remains unavailable to the authenticated non-collaborator identity; no PR was created or merged;
+- diagnosis starts from current Electron startup order and renderer snapshot handling. No live model, credentialed service, packaged app, or original acceptance home will be used.
+
+### Read-only diagnosis
+
+- `startDesktop()` awaits managed Runtime startup and the complete `CodexExecutionCore.start()` path—including account refresh and bounded provider reconciliation—before registering IPC or creating/presenting the full surface. A slow provider therefore delays even the neutral local window instead of allowing local history to hydrate independently.
+- The renderer starts with `desktop === null`, but `ProductSurface` renders the complete empty task shell immediately. A coherent desktop envelope with `product === null` and no `productError` is also classified as `startup_failed`, so a normal in-progress local hydration can flash New Task / composer and “Codex couldn't start” before the first local Product snapshot.
+- Once `LocalProductSnapshot` exists, current Task/customer projections already preserve STAB-03 per-Task unresolved state and STAB-04 bounded recovery warnings. The owning defect is startup composition and initial rendering, not another Task or Runtime state.
 
 ## Invariant
 

@@ -315,6 +315,22 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 
 **Non-goals:** do not change Task/Runtime identity, invent another recovery model, or reinterpret all transport errors as the retained configuration failure.
 
+### ROVE-STAB-05 — IN PROGRESS — READ-ONLY DIAGNOSIS
+
+**Exact stacked start SHA:** `d642822d0a00516ff32fec86d2fdfd35e5cbf6b9` (final pushed `codex/stab04-runtime-failure-containment` head).
+
+**Branch:** `codex/stab05-startup-hydration`; clean at entry. No predecessor PR was merged.
+
+**Inherited invariants:** STAB-03 distinguishes active bounded checking from exhausted `Task state unclear`; STAB-04 preserves local Product truth behind one classified Runtime degraded state and customer-safe warning.
+
+**Owned finding:** MR-006 initial hydration coherence and presentation of the established STAB-03/04 states.
+
+**First gate:** trace Electron window/IPC publication order and renderer `null` / product-null transitions, then reproduce any contradictory pre-snapshot shell before changing startup behavior.
+
+**Diagnosis:** `startDesktop()` currently waits for managed Runtime plus complete execution-core startup, account refresh and bounded provider reconciliation before IPC registration/window presentation. Renderer `desktop === null` nevertheless renders the full empty shell; a product-null/error-null envelope is misclassified as startup failure. Current non-null local Product projections already carry the correct STAB-03 per-Task and STAB-04 degraded-warning states, narrowing MR-006 to startup ordering and coherent initial presentation.
+
+**Non-goals:** do not add another recovery state, make provider reconciliation a prerequisite for local conversation readability, or reopen Runtime retry taxonomy.
+
 ## Future ticket rows
 
 ROVE-STAB-05 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.

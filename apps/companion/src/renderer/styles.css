@@ -984,6 +984,63 @@ select:focus-visible {
     var(--surface-subtle);
 }
 
+.product-hydration {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  place-items: center;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgb(119 153 132 / 0.13),
+      transparent 34%
+    ),
+    var(--surface);
+}
+
+.product-hydration > section {
+  display: flex;
+  max-width: 340px;
+  align-items: center;
+  padding: 28px;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.product-hydration img {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+}
+
+.product-hydration strong {
+  font-size: 18px;
+}
+
+.product-hydration p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.product-hydration button {
+  margin-top: 6px;
+}
+
+.product-hydration-follower > section {
+  padding: 12px;
+}
+
+.product-hydration-follower img,
+.product-hydration-follower p {
+  display: none;
+}
+
 .product-topbar {
   display: flex;
   height: 72px;
