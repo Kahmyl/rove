@@ -21,6 +21,8 @@ Inherit STAB-09's provider matrix rather than requiring every deterministic requ
 
 Inherit STAB-10's qualified browser-control authority rather than reconstructing it: requested and voluntary takeover preserve exact Task/session/page/handoff ownership; Return requires a fresh inspection and rejects stale targets; restart recovery and main/follower projections preserve the same identity. STAB-13 owns the combined development-app, narrow-layout, keyboard, reduced-motion, multi-Task and packaged/native-surface matrix, not another low-level control implementation.
 
+Inherit STAB-11's browser resource and surface presentation rather than reopening it: identity-less Tasks can retry after selecting a later profile, deleted frozen profile identities recover through a new Task, bound sessions without confirmed attachment present bounded recovery, unmatched cleanup is device-global, and the full surface yields only after exact browser foreground plus a visible follower decision. The fixture Electron walkthrough passed its multi-Task recovery presentations, and a real macOS/Playwright Chromium harness qualified exact foreground PID, CDP window/page identity and viable transfer twice. STAB-13 retains the combined packaged matrix and live unrelated-foreground revocation; the latter remained deterministic-only because scripted application activation could not reliably displace Chromium during STAB-11.
+
 ## Objective
 
 Prove that individually repaired authorities compose into one coherent product.
