@@ -633,3 +633,10 @@ The complete published STAB-02 through STAB-14 chain was verified as linear rela
 The local acceptance/planning continuation `2ff214b` → `7c1ea53` was then reconciled with that exact `origin/main` by a non-rewriting merge, producing `7a6f92bd20ce8196b101d5919b9988a6c628d1f9`, published as `origin/codex/human-review-remediation-planning`. [PR #38](https://github.com/Kahmyl/rove/pull/38) is the single draft PR for the Human-Review Remediation Program and subsequent UXR implementation. It targets canonical `main`; no remediation implementation had begun at PR creation and no merge is authorized.
 
 Continue from PR #38 / `codex/human-review-remediation-planning`. Do not reconstruct UXR work from the old stacked stabilization branches.
+
+
+### MR-029 reopened during PR #38 remote review — 3 October 2026
+
+Canonical `main` and the UXR planning PR were successfully reconciled, but PR #38's docs-only repository workflow re-established qualification nondeterminism. Workflow run `37105765709` attempt 1 failed `repeatable_read: after_claim_before_dispatch` in the real process cut matrix with `Task is not ready for a handoff`; an unchanged diagnostic rerun passed that case and instead timed out the recycled-list Playwright browser-inspection case. Repository checks, typecheck and build passed before the test failures.
+
+This contradicts the prior MR-029 closure evidence. MR-029 is open again under STAB-14. Do not treat a later lucky rerun as closure and do not inflate timeouts without causal evidence. The exact next gate before UXR product-source implementation is a bounded read-only diagnosis of the release-gate nondeterminism, followed by an owning fix and repeated qualification. PR #38 remains the single review/implementation surface and no merge is authorized.

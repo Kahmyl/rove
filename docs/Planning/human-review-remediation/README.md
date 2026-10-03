@@ -85,4 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-Begin UXR-02 read-only baseline/design reconciliation before source edits. Consume the exact UXR-01 planning commit, inspect current shell/CSS/projections, measure allocations and select coherent responsive/surface responsibilities. Do not begin implementation in this planning task. Retire this bounded program's ticket metadata with the active plan after completion; product/runtime/test names remain descriptive.
+Remote planning review approved the UXR contract/ticket structure, but it also produced new contradictory release-gate evidence: MR-029 has reopened on PR #38 after two unchanged docs-only CI attempts failed in different process/browser-backed tests. **Do not begin UXR-02 product-source implementation until MR-029 is reconciled and the release/CI gate is demonstrably trustworthy.**
+
+The immediate gate is read-only MR-029 diagnosis against the PR #38 CI evidence. Once that blocker is repaired and qualified, begin UXR-02 read-only baseline/design reconciliation before source edits, consume the exact UXR-01 planning checkpoint, inspect current shell/CSS/projections, measure allocations and select coherent responsive/surface responsibilities. Retire this bounded program's ticket metadata with the active plan after completion; product/runtime/test names remain descriptive.

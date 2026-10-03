@@ -99,3 +99,12 @@ The previously stacked STAB-02 through STAB-14 chain was reconciled into canonic
 The branch is published as `origin/codex/human-review-remediation-planning` and [PR #38](https://github.com/Kahmyl/rove/pull/38) is the single remote review and implementation surface for UXR-02 through UXR-08. At PR creation it targeted `main`, was 3 commits ahead / 0 behind, and contained only the immutable acceptance records plus the UXR planning/contract checkpoint beyond canonical `main`. PR #38 remains draft and must not merge without explicit human authorization after implementation and required qualification.
 
 This remote reconciliation changes no UXR contract or finding ownership. It only establishes one canonical remote base and one reviewable continuation branch. Exact next gate remains **UXR-02 read-only baseline/design reconciliation before source edits**.
+
+
+## Remote review gate — MR-029 reopened, 3 October 2026
+
+Remote review of PR #38 found no remaining structural defect in the UXR-01–08 planning package after aligning STAB-14's post-remediation human gate. The branch is based on canonical `main`, contains no product-source changes, and the planning contracts are approved in substance.
+
+The approval cannot yet authorize UXR product-source implementation because the repository's own release gate produced contradictory evidence. PR #38 workflow run `37105765709` attempt 1 passed repository checks, typecheck and build but failed `task-engine-cut-points.test.ts` at `repeatable_read: after_claim_before_dispatch` with `Task is not ready for a handoff`. One diagnostic rerun was authorized without source changes: the exact cut passed, while `playwright-browser-inspection.test.ts` instead timed out in the recycled-list content case at its existing 5-second timeout. This is the original MR-029 signature: different process/browser-backed failures on unchanged/docs-only source.
+
+MR-029 is therefore reopened and becomes the immediate pre-UXR implementation gate. Do not chase green CI by repeated reruns, timeout inflation, assertion weakening or removing real-boundary coverage. Diagnose whether shared resource pressure, process scheduling, harness lifecycle or a product race owns the instability; fix the owning cause or establish an evidence-backed bounded replacement gate preserving equivalent invariants. After repeatable qualification is restored, UXR-02 resumes at its documented read-only baseline/design reconciliation.
