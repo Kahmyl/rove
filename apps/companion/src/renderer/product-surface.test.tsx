@@ -2516,7 +2516,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       '<section class="product-main product-main-task" aria-label="Task workspace" tabindex="0">',
     );
     expect(html).toContain(
-      '<aside class="product-sidebar" aria-label="Task controls and status" tabindex="0">',
+      '<aside class="product-sidebar" aria-label="Task controls and status" tabindex="0" id="shell-navigation">',
     );
     expect(html).toContain("Long conversation entry 39");
     expect(html).not.toContain('aria-label="Archive Untitled task"');

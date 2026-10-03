@@ -32,7 +32,7 @@ A substitute implementation of unfinished predecessors, silent fixes to unrelate
 
 ## Continuity entry contract
 
-Consume all three specialist exits and UXR-02/03 invariants. Record exact integrated candidate SHA, outstanding MR disposition and evidence modes before beginning the matrix.
+Consume all three specialist exits and accepted UXR-02/03 invariants. The UXR-02 foundation candidate uses 968px and 1280px collapse boundaries, independently persisted navigation preference, transient mutually exclusive drawers, and the 8/12/16px surface scale. Its finite 27-capture foundation fixture does not establish integrated specialist composition; reuse its DOM/geometry/focus assertions without treating them as human acceptance. Record exact integrated candidate SHA, outstanding MR disposition and evidence modes before beginning the matrix.
 
 ## Investigation requirements
 

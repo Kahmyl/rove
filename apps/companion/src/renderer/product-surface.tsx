@@ -46,6 +46,13 @@ import {
   RUNTIME_TRANSIENT_WARNING,
 } from "../main/runtime-failure-containment.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
+import {
+  resolveShellComposition,
+  ShellSecondarySurface,
+  useShellViewport,
+  useSurfaceFocus,
+  type SecondaryDisclosure,
+} from "./product-shell.js";
 import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
 import {
@@ -2178,6 +2185,9 @@ export function ProductSurface({
     useState<ThemePreference>(loadThemePreference);
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(loadSidebarCollapsed);
+  const shellWidth = useShellViewport();
+  const [secondaryDisclosure, setSecondaryDisclosure] =
+    useState<SecondaryDisclosure>(null);
   const [windowFullscreen, setWindowFullscreen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -2302,15 +2312,16 @@ export function ProductSurface({
       }
     };
     const dismissOpenMenusWithKeyboard = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      document
-        .querySelectorAll<HTMLDetailsElement>(
-          ".account-menu[open], .app-menu[open], .composer-menu[open], .profile-actions[open], .task-more-menu[open]",
-        )
-        .forEach((menu) => {
-          menu.open = false;
-          menu.querySelector<HTMLElement>("summary")?.focus();
-        });
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const menu = document.querySelector<HTMLDetailsElement>(
+        ".account-menu[open], .app-menu[open], .composer-menu[open], .profile-actions[open], .task-more-menu[open], .task-queue-more[open]",
+      );
+      if (menu) {
+        event.preventDefault();
+        menu.open = false;
+        menu.querySelector<HTMLElement>("summary")?.focus();
+        return;
+      }
       setProfileManagerOpen(false);
       setSettingsOpen(false);
       setCodexRecoveryOpen(false);
@@ -2413,6 +2424,25 @@ export function ProductSurface({
   const selectedWorkflow = workflowWorkspace.workflow;
   const selectedWorkflowOutput = workflowWorkspace.outputs.find(
     ({ result }) => result.resultId === selectedWorkflowOutputId,
+  );
+  const shellComposition = resolveShellComposition(
+    shellWidth,
+    sidebarCollapsed,
+    Boolean(viewedTask && !selectedWorkflow),
+  );
+  useEffect(() => {
+    setSecondaryDisclosure(null);
+  }, [
+    shellComposition.mode,
+    shellComposition.navigation,
+    shellComposition.inspector,
+    viewedTask?.taskId,
+    selectedWorkflow?.workflowId,
+  ]);
+  useSurfaceFocus(activeModal, () =>
+    document.querySelector<HTMLElement>(
+      '.product-app [role="dialog"]:not([data-shell-drawer])',
+    ),
   );
   const followup = followupDraftForTask(followupDrafts, viewedTask?.taskId);
   const setFollowup = (value: string) => {
@@ -3841,9 +3871,7 @@ export function ProductSurface({
               ? "Attention needed"
               : customerCodexStatus.label}
           </span>
-          <strong>
-            {activeTask ? activeSurfaceTitle : "Rove is ready"}
-          </strong>
+          <strong>{activeTask ? activeSurfaceTitle : "Rove is ready"}</strong>
           {activeCollaboration?.browser.canReturnToRove && (
             <small>{activeCollaboration.browser.description}</small>
           )}
@@ -4060,7 +4088,10 @@ export function ProductSurface({
 
   return (
     <div
-      className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
+      className={`product-app${windowFullscreen ? " window-fullscreen" : ""}`}
+      data-shell-mode={shellComposition.mode}
+      data-shell-navigation={shellComposition.navigation ? "inline" : "drawer"}
+      data-shell-inspector={shellComposition.inspector ? "inline" : "drawer"}
     >
       {codexRecoveryDialog}
       {archiveTask && (
@@ -4576,10 +4607,33 @@ export function ProductSurface({
         <button
           className="sidebar-toggle"
           type="button"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!sidebarCollapsed}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setSidebarCollapsed((current) => !current)}
+          aria-label={
+            shellComposition.mode === "compact"
+              ? secondaryDisclosure === "navigation"
+                ? "Close navigation"
+                : "Open navigation"
+              : sidebarCollapsed
+                ? "Expand sidebar"
+                : "Collapse sidebar"
+          }
+          aria-expanded={
+            shellComposition.navigation || secondaryDisclosure === "navigation"
+          }
+          aria-controls="shell-navigation"
+          title={
+            shellComposition.mode === "compact"
+              ? "Navigation"
+              : sidebarCollapsed
+                ? "Expand sidebar"
+                : "Collapse sidebar"
+          }
+          onClick={() => {
+            if (shellComposition.mode === "compact")
+              setSecondaryDisclosure((current) =>
+                current === "navigation" ? null : "navigation",
+              );
+            else setSidebarCollapsed((current) => !current);
+          }}
         >
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <rect x="2.5" y="3" width="15" height="14" rx="2.5" />
@@ -4635,6 +4689,22 @@ export function ProductSurface({
             )}
         </div>
         <div className="product-topbar-actions">
+          {viewedTask && !selectedWorkflow && !shellComposition.inspector && (
+            <button
+              className="shell-inspector-toggle"
+              type="button"
+              aria-label="Open Task details"
+              aria-controls="shell-inspector"
+              aria-expanded={secondaryDisclosure === "inspector"}
+              onClick={() =>
+                setSecondaryDisclosure((current) =>
+                  current === "inspector" ? null : "inspector",
+                )
+              }
+            >
+              Details
+            </button>
+          )}
           <div className="product-health" aria-live="polite">
             <span
               className={`status-pip status-${customerCodexStatus.ready ? "ready" : customerCodexStatus.kind === "starting" || customerCodexStatus.kind === "signing_in" ? "starting" : "offline"}`}
@@ -7189,10 +7259,29 @@ export function ProductSurface({
           )}
         </section>
 
-        <aside
+        <ShellSecondarySurface
+          name="navigation"
+          onDismissMenu={() => {
+            if (!taskContextMenu) return false;
+            Array.from(
+              document.querySelectorAll<HTMLElement>(".task-history-select"),
+            )
+              .find(
+                (node) =>
+                  node.getAttribute("aria-label") ===
+                  `Task history: ${taskContextMenu.taskId}`,
+              )
+              ?.focus();
+            setTaskContextMenu(null);
+            setRenamingTaskId(null);
+            return true;
+          }}
+          label="Task controls and status"
           className="product-sidebar"
-          aria-label="Task controls and status"
-          tabIndex={0}
+          inline={shellComposition.navigation}
+          open={secondaryDisclosure === "navigation"}
+          suspended={activeModal !== null}
+          onClose={() => setSecondaryDisclosure(null)}
         >
           <button
             className="sidebar-new-task"
@@ -7203,6 +7292,7 @@ export function ProductSurface({
                 : undefined
             }
             onClick={() => {
+              setSecondaryDisclosure(null);
               setSelectedWorkflowWorkspaceId(null);
               setSelectedWorkflowOutputId(null);
               setSelectedWorkflowId("");
@@ -7238,6 +7328,7 @@ export function ProductSurface({
                     : undefined
                 }
                 onClick={() => {
+                  setSecondaryDisclosure(null);
                   setSelectedWorkflowWorkspaceId(workflow.workflowId);
                   setWorkflowWorkspaceSection("home");
                   setSelectedWorkflowOutputId(null);
@@ -7303,6 +7394,7 @@ export function ProductSurface({
                       entry.taskId === viewedTask?.taskId ? "true" : undefined
                     }
                     onClick={() => {
+                      setSecondaryDisclosure(null);
                       setSelectedWorkflowWorkspaceId(null);
                       setSelectedWorkflowOutputId(null);
                       setSelectedTaskId(entry.taskId);
@@ -7425,9 +7517,17 @@ export function ProductSurface({
               )}
             </div>
           )}
-        </aside>
+        </ShellSecondarySurface>
         {viewedTask && !selectedWorkflow && (
-          <aside className="product-inspector" aria-label="Task inspector">
+          <ShellSecondarySurface
+            name="inspector"
+            label="Task inspector"
+            className="product-inspector"
+            inline={shellComposition.inspector}
+            open={secondaryDisclosure === "inspector"}
+            suspended={activeModal !== null}
+            onClose={() => setSecondaryDisclosure(null)}
+          >
             <section
               className="inspector-panel browser-status"
               aria-label="Browser status"
@@ -7667,7 +7767,7 @@ export function ProductSurface({
                 </div>
               )}
             </details>
-          </aside>
+          </ShellSecondarySurface>
         )}
       </main>
     </div>

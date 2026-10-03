@@ -156,3 +156,72 @@ One declared instrumented five-file/four-worker diagnostic passed 199 tests in 1
 **Verification:** focused authority suites 70 tests in 874ms; all four affected heavy files included in every final full gate; broader isolated process recovery against the corrected source eight scenario groups with zero stale processes/ports/profiles/browser attachments/nonterminal sessions/cleanup-required Tasks and removed home. `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, `pnpm lint`, and `node --test experiments/agent-execution/*.test.mjs` (25 tests) pass. Six unchanged `pnpm test:release` runs passed 203 files / 1,755 tests each in 124.93s, 125.05s, 126.69s, 122.45s, 125.33s, 127.13s; Linux workflow `37113023226` attempts 1/2 passed in 177.84s / 305.71s, each 203 files / 1,754 tests plus the existing macOS-only skip. Exact commands, case timings, failed-first evidence, stopped candidate series, cancelled repeats and residual scope are in STAB-14's owning correction section and retained ignored `artifacts/release-repeatability/`. No green rerun is substituted for a failed candidate.
 
 **Stop/next gate:** obtain remote review authorization of this MR-029 correction on PR #38; then **UXR-02 read-only baseline/design reconciliation**, consuming the preserved UXR-01 checkpoint and this qualified source boundary. Do not begin it during this task. No source implementation permission is inferred from these machine passes, and no live/provider, packaged or human acceptance was rerun.
+
+## UXR-02 responsive shell foundation — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and authorization
+
+Branch `codex/human-review-remediation-planning`; exact committed start `4f44a2c33406fe5f1c3e40dae56eeb1094d554df`. `pnpm codex:context` confirmed the intended branch/HEAD and two transferred unfinished paths: modified `product-surface.tsx` and untracked `product-shell.tsx`. These were this effort's unverified edits, not unrelated user changes or an accepted checkpoint; the sole implementation worker completed/revised them. No subagent, rebase, force push or merge was used. PR #38 remains the sole implementation surface.
+
+The human handoff explicitly accepts remote technical review of MR-029/040/041/042 at this baseline and the completed UXR-02 read-only/design reconciliation, and authorizes normal implementation/tests/commit/non-force push. This resolves the earlier remote-pending/planned continuation wording without inferring authorization from machine passes. The later human instruction reuses this actual implementation chat through UXR-08, with one bounded item and a manager review stop each time. Full integrated system verification belongs to UXR-08; per-item checks remain focused/directly affected.
+
+Exit identity is the commit introducing this entry, titled `Preserve conversation space with responsive secondary surfaces`; resolve with `git log -1 --format=%H -S '## UXR-02 responsive shell foundation' -- docs/Planning/human-review-remediation/continuity-ledger.md`. Its source fingerprints are in the final report below. Source-head fields in generated evidence intentionally name committed start `4f44a2c`; seven file fingerprints identify the exact dirty implementation tested, including previously untracked files. No merge identity exists. Publication identity is supplied in the worker completion report.
+
+### Causes, disproved hypotheses and owned invariant
+
+Repeated CSS grid overrides had allocated permanent navigation/inspector columns even at compact widths. Conditional inspector presence affected grid allocation, while stored navigation collapse and viewport disclosure were conflated. Partial drawer code included closed-details controls in its focus loop, made its backdrop inert, and lacked robust nested-overlay/focus-return handling. These were current implementation defects found by rendered assertions and corrected at the owning shell/focus boundary.
+
+The initial 960px navigation threshold was disproved: 960 − 240 − 48 = 672px usable work. The accepted foundation uses 968px, leaving exactly 680px after navigation and gutters. At 1180×780 the central region measures 940px / 892px usable; at 820×700 it measures 820px / 772px usable. At 1280px, navigation 240px + inspector 280px leaves 760px / 712px usable. The conversation, draft and timeline DOM remain mounted during disclosure/resize; tested read position and unsent text survive. Drawer open/close/resize sends zero product/browser-control intents and preserves exact Task and Runtime ownership/generation data. Functional reachability alone still does not establish integrated visual or human acceptance.
+
+### Changed responsibilities and compatibility
+
+- `product-shell.tsx`: pure allocation resolver, viewport observation, reusable mounted secondary surface, topmost focus/inert/Tab restoration helper. `product-surface.tsx` retains Task/Workflow identity, draft, queue and host-intent ownership; it supplies mutually exclusive transient disclosure and existing stored navigation preference. Explicit navigation selection closes the drawer even for the same view. Nested profile/settings dialogs retain their own focus and return to their exact opener; resize fallback uses the visible navigation toggle.
+- `styles.css`: one owning grid allocation replaces competing three-column/collapse rules; 24px central gutters, 240px navigation and 280px inspector; shared 8/12/16px control/panel/overlay scale, ordinary surfaces without overlay shadows, contrasting focus/secondary text and reduced-motion suppression. Dock orchestration and specialist browser/decision/notification composition are not implemented here.
+- `product-shell.test.tsx`: threshold, preference independence and named/hidden drawer contracts. Existing `product-surface.test.tsx` retains the sidebar keyboard-region assertion while adding the stable navigation ID; no authority assertion is weakened.
+- `responsive-shell-rendered-qualification.mjs`: production-bundle fixture qualification, ignored timestamped captures/DOM/geometry/source hashes. Existing conversation builder gains scenarios-only generation and isolated evidence destination; compact selection opens navigation before the same exact Task selection. The conversation runner now uses/removes its own Electron user data. Existing projection inputs, negative assertions and fixture bridge are preserved.
+- Canonical application/testing/implementation status and bounded program/ticket/registry/downstream entries are reconciled. No schema, persistence-format, migration, installed history, protocol, dependency, host authority or credentials change occurred; existing navigation/theme storage keys remain compatible. Portable setup is unaffected.
+
+### Verification and exact evidence
+
+All final focused/directly affected checks pass:
+
+```sh
+pnpm codex:context
+pnpm check:repository
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec vitest run apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/follower-app.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/renderer/state.test.ts apps/companion/src/renderer/unified-session-state.test.ts
+pnpm exec eslint apps/companion/src/renderer/product-shell.tsx apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface.tsx apps/companion/src/renderer/product-surface.test.tsx experiments/agent-execution/responsive-shell-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-shell-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+git diff --check
+```
+
+Focused Vitest: eight files / 115 tests pass (final 947ms). Repository/typecheck/build and relevant lint pass. The workspace build and subsequent companion builds retain the existing Vite >500kB chunk-size advisory; no timeout/config change masks it. The conversation journey passes all retained assertions with 28 screenshots, seven attention families keyboard-qualified at 820×700, queue/Steer/Stop and main/follower parity; this is deterministic presentation evidence, not live provider/browser authority. The final isolated conversation run predates the compact toggle tooltip and shared inspector-panel scale corrections; the final shell run covers those corrections and fingerprints final source.
+
+Final shell evidence: `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/report.json`, 27 screenshots and matching HTML, eight assertion groups. It includes normal/compact light/dark selected Task, long content/title, navigation expanded/collapsed or drawer, inspector open/closed, 959/960/967/968/1279/1280/1400 transitions, New Task, Workflow, nested profile dialog, reduced motion, keyboard focus-loop/backdrop/Escape/context-menu dismissal, invisible-opener resize return, unchanged intents/Task/browser generations, draft DOM/read position and navigation/theme reload. Body contrast is 16.32:1 light / 14.44:1 dark; secondary text is 7.36:1 / 9.37:1. Screenshots were visually inspected alongside DOM/geometry; this does not certify every future specialist combination or assistive technology.
+
+| Retained record                                                                                     | SHA-256                                                            |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/report.json`                 | `7e30916bbdf48b5017b13201d31345912baa72ed2de3085a73670bc9d4a188c9` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/light-820-selected-task.png` | `3721f9d357fafc2977f4fe830d10d8b0a82ef9950961e3a9d66f8a5f8d33f22d` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/dark-820-inspector.png`      | `e105b97dec1b7fc2b36f6384a7ec92b2e161b4d6534dd2ed8ef6ba76a070bdd9` |
+| `artifacts/customer-journeys/conversation-task-shell-isolated/manifest.json`                        | `52416866157ee2060b7ff6187165b37910a87ae4b6ecf97c62797fe42a915011` |
+| `artifacts/customer-journeys/conversation-task-shell-isolated/journey.trace.zip`                    | `eba51d24417e499265a9658f9195b3bdf8cc4e686f8e52a357587189d7376f4c` |
+
+All seven source-file fingerprints in the final report match the candidate before commit. Earlier generated evidence under the same responsive-shell parent is retained, not overwritten; the historical Stage 1–4 acceptance tree remains untouched. Screenshot hash/geometry entries in the report cover every capture. Ordinary fixture dates are shifted to recent, believable presentation durations; the long unbroken text remains a dedicated stress case. Fixture accounts and temporary Electron user data only; successful runners remove owned user data on exit. No live model, real external account, consequential service action, packaged campaign or human recording ran.
+
+### Failures and classification
+
+- Initial static sidebar failure was caused by the transferred changed tag: preserve `tabindex=0` and add the new stable ID to the unchanged accessibility assertion. Final 115 tests pass.
+- Initial Electron sandbox launch failure was an environment boundary; local desktop qualification was rerun with the authorized sandbox exception, fixture bridge and isolated data. No product launch failure is inferred.
+- Rendered closed-details focus-loop, inert backdrop, same-Task navigation disclosure and 960px allocation failures were current candidate defects, causally corrected before new runs. Reduced-motion exact-zero assertion exposed the older global important rule; the owning shell rule now overrides it to zero without changing assertion or timing budgets.
+- Missing-profile and exact Workflow-name failures were bounded harness errors: the identity-less/no-selected-profile fixture now follows the existing recovery contract; the Workflow selector includes its existing task-count label. No product authority was changed to satisfy these fixtures.
+- Relevant lint caught a duplicate report metadata key; it was removed and the final fingerprinted shell run passed. Earlier partial captures and available failure JSON remain in timestamped directories. No rerun-until-green claim, case removal, weakened assertion or timeout inflation occurred.
+
+### Residual boundary and next stop
+
+MR-038 has a qualified shell/surface foundation candidate; independent manager acceptance, UXR-07 specialist integration and UXR-08/final human qualification remain open. MR-034–037/039 remain with their owners. Full system/release/recovery/platform campaigns and `test:experiments` were intentionally not run per the explicit per-item verification instruction; no claim is made for new native ownership, provider termination, restart recovery beyond stored renderer preference reload, Windows/Linux packaging, screen-reader behavior or final release readiness. Existing authority/provider/platform evidence remains inherited, not freshly requalified by a CSS change.
+
+UXR-03 entry now inherits measured allocations, shared scale, focus responsibility and mounted conversation boundary; UXR-07 entry preserves the finite evidence distinction. STAB-14 and both ledgers retain all release blockers. Stop writing after normal commit/non-force push for manager independent review. Do not begin UXR-03 until acceptance and an explicit continuation message in this same implementation chat. No merge or final human acceptance is authorized by this candidate.

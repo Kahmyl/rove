@@ -1,6 +1,6 @@
 # Rove Human-Review Remediation Program
 
-**Status:** Planning checkpoint complete; remediation implementation not started
+**Status:** UXR-02 foundation candidate qualified; independent manager review pending
 
 **Started:** 3 October 2026
 
@@ -49,18 +49,18 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 ## Tickets and status
 
-UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. All later implementation remains Planned.
+UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 now has a bounded foundation candidate awaiting manager review; UXR-03–08 remain Planned.
 
-| Ticket                                                                        | Responsibility                                        | Status                         |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------ |
-| [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only |
-| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Planned                        |
-| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Planned                        |
-| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                        |
-| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                        |
-| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                        |
-| [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                        |
-| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Planned                        |
+| Ticket                                                                        | Responsibility                                        | Status                             |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------- |
+| [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only     |
+| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Candidate — manager review pending |
+| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Planned                            |
+| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                            |
+| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                            |
+| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                            |
+| [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                            |
+| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Planned                            |
 
 ## Issue mapping
 
@@ -85,6 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-Remote planning review approved the UXR contract/ticket structure. The subsequently reopened MR-029 gate is now remediated and machine-qualified on complete source head `433a490caaccf44bd1c7901eee9e0eed704fd963`: six unchanged local four-worker full gates and two Linux gates passed after causal corrections, including the registered MR-040 handoff reducer, MR-041 history/attachment and MR-042 terminal inventory dependencies. Consume the exact evidence and failed-candidate history in both continuity ledgers and STAB-14. **Remote review of PR #38 must authorize continuation; do not begin UXR-02 implementation from these machine passes.**
+The user handoff explicitly accepts the remote MR-029/040/041/042 technical review and completed UXR-02 read-only/design reconciliation at baseline `4f44a2c33406fe5f1c3e40dae56eeb1094d554df`. The implementation worker reconciled the transferred unverified edits and has completed bounded shell qualification. Consume the [UXR-02 ledger exit](continuity-ledger.md); its checkpoint awaits independent manager review on PR #38. No later implementation is authorized by this candidate alone.
 
-After remote review authorization, the exact next gate is **UXR-02 read-only baseline/design reconciliation**. Consume the exact UXR-01 planning checkpoint and MR-029 qualified-source handoff before inspecting shell/CSS/projections, measuring allocations and selecting coherent responsive/surface responsibilities. This task stops before that gate. Retire this bounded program's ticket metadata with the active plan after completion; product/runtime/test names remain descriptive.
+The same actual implementation chat continues UXR-02 through UXR-08, one writer and one review stop per item. After accepting each checkpoint, the persistent manager sends the next bounded item explicitly. Focused/directly affected checks apply per item; full integrated system verification follows implementation at UXR-08. Final human-recorded acceptance and provider/platform/distribution gates remain separate. Retire ticket metadata with the active program.

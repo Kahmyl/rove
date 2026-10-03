@@ -22,10 +22,12 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../..",
 );
-const outputRoot = join(
-  repositoryRoot,
-  "artifacts/customer-journeys/conversation-task-rendered-qualification",
-);
+const outputRoot =
+  process.env.ROVE_RENDERED_EVIDENCE_ROOT ??
+  join(
+    repositoryRoot,
+    "artifacts/customer-journeys/conversation-task-rendered-qualification",
+  );
 const scenarioPath = join(outputRoot, "production-projection-scenarios.json");
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
 const fixtureMain = join(
@@ -793,6 +795,7 @@ scenarios.long_content = baseSnapshot(
   "task_long",
 );
 await writeFile(scenarioPath, `${JSON.stringify(scenarios)}\n`);
+if (process.argv.includes("--scenarios-only")) process.exit(0);
 
 async function visibleState(page) {
   return page.evaluate(() => {
@@ -868,6 +871,10 @@ async function setScenario(page, name) {
 }
 
 async function openTask(page, taskId) {
+  if (!(await page.locator("#shell-navigation").isVisible()))
+    await page
+      .getByRole("button", { name: "Open navigation", exact: true })
+      .click();
   await page.getByRole("button", { name: `Task history: ${taskId}` }).click();
   await page.locator(".task-detail").waitFor();
 }
@@ -978,7 +985,7 @@ try {
   application = await electron.launch({
     executablePath: electronExecutable,
     cwd: repositoryRoot,
-    args: [fixtureMain],
+    args: [fixtureMain, `--user-data-dir=${join(outputRoot, "electron-home")}`],
     env: {
       ...process.env,
       ROVE_JOURNEY_RENDERER_ROOT: rendererRoot,
@@ -1945,4 +1952,5 @@ try {
       .tracing.stop()
       .catch(() => undefined);
   if (application) await application.close();
+  await rm(join(outputRoot, "electron-home"), { recursive: true, force: true });
 }
