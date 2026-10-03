@@ -58,21 +58,28 @@ export class CodexThreadTruthReconciler {
 
     for (const turn of thread.turns) {
       const turnTime = instant(turn.startedAt ?? thread.createdAt);
-      await this.accept({
-        schemaVersion: 1,
-        type: "codex_turn_observed",
-        eventId: `codex-history:${threadId}:turn:${turn.id}:started`,
-        taskId,
-        source: {
-          kind: "codex",
-          id: `history:${threadId}:turn:${turn.id}`,
-          generation: 1,
-          position: 1,
-        },
-        observedAt: turnTime,
-        threadId,
-        turn: { turn: "active", turnId: turn.id, runtimeStatus: "active" },
-      });
+      // History repairs durable conversation, not current process attachment.
+      // Only a qualified start/resume plus loaded provider truth can supply
+      // active/idle execution state in this connection generation.
+      const loaded = () =>
+        this.session.isAttached(threadId) && thread.status.type !== "notLoaded";
+      if (loaded()) {
+        await this.accept({
+          schemaVersion: 1,
+          type: "codex_turn_observed",
+          eventId: `codex-history:${threadId}:turn:${turn.id}:started`,
+          taskId,
+          source: {
+            kind: "codex",
+            id: `history:${threadId}:turn:${turn.id}`,
+            generation: 1,
+            position: 1,
+          },
+          observedAt: turnTime,
+          threadId,
+          turn: { turn: "active", turnId: turn.id, runtimeStatus: "active" },
+        });
+      }
       for (const rawItem of turn.items) {
         const value = rawItem as unknown as Record<string, unknown>;
         const terminalItem = historyItemTerminal(value, turn.status);
@@ -162,7 +169,11 @@ export class CodexThreadTruthReconciler {
           },
           observedAt: instant(turn.completedAt ?? thread.updatedAt),
           threadId,
-          turn: { turn: terminal, turnId: turn.id, runtimeStatus: "idle" },
+          turn: {
+            turn: terminal,
+            turnId: turn.id,
+            runtimeStatus: loaded() ? "idle" : "notLoaded",
+          },
         });
     }
 

@@ -202,7 +202,11 @@ describe("process-backed production-composition lifecycle traces", () => {
     );
     const started = await current.until(
       (value) =>
-        task(value, taskId(ids.approval)).bootstrapStage === "complete",
+        task(value, taskId(ids.approval)).bootstrapStage === "complete" &&
+        (
+          task(value, taskId(ids.approval)).initialLaunch as
+            ProductValue | undefined
+        )?.stage === "turn_started",
     );
     const threadId = String(task(started, taskId(ids.approval)).codexThreadId);
     let requests = (await current.request({

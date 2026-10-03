@@ -35,6 +35,8 @@ Process fixtures share bounded helpers for durable browser attachment and a conv
 
 Completed Codex handoff metadata must reconcile its owned stale handoff recovery marker immediately when exact Runtime authority is restored. An identical later Runtime fingerprint need not produce another event. The reducer regression folds the stale observation and corroborated completion deterministically, verifies customer and segment human control, and preserves unrelated recovery and uncertain binding.
 
+App Server replacement fixtures require a ready connection identity different from the killed connection, within the existing driver wait bound. Approval-parameter restart traces await the committed initial-turn stage before deliberate replacement; actual interruption tests still cut unsettled commands. History reconciliation regressions use the real supervisor, SQLite engine and ingress to preserve terminal conversation without inventing current attachment, including provider unloading and replacement during awaited item processing. Resume receipts and approval-policy assertions remain required.
+
 Manually reconstructed Runtime fixtures use the same configured effect-journal home as their original Runtime. Recovery-admission calls alone do not await constructor journal initialization. Drain it through the existing read-only effect lookup before fixture teardown and verify the persisted cutover epoch, creation time and legacy cohort survive restart. Never mask a late writer by retrying recursive temporary-home removal.
 
 ## Product acceptance matrix

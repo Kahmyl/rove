@@ -24,6 +24,106 @@ afterEach(async () => {
 });
 
 describe("Codex thread truth reconciliation", () => {
+  it.each([
+    {
+      attached: false,
+      providerStatus: "idle",
+      expected: "notLoaded",
+      replaceDuringHistory: false,
+    },
+    {
+      attached: true,
+      providerStatus: "notLoaded",
+      expected: "notLoaded",
+      replaceDuringHistory: false,
+    },
+    {
+      attached: true,
+      providerStatus: "idle",
+      expected: "idle",
+      replaceDuringHistory: false,
+    },
+    {
+      attached: true,
+      providerStatus: "idle",
+      expected: "notLoaded",
+      replaceDuringHistory: true,
+    },
+  ] as const)(
+    "keeps history separate from attachment: attached=$attached, provider=$providerStatus, replaced=$replaceDuringHistory",
+    async ({ attached, providerStatus, expected, replaceDuringHistory }) => {
+      const root = await mkdtemp(join(tmpdir(), "rove-history-attachment-"));
+      roots.push(root);
+      const path = join(root, "tasks.sqlite3");
+      const store = new SqliteTaskEngineStore({ path });
+      try {
+        const taskId = "task_11111111-1111-4111-8111-111111111111";
+        const initial = aggregate(taskId, "thread_a", "codex_a");
+        initial.codex.runtimeStatus = "notLoaded";
+        initial.codex.turn = "none";
+        delete initial.codex.turnId;
+        seed(path, initial);
+        const thread = historyThread(taskId, `ses_${"1".repeat(32)}`, "unused");
+        thread.turns[0]!.items = thread.turns[0]!.items.filter(
+          (item) => item.type !== "mcpToolCall",
+        );
+        thread.status = { type: providerStatus };
+        const rpc = {
+          request: vi.fn(async (method: string) => {
+            if (!["thread/read", "thread/resume"].includes(method))
+              throw new Error(`Unexpected ${method}`);
+            return { thread };
+          }),
+        } as unknown as CodexRpcPort;
+        const session = new CodexThreadSessionSupervisor(rpc);
+        session.replaceConnectionGeneration(2);
+        if (attached) await session.resume({ threadId: "thread_a" } as never);
+        const ingress = new OrderedTaskIngress(
+          new TaskEngine(store),
+          (error) => {
+            throw error;
+          },
+        );
+        ingress.replaceGeneration(2);
+        const enqueue = ingress.enqueue.bind(ingress);
+        vi.spyOn(ingress, "enqueue").mockImplementation(
+          async (generation, event) => {
+            await enqueue(generation, event);
+            if (
+              replaceDuringHistory &&
+              event.type === "codex_item_observed" &&
+              event.itemId === "assistant_a"
+            ) {
+              session.replaceConnectionGeneration(3);
+              ingress.replaceGeneration(3);
+            }
+          },
+        );
+        const reconciler = new CodexThreadTruthReconciler(
+          session,
+          store,
+          ingress,
+          {} as never,
+          () => session.connectionGeneration(),
+        );
+        await reconciler.reconcile(taskId, "reconnect", 1);
+        const result = await store.aggregate(taskId);
+        expect(result?.codex.runtimeStatus).toBe(expected);
+        expect(result?.codex.turn).toBe("completed");
+        expect(result?.conversation.items.assistant_a).toMatchObject({
+          status: "completed",
+          text: "Final answer",
+        });
+        expect(session.isAttached("thread_a")).toBe(
+          attached && !replaceDuringHistory,
+        );
+        expect(rpc.request).toHaveBeenCalledTimes(attached ? 2 : 1);
+      } finally {
+        store.close();
+      }
+    },
+  );
+
   it("repairs dropped item, message, tool, turn, and handoff terminals without replay", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-codex-reconcile-"));
     roots.push(root);
