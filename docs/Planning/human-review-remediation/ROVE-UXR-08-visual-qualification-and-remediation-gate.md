@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Machine qualification candidate — independent review pending
+**Status:** Machine qualification independently accepted at `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9` — final human acceptance pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -79,4 +79,4 @@ Stop at the machine checkpoint. Schedule/perform final Stage 1–4 human-paced r
 
 The complete matrix and seven-criterion attributed Codex review are retained by `visual-interaction-qualification.mjs`; the catalog lives in `tests/fixtures/product-visual-qualification.json`. There is no pairwise reduction: 512 combined-state cells and 448 seven-family decision cells cover the full theme/size/motion/input product. Specialist negatives remain supplemental. A visual review cannot replace functional authority assertions; a missing cell, stale source/media hash or absent/failing review refuses qualification. See the [qualification continuation exit](continuity-ledger.md) for exact commands, final report/checksums, broader campaign outcomes and honest failure histories. No production source, schema, migration, persistence format or provider authority changed in this ticket.
 
-MR-034–MR-038 have integrated machine evidence and MR-039 has a retained composition gate candidate. They remain open for independent acceptance and final human-recorded composition review. Stop at this machine checkpoint; STAB-14 retains all external release gates.
+Manager independently accepted exact `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9` after complete committed replay and attributed visual review. MR-034–MR-039 have accepted machine remediation evidence and remain open for final human-recorded acceptance. The [acceptance ledger](continuity-ledger.md) retains the independent report, bundle and source/media hashes. Stop at this machine checkpoint; STAB-14 retains all external release gates.

@@ -837,3 +837,31 @@ All four early complete reports (`17-28-01-925Z`, `17-38-03-316Z`, `17-38-49-679
 MR-034–MR-039 independent/final human acceptance, final human Stage 1–4, authoritative current-page URL, live provider-family and elevated-grant consumption, supported-platform/native/live packaged browser composition, Windows/Linux process trees, signing/notarization/distribution and STAB-14 remain open/unrun. No real accounts or live model/external-service tasks filled those gaps. Existing historical recorded 37 PASS / six UNQUALIFIED / one BLOCKED and PARTIAL status stay intact. Stage-4 synthetic-history correlation and missing original launch/database provenance are unchanged.
 
 The owning testing/status/program/registry/stabilization documents agree. No downstream implementation ticket remains; independent checkpoint review is next, followed only by separately authorized final human recording. Normal commit/non-force push on the same PR #38, then STOP WRITING. No merge, release publication, extra chat, subagent or live run.
+
+## Independent machine acceptance and documentation closure — 3 October 2026
+
+**Accepted source / closure start:** `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9`, clean local/tracking/published remote on `codex/human-review-remediation-planning`, PR #38. **Closure end:** the separate documentation commit containing this exit, resolved by `git log -1 --format=%H -- docs/Planning/human-review-remediation/continuity-ledger.md` and reported verbatim in the final checkpoint. Manager independently accepts UXR-08 machine qualification at this exact source. No product remediation is required.
+
+Remediation machine qualification complete; candidate ready for final human-recorded acceptance.
+
+Manager inspected the full qualification/fixture/documentation changes and retained failures, verified the full-run command traces and clean matching HEAD/origin, and checked all 1,670 worker capture hashes, 960 mandatory DOM hashes and source/compiled/scenario/matrix/contact-sheet/review hashes. Independent committed complete replay passed composition (922 captures / one group), decisions (476 / five), browser resources (160 / two), notifications (112 / three) and all five qualification gate-negative tests. Independent composition judgments cover all seven families, both themes/widths and combined resource/modal/long/history states. These are attributed machine judgments; final human Stage 1–4 is not established.
+
+### Independent committed evidence
+
+Aggregate: `artifacts/customer-journeys/visual-interaction/manager-review/report.json`; source HEAD is the accepted b06a6ed, not the worker's pre-commit base. Neighboring `contact-sheet.html`, `matrix.json` and `visual-review.json` retain the full-resolution witnesses, cell identity and attributed judgments. Report SHA256: `01710c863e0b12d2995b12c3adc243fe0164e87f1e7d6e14b228065ef5cd4918`. Bundle: `6960c5ec74aa3a8eea2af190f23803b03b72eda0d6f959abc768ee92c9d79494`.
+
+- composition: `artifacts/customer-journeys/product-composition/2026-10-03T18-10-46-060Z/report.json` — `3e2570aa50c6dafb77b60f5c602e968520f1bd63630ef77995313b513e6fb873`
+- decisions: `artifacts/customer-journeys/task-decisions/2026-10-03T18-10-43-637Z/report.json` — `91232912b61e29e7582231f307435e108cedd173f7468194427cd2893aabd66e`
+- browser: `artifacts/customer-journeys/task-browser-resources/2026-10-03T18-11-40-173Z/report.json` — `938c0821b964d65f4245d92533400b928ccdd6b4c337e95be69d28bdb5160b71`
+- notifications: `artifacts/customer-journeys/task-notifications/2026-10-03T18-10-43-319Z/report.json` — `da650d0a482ff8ef99839325b29fe3a8fd957c8cb19250c921db5cd1f41d3b0c`
+- matrixSha256: `0df2b4e4453702034c7f824436e5e4acc30f0926a9d507f61393233e08795bbb`
+- contactSheetSha256: `0610cd698e368255a3904f3ac6394337e776485c9407abf8203622011c4306ec`
+- visualReviewSha256: `8801a4f5aa3e4c1b43a534041e33c0a56b738994ce3fde977f7494d19c4d6eaa`
+
+### Closure boundaries, checks and next gate
+
+This separate closure updates only owning documentation: current program/ticket/status/registry/stabilization summaries now reflect independent machine acceptance. Accepted machine remediation evidence covers MR-034–MR-039; all six remain open for final human-recorded acceptance. Historical candidate exits, failed-first evidence, recorded 37 PASS / six UNQUALIFIED / one BLOCKED and PARTIAL outcomes remain intact. Product source, tests, harnesses, fixtures, generated evidence, schema, migration history, dependencies, persistence and authority are unchanged. No contradictory evidence, new cause or additional remediation was established.
+
+`pnpm codex:context` confirmed the clean accepted source. `pnpm check:repository` and `git diff --check` pass for this documentation-only closure; no broader tests or evidence regeneration are needed or run. The accepted machine checkpoint's full verification remains separately retained above.
+
+Final human Stage 1–4 requires separately authorized recording and acceptance. Current-page read-model, live provider-family/elevated-grant consumption, supported-platform/native/live packaged browser composition, Windows/Linux process trees, signing/notarization/distribution and STAB-14 remain open. No live account/model/provider/platform/release work was performed. Normal separate documentation commit/non-force push on existing PR #38, verify clean local/remote match, then stop. Manager supervision ends after machine completion; this closure creates no new task or subagent and authorizes no recording, merge or release.

@@ -1,6 +1,6 @@
 # Rove Human-Review Remediation Program
 
-**Status:** UXR-02 foundation candidate qualified; independent manager review pending
+**Status:** Remediation machine qualification independently accepted; final human-recorded acceptance pending
 
 **Started:** 3 October 2026
 
@@ -49,18 +49,18 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 ## Tickets and status
 
-UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 foundation is independently accepted at `3458fb3`; UXR-04 foundation is independently accepted at `eef0f8b`; UXR-05 foundation is independently accepted at `bad7103`; UXR-06 foundation is independently accepted at `243c1db`; UXR-07 is independently accepted at exact `b69c735`; UXR-08 has the retained machine qualification candidate described in the ledger, pending independent review.
+UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 foundation is independently accepted at `3458fb3`; UXR-04 foundation is independently accepted at `eef0f8b`; UXR-05 foundation is independently accepted at `bad7103`; UXR-06 foundation is independently accepted at `243c1db`; UXR-07 is independently accepted at exact `b69c735`; UXR-08 machine qualification is independently accepted at exact `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9`, with committed replay and visual judgments retained in the ledger.
 
 | Ticket                                                                        | Responsibility                                        | Status                                           |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------ |
 | [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only                   |
-| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Foundation accepted — integrated/human pending   |
-| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Foundation accepted — integrated/human pending   |
-| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Foundation accepted — integrated/human pending   |
-| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Foundation accepted — integrated/human pending   |
-| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Foundation accepted — integrated/human pending   |
+| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Machine accepted — human pending   |
+| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Machine accepted — human pending   |
+| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Machine accepted — human pending   |
+| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Machine accepted — human pending   |
+| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Machine accepted — human pending   |
 | [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Integrated candidate accepted at b69c735         |
-| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Machine qualification candidate — review pending |
+| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Machine accepted at b06a6ed — human pending |
 
 ## Issue mapping
 
@@ -85,6 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-The manager independently accepted UXR-07 at exact `b69c73534cfe1156a95ec03100668db076639fd3` and explicitly continued the same sole writer to UXR-08. The retained complete Cartesian matrix, attributed Codex composition rubric, pointer evidence and broader deterministic/recovery/unsigned-package campaigns form the next machine checkpoint. Source/compiled/media hashes, failures, harness corrections and exact results are retained in the [qualification ledger exit](continuity-ledger.md). Stop after normal commit/non-force push on existing PR #38 for independent review. Final human Stage 1–4 and inherited live/provider/platform/distribution gates remain open.
+The manager independently accepted UXR-07 at exact `b69c73534cfe1156a95ec03100668db076639fd3` and explicitly continued the same sole writer to UXR-08. Manager independently accepted UXR-08 at exact `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9` after committed complete matrix replay and attributed visual review. The retained complete Cartesian matrix, rubric, pointer evidence and broader deterministic/recovery/unsigned-package campaigns establish accepted machine remediation evidence. Source/compiled/media hashes, failures, harness corrections and exact results are retained in the [qualification ledger exit](continuity-ledger.md). Machine implementation and review are complete. Final human Stage 1–4 requires separately authorized recording; inherited live/provider/platform/distribution gates remain open.
 
 The same actual implementation chat continues UXR-02 through UXR-08, one writer and one review stop per item. After accepting each checkpoint, the persistent manager sends the next bounded item explicitly. Focused/directly affected checks apply per item; full integrated system verification follows implementation at UXR-08. Final human-recorded acceptance and provider/platform/distribution gates remain separate. Retire ticket metadata with the active program.
