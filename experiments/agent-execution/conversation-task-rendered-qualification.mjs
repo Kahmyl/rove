@@ -22,10 +22,13 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../..",
 );
-const outputRoot = join(
-  repositoryRoot,
-  "artifacts/customer-journeys/conversation-task-rendered-qualification",
-);
+const outputRoot =
+  process.env.ROVE_RENDERED_EVIDENCE_ROOT ??
+  join(
+    repositoryRoot,
+    "artifacts/customer-journeys/conversation-task-rendered-qualification",
+    new Date().toISOString().replaceAll(":", "-"),
+  );
 const scenarioPath = join(outputRoot, "production-projection-scenarios.json");
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
 const fixtureMain = join(
@@ -793,6 +796,7 @@ scenarios.long_content = baseSnapshot(
   "task_long",
 );
 await writeFile(scenarioPath, `${JSON.stringify(scenarios)}\n`);
+if (process.argv.includes("--scenarios-only")) process.exit(0);
 
 async function visibleState(page) {
   return page.evaluate(() => {
@@ -868,6 +872,10 @@ async function setScenario(page, name) {
 }
 
 async function openTask(page, taskId) {
+  if (!(await page.locator("#shell-navigation").isVisible()))
+    await page
+      .getByRole("button", { name: "Open navigation", exact: true })
+      .click();
   await page.getByRole("button", { name: `Task history: ${taskId}` }).click();
   await page.locator(".task-detail").waitFor();
 }
@@ -978,7 +986,7 @@ try {
   application = await electron.launch({
     executablePath: electronExecutable,
     cwd: repositoryRoot,
-    args: [fixtureMain],
+    args: [fixtureMain, `--user-data-dir=${join(outputRoot, "electron-home")}`],
     env: {
       ...process.env,
       ROVE_JOURNEY_RENDERER_ROOT: rendererRoot,
@@ -1164,6 +1172,9 @@ try {
   const emptyStop = page.getByRole("button", { name: "Stop current work" });
   await emptyStop.waitFor();
   const emptyStopBox = await emptyStop.boundingBox();
+  const emptySendBox = await page
+    .getByRole("button", { name: "Queue follow-up" })
+    .boundingBox();
   assert(
     (await page.locator(".task-independent-controls").count()) === 0 &&
       (await page.getByText("Send now", { exact: true }).count()) === 0,
@@ -1174,27 +1185,36 @@ try {
     "active-empty-composer",
     "Continue while work is active",
     "Leave the draft empty",
-    "Stop occupies the canonical primary slot",
+    "Stop retains its independent slot beside Send",
   );
   await canonicalComposer.fill("Apply the newest evidence first");
   const activeSend = page.getByRole("button", { name: "Queue follow-up" });
   await activeSend.waitFor();
   const activeSendBox = await activeSend.boundingBox();
+  const draftStopBox = await emptyStop.boundingBox();
+  for (const [before, after, label] of [
+    [emptySendBox, activeSendBox, "Send"],
+    [emptyStopBox, draftStopBox, "Stop"],
+  ]) {
+    assert(
+      before &&
+        after &&
+        ["x", "y", "width", "height"].every(
+          (key) => Math.abs(before[key] - after[key]) < 2,
+        ),
+      `Typing changed the canonical ${label} geometry.`,
+    );
+  }
   assert(
-    emptyStopBox &&
-      activeSendBox &&
-      Math.abs(emptyStopBox.x - activeSendBox.x) < 2 &&
-      Math.abs(emptyStopBox.y - activeSendBox.y) < 2 &&
-      Math.abs(emptyStopBox.width - activeSendBox.width) < 2 &&
-      Math.abs(emptyStopBox.height - activeSendBox.height) < 2,
-    "Typing changed the canonical primary-action geometry.",
+    await emptyStop.isEnabled(),
+    "Typing hid independently available Stop.",
   );
   await capture(
     page,
     "active-draft-composer",
     "Write an active-work follow-up",
     "Type without changing composer geometry",
-    "Send replaces Stop in the same primary slot",
+    "Send and Stop keep independent stable slots",
   );
   await canonicalComposer.press("Enter");
   const referenceQueue = page.getByLabel("Queued messages");
@@ -1444,6 +1464,10 @@ try {
           .isVisible(),
         `${name} hid the canonical composer Stop.`,
       );
+    assert(
+      (await page.getByLabel("Task message", { exact: true }).count()) === 0,
+      `${name} stacked an ordinary composer under its blocking decision.`,
+    );
     const requestText = await page
       .getByLabel("Current task request")
       .innerText();
@@ -1554,6 +1578,9 @@ try {
   const requestBoxBefore = await page
     .getByLabel("Current task request")
     .boundingBox();
+  const beforeResponseCalls = (
+    await page.evaluate(() => window.rove.getJourneyState())
+  ).calls.filter((call) => call.intent?.type === "attention.decide").length;
   await page.getByRole("button", { name: "Send", exact: true }).focus();
   await page.keyboard.press("Enter");
   await page.getByText("Submitting your response…", { exact: true }).waitFor();
@@ -1561,15 +1588,42 @@ try {
     .getByLabel("Current task request")
     .boundingBox();
   assert(
-    requestBoxBefore &&
-      requestBoxAfter &&
-      Math.abs(requestBoxBefore.x - requestBoxAfter.x) < 2,
-    "Attention submission jumped horizontally.",
+    requestBoxBefore && requestBoxAfter,
+    "Attention geometry disappeared.",
+  );
+  for (const coordinate of ["x", "y", "width", "height"])
+    assert(
+      Math.abs(requestBoxBefore[coordinate] - requestBoxAfter[coordinate]) < 2,
+      `Attention submission changed ${coordinate}.`,
+    );
+  const retainedSend = page.getByRole("button", { name: "Send", exact: true });
+  assert(
+    (await retainedSend.count()) === 1 && (await retainedSend.isDisabled()),
+    "Submitting attention must retain one disabled Send.",
   );
   assert(
-    (await page.getByRole("button", { name: "Send", exact: true }).count()) ===
-      0,
+    (await page
+      .getByLabel("Current task request")
+      .locator(".task-decision-actions button:enabled")
+      .count()) === 0,
     "Submitting attention remained actionable.",
+  );
+  assert(
+    (await page
+      .getByText("Submitting your response…", { exact: true })
+      .count()) === 1,
+    "Submission status was duplicated.",
+  );
+  await retainedSend.evaluate((node) => {
+    node.click();
+    node.click();
+  });
+  const afterResponseCalls = (
+    await page.evaluate(() => window.rove.getJourneyState())
+  ).calls.filter((call) => call.intent?.type === "attention.decide").length;
+  assert(
+    afterResponseCalls === beforeResponseCalls + 1,
+    "Submitting attention dispatched a duplicate response.",
   );
 
   await setScenario(page, "browser_required");
@@ -1681,11 +1735,17 @@ try {
   await setScenario(page, "uncertain");
   await openTask(page, "task_uncertain");
   assert(
-    await page.getByText("Outcome unclear", { exact: true }).isVisible(),
+    (
+      await page.locator("#task-state-task_uncertain > summary").textContent()
+    ).includes("Outcome unclear"),
     "Uncertainty is not distinct.",
   );
   assert(
-    (await page.locator(".product-warning").count()) === 1,
+    (await page.locator("#task-state-task_uncertain").count()) === 1 &&
+      (await page
+        .getByLabel("Notifications", { exact: true })
+        .getByText("Outcome unclear", { exact: true })
+        .count()) === 1,
     "Consequential uncertainty lost its persistent warning.",
   );
   assert(
@@ -1760,7 +1820,19 @@ try {
     timeline.evaluate(
       (node) => node.scrollHeight - node.scrollTop - node.clientHeight <= 24,
     );
-  assert(await atBottom(), "Timeline did not begin in follow mode.");
+  const timelineEntry = await timeline.evaluate((node) => ({
+    scrollTop: node.scrollTop,
+    scrollHeight: node.scrollHeight,
+    clientHeight: node.clientHeight,
+  }));
+  await writeFile(
+    join(outputRoot, "timeline-entry-state.json"),
+    JSON.stringify(timelineEntry, null, 2),
+  );
+  assert(
+    await atBottom(),
+    `Timeline did not begin in follow mode: ${JSON.stringify(timelineEntry)}`,
+  );
   await page.evaluate(() => window.rove.appendJourneyActivity());
   await page.getByText("Verified follow-up 1", { exact: true }).waitFor();
   assert(await atBottom(), "New activity did not follow while at the bottom.");
@@ -1918,7 +1990,7 @@ try {
   );
   await writeFile(
     join(outputRoot, "manual-acceptance.md"),
-    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; a failed internal command followed by a successful answer remains ready/Worked.\n- [ ] Composer: New and existing Tasks preserve Attach, Commands, Mode/Approval, then Model/primary grouping; active empty shows Stop in the primary slot.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop boundary: this rendered fixture qualifies presentation only. Retain separate process-backed evidence from \`pnpm agent:command-exec-stop\` for exact base-profile termination, and keep elevated execution excluded while the provider grant-consumption contract remains blocked.\n- [ ] Late events: confirm late output stays under its historical turn and cannot mutate newer work or control state.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, genuine turn failure, delivery uncertainty, consequential-result uncertainty, and successful final answer remain distinct.\n- [ ] Completion: confirm the same active segment auto-compacts on terminal transition, reopens manually, uses only the main timeline scrollbar, and preserves Latest/reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, and checking.\n`,
+    `# Manual development-app acceptance\n\nUse a temporary Rove home, fixture Codex account, and non-sensitive browser fixture. Do not use a real external account or consequential action.\n\n- [ ] Send: accepted message appears immediately with no startup placeholder.\n- [ ] Working: fast completion does not flash; sustained work appears after the anti-flicker delay.\n- [ ] Activity: commentary and semantic activity remain distinct; repeated low-value inspection is bounded; a failed internal command followed by a successful answer remains ready/Worked.\n- [ ] Composer: New and existing Tasks preserve Attach, Commands, Mode/Approval, then Model/primary grouping; active work keeps stable independent Send and Stop slots.\n- [ ] Queue: ordinary active Send queues; edit, remove, reorder, restart, and automatic promotion remain exact.\n- [ ] Steer: use the queued message's Steer action and Command+Enter; confirm one exact accepted intervention for each path and no permanent Send now control.\n- [ ] Stop boundary: this rendered fixture qualifies presentation only. Retain separate process-backed evidence from \`pnpm agent:command-exec-stop\` for exact base-profile termination, and keep elevated execution excluded while the provider grant-consumption contract remains blocked.\n- [ ] Late events: confirm late output stays under its historical turn and cannot mutate newer work or control state.\n- [ ] Attention: exercise user input, command/file/network/permission approvals, MCP form, and trusted URL with non-sensitive fixture values.\n- [ ] Browser: requested and Companion voluntary Take Over, exact page foregrounding, Return to Rove, fresh checking, and resumed work.\n- [ ] Recovery/outcomes: neutral checking, genuine turn failure, delivery uncertainty, consequential-result uncertainty, and successful final answer remain distinct.\n- [ ] Completion: confirm the same active segment auto-compacts on terminal transition, reopens manually, uses only the main timeline scrollbar, and preserves Latest/reading position.\n- [ ] Multi-Task: A Working, B Needs input, C ready; background changes never steal selection.\n- [ ] Repeat relevant states at 1180×780 and 820×700, keyboard-only, reduced motion, long content, and background attention.\n- [ ] Confirm main Task and follower agree for takeover, human ownership, return, and checking.\n`,
   );
   await application
     .context()
@@ -1938,6 +2010,24 @@ try {
       screenshots: steps.length,
     }),
   );
+} catch (error) {
+  if (application) {
+    const page = application.windows()[0];
+    if (page) {
+      await page
+        .screenshot({ path: join(outputRoot, "failure.png") })
+        .catch(() => undefined);
+      await writeFile(
+        join(outputRoot, "failure.html"),
+        await page.content(),
+      ).catch(() => undefined);
+    }
+  }
+  await writeFile(
+    join(outputRoot, "failure.json"),
+    JSON.stringify({ commit, error: String(error) }, null, 2),
+  );
+  throw error;
 } finally {
   if (traceStarted && application)
     await application
@@ -1945,4 +2035,5 @@ try {
       .tracing.stop()
       .catch(() => undefined);
   if (application) await application.close();
+  await rm(join(outputRoot, "electron-home"), { recursive: true, force: true });
 }

@@ -202,7 +202,11 @@ describe("process-backed production-composition lifecycle traces", () => {
     );
     const started = await current.until(
       (value) =>
-        task(value, taskId(ids.approval)).bootstrapStage === "complete",
+        task(value, taskId(ids.approval)).bootstrapStage === "complete" &&
+        (
+          task(value, taskId(ids.approval)).initialLaunch as
+            ProductValue | undefined
+        )?.stage === "turn_started",
     );
     const threadId = String(task(started, taskId(ids.approval)).codexThreadId);
     let requests = (await current.request({
@@ -395,22 +399,12 @@ describe("process-backed production-composition lifecycle traces", () => {
           action.method === "turn/start" && action.correlation === ids.handoff,
       ),
     ).toHaveLength(1);
-    await current.request({
-      type: "browser.attach",
-      taskId: taskId(ids.handoff),
-    });
+    await current.attachBrowser(taskId(ids.handoff));
     await current.request({
       type: "handoff.prepare",
       taskId: taskId(ids.handoff),
     });
-    const handedOff = await current.until((value) =>
-      attention(value).some(
-        (request) =>
-          request.taskId === taskId(ids.handoff) &&
-          request.kind === "control_handoff" &&
-          request.status === "pending",
-      ),
-    );
+    const handedOff = await current.untilHandoff(taskId(ids.handoff), "human");
     expect(task(handedOff, taskId(ids.handoff)).availableActions).toContain(
       "return_control",
     );
@@ -482,23 +476,13 @@ describe("process-backed production-composition lifecycle traces", () => {
       const entry = task(value, taskId(ids.handoff));
       return entry.bootstrapStage === "complete";
     });
-    await current.request({
-      type: "browser.attach",
-      taskId: taskId(ids.handoff),
-    });
+    await current.attachBrowser(taskId(ids.handoff));
     await current.request({
       type: "handoff.prepare",
       taskId: taskId(ids.handoff),
       takeControl: false,
     });
-    const handedOff = await current.until((value) =>
-      attention(value).some(
-        (request) =>
-          request.taskId === taskId(ids.handoff) &&
-          request.kind === "control_handoff" &&
-          request.status === "pending",
-      ),
-    );
+    const handedOff = await current.untilHandoff(taskId(ids.handoff), null);
     expect(task(handedOff, taskId(ids.handoff)).runtime).toMatchObject({
       status: "awaiting_human",
       controller: null,
@@ -580,22 +564,12 @@ describe("process-backed production-composition lifecycle traces", () => {
         conversation(entry).turnStatus === "completed"
       );
     });
-    await current.request({
-      type: "browser.attach",
-      taskId: taskId(ids.finish),
-    });
+    await current.attachBrowser(taskId(ids.finish));
     await current.request({
       type: "handoff.prepare",
       taskId: taskId(ids.finish),
     });
-    await current.until((value) =>
-      attention(value).some(
-        (request) =>
-          request.taskId === taskId(ids.finish) &&
-          request.kind === "control_handoff" &&
-          request.status === "pending",
-      ),
-    );
+    await current.untilHandoff(taskId(ids.finish));
     await current.request({
       type: "task.finish",
       taskId: taskId(ids.finish),

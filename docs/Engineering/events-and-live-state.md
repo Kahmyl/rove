@@ -8,7 +8,7 @@ Durable product facts include accepted user conversation items and their deliver
 
 Durable acceptance creates exactly one accepted user conversation item without waiting for App Server `userMessage` history. That item is immediately renderable, owns stable client/operation identity and delivery state, and remains the same item through definite non-submission or uncertain delivery. The exact later live/history item reconciles it and may advance delivery evidence; it never replaces it or appends a duplicate. A queued follow-up is durable Task state but is not conversation truth, an execution turn, or an external submission. At the committed execution boundary, promotion atomically turns that exact queued instruction into the accepted user conversation item. Restart replay restores an unpromoted queue without dispatching it.
 
-Ephemeral presentation includes token deltas, temporary progress text, cursor position, selected task, visible page, open/collapsed history choices, anti-flicker timing, and component connectivity. Persist only what is needed for useful history and recovery. Do not write every streaming token as a separate full task snapshot. Intermediate semantic activity may be coalesced or reconstructed where final durable truth is sufficient, but consequential state, failure, and uncertainty remain durable as required by their owning contract.
+Ephemeral presentation includes token deltas, temporary progress text, cursor position, selected task, visible page, open/collapsed history choices, anti-flicker timing, and component connectivity. Task text drafts and timeline reading/follow intent are owned by their exact viewed Task in renderer memory. Changing dock mode never dispatches or transfers them. A first Task view follows latest activity; returning restores its own reading choice. Persist only what is needed for useful history and recovery. Do not write every streaming token as a separate full task snapshot. Intermediate semantic activity may be coalesced or reconstructed where final durable truth is sufficient, but consequential state, failure, and uncertainty remain durable as required by their owning contract.
 
 External observations are facts from Codex, the browser, or an integration. Validate and correlate them before using them to change product state. An external event is not an authorization to execute a new action.
 
@@ -56,7 +56,11 @@ Attention events identify the exact request generation and whether it remains ac
 
 Control transfer is represented after the underlying ownership boundary has changed. A request to take control is not yet evidence that control was acquired. Returning control emits current-state information sufficient for fresh agent grounding, not an instruction to replay an earlier click.
 
+Decision fields are ephemeral renderer state bound to authority/Task/request/generation/thread/turn/item. Non-secret pending fields survive view switching but are retired on nonpending settlement; secret question values remain only in the mounted request body and clear on submission or departure. Local submission state prevents a second same-request intent immediately and is not a durable response receipt. The exact host attention state controls responding/checking/unresolved presentation and safe settlement. One Task’s response cannot set a global input lock for another Task, and presentation rebuilding never replays it.
+
 Task needs-attention badges may aggregate in the navigation UI without globally blocking other tasks. Notification count and currently selected task are not approval authority.
+
+Notification dismissal belongs only to renderer-session memory. Source-keyed markers are reconstructed from host delivery, result and recovery projections independently of transient announcements and current active-work priority. A notification is announced once while mounted; unchanged snapshot rebuilding does not replay commands. Observed issue absence re-arms a later notification episode; restarting may announce current unresolved state once again without clearing its marker or any fence.
 
 ## Outcome reconciliation
 

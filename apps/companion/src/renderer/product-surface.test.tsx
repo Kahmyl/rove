@@ -19,6 +19,8 @@ import {
   browserResourcePresentation,
   browserOpenFailureMessage,
   browserIdentityLabel,
+  browserProfileLabel,
+  recordedPageSite,
   canRemoveWorkflowFromCloud,
   compatibleReasoningEffort,
   commandPaletteMatches,
@@ -38,7 +40,6 @@ import {
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   taskNeedsCustomerInput,
-  taskComposerPrimaryAction,
   timelineIsAtBottom,
   workflowConfigurationFromDraft,
   workflowDraft,
@@ -230,61 +231,23 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain('aria-label="Browser service status"');
+    expect(html).toContain('aria-label="Device browser service state details"');
+    expect(html).toContain(
+      'aria-label="Dismiss Browser work is unavailable notification"',
+    );
+    expect(html).toContain('id="device-browser-state"');
     expect(html).toContain("Browser work is unavailable");
     expect(html).toContain("Conversation history remains available");
     expect(html).not.toContain("internal identity detail");
-    expect(html.match(/Browser service status/g)).toHaveLength(1);
+    expect(html.match(/id="device-browser-state"/g)).toHaveLength(1);
+    expect(
+      html.match(
+        /aria-label="Dismiss Browser work is unavailable notification"/g,
+      ),
+    ).toHaveLength(1);
   });
 
-  it("keeps one primary composer slot across ready, active, stopping, and stopped states", () => {
-    expect(
-      taskComposerPrimaryAction({
-        state: "working",
-        hasDraft: false,
-        canStop: true,
-        canSubmit: false,
-        canQueue: true,
-      }),
-    ).toEqual({ kind: "stop", disabled: false });
-    expect(
-      taskComposerPrimaryAction({
-        state: "working",
-        hasDraft: true,
-        canStop: true,
-        canSubmit: false,
-        canQueue: true,
-      }),
-    ).toEqual({ kind: "send", disabled: false });
-    expect(
-      taskComposerPrimaryAction({
-        state: "stopping",
-        hasDraft: true,
-        canStop: false,
-        canSubmit: false,
-        canQueue: false,
-      }),
-    ).toEqual({ kind: "stop", disabled: true });
-    for (const state of ["ready", "stopped"] as const) {
-      expect(
-        taskComposerPrimaryAction({
-          state,
-          hasDraft: false,
-          canStop: false,
-          canSubmit: true,
-          canQueue: false,
-        }),
-      ).toEqual({ kind: "send", disabled: true });
-      expect(
-        taskComposerPrimaryAction({
-          state,
-          hasDraft: true,
-          canStop: false,
-          canSubmit: true,
-          canQueue: false,
-        }),
-      ).toEqual({ kind: "send", disabled: false });
-    }
+  it("keeps explicit steering out of the ordinary composer", () => {
     const source = readFileSync(
       new URL("./product-surface.tsx", import.meta.url),
       "utf8",
@@ -550,7 +513,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
     expect(stoppingHtml).toContain("Stopping… · 0s worked");
     expect(stoppingHtml).toContain(
-      'class="primary composer-submit composer-stop" aria-label="Stop current work" title="Stop current work" disabled=""',
+      'class="composer-submit task-stop-control" aria-label="Stop current work" title="Stopping…" disabled=""',
     );
 
     for (const [state, status, ariaLabel, heading] of [
@@ -1104,6 +1067,29 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       summary: "Recording unavailable",
       actionLabel: null,
     });
+  });
+
+  it("keeps the task profile separate from the default and labels recording provenance safely", () => {
+    const value = snapshot();
+    const task = {
+      browserIdentity: { mode: "workspace", workspaceId },
+    } as ProductTaskProjection;
+    value.workspaces.selectedWorkspaceId = "another_profile";
+    expect(browserProfileLabel(value, task)).toBe("Personal");
+    value.workspaces.workspaces = [];
+    expect(browserProfileLabel(value, task)).toBe("Unavailable task profile");
+    expect(
+      browserProfileLabel(value, {
+        browserIdentity: { mode: "temporary" },
+      } as ProductTaskProjection),
+    ).toBe("Guest · temporary");
+    expect(
+      recordedPageSite(
+        "https://user:private@example.test/private-path?token=private#private",
+      ),
+    ).toBe("example.test");
+    expect(recordedPageSite("file:///private/path")).toBe("Recorded task page");
+    expect(recordedPageSite("invalid")).toBe("Recorded task page");
   });
 
   it("shows browser identity only for the exact attached task", () => {
@@ -2156,8 +2142,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("task-composer-shell");
     expect(html).toContain(">Send</button>");
     expect(html).not.toContain("File change approval");
-    expect(html).toContain("Take Over");
-    expect(html).not.toContain('aria-label="Stop current work"');
+    expect(html.match(/>Take Over<\/button>/g)).toHaveLength(1);
+    expect(
+      html.slice(html.indexOf('aria-label="Browser status"')),
+    ).not.toContain(">Take Over</button>");
+    expect(html).toContain('aria-label="Stop current work"');
+    expect(html.match(/aria-label="Stop current work"/g)).toHaveLength(1);
     expect(html).toContain("Personal");
     expect(html).toContain('aria-label="Browser status"');
     expect(html).toContain(">View Browser</button>");
@@ -2257,7 +2247,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(humanOwnedFull).toContain("You&#x27;re in control");
     expect(humanOwnedFull).not.toContain(reason);
-    expect(humanOwnedFull).toContain("Return to Rove");
+    expect(humanOwnedFull.match(/>Return to Rove<\/button>/g)).toHaveLength(1);
+    expect(
+      humanOwnedFull.slice(
+        humanOwnedFull.indexOf('aria-label="Browser status"'),
+      ),
+    ).not.toContain(">Return to Rove</button>");
     expect(humanOwnedFull).not.toContain("Retry cleanup");
 
     value.surface.presentation = "expanded";
@@ -2516,7 +2511,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       '<section class="product-main product-main-task" aria-label="Task workspace" tabindex="0">',
     );
     expect(html).toContain(
-      '<aside class="product-sidebar" aria-label="Task controls and status" tabindex="0">',
+      '<aside class="product-sidebar" aria-label="Task controls and status" tabindex="0" id="shell-navigation">',
     );
     expect(html).toContain("Long conversation entry 39");
     expect(html).not.toContain('aria-label="Archive Untitled task"');

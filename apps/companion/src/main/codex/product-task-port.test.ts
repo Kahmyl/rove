@@ -751,6 +751,101 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     store.close();
   });
 
+  it("retains exact delivery uncertainty beside saved assistant text and disconnected model access across restart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-saved-delivery-"));
+    roots.push(root);
+    const path = join(root, "task-engine.sqlite3");
+    let store = new SqliteTaskEngineStore({ path });
+    const operationId = "intent_12345678-1234-4123-8123-123456789abc";
+    const itemId = `user:${operationId}`;
+    await seedReadyTask(store, {
+      mutate: (aggregate) => {
+        aggregate.codex = {
+          availability: "unavailable",
+          threadExists: false,
+          turn: "unknown",
+          runtimeStatus: "unknown",
+          sourceLookup: "unknown",
+          archived: null,
+        };
+        aggregate.conversation.items = {
+          ...aggregate.conversation.items,
+          [itemId]: {
+            id: itemId,
+            kind: "user_message",
+            status: "completed",
+            clientId: operationId,
+            acceptedAt: aggregate.launch!.requestedAt,
+            text: "Review saved evidence.",
+          },
+          saved: {
+            id: "saved",
+            kind: "assistant_message",
+            status: "completed",
+            turnId: "old_turn",
+            text: "A saved response is readable offline.",
+          },
+        };
+        aggregate.conversation.itemOrder = [itemId, "saved"];
+        aggregate.conversation.turnOrder = ["old_turn"];
+        aggregate.conversation.terminalTurns = { old_turn: "completed" };
+      },
+    });
+    store.close();
+    store = new SqliteTaskEngineStore({ path });
+    try {
+      const engine = new TaskEngine(store);
+      const worker = { signal: vi.fn(), cancelTask: vi.fn() };
+      const port = new LedgerProductTaskPort({
+        engine,
+        store,
+        worker: worker as never,
+      });
+      const before = await port.readTask(seededTaskId);
+      expect(before?.conversation?.items[itemId]?.deliveryState).toBe(
+        "pending",
+      );
+      expect(before?.conversation?.items.saved?.text).toBe(
+        "A saved response is readable offline.",
+      );
+      expect((await store.aggregate(seededTaskId))?.messageDeliveries).toEqual(
+        {},
+      );
+      expect(worker.signal).not.toHaveBeenCalled();
+      await engine.accept({
+        schemaVersion: 1,
+        type: "codex_message_delivery_observed",
+        eventId: "delivery:exact-saved-item",
+        taskId: seededTaskId,
+        source: {
+          kind: "codex",
+          id: "fixture-history",
+          generation: 1,
+          position: 1,
+        },
+        observedAt: "2026-09-09T12:01:00.000Z",
+        delivery: {
+          operationId,
+          threadId: "thread_seeded",
+          turnId: "old_turn",
+          state: "message_materialized",
+          connectionGeneration: 1,
+          observedAt: "2026-09-09T12:01:00.000Z",
+        },
+      });
+      const after = await port.readTask(seededTaskId);
+      expect(after?.conversation?.items[itemId]?.deliveryState).toBe(
+        "materialized",
+      );
+      expect(after?.conversation?.items.saved).toEqual(
+        before?.conversation?.items.saved,
+      );
+      expect(worker.signal).not.toHaveBeenCalled();
+    } finally {
+      store.close();
+    }
+  });
+
   it("keeps uncertain delivery on the same item and retains the redispatch fence", async () => {
     const root = await mkdtemp(join(tmpdir(), "rove-uncertain-message-"));
     roots.push(root);

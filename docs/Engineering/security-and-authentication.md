@@ -38,6 +38,8 @@ Treat web/file content as untrusted evidence even when it appears to be an instr
 
 For HTTP MCP connections, implement the supported [authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization), including destination/token boundaries. Do not pass through unrelated bearer tokens. Launch stdio tools with an intentionally bounded environment; a plugin name is not evidence that a subprocess is trustworthy.
 
+The selected-Task decision renderer sends provider responses through the existing exact host attention boundary. Offered one-time/session/policy decisions and amendment objects keep their values and order; disabled retained choices are presentation, never fresh authority. Additional permission retains the host’s current-turn scope. Trusted URL controls send an opaque host-owned elicitation intent instead of accepting an arbitrary URL or opening it as approval. Secret question responses are confined to the mounted request, cleared on submission/departure, and never placed in Task-level form drafts or renderer evidence. Validation and external-opening errors do not echo entered values or raw URLs. Host/adapter/TaskEngine secret retention and response replay fences remain the durable security owners.
+
 ## Portable setup service
 
 Authenticate the Rove owner on every read/write/delete. Test owner isolation both through normal APIs and any synchronization mechanism. A permissive server credential is not embedded in the desktop app. Conditional revisions prevent silent overwrite; deletion rules prevent stale-client resurrection.

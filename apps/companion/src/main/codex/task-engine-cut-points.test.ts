@@ -96,6 +96,83 @@ describe("21 real process stop/restart interruption cases", () => {
     ).not.toThrow();
   });
 
+  it("waits for durable Task browser binding rather than an external session receipt", async () => {
+    const home = await mkdtemp(join(tmpdir(), "rove-binding-cut-"));
+    const id = "intent_abcdef01-1234-4123-8123-abcdef012345";
+    const expectedTaskId = taskId(id);
+    let current = new ProcessProductHarness(home, {
+      cutPoint: "after_claim_before_dispatch",
+      cutCommand: "bind_runtime_identity",
+    });
+    try {
+      await current.start();
+      const workspace = await current.request({
+        type: "workspace.create",
+        displayName: "Durable browser binding",
+      });
+      const workspaceId = String(
+        (workspace.workspace as ProductValue | undefined)?.id ?? workspace.id,
+      );
+      await current.request(
+        launchIntent(id, {
+          browserIdentity: { mode: "workspace", workspaceId },
+        }),
+      );
+      await current.until(
+        (snapshot) =>
+          task(snapshot, expectedTaskId).bootstrapStage === "complete",
+      );
+      const attachedSessionId = String(
+        await current.request({
+          type: "browser.attach",
+          taskId: expectedTaskId,
+        }),
+      );
+      const reached = await current.waitForCut();
+      expect(reached.commandType).toBe("bind_runtime_identity");
+      const accepted = await current.request({ type: "external.actions" });
+      expect(
+        (accepted.runtime as ProductValue[]).filter(
+          (action) => action.method === "startSession",
+        ),
+      ).toHaveLength(1);
+      const unbound = task(await current.snapshot(), expectedTaskId);
+      expect(unbound.codexThreadId).toEqual(expect.any(String));
+      expect(unbound.roveSessionId).not.toBe(attachedSessionId);
+      // Deterministically exposes the former readiness assumption, regardless
+      // of worker scheduling: Runtime is accepted while ledger binding is held.
+      await expect(
+        current.request({
+          type: "handoff.prepare",
+          taskId: expectedTaskId,
+        }),
+      ).rejects.toThrow("Task is not ready for a handoff.");
+
+      await current.stopAllHard();
+      current = new ProcessProductHarness(home);
+      await current.start();
+      // The full process-tree cut also detaches Chromium. Recover that same
+      // Runtime session before exercising its live ownership boundary.
+      expect(await current.attachBrowser(expectedTaskId)).toBe(
+        attachedSessionId,
+      );
+      await current.request({
+        type: "handoff.prepare",
+        taskId: expectedTaskId,
+      });
+      await current.untilHandoff(expectedTaskId);
+      const recovered = await current.request({ type: "external.actions" });
+      expect(
+        (recovered.runtime as ProductValue[]).filter(
+          (action) => action.method === "startSession",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await current.stop().catch(() => undefined);
+      await rm(home, { recursive: true, force: true });
+    }
+  }, 240_000);
+
   for (const [
     representativeIndex,
     representative,
@@ -135,10 +212,7 @@ describe("21 real process stop/restart interruption cases", () => {
               (snapshot) =>
                 task(snapshot, expectedTaskId).bootstrapStage === "complete",
             );
-            await current.request({
-              type: "browser.attach",
-              taskId: expectedTaskId,
-            });
+            await current.attachBrowser(expectedTaskId);
             // Component replacement is its own cut, not an accidental
             // interruption of the still-asynchronous initial dispatch.
             await current.untilResult(
@@ -189,10 +263,7 @@ describe("21 real process stop/restart interruption cases", () => {
             "ready",
           );
 
-          await current.request({
-            type: "browser.attach",
-            taskId: expectedTaskId,
-          });
+          await current.attachBrowser(expectedTaskId);
 
           const afterRecovery = await current.untilResult(
             { type: "external.actions" },
@@ -228,14 +299,7 @@ describe("21 real process stop/restart interruption cases", () => {
             type: "handoff.prepare",
             taskId: expectedTaskId,
           });
-          const handedOff = await current.until((snapshot) =>
-            attention(snapshot).some(
-              (request) =>
-                request.taskId === expectedTaskId &&
-                request.kind === "control_handoff" &&
-                request.status === "pending",
-            ),
-          );
+          const handedOff = await current.untilHandoff(expectedTaskId);
           expect(attention(handedOff).length).toBeGreaterThan(0);
 
           await current.stopAllHard();

@@ -2092,9 +2092,29 @@ export class LocalProductApi {
                 task.conversation.items[latestInputId]!.deliveryState!,
             }
           : {}),
+        ...(task.roveSessionId &&
+        (task.runtime?.attachment !== "attached" ||
+          task.runtime.recovery !== "not_needed")
+          ? {
+              browserRecoveryKey: JSON.stringify([
+                task.roveSessionId,
+                task.runtime?.attachment,
+                task.runtime?.recovery,
+              ]),
+            }
+          : {}),
+        legacyOutcomeUnclear: task.availableActions.includes(
+          "acknowledge_legacy_effects",
+        ),
         consequentialOutcomeUnclear: task.results.some(
           (result) => result.lifecycle === "unresolved",
         ),
+        unresolvedResultIds: task.results
+          .filter((result) => result.lifecycle === "unresolved")
+          .map((result) => result.resultId),
+        uncertainInputIds: Object.values(task.conversation?.items ?? {})
+          .filter((item) => item.deliveryState === "uncertain")
+          .map((item) => item.id),
         recordings: task.recordings,
       });
     }

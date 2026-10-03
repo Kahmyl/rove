@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import process from "node:process";
+
+import { customerTaskPresentation } from "../../apps/companion/dist/main/main/codex/customer-task-presentation.js";
 
 const root = resolve(import.meta.dirname, "../..");
 const companion = join(root, "apps/companion");
@@ -18,6 +22,12 @@ const entry = join(
   companion,
   "dist/main/main/qualification/startup-hydration-main.js",
 );
+const output = join(
+  root,
+  "artifacts/customer-journeys/startup-hydration",
+  new Date().toISOString().replaceAll(/[:.]/g, "-"),
+);
+await mkdir(output, { recursive: true });
 const fixtureHome = await mkdtemp(join(tmpdir(), "rove-startup-hydration-"));
 const fixturePath = join(fixtureHome, "persisted-product.json");
 
@@ -71,19 +81,14 @@ const task = (taskId, title, unresolved) => ({
     queue: [],
     segments: [],
   },
-  customerPresentation: unresolved
-    ? {
-        state: "outcome_unclear",
-        sidebar: { label: "Couldn't continue", tone: "danger" },
-        conversationStatus: {
-          title: "Task state unclear",
-          description:
-            "Rove could not confirm the latest task state. It will not repeat the affected action automatically.",
-          tone: "danger",
-        },
-        terminalWorkLabel: "Couldn't continue",
-      }
-    : { state: "ready", terminalWorkLabel: "Worked" },
+  customerPresentation: customerTaskPresentation({
+    execution: {
+      state: unresolved ? "unresolved" : "ready",
+      queue: [],
+      segments: [],
+    },
+    capabilities,
+  }),
 });
 
 await writeFile(
@@ -148,7 +153,10 @@ async function qualify(scenario) {
       .getByText("Persisted uncertain task", { exact: true })
       .first()
       .waitFor();
-    await page.getByText("Task state unclear", { exact: true }).waitFor();
+    await page
+      .locator("#task-state-task_unresolved > summary")
+      .getByText("Task state unclear", { exact: false })
+      .waitFor();
     await page
       .getByRole("button", {
         name: "Task history: task_ready",
@@ -163,23 +171,47 @@ async function qualify(scenario) {
     await composer.waitFor({ state: "visible" });
     if (await composer.isDisabled())
       throw new Error("Unrelated persisted task was not interactive.");
-    const warning = page.getByLabel("Browser service status", { exact: true });
+    const warning = page.locator("#device-browser-state");
     if (scenario === "degraded") {
       await warning.waitFor({ state: "visible" });
+      await warning.locator("summary").click();
       const text = await warning.innerText();
       if (!text.includes("Conversation history remains available"))
         throw new Error("Degraded Runtime warning was not customer-safe.");
     } else if (await warning.count()) {
       throw new Error("Healthy startup rendered a Runtime warning.");
     }
+    await page.screenshot({ path: join(output, `${scenario}.png`) });
+    await writeFile(join(output, `${scenario}.html`), await page.content());
     return {
       scenario,
+      screenshotSha256: createHash("sha256")
+        .update(await readFile(join(output, `${scenario}.png`)))
+        .digest("hex"),
       hydrationObserved: true,
       persistedConversationObserved: true,
       unresolvedTaskOwned: true,
       unrelatedTaskInteractive: true,
       runtimeWarning: scenario === "degraded",
     };
+  } catch (error) {
+    const page = application.windows().find((entry) => !entry.isClosed());
+    if (page) {
+      await page.screenshot({ path: join(output, `failure-${scenario}.png`) });
+      await writeFile(
+        join(output, `failure-${scenario}.html`),
+        await page.content(),
+      );
+    }
+    await writeFile(
+      join(output, "failure.json"),
+      JSON.stringify(
+        { scenario, message: error.message, stack: error.stack },
+        null,
+        2,
+      ),
+    );
+    throw error;
   } finally {
     await application.close().catch(() => undefined);
   }
@@ -188,9 +220,36 @@ async function qualify(scenario) {
 try {
   const healthy = await qualify("healthy");
   const degraded = await qualify("degraded");
-  process.stdout.write(
-    `${JSON.stringify({ status: "passed", fixtureHome, healthy, degraded })}\n`,
+  const sourceFiles = {};
+  for (const file of [
+    "experiments/agent-execution/startup-hydration-qualification.mjs",
+    "apps/companion/src/main/qualification/startup-hydration-main.ts",
+    "apps/companion/src/main/codex/customer-task-presentation.ts",
+    "apps/companion/src/renderer/product-surface.tsx",
+    "apps/companion/src/renderer/styles.css",
+  ])
+    sourceFiles[file] = createHash("sha256")
+      .update(await readFile(join(root, file)))
+      .digest("hex");
+  await writeFile(
+    join(output, "report.json"),
+    JSON.stringify(
+      {
+        status: "passed",
+        sourceHead: execFileSync("git", ["rev-parse", "HEAD"], {
+          cwd: root,
+          encoding: "utf8",
+        }).trim(),
+        sourceFiles,
+        mode: "source-built fixture hydration; temporary home; no model execution",
+        healthy,
+        degraded,
+      },
+      null,
+      2,
+    ),
   );
+  process.stdout.write(`${output}\nHealthy/degraded hydration passed\n`);
 } finally {
   await rm(fixtureHome, { recursive: true, force: true });
 }

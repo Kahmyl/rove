@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /* global document, fetch, getComputedStyle, HTMLElement, innerHeight, innerWidth */
 
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
@@ -61,7 +63,7 @@ function taskIdentity(index) {
   };
 }
 
-function baseAggregate(index, outcome) {
+export function baseAggregate(index, outcome) {
   const identity = taskIdentity(index);
   const aggregate = emptyTaskAggregate(identity.taskId);
   aggregate.revision = 1;
@@ -105,6 +107,7 @@ function baseAggregate(index, outcome) {
         kind: "user_message",
         status: "completed",
         clientId: identity.operationId,
+        turnId: identity.turnId,
         acceptedAt: aggregate.launch.requestedAt,
         startedAt: aggregate.launch.requestedAt,
         completedAt: aggregate.launch.requestedAt,
@@ -114,6 +117,15 @@ function baseAggregate(index, outcome) {
     itemOrder: [`user:${identity.operationId}`],
     turnOrder: [],
     terminalTurns: {},
+  };
+  // Synthetic persistence history includes exact delivery facts; assistant text grants none.
+  aggregate.messageDeliveries[identity.operationId] = {
+    operationId: identity.operationId,
+    threadId: identity.threadId,
+    turnId: identity.turnId,
+    state: "message_materialized",
+    connectionGeneration: 1,
+    observedAt: aggregate.launch.requestedAt,
   };
   return { aggregate, identity };
 }
@@ -148,7 +160,7 @@ async function persistAggregate(store, aggregate, index) {
   );
 }
 
-async function seedProductHome(home) {
+export async function seedProductHome(home) {
   const stateDirectory = join(home, "codex-product");
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
   const store = new SqliteTaskEngineStore({
@@ -310,155 +322,182 @@ async function visibleBounds(page) {
   });
 }
 
-const executablePath = packageExecutable();
-const qualificationRoot = await mkdtemp(
-  join(tmpdir(), "rove-packaged-interaction-"),
-);
-const productHome = join(qualificationRoot, "product-home");
-let browser;
-let desktop;
-let activator;
-let desktopOutput = "";
-
-try {
-  await seedProductHome(productHome);
-  const debuggingPort = await allocatePort();
-  desktop = spawn(
-    executablePath,
-    [
-      "--rove-manage-services",
-      `--user-data-dir=${join(qualificationRoot, "electron-user-data")}`,
-      `--remote-debugging-port=${debuggingPort}`,
-    ],
-    {
-      cwd: qualificationRoot,
-      env: {
-        ...process.env,
-        ROVE_DESKTOP_HOME: productHome,
-        ROVE_BROWSER_HEADLESS: "true",
-        ROVE_BROWSER: "chromium",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
+export async function qualifyPackagedInteractions() {
+  const executablePath = packageExecutable();
+  const qualificationRoot = await mkdtemp(
+    join(tmpdir(), "rove-packaged-interaction-"),
   );
-  desktop.stdout.on("data", (chunk) => (desktopOutput += chunk.toString()));
-  desktop.stderr.on("data", (chunk) => (desktopOutput += chunk.toString()));
-  const endpoint = await waitForDebuggingPort(
-    debuggingPort,
-    desktop,
-    () => desktopOutput,
+  const productHome = join(qualificationRoot, "product-home");
+  const evidenceRoot = join(
+    repositoryRoot,
+    "artifacts/customer-journeys/packaged-critical",
+    new Date().toISOString().replaceAll(":", "-"),
   );
-  activator = spawn(
-    executablePath,
-    [`--user-data-dir=${join(qualificationRoot, "electron-user-data")}`],
-    {
-      cwd: qualificationRoot,
-      env: {
-        ...process.env,
-        ROVE_DESKTOP_HOME: productHome,
-        ROVE_BROWSER_HEADLESS: "true",
-        ROVE_BROWSER: "chromium",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  activator.stdout.on("data", (chunk) => (desktopOutput += chunk.toString()));
-  activator.stderr.on("data", (chunk) => (desktopOutput += chunk.toString()));
-  await Promise.race([once(activator, "exit"), delay(5_000)]);
-  await stopChild(activator);
-  activator = undefined;
-  browser = await chromium.connectOverCDP(endpoint);
-  const context = browser.contexts()[0];
-  assert(context, "Packaged renderer did not expose a browser context.");
-  let page;
-  let targets = [];
-  const pageStartedAt = Date.now();
-  while (!page && Date.now() - pageStartedAt < 30_000) {
-    targets = await fetch(`${endpoint}/json/list`).then((response) =>
-      response.json(),
-    );
-    page = context
-      .pages()
-      .find((candidate) => candidate.url().includes("renderer/index.html"));
-    if (!page) await delay(100);
-  }
-  assert(
-    page,
-    `Packaged Rove did not expose its renderer page. Targets: ${JSON.stringify(targets)}\n${desktopOutput}`,
-  );
-  await page.locator(".product-app").waitFor({ timeout: 30_000 });
-  await page.setViewportSize({ width: 1180, height: 780 });
-
-  await page
-    .getByRole("button", {
-      name: `Task history: ${taskIdentity(1).taskId}`,
-    })
-    .click();
-  await page
-    .getByText("The persisted packaged conversation remains readable", {
-      exact: false,
-    })
-    .waitFor();
-  const composer = page.getByLabel("Task message", { exact: true });
-  await composer.waitFor({ state: "visible" });
-
-  await page
-    .getByRole("button", {
-      name: `Task history: ${taskIdentity(2).taskId}`,
-    })
-    .click();
-  await page
-    .getByLabel("Task workspace")
-    .getByText("Review the packaged command request", { exact: true })
-    .waitFor();
-  assert(
-    !(await page.getByLabel("Current task request").isVisible()),
-    "Packaged startup presented a stale provider request as actionable.",
-  );
-  assert(
-    !(await page.getByText("Approve once", { exact: true }).isVisible()),
-    "Packaged startup retained a stale provider approval decision.",
-  );
-
-  await page
-    .getByRole("button", {
-      name: `Task history: ${taskIdentity(3).taskId}`,
-    })
-    .click();
-  await page
-    .getByLabel("Task workspace")
-    .getByText("Comparing the packaged application evidence.", {
-      exact: true,
-    })
-    .waitFor();
-  const stopPresented = await page
-    .getByRole("button", { name: "Stop current work" })
-    .isVisible();
-
-  await page.setViewportSize({ width: 820, height: 700 });
-  const historyButton = page.getByRole("button", {
-    name: `Task history: ${taskIdentity(1).taskId}`,
-  });
-  await page.keyboard.press("Tab");
-  await historyButton.focus();
-  assert(
-    await historyButton.evaluate((element) =>
-      element.matches(":focus-visible"),
+  await mkdir(evidenceRoot, { recursive: true });
+  const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const provenance = {
+    sourceHead: execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    }).trim(),
+    sourceSha256: digest(await readFile(fileURLToPath(import.meta.url))),
+    packagedArchiveSha256: digest(
+      await readFile(resolve(dirname(executablePath), "../Resources/app.asar")),
     ),
-    "Packaged narrow Task navigation lacks visible keyboard focus.",
-  );
-  const bounds = await visibleBounds(page);
-  assert(
-    !bounds.horizontalOverflow,
-    "Packaged narrow surface overflows horizontally.",
-  );
-  assert(
-    bounds.outside === 0,
-    "Packaged narrow dialog or alert escapes the viewport.",
-  );
+    executablePath,
+    mode: "Unsigned darwin/arm64 production package with synthetic SQLite facts, isolated homes, local services; no live model/account/browser Task",
+  };
+  let page;
+  let browser;
+  let desktop;
+  let activator;
+  let desktopOutput = "";
 
-  process.stdout.write(
-    `${JSON.stringify({
+  try {
+    await seedProductHome(productHome);
+    const debuggingPort = await allocatePort();
+    desktop = spawn(
+      executablePath,
+      [
+        "--rove-manage-services",
+        `--user-data-dir=${join(qualificationRoot, "electron-user-data")}`,
+        `--remote-debugging-port=${debuggingPort}`,
+      ],
+      {
+        cwd: qualificationRoot,
+        env: {
+          ...process.env,
+          ROVE_DESKTOP_HOME: productHome,
+          ROVE_BROWSER_HEADLESS: "true",
+          ROVE_BROWSER: "chromium",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    desktop.stdout.on("data", (chunk) => (desktopOutput += chunk.toString()));
+    desktop.stderr.on("data", (chunk) => (desktopOutput += chunk.toString()));
+    const endpoint = await waitForDebuggingPort(
+      debuggingPort,
+      desktop,
+      () => desktopOutput,
+    );
+    activator = spawn(
+      executablePath,
+      [`--user-data-dir=${join(qualificationRoot, "electron-user-data")}`],
+      {
+        cwd: qualificationRoot,
+        env: {
+          ...process.env,
+          ROVE_DESKTOP_HOME: productHome,
+          ROVE_BROWSER_HEADLESS: "true",
+          ROVE_BROWSER: "chromium",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    activator.stdout.on("data", (chunk) => (desktopOutput += chunk.toString()));
+    activator.stderr.on("data", (chunk) => (desktopOutput += chunk.toString()));
+    await Promise.race([once(activator, "exit"), delay(5_000)]);
+    await stopChild(activator);
+    activator = undefined;
+    browser = await chromium.connectOverCDP(endpoint);
+    const context = browser.contexts()[0];
+    assert(context, "Packaged renderer did not expose a browser context.");
+    let targets = [];
+    const pageStartedAt = Date.now();
+    while (!page && Date.now() - pageStartedAt < 30_000) {
+      targets = await fetch(`${endpoint}/json/list`).then((response) =>
+        response.json(),
+      );
+      page = context
+        .pages()
+        .find((candidate) => candidate.url().includes("renderer/index.html"));
+      if (!page) await delay(100);
+    }
+    assert(
+      page,
+      `Packaged Rove did not expose its renderer page. Targets: ${JSON.stringify(targets)}\n${desktopOutput}`,
+    );
+    await page.locator(".product-app").waitFor({ timeout: 30_000 });
+    await page.setViewportSize({ width: 1180, height: 780 });
+
+    await page
+      .getByRole("button", {
+        name: `Task history: ${taskIdentity(1).taskId}`,
+      })
+      .click();
+    await page
+      .getByText("The persisted packaged conversation remains readable", {
+        exact: false,
+      })
+      .waitFor();
+    const composer = page.getByLabel("Task message", { exact: true });
+    await composer.waitFor({ state: "visible" });
+
+    await page
+      .getByRole("button", {
+        name: `Task history: ${taskIdentity(2).taskId}`,
+      })
+      .click();
+    await page
+      .getByLabel("Task workspace")
+      .getByText("Review the packaged command request", { exact: true })
+      .waitFor();
+    assert(
+      !(await page.getByLabel("Current task request").isVisible()),
+      "Packaged startup presented a stale provider request as actionable.",
+    );
+    assert(
+      !(await page.getByText("Approve once", { exact: true }).isVisible()),
+      "Packaged startup retained a stale provider approval decision.",
+    );
+
+    await page
+      .getByRole("button", {
+        name: `Task history: ${taskIdentity(3).taskId}`,
+      })
+      .click();
+    await page
+      .getByLabel("Task workspace")
+      .getByText("Comparing the packaged application evidence.", {
+        exact: true,
+      })
+      .waitFor();
+    const stopPresented = await page
+      .getByRole("button", { name: "Stop current work" })
+      .isVisible();
+
+    await page.setViewportSize({ width: 820, height: 700 });
+    const historyButton = page.getByRole("button", {
+      name: `Task history: ${taskIdentity(1).taskId}`,
+    });
+    const navigation = page.getByRole("button", {
+      name: "Open navigation",
+      exact: true,
+    });
+    await navigation.focus();
+    await navigation.press("Enter");
+    await page.locator("#shell-navigation").waitFor({ state: "visible" });
+    await page.keyboard.press("Tab");
+    await historyButton.focus();
+    assert(
+      await historyButton.evaluate((element) =>
+        element.matches(":focus-visible"),
+      ),
+      "Packaged narrow Task navigation lacks visible keyboard focus.",
+    );
+    const bounds = await visibleBounds(page);
+    assert(
+      !bounds.horizontalOverflow,
+      "Packaged narrow surface overflows horizontally.",
+    );
+    assert(
+      bounds.outside === 0,
+      "Packaged narrow dialog or alert escapes the viewport.",
+    );
+
+    const result = {
+      ...provenance,
       status: "qualified",
       executablePath,
       packagedMain: true,
@@ -475,11 +514,54 @@ try {
       browserOwnership: "not_exercised_without_live_task_runtime_binding",
       followerPresentation: "not_exercised_without_live_task_runtime_binding",
       humanAcceptance: false,
-    })}\n`,
-  );
-} finally {
-  await browser?.close().catch(() => undefined);
-  await stopChild(activator);
-  await stopChild(desktop);
-  await rm(qualificationRoot, { recursive: true, force: true });
+    };
+    await page.screenshot({
+      path: join(evidenceRoot, "narrow-navigation.png"),
+    });
+    await writeFile(
+      join(evidenceRoot, "narrow-navigation.html"),
+      await page.content(),
+    );
+    result.screenshotSha256 = digest(
+      await readFile(join(evidenceRoot, "narrow-navigation.png")),
+    );
+    await writeFile(
+      join(evidenceRoot, "report.json"),
+      JSON.stringify(result, null, 2),
+    );
+    process.stdout.write(
+      `${JSON.stringify({ ...result, evidenceRoot }, null, 2)}\n`,
+    );
+  } catch (error) {
+    if (page) {
+      await page
+        .screenshot({ path: join(evidenceRoot, "failure.png") })
+        .catch(() => undefined);
+      await writeFile(
+        join(evidenceRoot, "failure.html"),
+        await page.content(),
+      ).catch(() => undefined);
+    }
+    await writeFile(
+      join(evidenceRoot, "report.json"),
+      JSON.stringify(
+        { ...provenance, status: "failed", error: String(error) },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  } finally {
+    await browser?.close().catch(() => undefined);
+    await stopChild(activator);
+    await stopChild(desktop);
+    await rm(qualificationRoot, { recursive: true, force: true });
+  }
+}
+
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await qualifyPackagedInteractions();
 }

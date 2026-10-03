@@ -101,7 +101,9 @@ function stableRequestOrder(
   );
 }
 
-function requestDescription(entry: ProductAttentionProjection): string {
+export function customerRequestDescription(
+  entry: ProductAttentionProjection,
+): string {
   if (entry.instruction) return entry.instruction;
   if (entry.elicitation) return entry.elicitation.message;
   return {
@@ -118,10 +120,10 @@ function requestDescription(entry: ProductAttentionProjection): string {
   }[entry.kind];
 }
 
-function requestActions(
+/** Offered presentation choices; disabled rendering never grants response authority. */
+export function customerRequestActions(
   entry: ProductAttentionProjection,
 ): readonly CustomerCollaborationAction[] {
-  if (entry.status !== "pending") return [];
   if (entry.kind === "user_input")
     return [{ kind: "respond", decision: "accept", label: "Send" }];
   if (entry.kind === "mcp_elicitation") {
@@ -153,12 +155,20 @@ function requestActions(
     {
       kind: "respond",
       decision: "accept",
-      label: entry.kind === "permission_approval" ? "Allow" : "Approve once",
+      label:
+        entry.kind === "permission_approval"
+          ? "Allow for this turn"
+          : "Approve once",
+      description:
+        entry.kind === "permission_approval"
+          ? "Grants only the requested permissions for the current turn."
+          : "Allows only this request.",
     },
     {
       kind: "respond",
       decision: "decline",
       label: entry.kind === "permission_approval" ? "Deny" : "Decline",
+      description: "Does not allow this request.",
     },
   ];
 }
@@ -197,7 +207,7 @@ function projectRequest(
           ? "Checking whether your response was received…"
           : responseState === "unresolved"
             ? "Rove could not confirm the response. It will not be sent again automatically."
-            : requestDescription(entry),
+            : customerRequestDescription(entry),
     identity: {
       authority: entry.authority,
       requestId: entry.requestId,
@@ -214,7 +224,7 @@ function projectRequest(
       ? {}
       : { elicitation: entry.elicitation }),
     sensitive,
-    actions: requestActions(entry),
+    actions: responseState === "pending" ? customerRequestActions(entry) : [],
   };
 }
 

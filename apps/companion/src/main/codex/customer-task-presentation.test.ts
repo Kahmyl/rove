@@ -83,7 +83,7 @@ describe("customer Task presentation", () => {
       customerTaskPresentation({ execution: execution("unresolved") }),
     ).toMatchObject({
       state: "outcome_unclear",
-      sidebar: { label: "Couldn't continue", tone: "danger" },
+      sidebar: { label: "Task state unclear", tone: "muted" },
       conversationStatus: { title: "Task state unclear" },
       terminalWorkLabel: "Couldn't continue",
     });
@@ -187,5 +187,57 @@ describe("customer Task presentation", () => {
     });
     expect(human.sidebar?.label).toBe("You're in control");
     expect(input.sidebar?.label).toBe("Needs input");
+  });
+  it("keeps exact unresolved markers alongside newer active work and removes only resolved facts", () => {
+    const facts = {
+      execution: execution("working"),
+      consequentialOutcomeUnclear: true,
+      unresolvedResultIds: ["result_exact"],
+      uncertainInputIds: ["input_exact"],
+    };
+    const value = customerTaskPresentation(facts);
+    expect(value.state).toBe("working");
+    expect(value.markers).toHaveLength(1);
+    expect(value.markers![0]!.key).toContain("result_exact");
+    expect(value.markers![0]!.key).toContain("input_exact");
+    expect(
+      customerTaskPresentation({ execution: execution("working") }).markers,
+    ).toBeUndefined();
+    expect(
+      customerTaskPresentation({ execution: execution("checking") }).markers,
+    ).toBeUndefined();
+    expect(
+      customerTaskPresentation({ execution: execution("stopped") }).markers,
+    ).toBeUndefined();
+  });
+  it("retains a legacy effect fence marker alongside active work without granting recovery", () => {
+    const value = customerTaskPresentation({
+      execution: execution("working"),
+      legacyOutcomeUnclear: true,
+    });
+    expect(value.state).toBe("working");
+    expect(value.markers).toMatchObject([{ title: "Outcome unclear" }]);
+    expect(value.retry).toBeUndefined();
+    expect(
+      customerTaskPresentation({
+        execution: execution("working"),
+        legacyOutcomeUnclear: false,
+      }).markers,
+    ).toBeUndefined();
+  });
+  it("lets newer stopping and stopped truth win immediately without creating warning noise", () => {
+    const states = ["checking", "stopping", "stopped"] as const;
+    expect(
+      states.map(
+        (state) =>
+          customerTaskPresentation({ execution: execution(state) }).state,
+      ),
+    ).toEqual(states);
+    expect(
+      states.map(
+        (state) =>
+          customerTaskPresentation({ execution: execution(state) }).markers,
+      ),
+    ).toEqual([undefined, undefined, undefined]);
   });
 });

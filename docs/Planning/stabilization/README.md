@@ -17,8 +17,12 @@ The canonical ticket-to-ticket handoff state is [continuity-ledger.md](continuit
 - Generated screenshots/traces may remain ignored artifacts; durable findings, hashes, commands, contract decisions, and qualification results belong in the ticket or evidence ledger.
 - Hard provider blockers are never marked complete from synthetic presentation evidence.
 
-## Current status
+## Earlier authority checkpoints
 
 ROVE-STAB-01 is complete as a planning/evidence ticket. ROVE-STAB-02 established exact Task/Runtime/Codex authority convergence. ROVE-STAB-03 verified the exact recovery-blocker lifecycle, durable stale-observation ordering, persisted compatibility, and bounded unresolved customer state. ROVE-STAB-04 established canonical browser-workspace validation plus classified, bounded Runtime failure containment with clean recovery and zero process-level rejection leakage in its managed-process fixture. Their checkpoints are recorded in the continuity ledger.
 
-The next production ticket is ROVE-STAB-05 unless new evidence changes the dependency graph. It must consume the STAB-03 bounded recovery/presentation handoff and STAB-04 Runtime degraded-state contract, run `pnpm codex:context`, and record its exact stacked start SHA before production edits.
+## Current continuation
+
+STAB-14’s recorded acceptance checkpoint is `2ff214b8f8624859c1a55bb50a16997302614560`: recorded E2E acceptance PARTIAL, with 37 PASS preserved. Subsequent human review requires remediation through the [Rove Human-Review Remediation Program](../human-review-remediation/README.md). MR-034–MR-039 remain open; UXR-01 planning setup is complete and UXR-02–08 are Planned. STAB-14 cannot close before the remediation gate, subsequent final human-recorded acceptance and separate external release gates.
+
+The exact next gate is UXR-02 read-only baseline/design reconciliation before source edits, consuming the [program continuity ledger](../human-review-remediation/continuity-ledger.md) and current repository truth. The earlier STAB-05 entry is historical sequencing, not the present next step.

@@ -11,6 +11,8 @@ Prepare the current Rove implementation as though it is being taken to market ra
 
 Development-app human acceptance exposed defects that cross the original acceptance stages. Several symptoms share one deeper authority, recovery, state-model, approval, or browser-ownership cause. The implementation must therefore be repaired at the owning boundary rather than patched at whichever screen exposed the symptom.
 
+The bounded [Rove Human-Review Remediation Program](human-review-remediation/README.md) now sequences MR-034–MR-039 found by post-STAB-14 recorded E2E human review. It feeds this sprint’s final release qualification rather than replacing its authority or external gates. Recorded acceptance remains PARTIAL and the 37 functional PASS checks stand; human review requires composition remediation before final Stage 1–4 recording after UXR-08.
+
 There is **one sprint**. The work is decomposed into ordered tickets so each problem family can be diagnosed, implemented, verified, and checkpointed independently.
 
 ## 2. Current acceptance baseline
@@ -39,6 +41,7 @@ The acceptance stages are discovery organization, not engineering ownership.
 | F. Browser resource/surface UX | Profile recovery, orphan presentation, foreground/window coordination |
 | G. Hard Stop execution ownership | Exact Rove-owned process termination plus approval-preserving delegate authority |
 | H. Qualification infrastructure | Real-boundary E2E, restart/process fixtures, packaged and human qualification |
+| I. Interaction composition and visual quality | Coherent dock, customer decisions, notifications, browser presentation, responsive shell and visual hierarchy |
 
 The canonical issue mapping is [stabilization/issue-registry.md](stabilization/issue-registry.md).
 
@@ -59,7 +62,7 @@ The canonical issue mapping is [stabilization/issue-registry.md](stabilization/i
 | [ROVE-STAB-11](stabilization/ROVE-STAB-11-browser-resource-and-surface-ux.md) | Browser resource and surface UX | Depends on authority truth where applicable |
 | [ROVE-STAB-12](stabilization/ROVE-STAB-12-hard-stop-provider-qualification.md) | Hard Stop provider qualification / execution ownership decision | In progress; approval/security gate |
 | [ROVE-STAB-13](stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md) | Cross-cutting interaction and accessibility qualification | Depends on repaired product tickets |
-| [ROVE-STAB-14](stabilization/ROVE-STAB-14-market-release-qualification.md) | Market release qualification | Final sprint gate |
+| [ROVE-STAB-14](stabilization/ROVE-STAB-14-market-release-qualification.md) | Market release qualification | Prior functional machine qualification complete; UXR remediation, external and final human gates open |
 
 Dependency order is intentional. It is not permission to combine unrelated tickets into one implementation change.
 

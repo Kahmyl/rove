@@ -531,8 +531,16 @@ async function execute(command) {
     ).filter((entry) => entry.method === "thread/resume").length;
     const pid = core.host.getProcessId();
     if (!pid) throw new Error("App Server stand-in is not running.");
+    const priorConnectionId = core.host.getHealth().connectionId;
     process.kill(pid, "SIGKILL");
-    await waitFor(() => core.host.getHealth().state === "ready");
+    await waitFor(() => {
+      const health = core.host.getHealth();
+      return (
+        health.ready &&
+        health.connectionId &&
+        health.connectionId !== priorConnectionId
+      );
+    });
     await waitFor(async () => {
       const entries = await readJson(
         join(home, "codex-product/codex-home/l2-app-server-commands.json"),

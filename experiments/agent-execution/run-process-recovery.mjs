@@ -37,6 +37,7 @@ const requireCompanion = createRequire(
   join(root, "apps/companion/package.json"),
 );
 const tsxLoader = requireCompanion.resolve("tsx");
+const Database = requireCompanion("better-sqlite3");
 const { chromium } = requireBrowser("playwright");
 const activeDrivers = new Set();
 const activeResources = new Set();
@@ -122,14 +123,49 @@ async function materializedLaunch(driver, acceptance, operationId) {
 }
 
 async function cleanupResourcesAndWait(driver, taskId, operationId) {
+  let lastTask;
+  let recoveryWarnings;
   const task = await waitFor(async () => {
     const snapshot = await driver.request({ type: "snapshot" });
     const current = snapshot.tasks.find((entry) => entry.taskId === taskId);
+    lastTask = current;
+    recoveryWarnings = snapshot.recoveryWarnings;
     return current?.availableActions.includes("retry_cleanup") ||
       (current?.lifecycle?.phase === "ready" &&
         current.availableActions.includes("message"))
       ? current
       : undefined;
+  }).catch((error) => {
+    let recovery;
+    let database;
+    try {
+      database = new Database(
+        join(driver.home, "codex-product", "task-process.v1.sqlite3"),
+        {
+          readonly: true,
+          fileMustExist: true,
+        },
+      );
+      const row = database
+        .prepare(
+          "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+        )
+        .get(taskId);
+      const aggregate = row ? JSON.parse(row.payload_json) : undefined;
+      recovery = aggregate && {
+        codex: aggregate.codex,
+        recoveryRequired: aggregate.recoveryRequired,
+        codexRecoveryBlockers: aggregate.codexRecoveryBlockers,
+        continuation: aggregate.continuation,
+      };
+    } catch {
+      recovery = "Diagnostic store unavailable";
+    } finally {
+      database?.close();
+    }
+    throw new Error(
+      `${error.message} Last cleanup Task: ${JSON.stringify(lastTask)} Recovery truth: ${JSON.stringify(recovery)} Recovery warnings: ${JSON.stringify(recoveryWarnings)}`,
+    );
   });
   if (task.availableActions.includes("retry_cleanup")) {
     const acceptance = await driver.request({

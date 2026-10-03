@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   emptyTaskAggregate,
   foldTaskEvent,
@@ -14,10 +15,16 @@ import {
 } from "@rove/protocol";
 
 import {
+  CodexExecutionCore,
   composeCompletedRequestHumanHandoff,
   runtimeInventoryEventId,
   runtimeInventorySourceId,
 } from "./execution-core.js";
+import { OrderedTaskIngress } from "./ordered-task-ingress.js";
+import {
+  TaskAttachmentAuthority,
+  type AttachmentRuntimeMaterializer,
+} from "./task-attachments.js";
 import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
 
 const roots: string[] = [];
@@ -383,4 +390,140 @@ describe("request-human live event composition", () => {
       }),
     ).rejects.toThrow(/not corroborated/);
   });
+});
+
+describe("Runtime inventory after attachment cleanup", () => {
+  it.each(["completed", "failed", "active"] as const)(
+    "observes %s session truth without hiding active attachment conflicts",
+    async (status) => {
+      const root = await mkdtemp(join(tmpdir(), "rove-terminal-inventory-"));
+      roots.push(root);
+      const taskId = "task_11111111-1111-4111-8111-111111111111";
+      const sessionId = `ses_${"a".repeat(32)}`;
+      const authority = new TaskAttachmentAuthority(join(root, "attachments"), {
+        select: async () => [
+          {
+            filename: "finish.txt",
+            mimeType: "text/plain",
+            bytes: Buffer.from("cleanup evidence"),
+          },
+        ],
+      });
+      const materializeUserFile = vi.fn<
+        AttachmentRuntimeMaterializer["materializeUserFile"]
+      >(async (input) => ({
+        id: "ev_attachment",
+        sessionId: input.sessionId,
+        type: "file",
+        label: input.filename,
+        createdAt: "2026-09-19T00:00:00.000Z",
+        metadata: {
+          filename: input.filename,
+          mimeType: input.mimeType,
+          sizeBytes: input.bytes.byteLength,
+          sha256: createHash("sha256").update(input.bytes).digest("hex"),
+          source: "user_file_grant",
+          grantId: input.grantId,
+        },
+      }));
+      const attachmentRuntime = { materializeUserFile };
+      const selected = await authority.selectDrafts();
+      const attachmentIds = selected.attachments.map((item) => item.id);
+      await authority.bindDrafts(
+        attachmentIds,
+        taskId,
+        sessionId,
+        attachmentRuntime,
+      );
+      await authority.cleanupTask(taskId);
+      expect(authority.listForTask(taskId)).toEqual([]);
+      const store = new SqliteTaskEngineStore({
+        path: join(root, "tasks.sqlite3"),
+      });
+      const engine = new TaskEngine(store);
+      const launchEvent = launch(taskId, 1, "1");
+      launchEvent.launch.attachmentIds = attachmentIds;
+      await engine.accept(launchEvent);
+      await engine.accept(
+        runtimeEvent(
+          taskId,
+          runtimeTruth(sessionId, "active", "human"),
+          1,
+          "stale-human",
+        ),
+      );
+      const ingress = new OrderedTaskIngress(engine, (error) => {
+        throw error;
+      });
+      ingress.replaceGeneration(1);
+      let inventoryStatus: typeof status = status;
+      const core = new CodexExecutionCore({
+        isPackaged: false,
+        clientVersion: "test",
+        stateDirectory: root,
+        runtime: {
+          listSessionInventory: async () => [
+            {
+              session: {
+                id: sessionId,
+                bootstrapId: launchEvent.launch.bootstrapId,
+                status: inventoryStatus,
+                controller: inventoryStatus === "active" ? "human" : null,
+              },
+              attachment: inventoryStatus === "active" ? "attached" : "missing",
+              profileOwnership: "released",
+              recovery: "not_needed",
+              browserIdentity: { mode: "temporary" },
+            },
+          ],
+        } as never,
+        attachmentAuthority: authority,
+        attachmentRuntime,
+        mcpLaunch: { command: "unused", args: [], environment: {} },
+      });
+      // Exercise the production poll boundary without starting native processes
+      // or interval scheduling; its real ingress and SQLite ledger still commit.
+      const poll = core as unknown as {
+        store: SqliteTaskEngineStore;
+        ingress: OrderedTaskIngress;
+        recoveryWarnings: string[];
+        runtimeObservationPosition: number;
+        pollRuntimeTruth(): Promise<void>;
+      };
+      poll.store = store;
+      poll.ingress = ingress;
+      poll.runtimeObservationPosition = 1; // The seeded inventory already owns position 1.
+      try {
+        await poll.pollRuntimeTruth();
+        await poll.pollRuntimeTruth();
+        expect(materializeUserFile).toHaveBeenCalledTimes(1);
+        if (status === "active") {
+          expect(poll.recoveryWarnings).toHaveLength(1);
+          expect((await store.aggregate(taskId))?.runtime).toMatchObject({
+            status: "active",
+            controller: "human",
+          });
+          // A stale active poll may lose the race with cleanup. The next
+          // authoritative terminal inventory must still repair its projection.
+          inventoryStatus = "completed";
+          await poll.pollRuntimeTruth();
+          expect(poll.recoveryWarnings).toEqual([]);
+          expect((await store.aggregate(taskId))?.runtime).toMatchObject({
+            status: "completed",
+            controller: null,
+          });
+        } else {
+          expect(poll.recoveryWarnings).toEqual([]);
+          expect((await store.aggregate(taskId))?.runtime).toMatchObject({
+            status,
+            controller: null,
+            attachment: "missing",
+          });
+        }
+      } finally {
+        await ingress.drain();
+        store.close();
+      }
+    },
+  );
 });

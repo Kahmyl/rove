@@ -437,8 +437,7 @@ export class CodexExecutionCore {
         .recoverPriorOwners()
         .then(() => this.recover("App Server"))
         .catch(async (error) => {
-          const detail =
-            error instanceof Error ? error.message : String(error);
+          const detail = error instanceof Error ? error.message : String(error);
           this.recoveryWarnings = [
             ...this.recoveryWarnings,
             `Exact execution recovery: ${detail}`,
@@ -1174,8 +1173,11 @@ export class CodexExecutionCore {
             ? entry.session.id === aggregate.record.identity.sessionId
             : entry.session.bootstrapId === aggregate.launch!.bootstrapId,
         );
+        // Cleanup removes attachment authority; frozen launch IDs must not
+        // prevent a terminal inventory observation from repairing stale control.
         if (
           match &&
+          !["completed", "failed"].includes(match.session.status) &&
           aggregate.launch.attachmentIds.length > 0 &&
           this.options.attachmentAuthority &&
           this.options.attachmentRuntime

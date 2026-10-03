@@ -1,0 +1,867 @@
+# Human-Review Remediation Continuity Ledger
+
+**Role:** Bounded active-program continuation evidence subordinate to canonical Product/Engineering authority. Retire with the program; do not duplicate durable implementation status.
+
+## UXR-01 planning-contract setup — Complete, 3 October 2026
+
+### Exact start and repository reconciliation
+
+- Repository: `/Users/habibkamil/Documents/monorepo/rove`.
+- Program start and acceptance-record commit: `2ff214b8f8624859c1a55bb50a16997302614560` (`Record partial end-to-end acceptance`).
+- Initial branch: `codex/stab14-market-release-qualification`; clean worktree.
+- Local tracking reference observed: `origin/codex/stab14-market-release-qualification` = `42952a2bce699cee299a2bca6315d95d6181b54f`; start divergence is 1 ahead / 0 behind. No remote fetch was required; this states observed local remote-reference truth, not a claim of refreshed server state.
+- Planning branch: `codex/human-review-remediation-planning`, created from that exact local HEAD. No reset, clean, stash, discard or branch-from-stale-origin occurred.
+- Exit checkpoint: the coherent local commit containing this entry, titled `Define human-review remediation contracts and work program`; resolve exact identity with `git log -1 --format=%H -- docs/Planning/human-review-remediation/continuity-ledger.md`. No push/PR/merge is authorized by this checkpoint.
+
+### Evidence inherited and preserved
+
+Acceptance records: `artifacts/human-e2e-acceptance/20260927T144500Z/manifest.json`, `walkthrough.md`, `SHA256SUMS`, committed in `2ff214b`; underlying run SHA `42952a2bce699cee299a2bca6315d95d6181b54f`. Manifest counts: 37 PASS / six UNQUALIFIED / one BLOCKED. Recorded conclusion remains **RECORDED E2E ACCEPTANCE: PARTIAL**. Its historical humanReview=PENDING is not rewritten. Current supplied post-recording evidence is **HUMAN REVIEW: REMEDIATION REQUIRED**.
+
+| Record                                              | SHA-256                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| manifest.json                                       | `346c58b25379a2ca1d57efdb70146fbe0bcd382ace7eb5dc75fdf76e682a9a31` |
+| walkthrough.md                                      | `5a8708a0c853ded4146795c3c7c314c7c9dd1ffc3fa869ef51338d8127705aa9` |
+| SHA256SUMS                                          | `3bf5dcbf486501c7c8fa365dae6ba470c2829f5ce53971472e0cf335e0eab64f` |
+| full-walkthrough.mov (retained checksum record)     | `d5cb5a10292729d377cc410344e9a20ffee1cb710753b0d705b09b005ecaa7eb` |
+| final-composition.mov (retained checksum record)    | `ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55` |
+| packaged-composition.mov (retained checksum record) | `3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2` |
+
+Ignored large videos/screenshots were inventoried read-only at entry (444 files in the acceptance tree) and are not edited or regenerated. No Stage 1–4 walkthrough or final human recording is rerun. Deterministic presentation, development app, packaged app, native/browser/process and live provider evidence remain distinct. Stage 1 queue/dock, Stage 2 decisions/submitting, Stage 3 takeover/return, final compact composition and Stage 4 recovery are investigation inputs, not silently upgraded authority proofs.
+
+### Recorded investigation anchors
+
+These anchors locate preserved evidence to inspect in future tickets; the supplied human review establishes the new composition findings. A recorded PASS is not changed by adding a visual-quality concern.
+
+| Review area                                        | Manifest step / recorded interval                                                      | Evidence mode              |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------- |
+| Composer and queue                                 | stage-1-01 (00:05–00:07), stage-1-04 (00:19–00:21), stage-1-05 (00:31–00:33)           | deterministic_presentation |
+| Command decision and submitting                    | stage-2-15 (00:16–00:18), stage-2-21 (00:59–01:01), stage-2-22 (01:04–01:06)           | deterministic_presentation |
+| Unresolved outcome presentation                    | stage-1-12 (01:19–01:21)                                                               | deterministic_presentation |
+| Browser takeover / human control / Return          | stage-3-26 (00:10–00:12), stage-3-27 (00:15–00:17), stage-3-28 (00:20–00:22)           | deterministic_presentation |
+| Compact composition                                | composition-33 (00:14–00:16), composition-37 (00:42–00:44)                             | deterministic_presentation |
+| Stage-4 account/delivery coexistence investigation | stage-4-pre-restart-persistence (00:00–00:24), stage-4-restart-same-home (00:24–00:49) | development_app            |
+
+The original manifest/report remain the exact per-step expected/observed and screenshot/video reference source. Current media inventory is preserved; no additional native/live authority or visual acceptance is inferred here.
+
+### Human-review findings and ownership
+
+| Finding | Established review boundary                                                         | One primary owner | Supporting scope                                                             |
+| ------- | ----------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------- |
+| MR-034  | Fragmented/heavy task-bottom interaction                                            | UXR-03            | UXR-02 foundation, UXR-07 integration                                        |
+| MR-035  | Inconsistent blocking decisions; duplicated submitting copy                         | UXR-04            | Exact STAB-07/08 authority and STAB-09 provider limits preserved             |
+| MR-036  | Permanent amber notification presentation                                           | UXR-05            | Durable effect/recovery state and replay fencing preserved                   |
+| MR-037  | Duplicate browser collaboration controls; weak narrow resource/profile presentation | UXR-06            | Repaired STAB-10/11 authority preserved                                      |
+| MR-038  | Inconsistent surface system and squeezed shell                                      | UXR-02            | UXR-07 owns integrated coherence validation, not competing primary ownership |
+| MR-039  | Composition-quality qualification gap                                               | UXR-08            | Existing functional assertions and PASS records preserved                    |
+
+All six remain open market-readiness blockers. New family I owns composition, not existing security/authority defects. Final wording is in the [issue registry](../stabilization/issue-registry.md).
+
+### Current source facts and unresolved research
+
+Read-only inspection confirms `apps/companion/src/renderer/product-surface.tsx` restricts replacement to user_input/MCP, renders conversationStatus immediately above the dock, renders central collaboration actions and duplicates Take Over/Return in inspector. The attention renderer emits request.description twice when non-pending; `apps/companion/src/main/codex/customer-task-collaboration.ts` supplies “Submitting your response…”. `apps/companion/src/renderer/styles.css` retains a three-column compact allocation. These are investigation anchors; detailed architecture selection and implementation remain future work.
+
+The root conclusion is composition responsibility fragmentation, not proof of defective exact authority. The hypothesis that a functional PASS establishes visual shipping quality is rejected. Stage-4 Not signed in + Sending… + existing assistant response is explicitly unclassified: UXR-07 must trace seed/recovered/delivery facts before routing legitimate state, misleading presentation or actual delivery inconsistency. Conservative Stopping dwell is an investigation, not an approved execution delay.
+
+### Contract decisions and changed boundaries
+
+- One primary selected-task dock with compose, exact blocking decision, browser collaboration, checking/return and stopping modes; ordinary composer is not a peer primary surface under a blocking decision.
+- Applicable conversational, command/file/network/additional-permission and MCP decisions share this model; background attention stays task-bound and Stop remains available from exact capability truth.
+- Queue is immediately above the dock, with quiet primary Steer and overflow for secondary edit/reorder/remove; capability is retained.
+- Dock owns Take Over/Return/checking; inspector owns resource status, profile recovery/Open/View and recording.
+- Transient notification may dismiss/expire safely; durable unresolved marker and replay/recovery authority remain until exact settlement.
+- Compact secondary nav/inspector collapses into accessible drawer/overlay; one light/dark surface scale uses elevation to communicate hierarchy.
+- Product Operating Model, application/capability and testing contracts and conversation plan are reconciled together. Implementation Status is narrowed for composition only. No source, schema, migration, protocol, dependency, fixture or persistence change occurs.
+
+### Dependency and release boundary
+
+`UXR-01 → UXR-02 → UXR-03 → (UXR-04 + UXR-05 + UXR-06) → UXR-07 → UXR-08 → final human-recorded Stage 1–4 acceptance`. All three specialists must complete before UXR-07. Freeze the graph unless current evidence proves it unsound; revise through this ledger and downstream entries.
+
+Provider-owned exact elevated-grant consumption; Windows/Linux packaged process trees; packaged live provider/browser authority composition; signing/notarization; and remaining supported-platform distribution evidence are excluded from UXR ownership and remain STAB-12/STAB-14 gates. STAB-14 remains open. UXR-08 completion means only **Remediation machine qualification complete; candidate ready for final human-recorded acceptance**.
+
+### Verification and precise exit
+
+- `pnpm codex:context`: PASS; exact acceptance head, original branch and clean worktree established.
+- `pnpm exec prettier --write 'docs/Planning/human-review-remediation/*.md'` and matching `--check`: PASS for all ten new Markdown documents. Existing edited Markdown retains its surrounding historical formatting; added tables/prose were reviewed.
+- `pnpm check:repository`: PASS; 735 files / 1,318 relative imports / 184 local document links. This includes repository document-link/naming checks and Codex environment checks (11 files).
+- `git diff --check` and complete changed/new-document review: PASS; no product/generated/acceptance artifact changes. Read-only independent review found no material scope, contract, ownership or dependency gaps.
+- Read-only section/ownership audit: PASS; all eight tickets include all fifteen required sections, and MR-034–MR-039 each have exactly one primary registry owner.
+- Preservation audit: PASS; manifest/report/checksum records are byte-identical to `2ff214b`, hashes above match, and all 444 acceptance-tree files retain path/size/mtime. No ignored media was modified.
+
+Product typecheck/build/test/process/live/package qualification is not rerun: no production source changed and documentation verification routing plus the explicit task boundary calls for docs-only checks.
+
+UXR-01 planning setup Complete; UXR-02–08 Planned. No MR implementation closure or final human acceptance is claimed. No branch push. Exact next gate: **begin UXR-02 read-only baseline/design reconciliation before source edits**. Read canonical contracts, this ledger and UXR-01 exit; verify current branch/HEAD/status, inspect shell/CSS/projections and measure current layouts before selecting coherent surface/responsive primitives.
+
+## Remote canonicalization and review surface — 3 October 2026
+
+The previously stacked STAB-02 through STAB-14 chain was reconciled into canonical remote `main` through [PR #37](https://github.com/Kahmyl/rove/pull/37), producing merge commit `a0a1bfff23628da236e1737f8d396842f69da890`. The local acceptance/planning continuation was then merged with that exact `origin/main` without rebasing or rewriting `2ff214b` or `7c1ea53`, producing branch reconciliation commit `7a6f92bd20ce8196b101d5919b9988a6c628d1f9`.
+
+The branch is published as `origin/codex/human-review-remediation-planning` and [PR #38](https://github.com/Kahmyl/rove/pull/38) is the single remote review and implementation surface for UXR-02 through UXR-08. At PR creation it targeted `main`, was 3 commits ahead / 0 behind, and contained only the immutable acceptance records plus the UXR planning/contract checkpoint beyond canonical `main`. PR #38 remains draft and must not merge without explicit human authorization after implementation and required qualification.
+
+This remote reconciliation changes no UXR contract or finding ownership. It only establishes one canonical remote base and one reviewable continuation branch. Exact next gate remains **UXR-02 read-only baseline/design reconciliation before source edits**.
+
+## Remote review gate — MR-029 reopened, 3 October 2026
+
+Remote review of PR #38 found no remaining structural defect in the UXR-01–08 planning package after aligning STAB-14's post-remediation human gate. The branch is based on canonical `main`, contains no product-source changes, and the planning contracts are approved in substance.
+
+The approval cannot yet authorize UXR product-source implementation because the repository's own release gate produced contradictory evidence. PR #38 workflow run `37105765709` attempt 1 passed repository checks, typecheck and build but failed `task-engine-cut-points.test.ts` at `repeatable_read: after_claim_before_dispatch` with `Task is not ready for a handoff`. One diagnostic rerun was authorized without source changes: the exact cut passed, while `playwright-browser-inspection.test.ts` instead timed out in the recycled-list content case at its existing 5-second timeout. This is the original MR-029 signature: different process/browser-backed failures on unchanged/docs-only source.
+
+MR-029 is therefore reopened and becomes the immediate pre-UXR implementation gate. Do not chase green CI by repeated reruns, timeout inflation, assertion weakening or removing real-boundary coverage. Diagnose whether shared resource pressure, process scheduling, harness lifecycle or a product race owns the instability; fix the owning cause or establish an evidence-backed bounded replacement gate preserving equivalent invariants. After repeatable qualification is restored, UXR-02 resumes at its documented read-only baseline/design reconciliation.
+
+## MR-029 qualification discovered durable handoff recovery defect — 3 October 2026
+
+On correction head `c6f0070bbd39164a07bc79008c839557d1e32c7c`, three unchanged local full gates passed (193.41s, 122.70s, 123.35s); run 4 stopped at 123.87s with production handoff projection `checking` instead of `human_control`. Linux attempt 1 passed in 303.24s; its unchanged repeat was cancelled when local qualification failed. These are diagnostic runs, not closure.
+
+Read-only source inspection established that completed handoff metadata can restore exact human Runtime authority and pending attention while retaining an earlier handoff-identity recovery marker. Runtime polling skips identical truth fingerprints, and recovery suppresses subsequent commands, so a future clearing event is not guaranteed. This is a product reducer correctness defect, not permission to hide a failing assertion behind a longer waiter. MR-040 is registered in the stabilization issue registry and routed to STAB-14 as an MR-029 qualification dependency before implementation. The authorized correction is bounded to applying existing exact handoff reconciliation to completed metadata, with causal and authority-negative regressions; no UXR behavior is in scope. MR-029 and its UXR-02 gate remain blocked pending correction and fresh unchanged-code qualification.
+
+## MR-029 Linux repeat discovered history/attachment defect — 3 October 2026
+
+Complete candidate source `fbafd635a4f3515590df945cf368099e98a6f1db` passed six unchanged local four-worker full gates (173.62s, 174.42s, 133.48s, 127.65s, 126.61s, 127.15s) and Linux workflow `37109331635` attempt 1 (306.73s). Its declared unchanged Linux repeat failed in 315.64s: the human-reviewed approval-contract production trace waited for App Server resume and timed out in the driver after 18,443ms. MR-029 remains open; these are diagnostic evidence, not closure.
+
+History reconciliation synthesizes active/idle runtime state from persisted turns even when the current-generation supervisor is unattached; the history read cannot establish attachment. A deterministic regression using the real supervisor, SQLite store, engine and ordered ingress preserves terminal conversation but fails because both absent current attachment and explicit provider notLoaded are projected idle. This can suppress policy-bound resume. The exact CI ordering is inference; its final snapshot is recovering/Checking with materialized completed work and a ready replacement host. MR-041 is registered/routed to STAB-14 before the bounded product correction. Also repair the driver replacement barrier so ready must belong to a different connection, and make the approval-parameter trace await its committed initial turn stage before deliberate replacement. Preserve its resume/policy assertions and the genuine interruption matrix. UXR-02 remains blocked.
+
+## MR-041 correction identity qualification — 3 October 2026
+
+Candidate `8479454e9e4d1617bcdd46ca967323adc491e1a9` passed 60 causal/authority tests and the affected four-worker suite (183 tests, 123.47s), but its broader process-recovery prerequisite failed after human return. The full release repetition did not start; CI `37110622755` was cancelled and is not closure evidence. Failure-state diagnostics reproduced terminal idle/completed work with a consumed continuation but an unresolved thread-history blocker. The precise exception was `Task event identity was reused with different content`: the new unloaded terminal payload reused the loaded historical event/source coordinate. A real engine/supervisor/SQLite regression reproduced it before correction (523ms).
+
+MR-041's bounded correction preserves legacy loaded-history event/source identities and gives the unloaded terminal payload a separate stable notLoaded coordinate. Repeated unloaded→loaded→unloaded→loaded history reads now deduplicate without conflict; exact resume remains attachment authority. The ledger's immutable identity assertions and cleanup conditions are unchanged. Process-recovery cleanup failures now retain last fixture Task, selected recovery truth and warning details instead of a generic timeout; no credentials are captured. Current correction passed all 60 causal/authority tests (614ms), typecheck and build. Qualification remains pending; MR-029 and UXR-02 remain blocked.
+
+## MR-029 rejected synchronous conflict-injection writer — 3 October 2026
+
+Candidate `4a94542601255ccf81b8269456898f844479297e` passed the complete isolated process-recovery prerequisite, but its first full four-worker gate stopped in 125.57s (202 files / 1,750 tests passed, one failed) at `execution-core-event-recovery.test.ts`: a second synchronous SQLite connection's conflict injection failed `database is locked` after 5,337ms. CI `37111126994` was cancelled rather than counted as closure; the stopped series is retained in `fourth-candidate/`. This is an additional MR-029 fixture writer defect, not a new product permission scope.
+
+The live store holds an asynchronous IMMEDIATE transaction on the same Task. A synchronous second connection's busy wait blocks the event loop required to finish that owner, so temporary-home isolation does not make it safe. Conflict injection now uses the existing owning store transaction queue and commit boundary, preserving the deliberate conflicting digest and all semantic-recovery assertions. A deterministic regression holds the owner, proves the old outsider lock with zero busy budget, then verifies the queued injection waits for commit and records the same conflict. It passes (2 tests, 581ms), and the owning core/injection is drained in finally on failure. No SQLite timeout, busy retry, new production API or authority assertion relaxation was added. All product/process source from the passing eight-group prerequisite remains unchanged by this fixture correction. MR-029 remains open pending fresh unchanged qualification; UXR-02 remains blocked.
+
+## MR-029 stopped qualification and terminal attachment dependency — 3 October 2026
+
+Source `a275e2b43e5116690c24d5a2525ac0b444c9f1e8` passed its first full four-worker gate (203 files / 1,752 tests, 126.66s) but failed the second (126.96s, one failure) in the production Task-finish trace after 47,075ms. Attention was cancelled and attachments removed, but Runtime/customer truth remained active human control. The series stopped; CI `37111639874` was cancelled, and exact logs/metadata moved to ignored `artifacts/release-repeatability/fifth-candidate/`. MR-029 remains open.
+
+Registered **MR-042** before product correction: polling uses frozen launch attachment IDs, whose real authority records cleanup deletes, before emitting terminal Runtime inventory. `bindDrafts` then throws `Unknown or conflicting task attachment`; generic dependency warnings conceal the owning failure and stale human truth can persist. A deterministic core/real-authority/SQLite regression must establish terminal convergence without rematerialization and preserve the active missing-attachment negative. UXR-02 remains untouched.
+
+## MR-029 native lifecycle budget evidence — 3 October 2026
+
+Candidate `c6408beebb43d325a0638a3523b3ea70370cf507` passed one local four-worker gate (125.52s) but failed the second (140.67s) in four five-second tests: Runtime durable settlement failure (5,448ms), Runtime ordinary navigation (5,565ms), browser identity freshness (5,451ms), and hidden freshness (5,335ms). The original cut and recycled journey passed. Normal Linux CI `37112189476` passed, but is not closure evidence for this rejected local candidate; no repeat was dispatched. Exact local logs/metadata are in `sixth-candidate/`. No orphaned Chromium or fixture-native processes remained after the failure.
+
+One declared instrumented five-file/four-worker diagnostic passed 199 tests in 120.81s. It measured distinct startup versus invariant work (engine start up to 1,353ms; Runtime start up to 1,691ms); the specific failed-case replay passed, so the historical exact slow phase remains unobserved. Startup was awaited: no new readiness race or shared-port/profile fault was established. Native fixture acquisition had been inside the same five-second authority budget. Dynamic freshness now acquires an independent browser/server in existing ten-second beforeEach hooks; the two Runtime cases use a shared isolated setup helper under the same existing hook bound. Every authority assertion retains five seconds. Acquisition ownership is registered before awaiting, and teardown drains pending starts before deleting owned resources. No worker, global timeout, assertion or production behavior changed in this additional harness correction. MR-029 remains open until fresh unchanged complete local/Linux qualification. UXR-02 remains untouched.
+
+## MR-029 owning correction and qualification — 3 October 2026
+
+**Disposition:** MR-029 is remediated and machine-qualified; MR-040, MR-041 and MR-042's narrow handoff/history/terminal-inventory dependencies are corrected and qualified. Remote PR #38 review must authorize the next gate. STAB-14, MR-034–MR-039 and remaining human/provider/platform/distribution gates remain open. UXR-02 implementation has not begun.
+
+**Exact continuation:** start at reviewed head `7b848378b7869053388dd7c9fab8d4550bc08c26` after clean fast-forward from `7a6f92bd20ce8196b101d5919b9988a6c628d1f9`; canonical main `a0a1bfff23628da236e1737f8d396842f69da890`. Corrections are normal commits `bc3624f36523f6e1bfb1db7392be96b3f1911704`, `c6f0070bbd39164a07bc79008c839557d1e32c7c`, `fbafd635a4f3515590df945cf368099e98a6f1db`, `8479454e9e4d1617bcdd46ca967323adc491e1a9`, `4a94542601255ccf81b8269456898f844479297e`, `a275e2b43e5116690c24d5a2525ac0b444c9f1e8`, `c6408beebb43d325a0638a3523b3ea70370cf507`, and complete qualified source/PR head `433a490caaccf44bd1c7901eee9e0eed704fd963`. The evidence-only exit is the commit containing this entry (resolve the introduction commit with `git log -1 --format=%H -S "## MR-029 owning correction and qualification — 3 October 2026" -- docs/Planning/human-review-remediation/continuity-ledger.md`); its exact publication head is recorded in PR #38's description and completion report. Continue on `codex/human-review-remediation-planning`, non-force only; no merge.
+
+**Owning causes/invariants:** external browser acceptance and App Server health precede asynchronous durable Task binding; wait for exact Task/session/thread identity. The former browser journey combined launch, ten inspections and four mandatory popup-grace waits into one five-second budget; retain cumulative state and every assertion under separate invariant tests and existing lifecycle hooks. Runtime restart injected a different journal home and left constructor initialization undrained; preserve configured journal/cutover identity and await its existing read-only boundary. Completed handoff metadata could restore the same fresh Runtime fingerprint while retaining an owned mismatch marker; reconcile at that commit, preserve unrelated recovery and uncertain binding. Historical conversation reads had projected loaded execution status without current-generation start/resume authority, suppressing required resume; check current attachment again after awaited items, preserve terminal conversation and distinct immutable loaded/unloaded history coordinates. A separate synchronous SQLite fault-injection connection could block the loop while the live store held an asynchronous write transaction; injection now queues on the owning store, with a deterministic locked-outsider/queued-owner regression and guaranteed drain. Runtime polling also tried rebinding deleted frozen launch attachment IDs before observing terminal sessions; skip rebinding only for completed/failed inventory so stale human truth converges, while active attachment conflicts remain errors. Additional Runtime/browser five-second timeouts were reproduced in the full gate; native acquisition inside invariant budgets was separated into existing setup hooks, retaining fresh per-case resources and pending-start drains. The exact historical slow phase was not captured; a declared instrumented replay passed 199 tests, so no new readiness race or required worker serialization was established. No claim of serializing every in-flight materializer/cleanup overlap is made. Shared handoff waiters now return one converged Runtime/attention/customer snapshot without changing the product execution driver or crash windows. No shared profile/port collision, hydration race or unsafe cross-file resource requiring fewer workers was established. Historical event ordering is inference where logs lack the marker; deterministic regressions establish the causes independently.
+
+**Changes:** protocol Task event fold; TaskAggregate regression; history reconciler and real supervisor/SQLite/ingress regression; core terminal inventory boundary and real attachment-authority/SQLite/ingress regression; process test support, cut matrix, replacement driver, process-recovery failure diagnostics and production traces; Runtime integration fixture; browser inspection journey and dynamic-freshness isolated lifecycle; Runtime invariant acquisition helper; owning transaction event-recovery fault-injection fixture/regression. Canonical browser-control/testing contracts, issue registry, STAB-14 evidence, both ledgers and downstream gate contracts are reconciled. No schema, migration, wire-format shape, dependency or recorded acceptance change; existing loaded-history identifiers are preserved and the new unloaded payload uses its own stable coordinate.
+
+**Verification:** focused authority suites 70 tests in 874ms; all four affected heavy files included in every final full gate; broader isolated process recovery against the corrected source eight scenario groups with zero stale processes/ports/profiles/browser attachments/nonterminal sessions/cleanup-required Tasks and removed home. `pnpm check:repository`, `pnpm typecheck`, `pnpm build`, `pnpm lint`, and `node --test experiments/agent-execution/*.test.mjs` (25 tests) pass. Six unchanged `pnpm test:release` runs passed 203 files / 1,755 tests each in 124.93s, 125.05s, 126.69s, 122.45s, 125.33s, 127.13s; Linux workflow `37113023226` attempts 1/2 passed in 177.84s / 305.71s, each 203 files / 1,754 tests plus the existing macOS-only skip. Exact commands, case timings, failed-first evidence, stopped candidate series, cancelled repeats and residual scope are in STAB-14's owning correction section and retained ignored `artifacts/release-repeatability/`. No green rerun is substituted for a failed candidate.
+
+**Stop/next gate:** obtain remote review authorization of this MR-029 correction on PR #38; then **UXR-02 read-only baseline/design reconciliation**, consuming the preserved UXR-01 checkpoint and this qualified source boundary. Do not begin it during this task. No source implementation permission is inferred from these machine passes, and no live/provider, packaged or human acceptance was rerun.
+
+## UXR-02 responsive shell foundation — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and authorization
+
+Branch `codex/human-review-remediation-planning`; exact committed start `4f44a2c33406fe5f1c3e40dae56eeb1094d554df`. `pnpm codex:context` confirmed the intended branch/HEAD and two transferred unfinished paths: modified `product-surface.tsx` and untracked `product-shell.tsx`. These were this effort's unverified edits, not unrelated user changes or an accepted checkpoint; the sole implementation worker completed/revised them. No subagent, rebase, force push or merge was used. PR #38 remains the sole implementation surface.
+
+The human handoff explicitly accepts remote technical review of MR-029/040/041/042 at this baseline and the completed UXR-02 read-only/design reconciliation, and authorizes normal implementation/tests/commit/non-force push. This resolves the earlier remote-pending/planned continuation wording without inferring authorization from machine passes. The later human instruction reuses this actual implementation chat through UXR-08, with one bounded item and a manager review stop each time. Full integrated system verification belongs to UXR-08; per-item checks remain focused/directly affected.
+
+Exit identity is the commit introducing this entry, titled `Preserve conversation space with responsive secondary surfaces`; resolve with `git log -1 --format=%H -S '## UXR-02 responsive shell foundation' -- docs/Planning/human-review-remediation/continuity-ledger.md`. Its source fingerprints are in the final report below. Source-head fields in generated evidence intentionally name committed start `4f44a2c`; seven file fingerprints identify the exact dirty implementation tested, including previously untracked files. No merge identity exists. Publication identity is supplied in the worker completion report.
+
+### Causes, disproved hypotheses and owned invariant
+
+Repeated CSS grid overrides had allocated permanent navigation/inspector columns even at compact widths. Conditional inspector presence affected grid allocation, while stored navigation collapse and viewport disclosure were conflated. Partial drawer code included closed-details controls in its focus loop, made its backdrop inert, and lacked robust nested-overlay/focus-return handling. These were current implementation defects found by rendered assertions and corrected at the owning shell/focus boundary.
+
+The initial 960px navigation threshold was disproved: 960 − 240 − 48 = 672px usable work. The accepted foundation uses 968px, leaving exactly 680px after navigation and gutters. At 1180×780 the central region measures 940px / 892px usable; at 820×700 it measures 820px / 772px usable. At 1280px, navigation 240px + inspector 280px leaves 760px / 712px usable. The conversation, draft and timeline DOM remain mounted during disclosure/resize; tested read position and unsent text survive. Drawer open/close/resize sends zero product/browser-control intents and preserves exact Task and Runtime ownership/generation data. Functional reachability alone still does not establish integrated visual or human acceptance.
+
+### Changed responsibilities and compatibility
+
+- `product-shell.tsx`: pure allocation resolver, viewport observation, reusable mounted secondary surface, topmost focus/inert/Tab restoration helper. `product-surface.tsx` retains Task/Workflow identity, draft, queue and host-intent ownership; it supplies mutually exclusive transient disclosure and existing stored navigation preference. Explicit navigation selection closes the drawer even for the same view. Nested profile/settings dialogs retain their own focus and return to their exact opener; resize fallback uses the visible navigation toggle.
+- `styles.css`: one owning grid allocation replaces competing three-column/collapse rules; 24px central gutters, 240px navigation and 280px inspector; shared 8/12/16px control/panel/overlay scale, ordinary surfaces without overlay shadows, contrasting focus/secondary text and reduced-motion suppression. Dock orchestration and specialist browser/decision/notification composition are not implemented here.
+- `product-shell.test.tsx`: threshold, preference independence and named/hidden drawer contracts. Existing `product-surface.test.tsx` retains the sidebar keyboard-region assertion while adding the stable navigation ID; no authority assertion is weakened.
+- `responsive-shell-rendered-qualification.mjs`: production-bundle fixture qualification, ignored timestamped captures/DOM/geometry/source hashes. Existing conversation builder gains scenarios-only generation and isolated evidence destination; compact selection opens navigation before the same exact Task selection. The conversation runner now uses/removes its own Electron user data. Existing projection inputs, negative assertions and fixture bridge are preserved.
+- Canonical application/testing/implementation status and bounded program/ticket/registry/downstream entries are reconciled. No schema, persistence-format, migration, installed history, protocol, dependency, host authority or credentials change occurred; existing navigation/theme storage keys remain compatible. Portable setup is unaffected.
+
+### Verification and exact evidence
+
+All final focused/directly affected checks pass:
+
+```sh
+pnpm codex:context
+pnpm check:repository
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec vitest run apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/follower-app.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/renderer/state.test.ts apps/companion/src/renderer/unified-session-state.test.ts
+pnpm exec eslint apps/companion/src/renderer/product-shell.tsx apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface.tsx apps/companion/src/renderer/product-surface.test.tsx experiments/agent-execution/responsive-shell-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-shell-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+git diff --check
+```
+
+Focused Vitest: eight files / 115 tests pass (final 947ms). Repository/typecheck/build and relevant lint pass. The workspace build and subsequent companion builds retain the existing Vite >500kB chunk-size advisory; no timeout/config change masks it. The conversation journey passes all retained assertions with 28 screenshots, seven attention families keyboard-qualified at 820×700, queue/Steer/Stop and main/follower parity; this is deterministic presentation evidence, not live provider/browser authority. The final isolated conversation run predates the compact toggle tooltip and shared inspector-panel scale corrections; the final shell run covers those corrections and fingerprints final source.
+
+Final shell evidence: `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/report.json`, 27 screenshots and matching HTML, eight assertion groups. It includes normal/compact light/dark selected Task, long content/title, navigation expanded/collapsed or drawer, inspector open/closed, 959/960/967/968/1279/1280/1400 transitions, New Task, Workflow, nested profile dialog, reduced motion, keyboard focus-loop/backdrop/Escape/context-menu dismissal, invisible-opener resize return, unchanged intents/Task/browser generations, draft DOM/read position and navigation/theme reload. Body contrast is 16.32:1 light / 14.44:1 dark; secondary text is 7.36:1 / 9.37:1. Screenshots were visually inspected alongside DOM/geometry; this does not certify every future specialist combination or assistive technology.
+
+| Retained record                                                                                     | SHA-256                                                            |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/report.json`                 | `7e30916bbdf48b5017b13201d31345912baa72ed2de3085a73670bc9d4a188c9` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/light-820-selected-task.png` | `3721f9d357fafc2977f4fe830d10d8b0a82ef9950961e3a9d66f8a5f8d33f22d` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T13-52-04-940Z/dark-820-inspector.png`      | `e105b97dec1b7fc2b36f6384a7ec92b2e161b4d6534dd2ed8ef6ba76a070bdd9` |
+| `artifacts/customer-journeys/conversation-task-shell-isolated/manifest.json`                        | `52416866157ee2060b7ff6187165b37910a87ae4b6ecf97c62797fe42a915011` |
+| `artifacts/customer-journeys/conversation-task-shell-isolated/journey.trace.zip`                    | `eba51d24417e499265a9658f9195b3bdf8cc4e686f8e52a357587189d7376f4c` |
+
+All seven source-file fingerprints in the final report match the candidate before commit. Earlier generated evidence under the same responsive-shell parent is retained, not overwritten; the historical Stage 1–4 acceptance tree remains untouched. Screenshot hash/geometry entries in the report cover every capture. Ordinary fixture dates are shifted to recent, believable presentation durations; the long unbroken text remains a dedicated stress case. Fixture accounts and temporary Electron user data only; successful runners remove owned user data on exit. No live model, real external account, consequential service action, packaged campaign or human recording ran.
+
+### Failures and classification
+
+- Initial static sidebar failure was caused by the transferred changed tag: preserve `tabindex=0` and add the new stable ID to the unchanged accessibility assertion. Final 115 tests pass.
+- Initial Electron sandbox launch failure was an environment boundary; local desktop qualification was rerun with the authorized sandbox exception, fixture bridge and isolated data. No product launch failure is inferred.
+- Rendered closed-details focus-loop, inert backdrop, same-Task navigation disclosure and 960px allocation failures were current candidate defects, causally corrected before new runs. Reduced-motion exact-zero assertion exposed the older global important rule; the owning shell rule now overrides it to zero without changing assertion or timing budgets.
+- Missing-profile and exact Workflow-name failures were bounded harness errors: the identity-less/no-selected-profile fixture now follows the existing recovery contract; the Workflow selector includes its existing task-count label. No product authority was changed to satisfy these fixtures.
+- Relevant lint caught a duplicate report metadata key; it was removed and the final fingerprinted shell run passed. Earlier partial captures and available failure JSON remain in timestamped directories. No rerun-until-green claim, case removal, weakened assertion or timeout inflation occurred.
+
+### Residual boundary and next stop
+
+MR-038 has a qualified shell/surface foundation candidate; independent manager acceptance, UXR-07 specialist integration and UXR-08/final human qualification remain open. MR-034–037/039 remain with their owners. Full system/release/recovery/platform campaigns and `test:experiments` were intentionally not run per the explicit per-item verification instruction; no claim is made for new native ownership, provider termination, restart recovery beyond stored renderer preference reload, Windows/Linux packaging, screen-reader behavior or final release readiness. Existing authority/provider/platform evidence remains inherited, not freshly requalified by a CSS change.
+
+UXR-03 entry now inherits measured allocations, shared scale, focus responsibility and mounted conversation boundary; UXR-07 entry preserves the finite evidence distinction. STAB-14 and both ledgers retain all release blockers. Stop writing after normal commit/non-force push for manager independent review. Do not begin UXR-03 until acceptance and an explicit continuation message in this same implementation chat. No merge or final human acceptance is authorized by this candidate.
+
+## UXR-02 nested modal correction — replacement candidate, manager review pending, 3 October 2026
+
+**Continuation:** branch `codex/human-review-remediation-planning`, exact committed start `a82a07da1c0b66cccb712b8d2411052d68ce20ba`, initially clean worktree. Independent manager review rejected that checkpoint; its previous qualification entry is historical machine evidence, not acceptance. The manager explicitly routed this defect back to the same worker for bounded repair, focused verification, a new normal commit/non-force push, and another review stop. No subagent, amend, rebase, force push or merge occurred. Exit identity is the commit introducing this section, titled `Retain modal focus protection across drawer cleanup`; resolve with `git log -1 --format=%H -S '## UXR-02 nested modal correction' -- docs/Planning/human-review-remediation/continuity-ledger.md`.
+
+**Failure and cause:** at 820×700, missing-profile Task → Details → Choose profile → resize 1180×780 kept Browser profiles open but restored the topbar to non-inert and focused Details behind it. Each surface had independently snapshotted shared ancestor inert state. Drawer cleanup restored a stale snapshot and focus while the parent's active modal identity remained unchanged. The existing normal nested Escape case did not cover underlying drawer cleanup; the prior claim of robust nesting was too broad. A durable regression added before the production edit reproduced `{focusInside:false, mainInert:true, topbarInert:false}` against the frozen bundle. This is a product focus ownership defect, not a timeout or fixture isolation issue.
+
+**Owned repair:** only `product-shell.tsx` production behavior changes: per-element shared inert leases capture initial state once, count active owners, and restore only after the final release. Existing visibility/inert-aware focus return now refuses background targets while a remaining dialog owns protection. No overlay stack, framework, timer, persistence or authority change is introduced. The existing mounted surfaces, exact opener return, Tab loop and Escape rules remain. The durable rendered fixture adds inspector/profile transitions 820→1180→1280→820, Task replacement and removal under a live dialog, and navigation/settings transitions through the same widths. Every transition asserts dialog focus, protected topbar/main, Tab/Shift+Tab containment and refusal of programmatic background focus; final Escape asserts no stale inert nodes and a visible focused navigation fallback. Existing fixture inputs and authority-negative assertions remain intact.
+
+**Verification:** all following commands passed on the unchanged repaired production/test sources:
+
+```sh
+pnpm codex:context
+pnpm --filter @rove/companion build
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+pnpm exec vitest run apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/state.test.ts apps/companion/src/renderer/follower-state.test.ts apps/companion/src/renderer/follower-app.test.tsx apps/companion/src/renderer/unified-session-state.test.ts
+pnpm typecheck
+pnpm exec eslint apps/companion/src/renderer/product-shell.tsx experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+pnpm check:repository
+git diff --check
+```
+
+Affected Vitest: eight files / 115 tests pass, 1.43s total (593ms tests). Workspace typecheck, affected companion build, touched-source lint and repository check pass. Companion build retains the existing >500kB Vite chunk advisory. The rendered run passes 35 captures / nine assertion groups with no page errors; added nested-dialog captures were visually inspected alongside focus/DOM assertions. Existing 27-capture checks remain in that run. This is deterministic production-bundle Electron presentation evidence using fixture accounts and temporary user data, removed on exit. No live model, real external account, provider/service effect, packaged/platform campaign or human recording ran. Full workspace build, full test suite, release-repeatability/recovery and integrated campaigns were not repeated for this bounded renderer correction; integrated campaigns remain deferred to UXR-08 under the explicit per-item verification instruction. The previous conversation/follower run is historical evidence; no claim that it was rerun on this correction.
+
+| Retained record under `artifacts/customer-journeys/responsive-shell/`      | SHA-256                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `2026-10-03T13-56-34-058Z/failure.json` — independent manager reproduction | `4264bba43547df0027c317b1b3537ea9e376a44f25900cf62773089c7fefbd4b` |
+| `2026-10-03T13-58-52-610Z/failure.json` — durable failing-first regression | `7bfaa3cca7697059815dfded3f9b5bb984f6d081a8d3b91d1eb12f67a16bac84` |
+| `2026-10-03T14-00-32-345Z/report.json` — replacement candidate             | `d459b9920b390ff240b863712756a99ddd416e06f770f9aea40825a061bd2f3b` |
+
+The passing report names committed start `a82a07d` in `sourceHead`; its seven source fingerprints identify the tested dirty source and are unchanged at commit. Changed shell hash: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`; changed qualification script hash: `138390afbbdabfcadc4e5b20806b5a53340831d76178aaef71cc5646b836c666`. Each capture has its own SHA and geometry in the report. Ignored evidence remains retained locally; the durable reproduction lives in the committed qualification script. Historical evidence is preserved rather than overwritten. Canonical focus/testing/status contracts, bounded ticket/downstream/registry entries and stabilization handoffs now distinguish the rejected checkpoint from this replacement candidate.
+
+**Stop/next gate:** independent manager review of the new PR #38 checkpoint. UXR-03 is unstarted and requires acceptance plus an explicit next-item message in this same implementation chat. MR-038 remains open through foundation acceptance and UXR-07 integration; specialist composition, human/provider/platform/distribution gates and STAB-14 remain open. No schema, persistence format, migrations, credentials, protocol, dependency or host authority changed.
+
+## UXR-02 manager acceptance and dock continuation — 3 October 2026
+
+The persistent manager independently accepted exact `b59fe4f071ca064b08514970259a72d3b252bab1` on `codex/human-review-remediation-planning`, with clean checkout and matching tracked origin. Review covered production changes, tests/harness, semantic docs and representative light/dark compact/profile captures. All seven source hashes and 35 screenshot hashes matched. Independent committed qualification replay passed 35 captures / nine groups at `artifacts/customer-journeys/responsive-shell/2026-10-03T14-03-51-135Z/report.json`; `git diff --check 4f44a2c..HEAD` passed. One remediation round corrected the rejected nested modal cleanup defect at `a82a07d`. This accepts the shell/surface foundation only; MR-038 integrated/human, provider/platform/native/package and release gates remain open. Historical rejected and pending entries are retained.
+
+The manager explicitly continued this same sole-worker chat to bounded UXR-03 implementation from that accepted identity, with focused causal verification, normal commit/non-force push on PR #38 and a review stop before UXR-04. No specialist decision/notification/browser authority implementation, live effects, subagents or integrated campaign is authorized here. `pnpm codex:context` confirmed the exact accepted start and clean branch before edits.
+
+## UXR-03 dock foundation — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and owned boundary
+
+Branch `codex/human-review-remediation-planning`; committed start and independently accepted shell foundation `b59fe4f071ca064b08514970259a72d3b252bab1`. The manager's acceptance and explicit bounded continuation are recorded immediately above. `pnpm codex:context` confirmed clean checkout and that exact HEAD before editing. One worker, no subagents/new tasks, amend, rebase, force push or merge. The exit is the normal commit introducing this section, titled `Compose task interaction in one dock with independent Stop`; resolve exact identity with `git log -1 --format=%H -S '## UXR-03 dock foundation' -- docs/Planning/human-review-remediation/continuity-ledger.md`. PR #38 remains the only publication surface. Source-head fields intentionally name committed start; fingerprints below identify the dirty source tested and committed.
+
+The existing renderer already preserved text drafts per Task and routed queue/edit/reorder/remove/Steer through qualified Task-engine and LocalProductApi owners. The defect was composition responsibility: independent cards stacked around ordinary input, only user-input/MCP decisions replaced it, queue disappeared with that conditional, and typing swapped Stop for Send. Retaining those ad hoc conditions or selecting modes from sidebar labels would not satisfy exact capability ownership. A small typed presentation resolver/container reuses the current projections and commands; no new lifecycle engine, persistence model, authority list or library is needed.
+
+### Implementation and invariant
+
+- `task-interaction-dock.tsx` owns presentation precedence and the named container: local/authoritative Stopping, one exact current selected-Task request, required/human/return browser collaboration, capability-blocked checking, Capture, then compose. Voluntary Companion takeover stays secondary within compose. Request matching retains authority, Task, request, generation, thread, turn and item. The resolver cannot grant commands; existing exact backend capability and generation checks remain authoritative.
+- `product-surface.tsx` routes existing family contents into that seam, keeps queue immediately above it through every mode, preserves Task-specific drafts, and provides separate stable Send/Stop slots. Stop is independently available even with a draft, decision or browser mode; a synchronous per-Task pending guard refuses a second intent before React commits. Its existing Task/operation routing is unchanged. Authoritative settlement restores composition; failure preserves the draft and exposes the existing operation error. No termination delay or minimum animation dwell was added. Existing attachments, Commands, frozen mode/approval/model-reasoning, Output-context chips, exact queue IDs/order/edit/remove/reorder/Steer and explicit resume/return paths remain.
+- Ordinary input uses the existing shared New/existing shell, 50px minimum text region, 180px maximum autosize, shared compact row spacing and 36px action slots. The text resize effects also run on mode/Task restoration, so a retained multiline draft keeps its bounded geometry. Queue is quiet adjacent material with contextual counts; Steer remains primary, and edit/remove/reorder are keyboard-accessible overflow. Its bounded scroll does not clip the fixed overflow menu.
+- A causally exposed view-state defect used one timeline-follow flag across Task selection. The unchanged long-content journey failed with `{scrollTop:0, scrollHeight:6294, clientHeight:356}` on first entry. Reading/follow intent is now stored in renderer memory per exact Task: fresh views follow latest; revisits restore their own upward reading position. The primary conversation subtree stays mounted through same-Task mode changes. This changes presentation ownership only, not event/execution reduction.
+- `task-interaction-dock.test.tsx` uses real collaboration/presentation projections, covers all request kinds, stale/background identity negatives and precedence. The obsolete draft-driven primary-action helper/test is replaced by independent-control behavior; the actual geometry assertions now prove both Send and Stop stay fixed rather than treating their intentional separation as a regression. Existing SSR negative assertions still require ordinary composer absence for blocking decisions; conditional composition retains draft state without leaving a hidden peer form. No assertion is weakened for relocation.
+
+Decision-family contents, response-state copy/form refinement (UXR-04), notifications/durable markers (UXR-05), and resource-only inspector/profile/collaboration composition (UXR-06) remain specialist work. Inspector collaboration duplication remains explicitly unqualified. Exact host fences, provider policy, Task/session/request/browser generations, queue promotion/restart admission, attachment/Output context and Stop process semantics were not redesigned. No schema, persistence format, storage key, migration, protocol, dependency or credential changes occurred. Canonical application/live-state/testing/status contracts and downstream UXR-04/05/06 entries were reconciled; runtime/test names remain descriptive.
+
+### Verification and retained evidence
+
+```sh
+pnpm codex:context
+pnpm exec vitest run apps/companion/src/main/codex/customer-task-collaboration.test.ts apps/companion/src/main/codex/customer-task-execution.test.ts apps/companion/src/main/codex/customer-task-presentation.test.ts apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/follower-app.test.tsx --reporter=dot
+pnpm exec vitest run apps/companion/src/main/codex/product-task-port.test.ts apps/companion/src/main/codex/local-product-api.test.ts --reporter=dot
+pnpm exec vitest run apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-shell.test.tsx --reporter=dot
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec eslint apps/companion/src/renderer/product-surface.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/task-interaction-dock.tsx apps/companion/src/renderer/task-interaction-dock.test.tsx experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-dock-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+pnpm check:repository
+git diff --check
+```
+
+Projection/renderer suites pass nine files / 120 tests (3.13s); unchanged owner suites pass all two files / 83 tests (2.62s), including durable ordered queue, exact Steer, context/attachments, atomic promotion and restart inertness. After the final textarea restoration review fix, the three directly affected renderer files pass 59 tests (852ms). Workspace typecheck/build pass; final companion build requalifies the renderer after the last restoration/CSS corrections. Touched lint and repository checks pass. The existing Vite >500kB size advisory remains. No full system/release/recovery/platform campaign, live model, real account, consequential external service effect, packaged accessibility test or human recording ran; full integrated campaigns remain deferred to UXR-08 under the explicit instruction.
+
+Final deterministic production-bundle Electron evidence uses fixture accounts and temporary user data, removed on exit:
+
+- Dock report: 32 captures / five assertion groups, all four theme/viewport combinations (1180×780 and 820×700), New/ready composition, queue, decision seam, Stopping/Stopped, attachments/keyboard overflow, exact Task draft isolation, no mode-change dispatch, ready/stopped Send admission, fixed Stop with empty/nonempty drafts, multiline restoration bounded at 180px, reduced motion and long content. Pre-turn and checking witnesses have no active provider turn and still expose exact Stop; synchronous double clicks issue exactly one intent. These are presentation witnesses, not live provider/process termination proof.
+- Existing conversation journey: all retained assertions pass with 28 captures, seven attention-family keyboard checks, queue acceptance/edit/reorder/remove/promotion/re-render, queued and direct exact Steer, late-event isolation, browser handoff/return/checking and main/follower parity. All blocking request families now additionally assert absence of ordinary composition. Timeline entry/follow/reading/Latest assertions remain intact; its recorded entry geometry explains failures instead of masking them.
+- Inherited shell fixture: 35 captures / nine groups pass, retaining the accepted 968/1280 composition, draft/DOM/read position, intent/identity negatives, nested profile/inspector and settings/navigation resize/removal focus/inert ownership and final cleanup. Body/secondary contrast, reduced motion and preference reload remain qualified only within this fixture scope.
+
+Representative normal/compact light/dark queue, attachments/overflow and Stopping captures were visually inspected against DOM geometry; final multiline restoration is separately asserted and captured. This is finite foundation evidence, not integrated specialist or human composition acceptance.
+
+| Retained record                                                                          | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-24-46-720Z/report.json` | `748e635106732c54d80a8dcdda07c807e06ceedf16200884ca505d767cf26381` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T14-23-53-772Z/report.json`      | `2a8fbf2a4f1915683c3a27774a767b378766ceaa1973337858c99bb653a2dedb` |
+| `artifacts/customer-journeys/conversation-task-dock-isolated/manifest.json`              | `0aa44703871dfa477f956ede96b12fb1f3c7725e28de4f9593a09e21c83be2ed` |
+| `artifacts/customer-journeys/conversation-task-dock-isolated/journey.trace.zip`          | `ad5211a80ecab8a65c9a757de8492167b30863b2972532287c99226fe06d6619` |
+
+All final dock source and capture hashes match the worktree at commit. Dock source fingerprints:
+
+- `apps/companion/src/renderer/product-shell.tsx`: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`
+- `apps/companion/src/renderer/product-shell.test.tsx`: `db618a9105a79e9fb70617535337f9371b39a89a3ec963018ffb094ef1ed6801`
+- `apps/companion/src/renderer/product-surface.tsx`: `106e06de8f35bdc56942411b8ddb7f50a3502003e573dbbcce08b74be3e95c8a`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `1e2e44142069a43193fc56ecc2e98994e564a04adccde35b726430f83c38a6cd`
+- `apps/companion/src/renderer/styles.css`: `f063430bdb2cffb2c6d1841998a657a73557d58591c205fbcb1e5520290ecb9b`
+- `experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs`: `8cccbf5404deba40f88c73922d138b9204142f0ee06106de244c0bbdd05bf9fc`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/renderer/task-interaction-dock.test.tsx`: `dbf90e8a4572a21269cfc5d9f0176e3a68fa4ffb9fb5d1b240ad772f1fdb1307`
+- `experiments/agent-execution/conversation-task-rendered-qualification.mjs`: `8bdeee0f76e478f9ec6a6d459c0d885673b76502f72a4587daaf54d47b3d45ae`
+
+Generated timestamped dock/shell evidence, screenshots/DOM/geometry and prior failed dock runs remain ignored and retained locally. Existing historical acceptance evidence remains untouched. The committed qualification scripts contain the durable reproductions; generated reports are evidence rather than design authority.
+
+### Failed candidates and causal classification
+
+- Initial test-fixture type errors (unsupported attention field/state) were corrected to existing protocol types. Existing SSR composer-absence negatives rejected a hidden peer form; the candidate instead conditionally renders the mode body with draft state preserved at its Task owner.
+- The inherited same-slot Send/Stop assertion rejected the newly required independent layout. It now asserts unchanged x/y/width/height for each control across typing plus Stop remaining enabled; no geometry budget was enlarged.
+- Dock keyboard failures at `2026-10-03T14-11-42-928Z/failure.json` and `2026-10-03T14-13-14-714Z/failure.json` were qualification-method defects: programmatic focus after pointer use does not imply `:focus-visible`, and Delete precedes Edit in the overflow. Explicit Enter/Tab/Tab traversal now proves keyboard-visible Edit and Escape focus return without changing product focus rules.
+- The conversation timeline entry failure above exposed global reading-state ownership; the selected-Task presentation fix passes the unchanged assertions and new Task-revisit regression. Failed geometry is preserved here; the current isolated journey output is the final pass, not the failed run.
+- Dock failures at `2026-10-03T14-19-20-432Z/failure.json` and `2026-10-03T14-23-50-423Z/failure.json` were fixture sequencing: the bridge's Stopped snapshot was observed before React restored composition, then another synthetic snapshot reused the same Task identity. Each Stop case now positively awaits/asserts visible compose before another case or Task switch. Timeout budgets, duplicate-refusal and restoration assertions are unchanged. The final run includes the barrier rather than relying on a lucky delay.
+- Review found multiline textarea sizing needed mode/Task dependencies; final 32-capture evidence proves identical restored height and exact text. No source changes follow that qualified final bundle. A missing browser-global ESLint declaration was corrected in the fixture script; no production lint policy changed.
+
+### MR disposition and next gate
+
+MR-034 has a machine-qualified dock/composer/queue foundation candidate, awaiting independent manager acceptance and later specialist/integrated/human qualification. MR-035/036/037/039, MR-038 integration, STAB-14, provider/platform/native/package and distribution gates remain open. UXR-04 is unstarted. Stop after normal commit and verified non-force push to PR #38, and wait for manager acceptance plus an explicit next-item message in this same implementation chat. No merge or release readiness is authorized.
+
+## UXR-03 manager acceptance and decision continuation — 3 October 2026
+
+The persistent manager independently accepted exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` on `codex/human-review-remediation-planning`; checkout was clean and tracked origin matched. Review covered resolver/container/Stop guard, every request coordinate negative, Task draft/read restoration, queue intents, tests, canonical/planning handoffs and representative compact light/dark queue/Stopping/attachments-overflow captures. All nine source and 32 screenshot hashes matched. Independent replay of the committed dock qualification passed 32 captures / five groups at `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-32-40-921Z/report.json`; `git diff --check b59fe4f..HEAD` passed. No manager remediation round was required. Independent stable Send and Stop geometry correctly supersedes the historical swapped-slot assertion; negative authority and ordinary-composer absence remain intact.
+
+This accepts the dock/composer/queue foundation only. MR-034 specialist/integrated/human and MR-038 integration, provider/native/platform/package/distribution gates remain open; the Vite advisory remains. The manager explicitly continued this same sole worker to bounded UXR-04 from that accepted HEAD, with focused/directly affected checks, no live model/account/service effects, normal descriptive commit/non-force push on PR #38 and a review stop before UXR-05. `pnpm codex:context` and current Git truth confirmed exact clean start before editing. No subagent or new task was created.
+
+## UXR-04 selected Task decisions — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and invariant
+
+Branch `codex/human-review-remediation-planning`; exact clean committed start and independently accepted dock foundation `3458fb36f5f9e0f81f9ef0e7345c5884fea52331`. The manager checkpoint immediately above records acceptance and explicit continuation in this same sole-worker chat. `pnpm codex:context` and Git truth matched before editing. One writer, no subagents/new tasks, live model/account/service effects, amend/rebase/force push or merge. Exit identity is the normal commit introducing this section, titled `Compose exact task decisions with stable submitting controls`; resolve it with `git log -1 --format=%H -S '## UXR-04 selected Task decisions' -- docs/Planning/human-review-remediation/continuity-ledger.md`. PR #38 is the only publication destination. Report `sourceHead` fields name the committed start; final fingerprints below identify the exact qualified dirty source committed.
+
+The exact applicable selected-Task blocking request occupies the accepted dock until it settles. Ordinary composition is absent, while its Task-owned draft, queue/context/attachments and reading intent remain intact. Background requests cannot replace another Task’s dock; submitting one Task does not globally disable another. Stopping retains accepted precedence and independently exact Stop capability. Provider values/order/amendment material and the existing host/adapter/TaskEngine response-once/replay fences remain authoritative.
+
+### Owning cause and correction
+
+The prior ad hoc renderer used `collaborationRequest.description` twice in its generic nonpending branch, duplicating “Submitting your response…”. Both branches removed their inputs/actions at submission, losing geometry and owned focus; generic approvals put all content and offered actions in one scroll area, making scope/refusal discoverability fragile. The global `run` busy flag also treated request submission as application-wide input gating. These are presentation ownership defects; no new provider policy, permission boundary or durable settlement mechanism was needed.
+
+`task-decision-surface.tsx` now owns conversational choice/multiple-question input, command/file/network/additional-permission approval, MCP structured form and trusted URL contents. Request instruction/context, full persistent-rule descriptions, fields and secondary exact browser controls scroll as bounded material. Provider-ordered actions stay outside that region; one-time acceptance is primary, session/policy choices and refusal/cancel remain plainly visible with consequences. Additional permission says **Allow for this turn**, matching existing host `scope: turn`; URL opening is primary, with separate Continue/refusal/cancel and explicit opening-is-not-submitting copy. The existing offered decisions/amendment objects are neither widened nor replaced. Unsupported forms expose no Submit while keeping refusal/cancel.
+
+Inputs and actions remain mounted/disabled during local submission and authoritative responding/checking/unresolved confirmation. One reserved status row renders the submitting message. Local synchronous refusal uses authority/Task/request/generation/thread/turn/item; host commands still reconstruct exact current provider coordinates and validate live identity/offered values/schema content before accepting. Client feedback focuses invalid controls and preserves exact option values/defaults, including provider-valid empty strings and false booleans. Secret question values live only in the mounted body and clear on submission/departure/rejection; response/external-opening error copy never echoes raw values. Non-secret pending field state remains transient and exactly keyed. Request-owned focus moves to status when disabled and returns to restored compose when settled, while live modal focus/inert protection is preserved. No global request-submitting busy flag is used.
+
+The candidate changes the family component/test, renderer integration and scoped CSS, pure collaboration action/description presentation helpers and exact scope-copy tests. Two qualification scripts and an additive fixture-only reject-next-response hook provide durable evidence; the fixture hook is inert by default and has no production API. Canonical application/live-state/security/testing/status, accepted UXR-03 status, UXR-04/program ledger, MR-034/035 disposition, UXR-07 entry and stabilization handoffs are reconciled. No schema, migration, persistence format, dependency, generated protocol or host/provider permission/response authority changed. UXR-05/06 specialist implementations remain unstarted; existing notification/error banner and duplicate browser inspector controls stay with their owners.
+
+### Final focused verification
+
+```sh
+pnpm codex:context
+pnpm exec vitest run apps/companion/src/main/codex/local-product-api.test.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts apps/companion/src/renderer/task-decision-surface.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-shell.test.tsx --reporter=dot
+pnpm exec vitest run apps/companion/src/main/codex/task-execution.test.ts -t 'trusted attention and continuation' --reporter=dot
+pnpm exec vitest run apps/companion/src/renderer/follower-app.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/main/codex/customer-task-presentation.test.ts --reporter=dot
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec eslint apps/companion/src/renderer/task-decision-surface.tsx apps/companion/src/renderer/task-decision-surface.test.tsx apps/companion/src/renderer/product-surface.tsx apps/companion/src/main/codex/customer-task-collaboration.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts experiments/agent-execution/task-decision-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs
+node experiments/agent-execution/task-decision-rendered-qualification.mjs
+node experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-decisions-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+pnpm check:repository
+git diff --check
+```
+
+Six owning renderer/projection/API files pass 134 tests in 1.80s, including every coordinate negative, unchanged offered-decision/amendment and form validation/refusal/trusted URL host tests. The selected trusted attention/continuation owner group passes six tests in 983ms; its other 91 tests were intentionally outside this focused selection, not disabled in source. Workspace typecheck/build pass. The final companion build requalifies the scoped browser-copy CSS after the last workspace build; Vite retains the existing >500kB chunk advisory (~506.81kB). Touched lint and repository checks pass. The follower/presentation replay passes 27 tests across three files in 310ms. No full suite, `test:experiments`, system/release/recovery/platform or live provider campaign ran; integrated campaigns remain explicitly deferred to UXR-08. No packaged screen-reader or final human recording is claimed.
+
+Final production-bundle Electron evidence uses fixture accounts and temporary user data removed on exit. The decision fixture passes **94 captures / three assertion groups**: all seven families × light/dark × 1180×780/820×700 × pending/submitting/resolved (84 captures), plus validation, checking/unresolved, secret erasure/rejection, background marker, unrelated Task draft, modal ownership, browser coexistence and unsupported-form cases. Assertions prove exact intent values and command/network amendments, synchronous double-response refusal, no mode-change/rebuild replay, all offered action bounds, independent Stop capability, no peer composer, full scrollable material and unchanged action x/y/width/height (<2px unchanged budget). Keyboard focus is visible; reduced motion is exercised at compact width. Refusal for all supported families and Cancel where offered are dispatched exactly; invalid/unsupported forms cannot accept. Trusted opening sends only purpose/Task/request/generation and is not a response. Secret sentinels are absent from rendered evidence after submission/rejection; no response payloads are dumped into evidence. All recorded Stop targets remain within the viewport in an independent geometry audit.
+
+The inherited dock passes **32 captures / five groups**, retaining pre-turn/checking Stop, multiline draft/height restoration, queue/context and exact Task read ownership. The strengthened conversation/follower journey passes **28 captures**, retaining seven-family keyboard/ordinary-composer absence, queue acceptance/edit/reorder/remove/promotion/re-render, exact Steer, context/attachments, timeline/Latest, browser handoff and late-event isolation. Its old disappearance assertion now requires one retained disabled Send, zero enabled decision actions, one status, one response intent and unchanged full request geometry; no budget/authority negative was weakened. The shell fixture passes **35 captures / nine groups**, preserving nested modal resize/removal/cleanup, focus/inert, preferences, responsive allocation and no-effect negatives. These 189 captures are finite deterministic presentation/intent evidence, not live provider effect or integrated/human acceptance. Representative seven-family compact light/dark, normal network/resolved, submitting, form, secret rejection and final corrected browser coexistence captures were visually reviewed alongside DOM/geometry. Full-material scrolling intentionally leaves ordinary details above the viewport while actions stay visible.
+
+### Retained evidence and exact fingerprints
+
+| Record                                                                                   | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `artifacts/customer-journeys/task-decisions/2026-10-03T14-56-32-717Z/report.json`        | `9d09cecf798b6d0e32d008a5d3d605a3a4ba9aa383ee242215f9b090742f888e` |
+| `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-56-46-940Z/report.json` | `b4f68204627b0bb1a709f425f8903e675f5876846b8e8a75b38e6e50cb8fe779` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T14-57-00-674Z/report.json`      | `05779749bcf57015e922145692ff17e249774230c91e05ab190a1a5a4376ac0e` |
+| `artifacts/customer-journeys/conversation-task-decisions-isolated/manifest.json`         | `185df00497fd874cd7dde583216535db6d00b8d8f46bcbb99c51ae3769f08106` |
+| `artifacts/customer-journeys/conversation-task-decisions-isolated/journey.trace.zip`     | `27591156b03a5f21dd7c74e45e7b23491a463e24787d568507cb782ec9dd94ea` |
+
+Final decision source fingerprints (all 14 match the worktree; all 94 decision, 32 dock and 35 shell screenshot hashes were independently checked):
+
+- `apps/companion/src/renderer/product-shell.tsx`: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`
+- `apps/companion/src/renderer/product-shell.test.tsx`: `db618a9105a79e9fb70617535337f9371b39a89a3ec963018ffb094ef1ed6801`
+- `apps/companion/src/renderer/product-surface.tsx`: `bcff241c5d49fd38338d7ae61c1b09bd35437c168cd8f1f47cb78744d80a6d89`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `1e2e44142069a43193fc56ecc2e98994e564a04adccde35b726430f83c38a6cd`
+- `apps/companion/src/renderer/styles.css`: `ee7ddb60dde377b80ad773647dc7d327f302536ed5d85bf081edc2ad88898f94`
+- `experiments/agent-execution/task-decision-rendered-qualification.mjs`: `96bdcf9a7a2facb06adb4259e1942dd9940316d780ca900cdf0f63016bb13762`
+- `experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs`: `e9d1e3b27b1cc63be07003fb2a1ec2d7c5dc4f235ca969a0f9d7d53ba6ecce40`
+- `apps/companion/src/renderer/task-decision-surface.tsx`: `e58ae172351c3babf4097065ff7758acb6ece1af14359994fc974492084aa4d3`
+- `apps/companion/src/renderer/task-decision-surface.test.tsx`: `b02d13c5e433851317c2a814742f6f2ce40f8ffe96211125c03f02e1baf6ffd1`
+- `apps/companion/src/main/codex/customer-task-collaboration.ts`: `be69ce4657d293a4d284ad40ed674a8e415ce0cfe2d1bc899094ec5f3be0ff09`
+- `apps/companion/src/main/codex/customer-task-collaboration.test.ts`: `98a4e518a98e2fe9d4f9d41fb0fc89a5882d35bde4bb36f8541266609ea8017e`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/renderer/task-interaction-dock.test.tsx`: `dbf90e8a4572a21269cfc5d9f0176e3a68fa4ffb9fb5d1b240ad772f1fdb1307`
+- `experiments/agent-execution/conversation-task-rendered-qualification.mjs`: `a2af95b2a3123ec561c54e0d485d43f7352f5f00b78f8c492767b028727a0b2f`
+
+### Failed candidates, review corrections and disproved hypotheses
+
+- Initial boolean default typechecking failed because a schema default has a union type; the renderer now narrows the boolean value explicitly. Exact permission-copy expectations were updated to the existing current-turn scope without changing accept/decline values; the inherited conversational eyebrow was retained. A review regression preserves valid empty string/default option values instead of conflating absence with an empty provider value.
+- `2026-10-03T14-40-30-626Z/failure.json`: pointer `.check()` targeted the established visually hidden radio (`pointer-events: none`). The fixture now clicks the visible label and asserts the exact radio value; the inherited keyboard Space route is preserved. No pointer policy or timeout changed.
+- `2026-10-03T14-40-57-479Z/failure.json` and explicit diagnostic `2026-10-03T14-41-23-669Z/failure.json`: genuine compact decision clipping. The policy action at y=655.15625 with height=49.84375 ended below 700px; refusal/Stop discovery was therefore not qualified. The bounded surface now reserves shell/capped queue/Stop/conversation space with independent material scroll, keeps full persistent rules in that material and visible action consequence copy outside it. Final action bounds and geometry pass. Disabled styling remains readable, choice labels can wrap, and required boolean controls use bounded geometry.
+- `2026-10-03T14-42-20-340Z/failure.json`: the background marker existed correctly in the compact hidden navigation drawer; querying a visible role without disclosing that drawer was a fixture defect. The committed case opens the existing navigation disclosure before asserting/capturing the marker; selected Task composition remains unchanged.
+- `2026-10-03T14-43-16-612Z/failure.json`: the fixture’s simulated Stop did not settle its pending attention. Product correctly retained the exact request after stopping. The case now positively observes fixture Stopped truth, proves the still-pending decision remains primary, then supplies an explicit settled snapshot before checking compose. No real process/provider cancellation is inferred.
+- The inherited conversation run rejected retained Send because its old assertion equated non-actionability with removal. The replacement is stronger: one disabled Send, zero enabled response actions, one status/intent, and unchanged x/y/width/height, with all original authority/queue/focus assertions retained. The current isolated output is the final pass; the earlier failure is preserved in this ledger, not claimed as a separate retained historical manifest.
+- `2026-10-03T14-51-24-301Z/failure.json`: replacing a contextBridge function did not inject rejection; the immutable bridge continued into submitting. An explicit fixture-only reject-next-response hook now proves the owner’s bounded error copy and secret erasure. The final test asserts bridge immutability; no production bridge or host policy was loosened. One copied unused lint global was removed.
+- Visual review rejected the synthetic browser combination in intermediate passing `2026-10-03T14-52-55-998Z/report.json`: Runtime/companion were copied without exact `roveSessionId`, causing an orphan-session banner. The fixture now copies that exact association and asserts absence of the orphan banner. A scoped decision-material grid separates existing secondary browser title/copy/control; it does not implement the resource inspector specialist. Final `2026-10-03T14-56-32-717Z/report.json` supersedes that combination. Existing notification/error-banner and inspector duplication findings remain open, not silently absorbed.
+
+Timestamped failures/diagnostics, screenshots, DOM/geometry and reports remain ignored and retained locally. Historical acceptance recordings are untouched; the committed scripts and fixture hook are the durable reproductions. No timeout inflation, removed case, lucky rerun or synthetic live-family pass is used as closure evidence.
+
+### MR disposition and exact next gate
+
+MR-034’s dock/composer/queue foundation is independently accepted at `3458fb3`; specialist/integrated/human qualification remains open. MR-035 has a bounded machine-qualified decision candidate awaiting manager acceptance and later integrated/human review. MR-036/037/039, MR-038 integration, STAB-14 and every provider/native/platform/package/distribution gate remain open. STAB-09’s selected-provider live family limitations are inherited, not requalified by deterministic cases, and provider-issued elevated permission consumption remains a release blocker. No notification or resource-only browser specialist implementation is included.
+
+After normal descriptive commit and verified non-force push to the same PR #38 branch, STOP WRITING for independent manager review. UXR-05 is unstarted and requires acceptance plus the next explicit continuation message in this same implementation chat. No merge or release readiness is authorized.
+
+## UXR-04 numeric form correction — manager re-review pending, 3 October 2026
+
+Exact clean start `691bed32236ca31e9109c8670e2c78b5f710e75d` on `codex/human-review-remediation-planning`, confirmed by `pnpm codex:context`. Manager review **rejected** this checkpoint: independent committed replay passed 94 captures / three groups at `artifacts/customer-journeys/task-decisions/2026-10-03T15-04-34-708Z/report.json`, with matching 14 source and 94 worker capture hashes, but those fixtures did not cover fractional number input. Manager reproduction `/tmp/rove-manager-decimal-review.mjs` retained `artifacts/customer-journeys/task-decisions/2026-10-03T15-05-40-998Z/failure.json` plus PNG/HTML: Submit expected six response calls, actual five. Existing `decisionValidation` and host numeric validation accepted 2.5 within minimum 1 / maximum 5 / default 2, yet the native number input had `stepMismatch=true`. A passing seven-family fixture did not establish valid decimal submission.
+
+Cause: the renderer's `input:invalid` / `reportValidity` pre-dispatch check exposed HTML's default integer step because provider `number` fields emitted no explicit step. The owning input now uses `step="any"` for `number`, while `integer` retains `step=1` and existing integer validation. No host schema, bounds, numeric normalization, offered decision, response authority or API changes. A component regression verifies number/integer markup and validation. The production rendered fixture adds a copied number scenario, checks native validity, and proves exact 2.5 dispatch once; the existing integer scenario checks native step mismatch, owned invalid focus and zero response dispatch. All prior seven-family authority/refusal/secret/mode/geometry assertions remain intact. The request's displayed fields clear on authoritative submission as before; exact decimal persistence is proven by the response intent, not its cleared screenshot.
+
+Final verification:
+
+- `pnpm exec vitest run apps/companion/src/renderer/task-decision-surface.test.tsx apps/companion/src/main/codex/local-product-api.test.ts --reporter=dot`: **67 tests / two files pass**, 374ms. Existing host schema/default/numeric and rejection tests remain unchanged.
+- `pnpm typecheck`: pass. Initial typecheck and companion build exposed an optional-field access in the new test; explicit test-fixture assertions corrected it, then both passed. No runtime failure or assertion weakening was concealed.
+- `pnpm --filter @rove/companion build`: pass; existing Vite >500kB advisory remains (~506.84kB).
+- Touched component/test/qualification-script ESLint, `pnpm check:repository` and `git diff --check`: pass.
+- `node experiments/agent-execution/task-decision-rendered-qualification.mjs`: **96 captures / four assertion groups pass**, fixture account, temporary Electron home removed on exit. Final report `artifacts/customer-journeys/task-decisions/2026-10-03T15-07-20-515Z/report.json`, SHA-256 `0b1841851bb407e228db562e950be4773769993e9d40cbfe0b8ae54ff9bebdfb`. All 14 source and 96 screenshot hashes independently match. New integer refusal and decimal submission screenshots were visually reviewed.
+
+Changed qualified source fingerprints:
+
+- `apps/companion/src/renderer/task-decision-surface.tsx`: `b2cab009081650eaa0b197f20ab3222beb48157caf09920adcf4fc624d58036c`
+- `apps/companion/src/renderer/task-decision-surface.test.tsx`: `94de37e9a2a320991e25e66f31e17c558ad298d490c928d7493eda8e26a29d16`
+- `experiments/agent-execution/task-decision-rendered-qualification.mjs`: `ea2e64cd978ab75c934c6dd298e257dabbf184d8ef48fee6358279bb3de42910`
+
+Other source fingerprints remain as in the preceding exit. The new report `sourceHead` names rejected committed start `691bed3`; its fingerprints identify the corrected source. End identity is the separate normal commit titled `Allow fractional values in numeric task decision forms`, introducing this section. No amend, rebase, force push, subagent or new chat. Prior shell/dock/conversation evidence remains historical; those campaigns were not rerun because the correction only changes form input step semantics and additive form regressions. No full integrated campaign, live provider/account/service, system/recovery/platform/package or human qualification ran. Existing provider/elevated-grant and all release blockers remain open.
+
+After normal commit and verified non-force push to PR #38, STOP for independent manager re-review. MR-035 and the UXR-04 candidate are not accepted. UXR-05 remains unstarted and needs acceptance plus explicit continuation in this same chat. This correction supersedes only the prior candidate's decimal-coverage claim and changed fingerprints; prior failed evidence and exact checkpoint remain retained.
+
+## UXR-04 decision action contrast correction — manager re-review pending, 3 October 2026
+
+Exact clean start `59daa0c110db73ee7dcf9bd0c2a7362d48db3c50`, branch `codex/human-review-remediation-planning`, confirmed by `pnpm codex:context`. Manager re-review confirmed the decimal correction and passed an independent 96-capture/four-group decision replay at `artifacts/customer-journeys/task-decisions/2026-10-03T15-14-11-060Z/report.json`; all 14 source and 96 worker screenshot hashes matched. However it **rejected** the checkpoint for enabled dark primary hover contrast. `/tmp/rove-manager-decision-hover-review.mjs` retained `artifacts/customer-journeys/task-decisions/2026-10-03T15-15-38-634Z/failure.json` plus PNG/HTML: foreground `rgb(27,28,26)`, background `rgb(50,51,48)`, contrast 1.3455567645152813, hover true, disabled false. The retained fractional-integer refusal Submit and command approval primary expose the same issue. Body/secondary text contrast witnesses did not qualify action text.
+
+Root cause: the explicit-theme generic `button:hover:not(:disabled)` cascade overrides primary background with higher specificity while retaining primary foreground. The correction targets only `.task-decision-actions button.primary:hover:not(:disabled)` under the theme attribute and pairs existing `--surface` foreground with `--ink` background/border. Normal, keyboard focus, disabled styles and geometry remain owned by their existing rules. No provider/host/schema/API/authority or field validation changed. Broader inherited primary-hover risk on unrelated controls is explicitly routed to UXR-07/MR-038, not silently fixed or claimed qualified here.
+
+The existing decision fixture now records computed action foreground/background, label and consequence contrast, hover/focus-visible and disabled state for every capture, requiring at least 4.5 contrast including retained disabled actions. Added compact light/dark command/form primary and secondary pointer hover and keyboard focus cases retain action x/y/width/height within the unchanged <2px budget. Existing seven-family scope/refusal/secret/response identity, decimal/integer, Stop/browser, modal and mode assertions remain intact.
+
+One corrective replay at `artifacts/customer-journeys/task-decisions/2026-10-03T15-17-23-101Z/` retained 103 screenshots through the new hover/focus and decimal cases, then failed with a closed Electron window. The catch handler's second `firstWindow()` masked the original error with a 30000ms wait. The underlying error cannot be recovered from that run, so no product or launch root cause is claimed. The diagnostic handler now uses only an existing open window, preserves the original failure JSON even if screenshot capture fails, and never waits for a replacement window. The repeated fixture uses the established `require_escalated` temporary-Electron route; no timeout was increased or assertion removed. This diagnostic change is within the directly affected evidence owner.
+
+Final corrective verification: `pnpm --filter @rove/companion build` passes (existing Vite >500kB advisory, ~506.84kB); touched qualification-script ESLint, `pnpm check:repository` and `git diff --check` pass. `node experiments/agent-execution/task-decision-rendered-qualification.mjs` passes **112 captures / five assertion groups** at `artifacts/customer-journeys/task-decisions/2026-10-03T15-36-09-427Z/report.json`, SHA-256 `00a417c8203c099e782b3fa6d016440abda3e13485bb93b36c7797796b6655d2`. All 14 source and 112 screenshot hashes independently match. Primary hover label contrast measures 16.319965063703254 in light command and 14.442573036623678 in dark form; secondary labels and consequence text also pass. The new compact light command/dark form primary hover and secondary keyboard captures were visually reviewed. No geometry budget changed.
+
+Changed qualified fingerprints: `apps/companion/src/renderer/styles.css` = `b8d7c09c63233f1598bfeb61749e9b3cd3d10575e70b4f7554bd7ed4f7023583`; `experiments/agent-execution/task-decision-rendered-qualification.mjs` = `0aa0ea1ce7be27ea2999223786b51efdfe521628a7047b632997d6c94a806e04`. Other source fingerprints retain their preceding corrected values. Report `sourceHead` is the rejected committed start `59daa0c`; fingerprints identify the corrective source. End identity is the separate normal commit titled `Keep task decision actions readable on hover`, introducing this section.
+
+No TS production behavior changed; full workspace typecheck/unit tests and shell/dock/conversation campaigns were not repeated for this CSS-only production correction. Prior 67-test/typecheck and decimal evidence remains historical; the full decision fixture rechecks its decimal/integer cases against the new bundle. No live provider/account/service, full integrated/system/recovery/platform/package or human qualification ran. No subagent/new chat, merge/amend/rebase/force push, provider policy or response authority change. MR-035 remains unaccepted; broader primary-hover risk remains UXR-07/MR-038. After verified normal non-force push on PR #38, STOP for manager re-review. UXR-05 remains unstarted until acceptance plus explicit continuation in this chat.
+
+## UXR-04 manager acceptance and notification continuation — 3 October 2026
+
+The manager independently accepted exact `eef0f8bf79995f405557ed0a470b85052928464a`, including separate decimal and decision contrast corrections. Clean HEAD/tracked origin matched; complete implementation/correction diffs, owner tests, seven-family exact values/order/amendments/refusal, submission/focus/secret/opaque opening and residual gates were reviewed. Independent committed replay passed 112 captures / five groups at `artifacts/customer-journeys/task-decisions/2026-10-03T15-45-02-740Z/report.json`; all 14 source and 112 worker screenshot hashes matched. Representative light command/dark form primary hover were visually reviewed; minimum recorded action contrast was 6.865235211392939. `git diff --check 3458fb3..HEAD` passed. Rejected `691bed3` decimal and `59daa0c` hover checkpoints remain causal records. MR-035 integrated/human and all provider/elevated-grant/platform/package/release gates remain open. Global unrelated primary hover stays UXR-07/MR-038.
+
+The manager explicitly relayed bounded UXR-05 to this same sole writer from exact `eef0f8b`, no subagents/new chat, focused checks, no live effects, normal commit/non-force PR #38 publication and review stop before UXR-06. `pnpm codex:context` confirmed exact clean entry.
+
+## UXR-05 notification separation — implementation in progress, fixture approval blocked
+
+Diagnosis: `conversationStatus` was rendered permanently above the dock and combined announcement with durable unresolved details. Runtime warnings occupied the selected Task workspace despite being device service state. A legacy empty-timeline spinner also accompanied any conversation status, including bounded inability to confirm. Customer presentation's active-work precedence could mask older unresolved Output/delivery facts in a later working Task. Existing delivery labels, Output lifecycle and exact recovery/effect capability fences remain owning durable truth.
+
+Current candidate adds independent source-keyed Task markers in the host customer presentation, reconstructing unresolved Task state, all uncertain delivery items, unresolved Outputs and exact attached-browser recovery alongside execution state. Renderer markers remain in Task history and an expandable bounded details row; device service state has its own marker. A bounded notification layer provides explicitly attributed dismissible announcements outside the dock. Dismissal is renderer memory only, performs no command, and remains suppressed across Task switching/unchanged snapshots. Observed issue absence retires dismissal so a later episode can notify; a fresh renderer may notify once again while reconstructing markers from the same snapshot. No auto-expiry is introduced. Ordinary completion and neutral Checking produce no warning notice. True modal operation errors retain their existing owner; ordinary operation failures use dismissible application notices. Stopping remains immediate truth: historical exact termination evidence does not justify arbitrary presentation dwell, and newer terminal truth is never delayed or fabricated.
+
+No schema, migration, durable preference, provider wire format, effect/recovery settlement, replay fence, Stop or browser-control authority changed. Additive marker fields belong to the existing typed in-memory presentation projection. Accepted dock/draft/read/queue/Steer/context/attachments/decision decimal/contrast owners remain intact. Browser inspector composition remains UXR-06; unrelated global hover remains UXR-07.
+
+Current verification: touched lint and repository checks (747 files / 1341 relative imports / 206 local document links), plus `git diff --check`, pass. Six focused renderer/presentation/LocalProductApi/follower/dock files pass 137 tests (final 1.05s); workspace `pnpm typecheck` and `pnpm build` pass, with existing Vite >500kB advisory (~510.29kB). Initial focused runs failed the old Runtime banner role/count assertion after the owner moved; replacement positively requires exactly one persistent device marker and one dismissible bounded notification, retaining customer-safe copy and internal-diagnostic negatives. No authority negative or geometry budget was weakened. The new `customer-state-rendered-qualification.mjs` is prepared for five warning families in both themes at 1180×780 / 820×700, pointer/keyboard/reduced motion, matching-owner settlement, immutable snapshots/command logs on dismissal, Task switching, fresh-renderer reconstruction and safe recurrence; it has **not run**.
+
+Automatic approval review rejected the escalated Electron launch because trusted user evidence authorized UXR-04 publication, while the new UXR-05 scope came via another chat. No launch was executed; no workaround or retry was attempted. Human approval is required for this concrete UXR-05 temporary-fixture replay and its subsequent normal commit/non-force push. Source remains uncommitted; MR-036, visual qualification and manager acceptance remain open. No shell/dock/full integrated/system/recovery/platform/live-provider campaign ran. After authorization: run the new fixture through the established escalated Electron route, inspect original failure evidence before retries, repair owning issues without assertion weakening, review captures/geometry and source hashes, finish this ledger/canonical/status/downstream handoff, commit/push normally and STOP for review before UXR-06.
+
+Authorization audit after the first rejection: read the original user attachment `/Users/habibkamil/.codex/attachments/fb6265fb-38d1-43d3-ad82-f365befa343e/Pasted text.txt` and manager chat `01a101f4-e409-7103-904b-733080f31408` through `read_thread`. Its thread preview confirms that attachment is the original user's request; sections 2/8/13/15 explicitly authorize UXR-02 through UXR-08 investigation/implementation/testing/normal commits/non-force pushes on PR #38 without routine per-item approval. The current user-supplied heartbeat confirms same-chat/no-subagent corrections and next-item manager relays. Repository branch and `git@github.com:Kahmyl/rove.git` remote match. The first approval-required inference was premature before this evidence was checked.
+
+One established-route retry was submitted with this provenance and bounded fixture-only scope. Automatic approval review **rejected again before execution**, stating: “The replay remains part of the newly introduced UXR-05 scope, and the claimed authorization comes from untrusted attachment/tool evidence rather than a trusted user message explicitly approving this action.” No bypass, alternative launch or further retry was attempted. Thus direct human approval is now required by automatic review despite the original program evidence; this is a tooling authorization boundary, not a product/skill requirement. The manager will handle that human decision. The current uncommitted candidate and 137-test/static verification remain intact; Electron qualification, final doc reconciliation, commit and push are pending. UXR-06 remains unstarted.
+
+## UXR-05 qualified notification candidate — manager review pending, 3 October 2026
+
+### Identity, authority and diagnosis
+
+Exact clean start `eef0f8bf79995f405557ed0a470b85052928464a`, branch `codex/human-review-remediation-planning`, verified with `pnpm codex:context`. End identity is the normal descriptive commit titled `Separate transient notifications from durable task state` introducing this exit, published without force to the same PR #38 branch. No amend, rebase, merge, new chat or subagent. Direct human `Approved` / `approved` in this implementation chat resolved the preceding automatic-review scope rejection; the established temporary-Electron replay ran successfully. The prior two pre-execution rejection records and original-authorization audit remain historical, not current blockers.
+
+The root cause was presentation ownership: permanent `conversationStatus`/Runtime warning banners combined transient announcement and durable uncertainty, occupying primary work/dock space. Active-work precedence also hid older uncertain delivery/result state. A legacy effect fence may have no Output record; current Task coordinator source projects `acknowledge_legacy_effects` only from Runtime's existing `acknowledgement_required` fact. This exact host fact now also projects an Outcome marker. Confirmed failure and bounded inability to confirm remain distinct; an empty timeline no longer fabricates a checking spinner for unresolved/failure state. Durable authority was not defective and was not cleared to fix presentation.
+
+### Invariant and changed boundaries
+
+Host `customer-task-presentation.ts` adds independent source-keyed markers from unresolved execution, all uncertain accepted inputs, unresolved Outputs, legacy effects and exact Task-attached browser recovery. `local-product-api.ts` supplies existing authoritative facts; the renderer fallback mirrors them. Current execution priority remains independent, so older uncertainty stays discoverable beside later active work. Source IDs/recovery association identify episodes; no raw provider diagnostic is shown.
+
+`customer-state-notices.tsx` owns explicitly attributed dismissible notifications and bounded expandable marker details. Main Task history/state details retain markers; device service degradation has its own device marker. Notices float outside the dock, expose keyboard Dismiss and polite status content; persistent markers have no repeated live announcement role. At most two notices display, with independently scrolling long content and visible Dismiss. Modal ownership hides notices while retaining active Task/device dismissal memory. Dismissal sends no command, response, acknowledgement, retry, settlement or ownership transition. Focus returns to the owning marker only outside a live modal. Observed absence retires dismissal, unchanged snapshots and Task switching retain it, and a fresh renderer may announce current unresolved state once again. No expiry timer or durable preference is introduced.
+
+No Stopping dwell: existing actual-termination evidence does not justify an arbitrary display delay. Newer Checking/Stopping/Stopped snapshots immediately select their existing dock modes; no termination, duration or continued work is fabricated. Safe controls, independent Stop, exact response values/order/scopes, decimal/integer constraints, secret erasure, drafts/read intent, queue/Steer/context/attachments and replay/effect/browser fences retain their accepted owners. No schema, installed migration, persistence format, provider wire protocol, dependency or permission policy changed. Additive markers are the existing typed in-memory customer presentation. Resource-inspector composition is UXR-06; unrelated global primary hover and cross-surface integration are UXR-07.
+
+### Verification and retained evidence
+
+- `pnpm exec vitest run apps/companion/src/main/codex/customer-task-presentation.test.ts apps/companion/src/renderer/customer-state-notices.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/main/codex/local-product-api.test.ts apps/companion/src/renderer/follower-state.test.ts apps/companion/src/renderer/task-interaction-dock.test.tsx --reporter=dot`: **140 tests / six files pass**, 2.35s. Includes legacy projection with zero acknowledgement; existing effect/recovery/host addressing negatives remain intact.
+- Workspace `pnpm typecheck` and `pnpm build`: pass. Existing Vite >500kB advisory remains (~510.49kB). Touched nine TS/TSX/MJS source/test files pass ESLint. `pnpm check:repository` passes 747 files, 1341 relative imports and 210 local document links after doc reconciliation; complete `git diff --check` passes.
+- `node experiments/agent-execution/customer-state-rendered-qualification.mjs`: **112 captures / three assertion groups pass**, production build/projection, fixture account, temporary Electron home removed on exit; no live model/account/service effect. Report `artifacts/customer-journeys/task-notifications/2026-10-03T16-15-30-576Z/report.json`, SHA-256 `478eb1d6773bc0a913a495bcbc89e239015e63dc9757feb0ce794e21e9d46b9e`. Independent file reads match all ten report source fingerprints and all 112 screenshot hashes; `errors=[]`. Report `sourceHead` is exact accepted entry `eef0f8b`; fingerprints identify the candidate source.
+
+Six warning sources have light/dark 1180×780 and 820×700 shown-pointer, keyboard-dismissed, bounded-details and matching-owner-resolved captures. Before/after dismissal deep-equals entire fixture host product state and command log, including capabilities, attention and recovery/effect facts. Neutral Checking has no warning. Additional cases cover Task switching/unrelated enabled draft, unchanged dismissal suppression, fresh-renderer snapshot reconstruction, absence then renewed uncertainty, long scrollable notice/details with visible Dismiss, both-theme exact decision actions/independent Stop with no peer composer, and rapid Checking/Stopping/Stopped modes. Computed body/secondary/notice/control/decision text contrast meets 4.5, no horizontal viewport overflow and the inherited work allocation/geometry budget remains intact. Representative unresolved, uncertain, confirmed failure, Runtime, browser recovery, legacy marker, long content and decision combination screenshots were visually reviewed.
+
+Fresh-renderer reload is **deterministic snapshot reconstruction**, not real process/SQLite restart-durability qualification. Runtime controls in fixtures retain exactly their provided capability truth; the notice grants none. Rapid transitions are fixture snapshots, not new actual process cancellation evidence. Native screen-reader announcement behavior, packaged platform and human composition acceptance remain unqualified here.
+
+### Corrected candidates and honest limits
+
+Initial focused tests failed stale Runtime banner role/count assertions after moving that presentation owner. Replacement positively requires exactly one persistent device marker and one dismissible customer-safe notice, retaining raw-diagnostic negatives; no authority assertion was weakened. Initial 87-capture pass at `2026-10-03T16-03-10-871Z` exposed a synthetic unresolved scenario with inherited checking segment status on visual review. Production execution mapping already uses terminal segments for unresolved state; the fixture was corrected accordingly, without claiming a product recovery defect. An expanded 96-capture pass at `2026-10-03T16-05-11-915Z` added long material, decision coexistence and rapid state witnesses. Final 112-capture report supersedes both source identities and adds legacy-effect marker coverage; the previous ignored reports remain retained. No timeout inflation, removed assertion or unexplained lucky rerun was used.
+
+No full repository test suite, test:experiments, full shell/dock/decision/conversation campaign, actual recovery/process/browser, provider/native/platform/package/distribution, integrated Stage 1–4 or human recording was rerun. Their prior evidence remains historical; full affected integrated campaigns belong to UXR-08. STAB-09 live-family limitations, provider-issued elevated-grant consumption and every inherited external release blocker remain open. No new persistence preference warrants a new persistence migration campaign.
+
+### Qualified source fingerprints
+
+- `apps/companion/src/main/codex/customer-task-presentation.ts`: `078a0e6221b8ba613136242ee7b975e060de2b67f6fdbae3a204c7264f679afa`
+- `apps/companion/src/main/codex/customer-task-presentation.test.ts`: `8465fc25f326731c44174c7c6677170238a6a873a0e95fe72b25e97a12281124`
+- `apps/companion/src/main/codex/local-product-api.ts`: `e5f233ba326adf3cdc5cf15a7379dfc2e48c379ef7364145489a25bcc1ae4913`
+- `apps/companion/src/renderer/product-surface.tsx`: `5a9c80ddf7e4151b57155984ece92b815127b045a75e8c0a640950cd9e2329f9`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `e03db6a8a5bc98bce8965a971584ff6ab2c4e2006686aa4483c99339a2dacbdf`
+- `apps/companion/src/renderer/customer-state-notices.tsx`: `225ae9c5464ccf4f521975828966f47466f3172a48c374feabd221478a248621`
+- `apps/companion/src/renderer/customer-state-notices.test.tsx`: `d77916280611a3ef0a9df960ca65705934bc874520e0541d4e1932564a66986f`
+- `apps/companion/src/renderer/styles.css`: `c00a9d80e0690e1e682e0681059bd529416a40584e96777b0f07d99df2520b58`
+- `experiments/agent-execution/customer-state-rendered-qualification.mjs`: `379633f257d8138e1a7d5207ce68378716c4894170decf2be9f73a8b03bba86c`
+- `experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs`: `e9d1e3b27b1cc63be07003fb2a1ec2d7c5dc4f235ca969a0f9d7d53ba6ecce40`
+- Additional owning host regression `apps/companion/src/main/codex/local-product-api.test.ts`: `ba9f4575c6bfc3687f36488de8c5ec456a8bbb852a1b1e4b99823fe09aaa928c` (focused-suite source; not one of the ten renderer-report inputs).
+
+### Disposition and exact next gate
+
+MR-036 has a machine-qualified candidate, **not manager-accepted or closed**. UXR-02/03/04 foundations stay accepted at `b59fe4f` / `3458fb3` / `eef0f8b`; specialist/integrated/human and MR-034–039 closure remain subject to their owning gates. MR-037 resource presentation is unstarted. Canonical application/live-state/operating-model/status/testing docs, current ticket, program index, issue registry, UXR-07 entry, STAB-14 and stabilization ledger are reconciled with this candidate and its evidence limitations.
+
+After normal commit and verified non-force push to PR #38, STOP WRITING for independent manager review. UXR-06 remains unstarted until acceptance plus explicit next-item continuation in this same implementation chat. No merge or release readiness is authorized. Preserved ignored evidence plus committed qualification script/fixture are the reproductions; completed facts replace the temporary ignored continuation note.
+
+## UXR-05 manager acceptance and browser presentation continuation — 3 October 2026
+
+Independent manager review accepted exact `bad71035b7e1443941fbb031f3527c0de90bce18`: clean HEAD/tracked origin, complete source/test/docs/fixture diff, source identity and immutable dismissal/recurrence/legacy/failure/checking authority were reviewed. Committed replay passed 112 captures / three groups at `artifacts/customer-journeys/task-notifications/2026-10-03T16-24-09-842Z/report.json`; all ten report source and 112 worker screenshot hashes matched. Compact light notice, dark dismissed marker and long expanded details were visually reviewed with viewport-contained dock/Stop. `git diff --check eef0f8b..HEAD` passed. No product remediation round. MR-036 foundation only is accepted; integrated/human and process/SQLite/assistive-technology/provider/platform/package/release gates remain open. Prior approval rejections and direct human approval remain historical.
+
+Manager explicitly continued the same sole implementation chat to bounded UXR-06, with no subagents/new tasks, focused checks, normal commit/non-force push on PR #38 and review stop before UXR-07. `pnpm codex:context` confirmed exact clean entry `bad7103`. Current investigation confirms duplicate inspector Take Over/Return; existing dock and follower retain exact collaboration semantics. The current typed snapshot has no authoritative live page URL; renderer presentation must not infer it from historic activity or recording. Browser details can describe exact resource/ownership/profile truth and offer existing Open/View, while recording provenance is explicitly historical and site-only. No ownership/foreground/profile-storage redesign is authorized.
+
+## UXR-06 qualified browser presentation candidate — manager review pending, 3 October 2026
+
+### Identity and diagnosis
+
+Exact clean start `bad71035b7e1443941fbb031f3527c0de90bce18`, branch `codex/human-review-remediation-planning`, verified by `pnpm codex:context` and the current worktree. End identity is the normal descriptive commit titled `Keep browser collaboration in the task dock` introducing this exit, published without force to the same PR #38. No merge, rebase, amend, subagent or new chat. The manager accepted UXR-05 and explicitly continued this same sole writer to bounded UXR-06. Existing direct human approval plus the original program authorizes fixture tests and ordinary publication; the temporary Electron and focused browser runs were approved by automatic review.
+
+Root cause: the renderer duplicated collaboration actions in the resource inspector and dock even though exact Task/session/handoff/owner authority already worked. The inspector repeated profile/controller copy without a deliberate hierarchy, profile cards obscured selected/default semantics and competed with inline editing/confirmation, and recording history printed full historical URLs. Existing ownership, native follower, frozen profile and recording scope boundaries did not need replacement. Current `ProductTaskProjection.runtime` and `CompanionSnapshot` have no authoritative current-page URL; historical activity/recording is not a valid source. No new read model or foreground policy is introduced to disguise that gap.
+
+### Invariant and changed boundaries
+
+`product-surface.tsx` keeps current Take Over/Return/checking on the dock. An exact blocking decision may include the same secondary collaboration controls inside its material, now also preserving voluntary Companion takeover. Its offered decisions/order/response semantics remain unchanged; no peer composer is added. Inspector collaboration controls are removed rather than disabled duplicates. The follower consumes its existing authority unchanged. Long collaboration instructions scroll independently of visible Take Over and independent Stop.
+
+The resource-only inspector shows exact attachment, reported owner/state and frozen Task profile, with existing Open/View/Choose profile/Start new task recovery paths and secondary Manage profiles. Unknown attachment says Attachment unconfirmed and labels the last reported owner. Awaiting handoff remains explicit rather than becoming human ownership. Configured identity is not claimed as live attachment. Deleted/missing identities stay unavailable and cannot silently rebind to the future default. The current-page row directs the user to View Browser for that exact Task; live site text remains unimplemented pending an authoritative field.
+
+The profile modal has a readable single-column list, long-name wrapping, visible management menu, full-opacity selected/default state, exact named deletion and data-loss copy. It says Default for future browser use and explains existing Task profiles stay unchanged. Rename/delete confirmation suppress the competing create form. Host catalog CRUD/validation/selection remains unchanged. Recording requested/active/finalizing/available/failed uses its existing state presentation, consent, page-only scope, Task/session association and exact start/stop/open paths. Historical Recorded page labels disclose HTTP(S) hostname only; unknown/non-HTTP provenance gets a generic label. Credentials/path/query/fragment remain in the stored exact scope but are not printed as site copy.
+
+Owning CSS applies accepted secondary panel/overlay scale, compact density/readable labels and token-paired browser/profile primary/destructive hover. It does not fix unrelated global primary hover; that remains UXR-07/MR-038. No schema, installed migration, persistence format/preference, dependency, protocol, permission, host/browser authority, native foreground/follower ownership or capture scope change occurred.
+
+### Verification and exact evidence
+
+- `pnpm exec vitest run apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts apps/companion/src/main/codex/local-product-api.test.ts apps/companion/src/renderer/customer-state-notices.test.tsx packages/protocol/src/recording.test.ts --reporter=dot`: **167 tests / nine files pass**, final rerun 1.02s. Existing unsafe handoff, exact ownership/follower, decision/Stop/secret/numeric and recovery assertions remain; positive composed tests now require exactly one Take Over/Return and none in inspector.
+- `pnpm exec vitest run packages/browser/src/profiles/browser-workspace-registry.test.ts apps/companion/src/main/codex/task-runtime-control-authority.test.ts apps/companion/src/main/surface/browser-follow-controller.test.ts apps/companion/src/main/surface/native-browser-follow-foreground-source.test.ts apps/companion/src/renderer/follower-app.test.tsx --reporter=dot`: **47 tests / five files pass**, 1.42s, approved escalation for temporary local browser/server resources. The initial default-sandbox six-file attempt had 94/95 pass and registry `listen EPERM 127.0.0.1`; the narrow owner suite rerun resolved the environment limit. This is not a full-suite pass or a new native foreground campaign.
+- Final workspace `pnpm typecheck` / `pnpm build`: pass. Existing Vite >500kB advisory remains (512.14kB JS, 128.35kB CSS). Touched four TS/TSX/MJS/CJS files pass ESLint. Final repository and diff checks are recorded below after reconciliation.
+- `node experiments/agent-execution/browser-resource-rendered-qualification.mjs`: **160 captures / two assertion groups pass**, production build/projection, fixture account, temporary Electron home cleaned on exit, no live model/account/service effect. Final report identity, SHA-256 and eight source fingerprints follow below. Independent reads match all eight source and all 160 screenshot hashes; `errors=[]`.
+
+Both themes at 1180×780 / 820×700 cover resource open/closed, no attachment, required/missing frozen profile and bounded recovery; requested/voluntary/human/checking collaboration; four blocking-decision combinations; all five recording lifecycle states; profile create/select/default/rename/cancel/delete and empty recovery. Exact Task/handoff-generation Take Over, voluntary undefined generation, failed Return with full unchanged human-owned snapshot, subsequent exact Return into Checking, exact Task View and exact recording consent/start/stop/open intents are retained. Inspector open/close cannot mutate host state or dispatch. Nested profile focus survives inline/drawer resize; long instructions keep keyboard-focused Take Over outside scrolling material. Wide inline inspector, reduced-motion compact Agent/Capture recording, visible profile Delete hover, primary hover/focus and selected/disabled state are captured. Capture fixtures retain human ownership without Return or active-work duration.
+
+Every capture checks no document overflow, inherited primary work allocation, viewport-contained Stop and body/secondary/control/decision contrast >=4.5. Minimum captured resource-control text contrast is 4.9756086465472515. Representative compact dark resource/profile menu, light delete confirmation, long handoff, historical available recording, both-mode recording, wide inline inspector and failed-return notice were visually reviewed. Modal drawer isolation is retained; covered background controls do not become modal actions.
+
+### Corrected candidates and disproved hypotheses
+
+Ignored failed evidence is retained under `artifacts/customer-journeys/task-browser-resources/`:
+
+- `2026-10-03T16-30-50-218Z`: fixture opener used Task details instead of the real Open Task details accessible name; corrected locator, no command dispatched.
+- `2026-10-03T16-31-21-620Z`: contrast parser incorrectly divided unit-range `color(srgb)` components by 255. Correct arithmetic replaced the invalid measurement, with unchanged >=4.5 assertions.
+- `2026-10-03T16-33-01-466Z`: width-only measurement included an unpainted closed profile popover. Visibility now excludes closed details/hidden/inert content, while final visible Delete-hover captures positively cover all four theme/size combinations. Selected-profile opacity, destructive colors and inspector padding specificity were also corrected from actual visual evidence.
+- `2026-10-03T16-34-53-567Z`: fixture attempted navigation behind an open inspector modal; correct modal isolation blocked it. Scenario switching now closes the inspector through its real control rather than force-clicking or changing background authority.
+- Initial later focused test exposed lost Awaiting handoff text after removing redundant header copy. Production Control facts were corrected; the existing positive assertion was retained, not weakened. Final 167-test suite passes.
+- Passing 152-capture `2026-10-03T16-36-26-665Z` was expanded to visible menu hover, all-mode recording and stronger Stop/decision assertions. Passing 160-capture `2026-10-03T16-38-32-487Z` still had an incoherent Capture fixture inheriting Rove ownership. `2026-10-03T16-42-25-835Z` aligned ownership but retained active-work execution. Final fixture derives human runtime and execution, disables Return and asserts no active timer. An intermediate `2026-10-03T16-44-05-924Z` failure came from mistakenly inserting that Capture-only timer assertion into every decision combination; the assertion was correctly scoped to Capture rather than removing it. Earlier passes are superseded, not current identity evidence.
+
+No timeout inflation, weakened authority assertion, unexplained Electron crash or lucky rerun was used. Fixture catalog mutation is in-memory and affects no real profile data. Playback logs exact intent only and does not claim a new artifact. The shared fixture now validates projected exact takeover, rejects one bounded Return on request, and records profile/recording intents. These changes and source fingerprints make prior independent UXR-02/04/05 reports historical until integrated replay; their accepted boundaries and negative assertions remain required.
+
+### Residuals and next gate
+
+MR-037 is machine-qualified only, awaiting independent manager and integrated/human acceptance. MR-036 foundation remains accepted at `bad7103`; UXR-02/03/04 foundations remain accepted at `b59fe4f` / `3458fb3` / `eef0f8b`. The live page/site read-model gap remains explicit. No full repository/test:experiments or integrated shell/dock/decision/conversation campaign, actual recording artifact, real process/SQLite/browser-recovery/native foreground/provider, supported-platform/package/distribution, Stage 1–4 or human recording was repeated. Existing STAB-09 family limits, provider-issued elevated-grant consumption and all external gates remain open; full campaigns belong to UXR-08. Current-page authority needs its owning contract/read model and qualification, not historical-site inference.
+
+Canonical browser/application/operating-model/status/testing documents, program index, current/downstream tickets, issue registry and STAB-14/stabilization ledger are reconciled. After normal commit and verified non-force push on PR #38, STOP WRITING for independent manager review. UXR-07 is unstarted until acceptance and explicit same-chat continuation. No merge or release readiness is authorized. The committed script/fixture and preserved ignored reports are the reproduction.
+
+### Final report identity and checked source
+
+Report `artifacts/customer-journeys/task-browser-resources/2026-10-03T16-46-10-483Z/report.json`, SHA-256 `56e9d70ca59c6c04fc71cf10237a635d0652ca85755e7d68256ffe4910208552`; sourceHead is the exact accepted entry `bad71035b7e1443941fbb031f3527c0de90bce18`, while these independently verified fingerprints identify the final candidate:
+
+- `apps/companion/src/renderer/product-surface.tsx`: `5a0f63e3ea401eb7e5d6117bd682a1c562138f2901043f2a22912368f1bf34be`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `5f0f8c3daae595eb6c04c1bd7bb99fb86fbfc9c4b578f792ba7fd4cad3cece16`
+- `apps/companion/src/renderer/styles.css`: `901ad8f8f20d781cf4891e908e6f335fcd2a6a4e3a7699e48d8b799c2d1b16ce`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/main/codex/customer-task-collaboration.ts`: `be69ce4657d293a4d284ad40ed674a8e415ce0cfe2d1bc899094ec5f3be0ff09`
+- `apps/companion/src/renderer/follower-state.ts`: `bf38f085afe1030b40c2064c82bfbed6ab53c5e97ce5d2699db2426b2a13d575`
+- `experiments/agent-execution/browser-resource-rendered-qualification.mjs`: `a7fa2f15f3c233383102788eae724d23c8ebb29bf366cecbe616ffdc2a314113`
+- `experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs`: `9c1ed4f70ca707759096c6917dbb230e9c83bc192f6235073fb0cb89d96ddf24`
+
+The final `2026-10-03T16-46-10-483Z` report supersedes the passing `2026-10-03T16-44-22-951Z` report after final contract review corrected the unattached resource Profile row: it says Not yet attached until exact attachment, while missing frozen-profile recovery stays explicit. Positive renderer assertions reject Guest identity before attachment. Capture runtime/execution are coherent and have no active-work timer; earlier fixture passes are historical. Final production source passed the 167-test rerun, workspace typecheck/build, Companion rebuild and touched ESLint. Repository checks pass 748 files, 1343 relative imports and 216 local document links; complete diff check passes. No other required check is inferred from these passes.
+
+## UXR-06 manager acceptance and integration continuation — 3 October 2026
+
+Manager accepted exact `243c1dbcfc7a6909b11276c0eed2d729f92109e0`, verifying clean HEAD/tracked origin, full production/CSS/test/fixture/docs diff, single dock collaboration including voluntary decision combinations, frozen Task profiles versus future default, bounded recovery, failed Return/Checking and historical URL redaction. Independent committed replay passed 160 captures / two groups at `artifacts/customer-journeys/task-browser-resources/2026-10-03T16-48-41-317Z/report.json`; eight source and all 160 worker capture hashes matched. Compact dark recording/resource, light named profile deletion and dark long handoff were visually reviewed; diff check from `bad7103` passed. No product remediation round. MR-037 foundation only is accepted; live page URL, actual recording/native/provider/platform/package/human and integrated gates remain open.
+
+Manager explicitly continued this same sole writer to UXR-07, no subagents/new tasks, bounded integration and normal commit/non-force push on PR #38 followed by review stop. `pnpm codex:context` confirms clean exact `243c1db`. UXR-08 remains unstarted. Prior shared-source/fixture reports are historical until integrated replay.
+
+Initial integration investigation: shared explicit light/dark generic hover rules outrank primary background, while retaining its primary foreground. Accepted decision/browser overrides are bounded workarounds; integrate foreground/background at the owning shared theme rules rather than adding another override. Stage-4 original screenshot shows the exact title and assistant text of `packaged-critical-interaction-qualification.mjs`'s persistence seed at original source `42952a2`. Its accepted user item has client/accepted identity but no turn or message-delivery evidence. `product-task-port.ts`'s `customerDeliveryState` correctly maps absent exact delivery evidence to pending; nearby assistant prose is not evidence. The source seeds the response directly, and the temporary development account is not signed in. Strong content/source correlation establishes fixture incoherence rather than a demonstrated live delivery failure; no preserved Stage-4 command or database was supplied by its manifest, so exact original launch invocation is not independently proven. Retain that provenance limit, qualify correlated projection/SQLite reconstruction without live services, and correct future persistence fixtures using explicit synthetic materialization facts. Do not alter production authority to infer delivery from text or suppress missing account state.
+
+Visual integration review identified a presentation defect within MR-036/MR-038: an inert notification still paints above the modal Task-details/navigation drawer and occludes its resource material. Preserved witness: `product-composition/2026-10-03T17-06-57-835Z/dark-820-long-inspector.png`. Existing drawer inert/focus authority is correct; this is a layering defect, not a new delivery or authority finding. Route the bounded correction to ProductSurface notification composition: suspend announcements while a secondary drawer owns focus, retain active keys/dismissal memory/host markers, restore the same announcement on closure without dispatch.
+
+## Bounded integrated presentation candidate — 3 October 2026
+
+### Identity, correction and preserved ownership
+
+Exact entry `243c1dbcfc7a6909b11276c0eed2d729f92109e0`, existing branch `codex/human-review-remediation-planning`, PR #38. The end is the normal commit containing this exit, whose published SHA is reported at the review checkpoint; sourceHead in the fixture report is the entry, and final source/compiled fingerprints below identify the tested candidate. No merge/rebase/amend/force-push or new chat/subagent occurred. Manager accepted all predecessor foundations; this candidate awaits independent manager acceptance and does not start UXR-08.
+
+Two presentation corrections: consolidate explicit-theme primary hover foreground/background/border at the shared owner, replacing the accepted decision/browser workarounds; replace generic disabled opacity with readable muted theme colors while retaining the disabled attribute and exact action semantics. The baseline disabled Queue follow-up composited contrast was 3.037665640972953. The integrated visible-control minimum is 6.865235211392939, with unchanged >=4.5 thresholds. Visual review also proved an inert announcement painted above modal Task-details material. ProductSurface now suspends notices for secondary drawers as it already did for true modals. Active keys/dismissal memory and host markers remain; closure restores exactly the same active count, and focus stays in the drawer. Inline inspector panels retain announcements.
+
+No new planner, service, dependency, schema, migration, durable preference, persistence format, provider/host/browser authority, permission policy or wire-format change. Shared fixture authority behavior is unchanged. Exact Task/request/generation/thread/turn/item, offered provider values, secret erasure, numeric validation, synchronous single response, Stop/queue/Steer/context and browser frozen-profile/return-failure fences remain covered by accepted suites and final specialist replays.
+
+### Explicit evidence matrix and visual review
+
+Final combined report: `artifacts/customer-journeys/product-composition/2026-10-03T17-10-46-849Z/report.json`, 238 captures / one integrated assertion group. SHA-256 `b8fb6fc03759e9f6e82a8f44eda602a6dbaff2443be7a14207f8f8e9c0e8f54f`. Matrix SHA-256 `bfef94e49b4852f0904c2a86d2a2e05943e8f6410a76bfb60639e0fc359e4f46`. Independent readback verifies 14 source fingerprints, four compiled renderer files, every 238 PNG hash and the matrix checksum. Runtime: Electron 37.10.3, Chromium 138.0.7204.251, Node v22.22.0. This is production-built renderer/projection with in-memory host scenarios, fixture accounts and temporary Electron user data, not live provider/native/package acceptance.
+
+The 64 main state/theme/size rows each have closed/open inspector witnesses at 1180×780 and 820×700, both light/dark. Normal motion accompanies normal size and reduced motion compact size. States: Working with queue + uncertain input/marker/notice; command decision + queue + uncertainty; required takeover, human control and Checking after Return + queue/uncertainty; background Task attention; long unbroken title/message and 28 activities; Checking; failure; unresolved state; Stopping; Stopped; signed-out saved history with pending/uncertain/materialized delivery; selected draft attachment + queued attachment and keyboard queue menu. Dates shift ordinary work to 45 seconds before the run; no artificial product dwell is introduced.
+
+Additional named captures cover real primary hover and Tab/Shift+Tab focus for Queue/Send, decisions, takeover/Return, profile Create, unrelated Workflow Create and New Task Start; disabled Create/Queue and retained submitting decisions; visible archive hover/focus in both navigation allocations; exact submission Task/request/generation intent with unchanged host authority identity; browser notification keyboard dismissal retaining markers and unchanged snapshot/command log; per-Task drafts through decision/stopping/stopped/checking, Task A/C draft isolation and Task B attention without input; inspector and Task switching preserving manual scroll, followed by Latest restoring bottom; profile modal focus; 967/968/1279/1280/1440px responsive inspector witnesses in both themes. Source checks preserve work allocation >=680px, document containment, viewport Stop, body/secondary/action/consequence/notice contrast and no duplicate inspector collaboration.
+
+Visually reviewed final compact dark long-content inspector (announcement no longer covers it), compact light retained submitting decisions, compact dark Workflow primary hover and normal light signed-out/pending saved-history composition. Prior failing dark inspector remains the positive layering reproduction. The fixture has no new recording artifact, real attachment acquisition, native foreground or provider dispatch. UXR-08 still owns a complete review rubric, pointer/click indicator and full integrated machine campaign; these bounded captures are not its exit.
+
+### Stage-4 classification, exact facts and limits
+
+Original recording source `42952a2bce699cee299a2bca6315d95d6181b54f`; retained screenshot `artifacts/human-e2e-acceptance/20260927T144500Z/screenshots/stage-4-pre-restart.png` shows title Review the packaged launch evidence, Sending…, Not signed in to Codex, and assistant text The persisted packaged conversation remains readable and ready for follow-up. Both title and exact assistant text correlate with the historical `packaged-critical-interaction-qualification.mjs` seed. At that source, accepted user client/accepted identity is inserted without a turn or messageDeliveries fact; assistant text and a terminal turn are inserted directly. The original walkthrough/manifest calls this a temporary development persistent-home/restart check, not live provider execution, and leaves startup hydration unqualified. No original launch command, DB or correlated delivery trace survives in the manifest, so the exact launch invocation cannot be independently proven.
+
+Classification: strong evidence of synthetic-history incoherence, not a demonstrated actual delivery failure. Signed-out status is legitimate independent account truth and saved local history remains readable. `customerDeliveryState` conservatively returns pending when exact delivery is absent; assistant prose cannot establish materialization. The new task-port regression closes/reopens real temporary SQLite and keeps that accepted item pending beside saved assistant text and unavailable model access, with no worker signal; only an exact observed delivery event advances the same item. Future seeds include explicit synthetic operation/thread/turn materialization and the user turn identity. Importing the seed no longer launches the packaged campaign. A separate temporary SQLite/API reconstruction retains logged-out catalog, materialized seeded item and saved text, with zero worker signals and no due commands. No auto-replay, real credentials, external services or live provider success is inferred. No new authority finding is warranted without contradictory owning evidence.
+
+### Commands and final results
+
+- `pnpm codex:context`: exact clean accepted entry and expected worktree/branch.
+- `pnpm exec vitest run apps/companion/src/main/codex/product-task-port.test.ts apps/companion/src/main/codex/sqlite-task-store.test.ts apps/companion/src/main/codex/customer-task-presentation.test.ts apps/companion/src/main/codex/local-product-api.test.ts apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/customer-state-notices.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts --reporter=dot`: final 212 tests / 11 files, 1.09s.
+- `pnpm exec vitest run apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/task-decision-surface.test.tsx --reporter=dot`: 16 tests / two files, 256ms.
+- `node --test experiments/agent-execution/persisted-conversation-qualification-fixture.test.mjs`: one pass, final 391.2ms total.
+- `pnpm typecheck`: workspace pass, repeated after final production change.
+- `pnpm build`: workspace pass; `pnpm --filter @rove/companion build` after final drawer correction passes. Final renderer CSS 128.11kB / JS 512.15kB. Existing Vite >500kB warning remains.
+- `pnpm exec eslint apps/companion/src/renderer/product-surface.tsx apps/companion/src/main/codex/product-task-port.test.ts experiments/agent-execution/packaged-critical-interaction-qualification.mjs experiments/agent-execution/persisted-conversation-qualification-fixture.test.mjs experiments/agent-execution/product-composition-rendered-qualification.mjs`: pass.
+- `node experiments/agent-execution/product-composition-rendered-qualification.mjs`: final 238 captures / one group, report above. Temporary fixture Electron launch uses the approved narrow sandbox escalation.
+- `node experiments/agent-execution/task-decision-rendered-qualification.mjs`: final 112 captures / five groups at `task-decisions/2026-10-03T17-11-56-960Z/report.json`, SHA-256 `c318f45717050b0a1e2b6e826f92ec3aacb0b76082699305c4758dda83287fe4`; 14 source and 112 capture hashes checked.
+- `node experiments/agent-execution/browser-resource-rendered-qualification.mjs`: final 160 captures / two groups at `task-browser-resources/2026-10-03T17-12-28-858Z/report.json`, SHA-256 `344e42231c046aa53e6549a85d79020d5a8f72d54e40283cd89109a3e0d654db`; eight source and 160 capture hashes checked.
+- `node experiments/agent-execution/customer-state-rendered-qualification.mjs`: final 112 captures / three groups at `task-notifications/2026-10-03T17-13-23-151Z/report.json`, SHA-256 `fe932774e7f2feb46c74ce3c9d8c034e40ff9fdb6c0eb4287adb78a6c3680279`; ten source and 112 capture hashes checked.
+
+All specialist paths above are under `artifacts/customer-journeys/`. Their final reports supersede pre-correction fingerprints; no inherited negative was removed or changed. Final repository/diff checks are recorded below after documentation reconciliation.
+
+### Failed candidates, corrective causes and superseded passes
+
+All composition attempts remain ignored under `artifacts/customer-journeys/product-composition/`:
+
+- `16-56-12-353Z` assumed Send follow-up while actual control was Queue follow-up; `16-56-51-950Z` then matched both Stop and Send with a broad class. The final primary composer selector uses actual semantics; no timeout increase.
+- `16-57-32-999Z` exposed the real disabled Queue contrast failure (3.037665640972953), corrected at shared disabled styling.
+- `16-59-43-755Z` measured an unpainted opacity-zero archive. Exclude unpainted/hidden/inert/closed details, and positively capture visible archive hover/focus in every theme/size.
+- `17-02-36-049Z` put logged-out facts at an unused snapshot root; the catalog is under product. Corrected the fixture, retaining positive Not signed in and exact Sending assertions.
+- `17-03-22-163Z` used a wrong action-list class and exact accessible name excluding the offered consequence. Corrected real action selectors and retained all offered actions/disabled/submission identity assertions.
+- `17-03-52-131Z` sampled archive during its opacity transition. Await finite CSS visual endpoints without changing production dwell. `17-04-27-448Z` was deliberately interrupted because the first endpoint waiter also awaited infinite progress animation; its Application exited failure is this interruption, not an unexplained crash. Filter finite animation end times.
+- `17-05-06-448Z` attempted archive behind closed compact navigation; `17-05-44-516Z` then matched two Close navigation buttons; `17-06-13-359Z` selected the covered topbar toggle. Use the actual foreground drawer close control, preserving inert background rather than force-clicking it.
+- Passing `17-06-57-835Z` (230 captures) was superseded after visual review found the inert notification-over-inspector defect and after stronger keyboard/identity/seed checks. Source fingerprints from that interim pass are historical.
+- `17-08-04-504Z` overasserted authority/thread/turn/item as wire fields absent from the typed attention.decide command. Correct assertion checks exact Task/request/generation/decision wire shape and independently retains all seven owning snapshot identity fields; no product wire change or authority assertion was removed.
+- Initial task-port regression seed used an invalid unavailable-Codex shape, then omitted required unknown fields. Read the validator and corrected the fixture. The first Companion build rejected readonly item-index assignment; replace the immutable map as a whole. Final focused suite and builds pass. Initial lint rejected an unused inherited state helper; remove it.
+
+No lucky retry, assertion weakening, timeout inflation, fabricated work duration, credential reuse or external effect was used. These are causal corrections with retained repros, not qualification from repeated unexplained runs.
+
+### Disposition and next gate
+
+MR-034–MR-038 retain independently accepted foundations plus this bounded integrated candidate, awaiting manager/UXR-08/human closure. MR-039 remains open. Stage-4 has the correlated synthetic-history disposition above and an explicit original-launch evidence limit. Current-page URL/read-model authority, real recording artifact, process/browser/native recovery, live provider-family/elevated-grant consumption, supported-platform/package/distribution/signing/notarization and final human Stage 1–4 remain unqualified/open as inherited. No full test:release/test:experiments/system/recovery/live/packaged campaign was run here; UXR-08 remains unstarted and owns later full deterministic qualification only after acceptance and explicit continuation. STAB-14 remains open.
+
+The owning application/testing/status documents, program/tickets, registry and stabilization continuation are reconciled. Normal commit/non-force push on the same PR #38, then STOP WRITING for independent manager review. No merge or release readiness is authorized.
+
+### Final source fingerprints
+
+- `apps/companion/src/renderer/product-surface.tsx`: `ada8dce4f8d21f3f11578ad4676365fedf22a5f5eea158fb6a98723a31911e9c`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `5f0f8c3daae595eb6c04c1bd7bb99fb86fbfc9c4b578f792ba7fd4cad3cece16`
+- `apps/companion/src/renderer/styles.css`: `3d64b91b30e4ac689e7cb6babe5b70c47b58e6bc37c146763831973d811f1875`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/main/codex/customer-task-collaboration.ts`: `be69ce4657d293a4d284ad40ed674a8e415ce0cfe2d1bc899094ec5f3be0ff09`
+- `apps/companion/src/renderer/follower-state.ts`: `bf38f085afe1030b40c2064c82bfbed6ab53c5e97ce5d2699db2426b2a13d575`
+- `experiments/agent-execution/product-composition-rendered-qualification.mjs`: `3f48895ec7633bb46807b924b8a8f29c140b4f4266923a82cd7ce64c0346439f`
+- `experiments/agent-execution/packaged-critical-interaction-qualification.mjs`: `a468d5c9bb4d4984e0dd63eb3a707b834b1ce77cc31f832960b9752507de16db`
+- `apps/companion/src/main/codex/product-task-port.test.ts`: `4416f0123048a49cd88cc8ade120a719271de39e85c08c27763a55c3ae997796`
+- `apps/companion/src/main/codex/product-task-port.ts`: `cfdc9a40dc57dea7bcffafe875c3b7d760f8b4777812276084b42cc8368a12f1`
+- `apps/companion/src/main/codex/local-product-api.ts`: `e5f233ba326adf3cdc5cf15a7379dfc2e48c379ef7364145489a25bcc1ae4913`
+- `packages/protocol/src/task-engine.ts`: `c9aa851d9da841d4ceaa8baa062a0161d3d90e5f149b98d13a8bf6dc74f57360`
+- `experiments/agent-execution/persisted-conversation-qualification-fixture.test.mjs`: `a4dcfe157f8a68986ae03de04efc7792ebfc4a343f0297feebe9d0b9e64d4bfb`
+- `experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs`: `9c1ed4f70ca707759096c6917dbb230e9c83bc192f6235073fb0cb89d96ddf24`
+
+Compiled renderer hashes and runtime versions are retained in the same final report.
+
+Final repository checks pass 750 files, 1351 relative imports, 221 local document links and 11 Codex environment files. Complete diff check passes. Final review confirms the packaged campaign body is unchanged modulo safe function wrapping/indentation; only synthetic seed facts and import/CLI separation changed. All generated reports/media remain ignored. No governance files changed.
+
+## Integrated candidate acceptance and final machine qualification entry — 3 October 2026
+
+Manager independently accepted exact `b69c73534cfe1156a95ec03100668db076639fd3`, clean HEAD/tracked origin and complete diff. All 14 source/four compiled fingerprints, 238 PNG hashes and matrix checksum matched. Independent committed replay passed 238 captures / one group at `artifacts/customer-journeys/product-composition/2026-10-03T17-21-44-065Z/report.json`; the temporary SQLite seed audit passed independently. Original Stage-4, compact dark corrected inspector and compact light retained submitting decisions were visually reviewed. No remediation round. Stage-4 synthetic-history correlation is accepted with missing original launch/database provenance; no live delivery claim follows.
+
+Manager explicitly continued this same sole writer to UXR-08 from that accepted clean checkpoint. `pnpm codex:context` confirms it. No tasks/subagents, live provider/accounts/external services, unsupported-platform/signing/distribution or final human Stage 1–4 are authorized. Normal commit/non-force push on existing PR #38 then stop for independent review. This ticket owns the retained matrix/rubric/pointer indicator and full deterministic verification; newly discovered product defects must be registered/routed and reported before qualification resumes, never silently remediated here. No product source edit is planned.
+
+### Qualification harness mismatch registered before replay
+
+The conversation rendered campaign stopped on a strict selector: `Outcome unclear` correctly exists in the announcement, owning Task marker and history marker. This is a stale global harness selector, not a new production defect. Route to the rendered qualification harness: require the exact `#task-state-task_uncertain > summary` marker while preserving distinct uncertainty, persistent warning and no unsafe retry assertions. No product correction is authorized or needed. First-launch/Workflow replay additionally requires isolated Electron homes and timestamped output directories to preserve prior evidence; these are harness-only changes.
+
+The unsigned packaged critical-interaction campaign passed saved conversation, exact Task switching and stale-request refusal before its narrow focus step timed out. Source inspection proves the step assumed permanently mounted history at 820px, contrary to the accepted responsive drawer contract. Route this stale harness assumption to explicit keyboard opening of `Open navigation`, retaining exact history focus, no-overflow and dialog containment assertions. Original tool trace/source identify the failure; the old harness removed its temporary database and retained no failure screenshot. Add timestamped success/failure report, DOM and screenshot retention before replay. No production edit.
+
+The first owning-marker selector correction still used exact child text, but the current summary combines title and Details in one text node. Require the owning summary text to contain Outcome unclear, and retain both one durable marker and one matching announcement instead of obsolete `.product-warning`. This follows the accepted notification contract and strengthens scope, without removing uncertainty or unsafe-retry negatives. Conversation output now uses timestamped paths and future failures retain DOM/PNG/error before cleanup. The two original failing traces are retained in this chat; their original harness generated no failure manifest.
+
+Workflow fixture replay stopped at removed `.task-response-surface` after exact Workflow attention navigation. The accepted decision component is now `.task-decision-surface` / Current task request, and offered-options freeform uses Something else. Route those obsolete harness selectors to the current component/label; preserve composer absence/restoration, exact two responses and offered/freeform assertions. No runtime/product defect or correction. Timestamped first failed replay remains under journey-02-workflow; the old harness retained steps but no final failure manifest. Add future failure DOM/PNG/error retention.
+
+The first Workflow selector correction mistakenly substituted visible Something else for the actual preserved accessible name Audience answer. The second replay reached that field and failed; retained failure PNG/DOM/error identify the harness mistake. Revert only that label change; keep the current decision surface and every response/composer assertion. No product change.
+
+## Retained machine qualification exit — 3 October 2026
+
+**Start:** accepted `b69c73534cfe1156a95ec03100668db076639fd3`. **Branch/PR:** `codex/human-review-remediation-planning`, existing PR #38. **End:** the normal checkpoint commit containing this exit, resolved by `git log -1 --format=%H -- docs/Planning/human-review-remediation/continuity-ledger.md` and published verbatim in the final checkpoint/ignored Git readback. Source reports truthfully identify pre-commit b69c735 plus exact current file fingerprints; they were not relabeled as committed evidence. Independent committed replay is the next review step.
+
+Remediation machine qualification complete; candidate ready for final human-recorded acceptance.
+
+### Scope and finding dispositions
+
+Only qualification harnesses, fixture catalog and owning testing/status/planning documents changed. No `apps/**` or `packages/**` production source, dependencies/lockfile, schema, migration history, persistence format, authority, host permission policy or response wire contract changed. No governance edits. All media stays ignored. MR-034–MR-038 retain accepted dock, decision, notice, resource and shell foundations plus accepted integrated b69c735 evidence; this full matrix adds bounded machine evidence for each. MR-039 has an explicit separate composition-review/refusal gate candidate. All six remain open for independent checkpoint and final human acceptance; no external release blocker is closed.
+
+The full Cartesian product is two themes × two viewport sizes × two motion settings × two input modes. Sixteen composition states × closed/inspector produce 512 mandatory cells. Seven decision families × pending/synchronous-duplicate submission/resolved/native submission produce 448 cells. 960 mandatory cells, 1,670 total witnesses; no pairwise reduction. Browser/notification, thresholds, hover/focus/disabled, numeric/integer, secret, exact identity, Stop, drafts, queue and reading-position negatives remain linked extras. Original synchronous double-click assertions are retained unchanged; native activation is a separate fresh request. Ordinary timestamp/duration fixtures remain believable; long-duration behavior stays dedicated.
+
+Seven Codex judgments inspect representative retained full-resolution material across every decision family, both themes/widths, combined surface/focus/resource/long-content criteria. They cover hierarchy, coherent scale, offered refusal/scope, theme/control contrast, truthful state, focus/reading and long/resource content. This is explicitly attributed machine review, with explained witness identities and a selection method; it is not a human review of every frame or final Stage 1–4. The full cell assertions independently cover geometry, contrast, actual motion, state, focus and exact authority.
+
+The evidence-only pointer is 8px, offset/clamped away from its target, outside product layout and focus, aria-hidden with pointer-events none. It hides for keyboard input, records only bounded action-key/pointer metadata and no typed input, and adds no video dwell.
+
+### Exact verification commands and outcomes
+
+- `pnpm test:release`: 207 files / 1,788 tests pass with four workers, 124.10s. Final production source is unchanged afterward. Counts/duration are retained in this chat tool trace; there is no separate full-run log file.
+- `pnpm test:experiments`: final 31 tests pass; retained final output in `artifacts/customer-journeys/visual-interaction/final/experiments.log` (includes five gate-negative tests).
+- `pnpm typecheck`: all eight workspace projects pass.
+- `env CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package:desktop:dir`: workspace build and unsigned darwin/arm64 directory package pass; `--publish=never`, no signing. This runs production deployment/staging and downloads ordinary Playwright/Electron dependency assets, not credentialed external tasks. Existing large-renderer/deprecated-subdependency/native build-script warnings remain; actual package smoke passes.
+- `node scripts/verify-desktop-package.mjs`: packaged darwin/arm64 smoke passes; local temporary services/browser and startup, no model call.
+- `node scripts/verify-codex-component-set-fixtures.mjs`: selection/schema/rollback/resolver/staging/verification/tamper fixtures pass.
+- `node experiments/agent-execution/run-lifecycle-contract.mjs --write-evidence`: 63,417 assertions; 55 fixture cases, 10,080 exhaustive states, 1,440 rejected states, 64 model sequences, 21 semantic, 26 transition and 34 rejection cases pass. The initial same command without `--write-evidence` passed but retained stdout only; write-evidence rerun retains the actual result.
+- `node experiments/agent-execution/run-process-recovery.mjs`: production-equivalent local source-built Runtime/browser/SQLite with an App Server stand-in passes; named restarts, cleanup cut points, human return/fresh inspection and persistent cleanup. Terminal audit: 58 tracked children/22 ports, zero stale children/ports/locks/attachments/nonterminal sessions/cleanup-required Tasks, ten terminal homes, isolated home removed. No live provider or external service.
+- `node experiments/agent-execution/startup-hydration-qualification.mjs`: healthy/degraded source hydration pass.
+- `node experiments/agent-execution/responsive-shell-rendered-qualification.mjs`: 35 captures / nine groups pass.
+- `node experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs`: 32 captures / five groups pass.
+- `node experiments/agent-execution/conversation-task-rendered-qualification.mjs`: 28 captures pass, exact Queue/Steer/Stop/follower negatives preserved.
+- `node experiments/agent-execution/first-launch-customer-journey.mjs`: signed-out exact state/recovery/draft/no launch assertions pass in isolated Electron data.
+- `node experiments/agent-execution/workflow-customer-journey.mjs`: 22 screenshots, exact two offered/freeform responses, composer absence/restoration and immutable context revision assertions pass.
+- `node experiments/agent-execution/packaged-critical-interaction-qualification.mjs`: unsigned production package + synthetic SQLite saved conversation, exact Task switching, stale approval refusal and narrow keyboard drawer/history focus pass. Isolated Rove/Codex/Electron homes, no live model dispatch; stop presentation follows reconciled fixture state. Live browser/follower binding and provider attention remain unexercised. Package archive SHA `80b94cd2de3e893d5cd549ae40d83095dab3addf5343d870360ab345c7766448`.
+- `pnpm exec eslint` on all twelve touched experiment/helper/test files passes. `git diff --check` passes. `pnpm check:repository` passes 754 files / 1,357 relative imports / 227 local document links and eleven Codex environment files including final ledger text. Final independent readback confirms all 1,670 PNG hashes, all 960 mandatory DOM hashes and all specialist/source/compiled/matrix/contact-sheet/review hashes match the retained files.
+
+Final specialist commands all prefix `env ROVE_VISUAL_QUALIFICATION=complete node experiments/agent-execution/`: `product-composition-rendered-qualification.mjs` (922 / one group), `task-decision-rendered-qualification.mjs` (476 / five), `browser-resource-rendered-qualification.mjs` (160 / two), `customer-state-rendered-qualification.mjs` (112 / three). They use built production projections/renderer, fixture accounts and isolated temporary Electron homes; no live provider facts.
+
+```bash
+node experiments/agent-execution/visual-interaction-qualification.mjs \
+  --composition artifacts/customer-journeys/product-composition/2026-10-03T17-49-02-005Z/report.json \
+  --decisions artifacts/customer-journeys/task-decisions/2026-10-03T17-49-01-578Z/report.json \
+  --browser artifacts/customer-journeys/task-browser-resources/2026-10-03T17-49-03-547Z/report.json \
+  --notifications artifacts/customer-journeys/task-notifications/2026-10-03T17-48-59-644Z/report.json \
+  --output artifacts/customer-journeys/visual-interaction/final \
+  --review artifacts/customer-journeys/visual-interaction/final/review-input.json
+```
+
+The final aggregate verifies every specialist source/compiled/PNG hash, matrix identity, all DOM hashes and fixture provenance, then accepts the matching attributed review. Runtime: Node v22.22.0, Electron 37.10.3, Electron Chromium 138.0.7204.251. Package-staged Playwright Chromium is separately 151.0.7922.34; do not conflate the renderer/browser evidence modes.
+
+### Final evidence paths and hashes
+
+- composition: `artifacts/customer-journeys/product-composition/2026-10-03T17-49-02-005Z/report.json` — `d6cd753828aa30c0960701fe5589686873d10f3365b3dd338692fc8d9f07121f`
+
+- decisions: `artifacts/customer-journeys/task-decisions/2026-10-03T17-49-01-578Z/report.json` — `99570afffbff2508fc682fbeab3b2a376ed5fc213de47f8577874ecc48e6701a`
+
+- browser: `artifacts/customer-journeys/task-browser-resources/2026-10-03T17-49-03-547Z/report.json` — `c4a046e203175e8243def0cc00e9025a0ebdffca9fa6edaca0244c9b56f4e3c0`
+
+- notifications: `artifacts/customer-journeys/task-notifications/2026-10-03T17-48-59-644Z/report.json` — `e08ad5fa5140060fed313fd233eb605366178ee225bccd644a333985d51c96ad`
+
+- bundleSha256: `c6cbd70c48f9fc7eabfef2a05bfa1dd4ba69ac437453fc502ad90c62fb7fe355`
+
+- matrixSha256: `8dca31e7d8de3642a9df5f2fdd355873a391e3dff19a9a4be0b3c30518f0daed`
+
+- contactSheetSha256: `f184607a6f4e123657c2f72bb6f6c14aeb07a4e87b8558bdd8a0d7cb7671c0c4`
+
+- visualReviewSha256: `3bf24174ca3ef4c5c724724c5ab8d02b76502207b5bd49f5937978c6d630daae`
+
+- Aggregate `artifacts/customer-journeys/visual-interaction/final/report.json`: `6c85dbe27eee8d808a56acc85600f38af1022d5efddba2f80af42b2067c5a1c9`. Clickable full-resolution witnesses in the neighboring `contact-sheet.html`; all 960 mandatory cells in `matrix.json`, review in `visual-review.json`.
+
+- Lifecycle contract: `artifacts/verification/lifecycle-contract/results.json` — `dd054bf42a9e0a44ffddd78d56104ed90e7ea75d9fad32a1483376d3e421e2a6`
+
+- Local process recovery: `artifacts/verification/process-recovery/results.json` — `15d6f6666c1f4c4369e29ef571641d7e116d479f8585dcf9061845a1146fef17`
+
+- Startup hydration: `artifacts/customer-journeys/startup-hydration/2026-10-03T17-35-04-106Z/report.json` — `12f7b46fb66f967812e9ee523616d115750e3381def5a07cdb2a16f358be1cff`
+
+- Responsive shell: `artifacts/customer-journeys/responsive-shell/2026-10-03T17-43-36-939Z/report.json` — `77e53f2db0beb0c585eba1a60ab42843e234d6871e6bc9e642eac87b10cb2dbd`
+
+- Interaction dock: `artifacts/customer-journeys/task-interaction-dock/2026-10-03T17-44-27-570Z/report.json` — `fc0919f508db03d80967b1ae77bbcd416acb33d8da5333dc0e878186ce53e02f`
+
+- Conversation: `artifacts/customer-journeys/conversation-task-rendered-qualification/2026-10-03T17-47-09.563Z/manifest.json` — `7cdd0a33c5cad21864be65c00f772dad27ffa9810b590138362f8bd99592d4a0`
+
+- First launch: `artifacts/customer-journeys/journey-01-first-launch/2026-10-03T17-45-40.437Z/manifest.json` — `281688f05efcc44566ce56d9b27ede153988c4f0af2abd313a15430bd3b19312`
+
+- Workflow: `artifacts/customer-journeys/journey-02-workflow/2026-10-03T17-48-42.695Z/manifest.json` — `c1046da2563b4a7d818ecc50139b834f663d105c4b17a48f492722f1c565446d`
+
+- Packaged critical: `artifacts/customer-journeys/packaged-critical/2026-10-03T17-47-05.339Z/report.json` — `6bf6f7e6ec8f18f0f30d706f891a695408bdbc743763ce47197ed9f6ec9230ce`
+
+### Failures, superseded runs and disproved hypotheses
+
+Decision keyboard run `2026-10-03T17-30-50-879Z/failure.json` focused an option label with Enter; native Space on the radio now preserves the checked assertion. Decision `2026-10-03T17-34-59-186Z/failure.json` passed its full main matrix but leaked keyboard modality into unchanged pointer-only extras; resetting modality before extras preserves those negatives. Notification `2026-10-03T17-38-53-536Z/failure.json` lost only injected instrumentation across deliberate page reload; reinstall it after reload, keeping dismissal/recurrence invariants. These paths are under their specialist artifact directories.
+
+Initial startup hydration had obsolete manually invented presentation and warning selectors; current owning production projection/Task/device markers restore the same safe hydration assertions. Original failure lacked screenshot/report retention; exact old source and tool trace remain, not reconstructed database evidence. Conversation had a stale global label and removed `.product-warning`; scoping to the owning summary plus separate announcement preserves distinct uncertainty/no retry. One intermediate exact-child selector failed because summary text includes Details; its fix uses owning summary text. Workflow retained failed timestamped steps at `2026-10-03T17-46-22.286Z` and `2026-10-03T17-47-38.842Z/failure.json`; removed decision CSS was corrected, and the mistaken accessible-name change was reverted. Packaged narrow focus assumed permanently mounted navigation at 820px; explicit drawer keyboard opening restores the original exact focus/containment checks. The first conversation/package/Workflow harnesses did not retain final failure reports; this provenance limitation is explicit. Future failures now retain error/DOM/PNG.
+
+All four early complete reports (`17-28-01-925Z`, `17-38-03-316Z`, `17-38-49-679Z`, `17-39-41-590Z`) and `visual-interaction/candidate` are superseded qualification drafts. The validator correctly refused their changed packaged-harness source fingerprint after broader replay repairs. Final source regenerated all four reports; no historical hash was edited. The initial gate without review explicitly refused to claim qualification. Original synchronous duplicate response negative was restored before final evidence, with separate native positive cases. No new product failure was established; no silent implementation remediation. Registered harness routing precedes each replay.
+
+### Residual boundaries and next step
+
+MR-034–MR-039 independent/final human acceptance, final human Stage 1–4, authoritative current-page URL, live provider-family and elevated-grant consumption, supported-platform/native/live packaged browser composition, Windows/Linux process trees, signing/notarization/distribution and STAB-14 remain open/unrun. No real accounts or live model/external-service tasks filled those gaps. Existing historical recorded 37 PASS / six UNQUALIFIED / one BLOCKED and PARTIAL status stay intact. Stage-4 synthetic-history correlation and missing original launch/database provenance are unchanged.
+
+The owning testing/status/program/registry/stabilization documents agree. No downstream implementation ticket remains; independent checkpoint review is next, followed only by separately authorized final human recording. Normal commit/non-force push on the same PR #38, then STOP WRITING. No merge, release publication, extra chat, subagent or live run.
+
+## Independent machine acceptance and documentation closure — 3 October 2026
+
+**Accepted source / closure start:** `b06a6ed444bd1813e122e0fe05a3d3fb9e7162f9`, clean local/tracking/published remote on `codex/human-review-remediation-planning`, PR #38. **Closure end:** the separate documentation commit containing this exit, resolved by `git log -1 --format=%H -- docs/Planning/human-review-remediation/continuity-ledger.md` and reported verbatim in the final checkpoint. Manager independently accepts UXR-08 machine qualification at this exact source. No product remediation is required.
+
+Remediation machine qualification complete; candidate ready for final human-recorded acceptance.
+
+Manager inspected the full qualification/fixture/documentation changes and retained failures, verified the full-run command traces and clean matching HEAD/origin, and checked all 1,670 worker capture hashes, 960 mandatory DOM hashes and source/compiled/scenario/matrix/contact-sheet/review hashes. Independent committed complete replay passed composition (922 captures / one group), decisions (476 / five), browser resources (160 / two), notifications (112 / three) and all five qualification gate-negative tests. Independent composition judgments cover all seven families, both themes/widths and combined resource/modal/long/history states. These are attributed machine judgments; final human Stage 1–4 is not established.
+
+### Independent committed evidence
+
+Aggregate: `artifacts/customer-journeys/visual-interaction/manager-review/report.json`; source HEAD is the accepted b06a6ed, not the worker's pre-commit base. Neighboring `contact-sheet.html`, `matrix.json` and `visual-review.json` retain the full-resolution witnesses, cell identity and attributed judgments. Report SHA256: `01710c863e0b12d2995b12c3adc243fe0164e87f1e7d6e14b228065ef5cd4918`. Bundle: `6960c5ec74aa3a8eea2af190f23803b03b72eda0d6f959abc768ee92c9d79494`.
+
+- composition: `artifacts/customer-journeys/product-composition/2026-10-03T18-10-46-060Z/report.json` — `3e2570aa50c6dafb77b60f5c602e968520f1bd63630ef77995313b513e6fb873`
+- decisions: `artifacts/customer-journeys/task-decisions/2026-10-03T18-10-43-637Z/report.json` — `91232912b61e29e7582231f307435e108cedd173f7468194427cd2893aabd66e`
+- browser: `artifacts/customer-journeys/task-browser-resources/2026-10-03T18-11-40-173Z/report.json` — `938c0821b964d65f4245d92533400b928ccdd6b4c337e95be69d28bdb5160b71`
+- notifications: `artifacts/customer-journeys/task-notifications/2026-10-03T18-10-43-319Z/report.json` — `da650d0a482ff8ef99839325b29fe3a8fd957c8cb19250c921db5cd1f41d3b0c`
+- matrixSha256: `0df2b4e4453702034c7f824436e5e4acc30f0926a9d507f61393233e08795bbb`
+- contactSheetSha256: `0610cd698e368255a3904f3ac6394337e776485c9407abf8203622011c4306ec`
+- visualReviewSha256: `8801a4f5aa3e4c1b43a534041e33c0a56b738994ce3fde977f7494d19c4d6eaa`
+
+### Closure boundaries, checks and next gate
+
+This separate closure updates only owning documentation: current program/ticket/status/registry/stabilization summaries now reflect independent machine acceptance. Accepted machine remediation evidence covers MR-034–MR-039; all six remain open for final human-recorded acceptance. Historical candidate exits, failed-first evidence, recorded 37 PASS / six UNQUALIFIED / one BLOCKED and PARTIAL outcomes remain intact. Product source, tests, harnesses, fixtures, generated evidence, schema, migration history, dependencies, persistence and authority are unchanged. No contradictory evidence, new cause or additional remediation was established.
+
+`pnpm codex:context` confirmed the clean accepted source. `pnpm check:repository` and `git diff --check` pass for this documentation-only closure; no broader tests or evidence regeneration are needed or run. The accepted machine checkpoint's full verification remains separately retained above.
+
+Final human Stage 1–4 requires separately authorized recording and acceptance. Current-page read-model, live provider-family/elevated-grant consumption, supported-platform/native/live packaged browser composition, Windows/Linux process trees, signing/notarization/distribution and STAB-14 remain open. No live account/model/provider/platform/release work was performed. Normal separate documentation commit/non-force push on existing PR #38, verify clean local/remote match, then stop. Manager supervision ends after machine completion; this closure creates no new task or subagent and authorizes no recording, merge or release.

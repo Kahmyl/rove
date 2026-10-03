@@ -1,5 +1,22 @@
 import {
+  CustomerStateMarkers,
+  CustomerStateNotices,
+  type CustomerNotice,
+} from "./customer-state-notices.js";
+import {
+  TaskDecisionSurface,
+  type DecisionAnswers,
+  type DecisionForm,
+} from "./task-decision-surface.js";
+import {
+  resolveTaskDock,
+  TaskInteractionDock,
+  TaskStopControl,
+} from "./task-interaction-dock.js";
+import {
   useEffect,
+  useCallback,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -14,7 +31,6 @@ import type {
   LocalProductSnapshot,
   ProductAttentionDecision,
   ProductAttentionProjection,
-  ProductElicitationField,
   ProductTaskProjection,
 } from "../main/codex/local-product-api.js";
 import type { RecordingState } from "@rove/protocol";
@@ -38,7 +54,6 @@ import type {
 import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
 import { customerTaskCollaboration } from "../main/codex/customer-task-collaboration.js";
 import { customerTaskPresentation } from "../main/codex/customer-task-presentation.js";
-import type { CustomerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import {
@@ -46,6 +61,13 @@ import {
   RUNTIME_TRANSIENT_WARNING,
 } from "../main/runtime-failure-containment.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
+import {
+  resolveShellComposition,
+  ShellSecondarySurface,
+  useShellViewport,
+  useSurfaceFocus,
+  type SecondaryDisclosure,
+} from "./product-shell.js";
 import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
 import {
@@ -890,6 +912,37 @@ export function browserResourcePresentation(
   };
 }
 
+/** Profile labels describe the task's frozen identity, never the currently selected default. */
+export function browserProfileLabel(
+  desktop: DesktopSurfaceSnapshot | null,
+  task: ProductTaskProjection,
+): string {
+  if (task.browserIdentity?.mode === "temporary") return "Guest · temporary";
+  if (task.browserIdentity?.mode === "workspace") {
+    const profile = desktop?.workspaces.workspaces.find(
+      (entry) =>
+        entry.id ===
+        (task.browserIdentity?.mode === "workspace"
+          ? task.browserIdentity.workspaceId
+          : undefined),
+    );
+    return profile?.displayName ?? "Unavailable task profile";
+  }
+  return "Not yet attached";
+}
+
+/** Recording provenance is historical; omit credentials, paths, queries and fragments. */
+export function recordedPageSite(value: string): string {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol)
+      ? url.hostname
+      : "Recorded task page";
+  } catch {
+    return "Recorded task page";
+  }
+}
+
 export function browserOpenFailureMessage(_cause: unknown): string {
   return "Browser could not open. Check this task's browser recovery or profile and try again.";
 }
@@ -1401,6 +1454,7 @@ function ComposerModelMenu({
 
 function attentionStateKey(entry: ProductAttentionProjection): string {
   return JSON.stringify([
+    entry.authority,
     entry.requestId,
     entry.taskId,
     entry.threadId ?? null,
@@ -1416,12 +1470,6 @@ export function retainCurrentAttentionState<T>(
   return Object.fromEntries(
     Object.entries(current).filter(([key]) => liveKeys.has(key)),
   );
-}
-function unsetSelectValue(field: ProductElicitationField): string {
-  let value = `__rove_unset__:${field.id}`;
-  while (field.options?.some((option) => option.value === value))
-    value = `_${value}`;
-  return value;
 }
 
 export function commandPaletteMatches(
@@ -1485,22 +1533,6 @@ export function followupKeyboardAction(
     return capabilities.canSteer ? "steer" : "none";
   if (capabilities.canQueue) return "queue";
   return capabilities.canSubmit ? "submit" : "none";
-}
-
-export function taskComposerPrimaryAction(input: {
-  state: CustomerTaskPresentation["state"];
-  hasDraft: boolean;
-  canStop: boolean;
-  canSubmit: boolean;
-  canQueue: boolean;
-}): { kind: "stop" | "send"; disabled: boolean } {
-  if (input.state === "stopping") return { kind: "stop", disabled: true };
-  if (input.canStop && !input.hasDraft)
-    return { kind: "stop", disabled: false };
-  return {
-    kind: "send",
-    disabled: !input.hasDraft || (!input.canSubmit && !input.canQueue),
-  };
 }
 
 export function timelineIsAtBottom(input: {
@@ -2178,6 +2210,9 @@ export function ProductSurface({
     useState<ThemePreference>(loadThemePreference);
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(loadSidebarCollapsed);
+  const shellWidth = useShellViewport();
+  const [secondaryDisclosure, setSecondaryDisclosure] =
+    useState<SecondaryDisclosure>(null);
   const [windowFullscreen, setWindowFullscreen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [profileNameDraft, setProfileNameDraft] = useState("");
@@ -2190,6 +2225,14 @@ export function ProductSurface({
   const [attentionForms, setAttentionForms] = useState<
     Record<string, Record<string, string | number | boolean | string[]>>
   >({});
+  const pendingResponses = useRef(new Set<string>());
+  const [submittingResponses, setSubmittingResponses] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const restoreDecisionFocus = useRef(false);
+  const decisionFocusDeparture = useCallback(() => {
+    restoreDecisionFocus.current = true;
+  }, []);
   const [busy, setBusy] = useState(false);
   const [archivingTaskIds, setArchivingTaskIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -2264,6 +2307,8 @@ export function ProductSurface({
   const [renameDraft, setRenameDraft] = useState("");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
   const [timelineNow, setTimelineNow] = useState(() => Date.now());
+  const pendingStopIds = useRef(new Set<string>());
+  const [stoppingTaskIds, setStoppingTaskIds] = useState(new Set<string>());
   const [editingQueueEntryId, setEditingQueueEntryId] = useState<string | null>(
     null,
   );
@@ -2279,6 +2324,9 @@ export function ProductSurface({
   const followupComposer = useRef<HTMLTextAreaElement | null>(null);
   const taskTimeline = useRef<HTMLElement | null>(null);
   const followTimeline = useRef(true);
+  const timelineReading = useRef(
+    new Map<string, { top: number; following: boolean }>(),
+  );
   const savingOutputItemIds = useRef(new Set<string>());
 
   useEffect(() => {
@@ -2302,15 +2350,16 @@ export function ProductSurface({
       }
     };
     const dismissOpenMenusWithKeyboard = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      document
-        .querySelectorAll<HTMLDetailsElement>(
-          ".account-menu[open], .app-menu[open], .composer-menu[open], .profile-actions[open], .task-more-menu[open]",
-        )
-        .forEach((menu) => {
-          menu.open = false;
-          menu.querySelector<HTMLElement>("summary")?.focus();
-        });
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const menu = document.querySelector<HTMLDetailsElement>(
+        ".account-menu[open], .app-menu[open], .composer-menu[open], .profile-actions[open], .task-more-menu[open], .task-queue-more[open]",
+      );
+      if (menu) {
+        event.preventDefault();
+        menu.open = false;
+        menu.querySelector<HTMLElement>("summary")?.focus();
+        return;
+      }
       setProfileManagerOpen(false);
       setSettingsOpen(false);
       setCodexRecoveryOpen(false);
@@ -2414,6 +2463,25 @@ export function ProductSurface({
   const selectedWorkflowOutput = workflowWorkspace.outputs.find(
     ({ result }) => result.resultId === selectedWorkflowOutputId,
   );
+  const shellComposition = resolveShellComposition(
+    shellWidth,
+    sidebarCollapsed,
+    Boolean(viewedTask && !selectedWorkflow),
+  );
+  useEffect(() => {
+    setSecondaryDisclosure(null);
+  }, [
+    shellComposition.mode,
+    shellComposition.navigation,
+    shellComposition.inspector,
+    viewedTask?.taskId,
+    selectedWorkflow?.workflowId,
+  ]);
+  useSurfaceFocus(activeModal, () =>
+    document.querySelector<HTMLElement>(
+      '.product-app [role="dialog"]:not([data-shell-drawer])',
+    ),
+  );
   const followup = followupDraftForTask(followupDrafts, viewedTask?.taskId);
   const setFollowup = (value: string) => {
     if (!viewedTask) return;
@@ -2445,20 +2513,11 @@ export function ProductSurface({
     const textarea = outcomeComposer.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const maximumHeight = 240;
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
-    textarea.style.overflowY =
-      textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
-  }, [outcome]);
-  useEffect(() => {
-    const textarea = followupComposer.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
     const maximumHeight = 180;
     textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
     textarea.style.overflowY =
       textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
-  }, [followup]);
+  }, [outcome, viewedTask?.taskId, selectedWorkflow?.workflowId]);
 
   useEffect(() => {
     if (viewedTaskExecution?.state !== "working") return;
@@ -2495,6 +2554,14 @@ export function ProductSurface({
     node.scrollTop = node.scrollHeight;
     setShowLatest(false);
   }, [executionRevision]);
+  useLayoutEffect(() => {
+    const node = taskTimeline.current;
+    if (!node || !viewedTask) return;
+    const reading = timelineReading.current.get(viewedTask.taskId);
+    followTimeline.current = reading?.following ?? true;
+    node.scrollTop = followTimeline.current ? node.scrollHeight : reading!.top;
+    setShowLatest(!followTimeline.current);
+  }, [viewedTask?.taskId]);
   const gate = composerGate(desktop, {
     outcome,
     mode,
@@ -2530,6 +2597,29 @@ export function ProductSurface({
                 task.conversation.items[latestInputId]!.deliveryState!,
             }
           : {}),
+        ...(task.roveSessionId &&
+        (task.runtime?.attachment !== "attached" ||
+          task.runtime.recovery !== "not_needed")
+          ? {
+              browserRecoveryKey: JSON.stringify([
+                task.roveSessionId,
+                task.runtime?.attachment,
+                task.runtime?.recovery,
+              ]),
+            }
+          : {}),
+        legacyOutcomeUnclear: task.availableActions.includes(
+          "acknowledge_legacy_effects",
+        ),
+        consequentialOutcomeUnclear: task.results.some(
+          (result) => result.lifecycle === "unresolved",
+        ),
+        unresolvedResultIds: task.results
+          .filter((result) => result.lifecycle === "unresolved")
+          .map((result) => result.resultId),
+        uncertainInputIds: Object.values(task.conversation?.items ?? {})
+          .filter((item) => item.deliveryState === "uncertain")
+          .map((item) => item.id),
         ...(task.recordings ? { recordings: task.recordings } : {}),
       })
     );
@@ -2537,27 +2627,53 @@ export function ProductSurface({
   const viewedPresentation = viewedTask
     ? presentationForTask(viewedTask)
     : undefined;
-  const composerPrimaryAction = viewedPresentation
-    ? taskComposerPrimaryAction({
-        state: viewedPresentation.state,
-        hasDraft: followup.trim().length > 0,
-        canStop: viewedTask?.capabilities?.canStop === true,
-        canSubmit: viewedTask?.capabilities?.canSubmit === true,
-        canQueue: viewedTask?.capabilities?.canQueue === true,
-      })
-    : undefined;
-  const respondableCodexAttention = viewedCollaboration?.request
-    ? product?.attention.find(
-        (entry) =>
-          entry.authority === viewedCollaboration.request!.identity.authority &&
-          entry.taskId === viewedCollaboration.request!.identity.taskId &&
-          entry.requestId === viewedCollaboration.request!.identity.requestId &&
-          entry.generation === viewedCollaboration.request!.identity.generation,
+  const dock =
+    viewedTask && viewedPresentation && viewedCollaboration
+      ? resolveTaskDock({
+          task: viewedTask,
+          presentation: viewedPresentation,
+          collaboration: viewedCollaboration,
+          attention: product?.attention ?? [],
+          stopPending: stoppingTaskIds.has(viewedTask.taskId),
+        })
+      : undefined;
+  useEffect(() => {
+    const textarea = followupComposer.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maximumHeight = 180;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
+  }, [followup, dock?.mode, viewedTask?.taskId]);
+  const respondableCodexAttention = dock?.request;
+  useLayoutEffect(() => {
+    if (!restoreDecisionFocus.current || dock?.mode === "decision") return;
+    restoreDecisionFocus.current = false;
+    if (!document.querySelector('[role="dialog"][aria-modal="true"]'))
+      document
+        .querySelector<HTMLElement>(
+          ".task-dock-compose textarea, .task-interaction-dock .task-dock-status, .task-interaction-dock .browser-collaboration button",
+        )
+        ?.focus({ preventScroll: true });
+  }, [dock?.mode, viewedTask?.taskId]);
+
+  useEffect(() => {
+    const terminal = (product?.tasks ?? [])
+      .filter(
+        (task) =>
+          !task.capabilities?.canStop &&
+          task.customerPresentation?.state !== "stopping",
       )
-    : undefined;
-  const attentionReplacesComposer =
-    respondableCodexAttention?.kind === "user_input" ||
-    respondableCodexAttention?.kind === "mcp_elicitation";
+      .map((task) => task.taskId);
+    for (const taskId of terminal) pendingStopIds.current.delete(taskId);
+    setStoppingTaskIds((current) => {
+      if (!terminal.some((taskId) => current.has(taskId))) return current;
+      return new Set(
+        [...current].filter((taskId) => !terminal.includes(taskId)),
+      );
+    });
+  }, [product?.tasks]);
   const viewedCompanion =
     viewedTask?.roveSessionId !== undefined &&
     desktop?.companion?.session.id === viewedTask.roveSessionId
@@ -2576,20 +2692,16 @@ export function ProductSurface({
     : legacyView.description;
   useEffect(() => {
     const live = new Set(
-      (product?.tasks ?? []).flatMap((task) => {
-        const request = (
-          task.customerCollaboration ??
-          customerTaskCollaboration(task, product?.attention ?? [])
-        ).request;
-        if (!request) return [];
-        const exact = product?.attention.find(
-          (entry) =>
-            entry.taskId === request.identity.taskId &&
-            entry.requestId === request.identity.requestId &&
-            entry.generation === request.identity.generation,
-        );
-        return exact ? [attentionStateKey(exact)] : [];
-      }),
+      (product?.attention ?? [])
+        .filter(
+          (entry) => entry.authority === "codex" && entry.status === "pending",
+        )
+        .map(attentionStateKey),
+    );
+    for (const key of pendingResponses.current)
+      if (!live.has(key)) pendingResponses.current.delete(key);
+    setSubmittingResponses(
+      (current) => new Set([...current].filter((key) => live.has(key))),
     );
     setAttentionAnswers((current) =>
       retainCurrentAttentionState(current, live),
@@ -3056,28 +3168,46 @@ export function ProductSurface({
   const answerAttention = async (
     entry: ProductAttentionProjection,
     decision: ProductAttentionDecision,
+    answers: DecisionAnswers,
+    form: DecisionForm,
   ) => {
+    const stateKey = attentionStateKey(entry);
     if (
       viewedTask?.taskId !== entry.taskId ||
-      !viewedTask.capabilities?.canRespond
+      !viewedTask.capabilities?.canRespond ||
+      dock?.mode !== "decision" ||
+      !dock.request ||
+      attentionStateKey(dock.request) !== stateKey ||
+      entry.status !== "pending" ||
+      pendingResponses.current.has(stateKey)
     )
       return;
-    const stateKey = attentionStateKey(entry);
-    await run(() =>
-      command({
+    pendingResponses.current.add(stateKey);
+    setSubmittingResponses((current) => new Set(current).add(stateKey));
+    try {
+      await command({
         type: "attention.decide",
         taskId: entry.taskId,
         requestId: entry.requestId,
         generation: entry.generation,
         decision,
-        ...(entry.kind === "user_input"
-          ? { answers: attentionAnswers[stateKey] ?? {} }
-          : {}),
-        ...(entry.elicitation?.mode === "form"
-          ? { form: attentionForms[stateKey] ?? {} }
-          : {}),
-      }),
-    );
+        ...(entry.kind === "user_input" ? { answers } : {}),
+        ...(entry.elicitation?.mode === "form" ? { form } : {}),
+      });
+      await refresh();
+      setOperationError(null);
+    } catch {
+      pendingResponses.current.delete(stateKey);
+      setSubmittingResponses((current) => {
+        const next = new Set(current);
+        next.delete(stateKey);
+        return next;
+      });
+      setOperationError(
+        "The response could not be submitted. Check this request before trying again.",
+      );
+      await refresh();
+    }
   };
   const returnControl = async () => {
     if (!viewedTask || !viewedCollaboration?.browser.canReturnToRove) return;
@@ -3099,15 +3229,36 @@ export function ProductSurface({
     await run(() => window.rove.takeControl(task.taskId, handoffGeneration));
   };
   const stopTask = async () => {
-    if (!viewedTask?.capabilities?.canStop) return;
-    await run(() =>
-      command({
+    if (
+      !viewedTask?.capabilities?.canStop ||
+      pendingStopIds.current.has(viewedTask.taskId)
+    )
+      return;
+    const taskId = viewedTask.taskId;
+    pendingStopIds.current.add(taskId);
+    setStoppingTaskIds((current) => new Set(current).add(taskId));
+    try {
+      await command({
         type: "task.stop",
-        taskId: viewedTask.taskId,
+        taskId,
         operationId:
           viewedTask.operation?.operationId ?? `intent_${crypto.randomUUID()}`,
-      }),
-    );
+      });
+      await refresh();
+      setOperationError(null);
+    } catch (cause) {
+      pendingStopIds.current.delete(taskId);
+      setStoppingTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(taskId);
+        return next;
+      });
+      setOperationError(
+        cause instanceof Error
+          ? cause.message
+          : "Stopping failed. Try again when safe.",
+      );
+    }
   };
   const restoreTask = async (task = viewedTask) => {
     if (!task?.availableActions.includes("resume")) return;
@@ -3347,23 +3498,16 @@ export function ProductSurface({
 
   const renderCodexAttention = (entry: ProductAttentionProjection) => {
     const collaborationRequest = viewedCollaboration?.request;
-    if (
-      !collaborationRequest ||
-      collaborationRequest.identity.requestId !== entry.requestId ||
-      collaborationRequest.identity.generation !== entry.generation
-    )
-      return null;
-    const choiceQuestion =
-      entry.kind === "user_input" && entry.questions?.length === 1
-        ? entry.questions[0]
-        : undefined;
-    const choiceOptions = choiceQuestion?.options;
+    if (!collaborationRequest || dock?.request !== entry) return null;
     const responseKey = attentionStateKey(entry);
     const browserCollaborationControls =
       viewedCollaboration &&
-      ["takeover_required", "human_control", "checking_after_return"].includes(
-        viewedCollaboration.browser.state,
-      ) ? (
+      [
+        "takeover_required",
+        "takeover_available",
+        "human_control",
+        "checking_after_return",
+      ].includes(viewedCollaboration.browser.state) ? (
         <div className="browser-collaboration-summary">
           <strong>{viewedCollaboration.browser.title}</strong>
           <span>{viewedCollaboration.browser.description}</span>
@@ -3389,357 +3533,31 @@ export function ProductSurface({
           </div>
         </div>
       ) : null;
-    const selectedChoice = choiceQuestion
-      ? attentionAnswers[responseKey]?.[choiceQuestion.id]?.[0]
-      : undefined;
-    const boundedChoiceResponse = Boolean(
-      choiceQuestion && choiceOptions?.length,
-    );
-
-    if (boundedChoiceResponse && choiceQuestion && choiceOptions) {
-      const freeformValue = choiceOptions.some(
-        (option) => option.label === selectedChoice,
-      )
-        ? ""
-        : (selectedChoice ?? "");
-
-      return (
-        <section
-          className="attention-card attention-inline attention-codex task-response-surface task-choice-response"
-          aria-label="Current task request"
-        >
-          <header className="task-response-heading">
-            <h2>{choiceQuestion.question}</h2>
-          </header>
-          {entry.context?.length ? (
-            <div className="task-response-context">
-              {entry.context.map((item) => (
-                <p key={item.label}>
-                  <strong>{item.label}:</strong> {item.value}
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {collaborationRequest.responseState === "pending" ? (
-            <>
-              <fieldset className="task-response-options">
-                <legend>{choiceQuestion.header}</legend>
-                {choiceOptions.map((option, index) => (
-                  <label className="task-response-choice" key={option.label}>
-                    <input
-                      className="task-response-radio"
-                      type="radio"
-                      name={`${responseKey}:${choiceQuestion.id}`}
-                      checked={selectedChoice === option.label}
-                      onChange={() =>
-                        setQuestionAnswer(responseKey, choiceQuestion.id, [
-                          option.label,
-                        ])
-                      }
-                    />
-                    <span className="task-response-index" aria-hidden="true">
-                      {index + 1}
-                    </span>
-                    <span className="task-response-option-copy">
-                      <strong>{option.label}</strong>
-                      <small>{option.description}</small>
-                    </span>
-                    <svg
-                      className="task-response-arrow"
-                      viewBox="0 0 20 20"
-                      aria-hidden="true"
-                    >
-                      <path d="m7.5 4.5 5.5 5.5-5.5 5.5" />
-                    </svg>
-                  </label>
-                ))}
-              </fieldset>
-              <div className="task-response-footer">
-                {choiceQuestion.isOther ? (
-                  <label className="task-response-other">
-                    <span className="task-response-pencil" aria-hidden="true">
-                      <svg viewBox="0 0 20 20">
-                        <path d="m12.9 4.1 3 3L7.2 15.8l-3.7.7.7-3.7 8.7-8.7Z" />
-                        <path d="m11.5 5.5 3 3" />
-                      </svg>
-                    </span>
-                    <span className="task-response-other-label">
-                      Something else
-                    </span>
-                    <input
-                      aria-label={`${choiceQuestion.header} answer`}
-                      type={choiceQuestion.isSecret ? "password" : "text"}
-                      placeholder="Something else…"
-                      value={freeformValue}
-                      onChange={(event) =>
-                        setQuestionAnswer(responseKey, choiceQuestion.id, [
-                          event.target.value,
-                        ])
-                      }
-                    />
-                  </label>
-                ) : (
-                  <span />
-                )}
-                <button
-                  className="primary task-response-submit"
-                  disabled={busy}
-                  onClick={() => void answerAttention(entry, "accept")}
-                >
-                  Send
-                </button>
-              </div>
-            </>
-          ) : (
-            <small>{collaborationRequest.description}</small>
-          )}
-          {browserCollaborationControls}
-        </section>
-      );
-    }
-
     return (
-      <section
-        className={`attention-card attention-inline attention-codex${
-          entry.kind === "user_input" ? " task-response-surface" : ""
-        }`}
-        aria-label="Current task request"
+      <TaskDecisionSurface
+        key={responseKey}
+        entry={entry}
+        request={collaborationRequest}
+        submitting={submittingResponses.has(responseKey)}
+        answers={attentionAnswers[responseKey] ?? {}}
+        form={attentionForms[responseKey] ?? {}}
+        onAnswer={(id, value) => setQuestionAnswer(responseKey, id, value)}
+        onForm={(id, value) => setFormValue(responseKey, id, value)}
+        onRespond={(decision, answers, form) => {
+          void answerAttention(entry, decision, answers, form);
+        }}
+        onExternal={() =>
+          window.rove.openTrustedExternal({
+            purpose: "mcp_elicitation",
+            taskId: entry.taskId,
+            requestId: entry.requestId,
+            generation: entry.generation,
+          })
+        }
+        onFocusDeparture={decisionFocusDeparture}
       >
-        <div className="eyebrow">
-          {entry.kind === "user_input"
-            ? "Rove needs your input"
-            : "Input needed"}
-        </div>
-        <h2>{collaborationRequest.title}</h2>
-        <p>{collaborationRequest.description}</p>
-        {entry.context?.map((item) => (
-          <p key={item.label}>
-            <strong>{item.label}:</strong> {item.value}
-          </p>
-        ))}
-        {collaborationRequest.responseState === "pending" && (
-          <>
-            {entry.questions?.map((question) => (
-              <fieldset key={question.id}>
-                <legend>{question.header}</legend>
-                <p>{question.question}</p>
-                {question.options?.map((option) => (
-                  <label className="task-response-choice" key={option.label}>
-                    <input
-                      type="radio"
-                      name={`${attentionStateKey(entry)}:${question.id}`}
-                      checked={
-                        attentionAnswers[attentionStateKey(entry)]?.[
-                          question.id
-                        ]?.[0] === option.label
-                      }
-                      onChange={() =>
-                        setQuestionAnswer(
-                          attentionStateKey(entry),
-                          question.id,
-                          [option.label],
-                        )
-                      }
-                    />
-                    {option.label} — {option.description}
-                  </label>
-                ))}
-                {(!question.options || question.isOther) && (
-                  <label className="task-response-other">
-                    <span>
-                      {question.options ? "Something else" : "Your answer"}
-                    </span>
-                    <input
-                      aria-label={`${question.header} answer`}
-                      type={question.isSecret ? "password" : "text"}
-                      value={
-                        question.options &&
-                        question.options.some(
-                          (option) =>
-                            option.label ===
-                            attentionAnswers[attentionStateKey(entry)]?.[
-                              question.id
-                            ]?.[0],
-                        )
-                          ? ""
-                          : (attentionAnswers[attentionStateKey(entry)]?.[
-                              question.id
-                            ]?.[0] ?? "")
-                      }
-                      onChange={(event) =>
-                        setQuestionAnswer(
-                          attentionStateKey(entry),
-                          question.id,
-                          [event.target.value],
-                        )
-                      }
-                    />
-                  </label>
-                )}
-              </fieldset>
-            ))}
-            {entry.elicitation?.mode === "form" &&
-              entry.elicitation.fields?.map((field) => (
-                <label key={field.id}>
-                  {field.title}
-                  {field.description && <small>{field.description}</small>}
-                  {field.type === "boolean" ? (
-                    <input
-                      type="checkbox"
-                      checked={
-                        (attentionForms[attentionStateKey(entry)]?.[field.id] ??
-                          field.default) === true
-                      }
-                      onChange={(event) =>
-                        setFormValue(
-                          attentionStateKey(entry),
-                          field.id,
-                          event.target.checked,
-                        )
-                      }
-                    />
-                  ) : field.options ? (
-                    <select
-                      aria-label={field.title}
-                      multiple={field.type === "multi_select"}
-                      value={
-                        field.type === "multi_select"
-                          ? ((attentionForms[attentionStateKey(entry)]?.[
-                              field.id
-                            ] as string[] | undefined) ??
-                            (field.default as readonly string[] | undefined) ??
-                            [])
-                          : String(
-                              attentionForms[attentionStateKey(entry)]?.[
-                                field.id
-                              ] ??
-                                field.default ??
-                                unsetSelectValue(field),
-                            )
-                      }
-                      onChange={(event) =>
-                        setFormValue(
-                          attentionStateKey(entry),
-                          field.id,
-                          field.type === "multi_select"
-                            ? Array.from(event.target.selectedOptions).map(
-                                (option) => option.value,
-                              )
-                            : event.target.value,
-                        )
-                      }
-                    >
-                      {field.type !== "multi_select" && (
-                        <option value={unsetSelectValue(field)} disabled>
-                          Choose…
-                        </option>
-                      )}
-                      {field.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      aria-label={field.title}
-                      type={
-                        field.type === "number" || field.type === "integer"
-                          ? "number"
-                          : field.format === "email"
-                            ? "email"
-                            : field.format === "uri"
-                              ? "url"
-                              : field.format === "date"
-                                ? "date"
-                                : "text"
-                      }
-                      required={field.required}
-                      min={field.minimum}
-                      max={field.maximum}
-                      minLength={field.minLength}
-                      maxLength={field.maxLength}
-                      step={field.type === "integer" ? 1 : undefined}
-                      placeholder={
-                        field.format === "date-time"
-                          ? "YYYY-MM-DDTHH:mm:ssZ"
-                          : undefined
-                      }
-                      value={String(
-                        attentionForms[attentionStateKey(entry)]?.[field.id] ??
-                          field.default ??
-                          "",
-                      )}
-                      onChange={(event) =>
-                        setFormValue(
-                          attentionStateKey(entry),
-                          field.id,
-                          field.type === "number" || field.type === "integer"
-                            ? event.target.valueAsNumber
-                            : event.target.value,
-                        )
-                      }
-                    />
-                  )}
-                </label>
-              ))}
-            {entry.elicitation?.mode === "form" &&
-              entry.elicitation.unsupportedReason && (
-                <p role="alert">
-                  This request cannot be submitted:{" "}
-                  {entry.elicitation.unsupportedReason}
-                </p>
-              )}
-            <div className="attention-actions">
-              {collaborationRequest.actions.map((action) =>
-                action.kind === "trusted_external" ? (
-                  <button
-                    key={action.kind}
-                    onClick={() =>
-                      void window.rove.openTrustedExternal({
-                        purpose: "mcp_elicitation",
-                        taskId: entry.taskId,
-                        requestId: entry.requestId,
-                        generation: entry.generation,
-                      })
-                    }
-                  >
-                    {action.label}
-                  </button>
-                ) : (
-                  <button
-                    key={action.id ?? String(action.decision)}
-                    className={
-                      action.scope !== undefined
-                        ? action.scope === "none"
-                          ? undefined
-                          : "primary"
-                        : action.decision === "accept"
-                          ? "primary"
-                          : undefined
-                    }
-                    disabled={busy}
-                    onClick={() => void answerAttention(entry, action.decision)}
-                  >
-                    {action.description ? (
-                      <>
-                        <span>{action.label}</span>
-                        <small>{action.description}</small>
-                      </>
-                    ) : (
-                      action.label
-                    )}
-                  </button>
-                ),
-              )}
-            </div>
-          </>
-        )}
-        {collaborationRequest.responseState !== "pending" && (
-          <small>{collaborationRequest.description}</small>
-        )}
         {browserCollaborationControls}
-      </section>
+      </TaskDecisionSurface>
     );
   };
 
@@ -3764,6 +3582,54 @@ export function ProductSurface({
       warning === RUNTIME_CONFIGURATION_WARNING ||
       warning === RUNTIME_TRANSIENT_WARNING,
   );
+
+  const taskNotices: CustomerNotice[] = (product?.tasks ?? []).flatMap((task) =>
+    (presentationForTask(task).markers ?? []).map((marker) => ({
+      ...marker,
+      key: JSON.stringify([task.taskId, marker.key]),
+      owner: displayTaskTitle(task),
+      markerId: `task-state-${task.taskId}`,
+    })),
+  );
+  const deviceMarker = runtimeWarning
+    ? [
+        {
+          key: `runtime:${runtimeWarning}`,
+          title: "Browser work is unavailable",
+          description: runtimeWarning,
+          tone: "neutral" as const,
+        },
+      ]
+    : [];
+  const deviceNotices = deviceMarker.map((marker) => ({
+    ...marker,
+    owner: "Device browser service",
+    markerId: "device-browser-state",
+  }));
+  const operationNotice =
+    error && activeModal === null
+      ? [
+          {
+            key: `operation:${error}`,
+            title: "Action could not complete",
+            description: error,
+            tone: "danger" as const,
+            owner: "Rove operation",
+          },
+        ]
+      : [];
+  const visibleNotices = [
+    ...taskNotices.filter(
+      (notice) => notice.markerId === `task-state-${viewedTask?.taskId}`,
+    ),
+    ...deviceNotices,
+    ...operationNotice,
+  ];
+  const activeNoticeKeys = [
+    ...taskNotices,
+    ...deviceNotices,
+    ...operationNotice,
+  ].map((notice) => notice.key);
 
   if (initialProductHydrationPending(desktop)) {
     const failed = connectionError !== null;
@@ -3841,9 +3707,7 @@ export function ProductSurface({
               ? "Attention needed"
               : customerCodexStatus.label}
           </span>
-          <strong>
-            {activeTask ? activeSurfaceTitle : "Rove is ready"}
-          </strong>
+          <strong>{activeTask ? activeSurfaceTitle : "Rove is ready"}</strong>
           {activeCollaboration?.browser.canReturnToRove && (
             <small>{activeCollaboration.browser.description}</small>
           )}
@@ -4060,7 +3924,10 @@ export function ProductSurface({
 
   return (
     <div
-      className={`product-app${sidebarCollapsed ? " sidebar-collapsed" : ""}${windowFullscreen ? " window-fullscreen" : ""}`}
+      className={`product-app${windowFullscreen ? " window-fullscreen" : ""}`}
+      data-shell-mode={shellComposition.mode}
+      data-shell-navigation={shellComposition.navigation ? "inline" : "drawer"}
+      data-shell-inspector={shellComposition.inspector ? "inline" : "drawer"}
     >
       {codexRecoveryDialog}
       {archiveTask && (
@@ -4576,10 +4443,33 @@ export function ProductSurface({
         <button
           className="sidebar-toggle"
           type="button"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!sidebarCollapsed}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setSidebarCollapsed((current) => !current)}
+          aria-label={
+            shellComposition.mode === "compact"
+              ? secondaryDisclosure === "navigation"
+                ? "Close navigation"
+                : "Open navigation"
+              : sidebarCollapsed
+                ? "Expand sidebar"
+                : "Collapse sidebar"
+          }
+          aria-expanded={
+            shellComposition.navigation || secondaryDisclosure === "navigation"
+          }
+          aria-controls="shell-navigation"
+          title={
+            shellComposition.mode === "compact"
+              ? "Navigation"
+              : sidebarCollapsed
+                ? "Expand sidebar"
+                : "Collapse sidebar"
+          }
+          onClick={() => {
+            if (shellComposition.mode === "compact")
+              setSecondaryDisclosure((current) =>
+                current === "navigation" ? null : "navigation",
+              );
+            else setSidebarCollapsed((current) => !current);
+          }}
         >
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <rect x="2.5" y="3" width="15" height="14" rx="2.5" />
@@ -4635,6 +4525,22 @@ export function ProductSurface({
             )}
         </div>
         <div className="product-topbar-actions">
+          {viewedTask && !selectedWorkflow && !shellComposition.inspector && (
+            <button
+              className="shell-inspector-toggle"
+              type="button"
+              aria-label="Open Task details"
+              aria-controls="shell-inspector"
+              aria-expanded={secondaryDisclosure === "inspector"}
+              onClick={() =>
+                setSecondaryDisclosure((current) =>
+                  current === "inspector" ? null : "inspector",
+                )
+              }
+            >
+              Details
+            </button>
+          )}
           <div className="product-health" aria-live="polite">
             <span
               className={`status-pip status-${customerCodexStatus.ready ? "ready" : customerCodexStatus.kind === "starting" || customerCodexStatus.kind === "signing_in" ? "starting" : "offline"}`}
@@ -4715,7 +4621,7 @@ export function ProductSurface({
           }}
         >
           <section
-            className="profile-modal"
+            className="profile-modal browser-profiles-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="browser-profiles-title"
@@ -4769,7 +4675,9 @@ export function ProductSurface({
                       <span className="profile-card-copy">
                         <strong>{workspace.displayName}</strong>
                         <small>
-                          {selected ? "Default profile" : "Saved profile"}
+                          {selected
+                            ? "Default for future browser use"
+                            : "Saved profile"}
                         </small>
                       </span>
                       {selected && (
@@ -4869,9 +4777,18 @@ export function ProductSurface({
             )}
 
             {deletingProfileId !== null && (
-              <section className="profile-inline-panel profile-delete-confirm">
+              <section
+                className="profile-inline-panel profile-delete-confirm"
+                aria-label="Delete browser profile confirmation"
+              >
                 <div>
-                  <strong>Delete this profile?</strong>
+                  <strong>
+                    Delete{" "}
+                    {desktop?.workspaces.workspaces.find(
+                      (entry) => entry.id === deletingProfileId,
+                    )?.displayName ?? "this profile"}
+                    ?
+                  </strong>
                   <small>
                     Its locally saved cookies, sign-ins, and browsing data will
                     be permanently removed. Task history remains.
@@ -4911,46 +4828,51 @@ export function ProductSurface({
               </section>
             )}
 
-            <form
-              className="profile-create"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const name = workspaceDraft.trim();
-                if (!name || busy) return;
-                void run(() => window.rove.createBrowserWorkspace(name)).then(
-                  (status) => {
-                    const selected = status?.selectedWorkspaceId;
-                    if (selected) setBrowserChoice(`workspace:${selected}`);
-                    if (status !== undefined) setWorkspaceDraft("");
-                  },
-                );
-              }}
-            >
-              <div>
-                <strong>Create a profile</strong>
-                <small>Give it a familiar name such as Work or Personal.</small>
-              </div>
-              <div className="profile-create-controls">
-                <input
-                  aria-label="New browser profile name"
-                  placeholder="Profile name"
-                  maxLength={80}
-                  value={workspaceDraft}
-                  onChange={(event) => setWorkspaceDraft(event.target.value)}
-                />
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={busy || !workspaceDraft.trim()}
-                >
-                  Create
-                </button>
-              </div>
-            </form>
+            {editingProfileId === null && deletingProfileId === null && (
+              <form
+                className="profile-create"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const name = workspaceDraft.trim();
+                  if (!name || busy) return;
+                  void run(() => window.rove.createBrowserWorkspace(name)).then(
+                    (status) => {
+                      const selected = status?.selectedWorkspaceId;
+                      if (selected) setBrowserChoice(`workspace:${selected}`);
+                      if (status !== undefined) setWorkspaceDraft("");
+                    },
+                  );
+                }}
+              >
+                <div>
+                  <strong>Create a profile</strong>
+                  <small>
+                    Give it a familiar name such as Work or Personal.
+                  </small>
+                </div>
+                <div className="profile-create-controls">
+                  <input
+                    aria-label="New browser profile name"
+                    placeholder="Profile name"
+                    maxLength={80}
+                    value={workspaceDraft}
+                    onChange={(event) => setWorkspaceDraft(event.target.value)}
+                  />
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={busy || !workspaceDraft.trim()}
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            )}
 
             {renderModalError()}
             <footer>
               <p>
+                Existing task profiles stay unchanged when you choose a default.
                 Guest browsing is available from Commands under Browser profile.
                 Guest data is deleted locally when its task ends.
               </p>
@@ -5109,6 +5031,14 @@ export function ProductSurface({
         </div>
       )}
 
+      <CustomerStateNotices
+        notices={
+          activeModal === null && secondaryDisclosure === null
+            ? visibleNotices
+            : []
+        }
+        activeKeys={activeNoticeKeys}
+      />
       {unmatchedSession !== null && (
         <section
           className="product-warning global-resource-recovery"
@@ -5142,16 +5072,11 @@ export function ProductSurface({
           }
           tabIndex={0}
         >
-          {runtimeWarning !== undefined && (
-            <section
-              className="product-warning runtime-dependency-warning"
-              aria-label="Browser service status"
-              role="status"
-            >
-              <strong>Browser work is unavailable</strong>
-              <span>{runtimeWarning}</span>
-            </section>
-          )}
+          <CustomerStateMarkers
+            markers={deviceMarker}
+            id="device-browser-state"
+            owner="Device browser service"
+          />
           {fileAttention.map((entry) => (
             <section
               key={entry.requestId}
@@ -6389,6 +6314,11 @@ export function ProductSurface({
 
           {viewedTask && !selectedWorkflow && (
             <div className="task-detail">
+              <CustomerStateMarkers
+                markers={viewedPresentation?.markers ?? []}
+                id={`task-state-${viewedTask.taskId}`}
+                owner={displayTaskTitle(viewedTask)}
+              />
               <section
                 className="task-timeline"
                 aria-label="Conversation and activity"
@@ -6397,13 +6327,19 @@ export function ProductSurface({
                   const node = event.currentTarget;
                   const atBottom = timelineIsAtBottom(node);
                   followTimeline.current = atBottom;
+                  timelineReading.current.set(viewedTask.taskId, {
+                    top: node.scrollTop,
+                    following: atBottom,
+                  });
                   setShowLatest(!atBottom);
                 }}
               >
                 {timeline.length === 0 &&
                   viewedPresentation?.conversationStatus && (
                     <div className="timeline-empty">
-                      <span className="activity-spinner" aria-hidden="true" />
+                      {viewedPresentation.state === "checking" && (
+                        <span className="activity-spinner" aria-hidden="true" />
+                      )}
                       <p>{viewedPresentation.conversationStatus.title}</p>
                     </div>
                   )}
@@ -6730,184 +6666,177 @@ export function ProductSurface({
                   </button>
                 )}
               </section>
-              {viewedPresentation?.conversationStatus &&
-                viewedCollaboration?.browser.state !==
-                  "checking_after_return" &&
-                timeline.length > 0 && (
-                  <div
-                    className={`product-warning status-${viewedPresentation.conversationStatus.tone}`}
-                    role="status"
-                  >
-                    <strong>
-                      {viewedPresentation.conversationStatus.title}
-                    </strong>
-                    <span>
-                      {viewedPresentation.conversationStatus.description}
-                    </span>
-                  </div>
-                )}
               <footer className="task-detail-dock">
-                {respondableCodexAttention &&
-                  renderCodexAttention(respondableCodexAttention)}
-                {!respondableCodexAttention &&
-                  viewedCollaboration &&
-                  [
-                    "takeover_required",
-                    "takeover_available",
-                    "human_control",
-                    "checking_after_return",
-                  ].includes(viewedCollaboration.browser.state) && (
-                    <section
-                      className="attention-card attention-inline browser-collaboration"
-                      aria-label="Current browser collaboration"
-                    >
-                      <div className="eyebrow">Browser collaboration</div>
-                      <h2>{viewedCollaboration.browser.title}</h2>
-                      <p>{viewedCollaboration.browser.description}</p>
-                      <div className="attention-actions">
-                        {viewedCollaboration.browser.canTakeOver && (
-                          <button
-                            className="primary"
-                            disabled={busy}
-                            onClick={() => void takeControl(viewedTask)}
+                {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
+                  <div className="task-queue" aria-label="Queued messages">
+                    {viewedTaskExecution!.queue.map((entry, index, queue) => (
+                      <div className="task-queue-entry" key={entry.id}>
+                        {editingQueueEntryId === entry.id ? (
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void editQueuedEntry(entry.id);
+                            }}
                           >
-                            Take Over
-                          </button>
-                        )}
-                        {viewedCollaboration.browser.canReturnToRove && (
-                          <button
-                            className="primary"
-                            disabled={busy}
-                            onClick={() => void returnControl()}
-                          >
-                            Return to Rove
-                          </button>
-                        )}
-                      </div>
-                    </section>
-                  )}
-                {!respondableCodexAttention && awaitingExplicitResponse && (
-                  <p className="task-response-hint">
-                    {activeSurfaceDescription}
-                  </p>
-                )}
-                {!attentionReplacesComposer &&
-                  viewedTask.executionMode !== "capture" &&
-                  (viewedTask.capabilities?.canSubmit ||
-                    viewedTask.capabilities?.canQueue ||
-                    viewedTask.capabilities?.canSteer ||
-                    viewedTask.capabilities?.canStop ||
-                    viewedPresentation?.state === "stopping" ||
-                    viewedTask.availableActions.includes("resume") ||
-                    viewedCollaboration?.browser.canReturnToRove) && (
-                    <>
-                      {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
-                        <div
-                          className="task-queue"
-                          aria-label="Queued messages"
-                        >
-                          {viewedTaskExecution!.queue.map(
-                            (entry, index, queue) => (
-                              <div className="task-queue-entry" key={entry.id}>
-                                {editingQueueEntryId === entry.id ? (
-                                  <form
-                                    onSubmit={(event) => {
-                                      event.preventDefault();
-                                      void editQueuedEntry(entry.id);
+                            <input
+                              aria-label="Edit queued message"
+                              maxLength={16_000}
+                              value={queueEditDraft}
+                              onChange={(event) =>
+                                setQueueEditDraft(event.target.value)
+                              }
+                            />
+                            <button
+                              type="submit"
+                              disabled={busy || !queueEditDraft.trim()}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingQueueEntryId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="task-queue-copy">
+                              <span>{entry.message}</span>
+                              {entry.attachmentIds.length > 0 && (
+                                <small>
+                                  {entry.attachmentIds.length} attachment
+                                  {entry.attachmentIds.length === 1 ? "" : "s"}
+                                </small>
+                              )}
+                              {(entry.selectedResultContext?.references
+                                ?.length ?? 0) > 0 && (
+                                <small>
+                                  {
+                                    entry.selectedResultContext!.references
+                                      .length
+                                  }{" "}
+                                  Output context
+                                </small>
+                              )}
+                            </div>
+                            <div className="task-queue-actions">
+                              {viewedTask.capabilities?.canSteer && (
+                                <button
+                                  type="button"
+                                  className="task-queue-steer"
+                                  title="Apply this queued instruction to the current work now"
+                                  onClick={() =>
+                                    void steerQueuedEntry(entry.id)
+                                  }
+                                >
+                                  Steer
+                                </button>
+                              )}
+                              <details className="task-queue-more">
+                                <summary aria-label="More queued message actions">
+                                  More
+                                </summary>
+                                <div>
+                                  <button
+                                    type="button"
+                                    aria-label="Delete queued message"
+                                    onClick={() =>
+                                      void removeQueuedEntry(entry.id)
+                                    }
+                                  >
+                                    Delete
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingQueueEntryId(entry.id);
+                                      setQueueEditDraft(entry.message);
                                     }}
                                   >
-                                    <input
-                                      aria-label="Edit queued message"
-                                      maxLength={16_000}
-                                      value={queueEditDraft}
-                                      onChange={(event) =>
-                                        setQueueEditDraft(event.target.value)
-                                      }
-                                    />
-                                    <button
-                                      type="submit"
-                                      disabled={busy || !queueEditDraft.trim()}
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setEditingQueueEntryId(null)
-                                      }
-                                    >
-                                      Cancel
-                                    </button>
-                                  </form>
-                                ) : (
-                                  <>
-                                    <span>{entry.message}</span>
-                                    <div className="task-queue-actions">
-                                      {viewedTask.capabilities?.canSteer && (
-                                        <button
-                                          type="button"
-                                          className="task-queue-steer"
-                                          title="Apply this queued instruction to the current work now"
-                                          onClick={() =>
-                                            void steerQueuedEntry(entry.id)
-                                          }
-                                        >
-                                          Steer
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        aria-label="Delete queued message"
-                                        onClick={() =>
-                                          void removeQueuedEntry(entry.id)
-                                        }
-                                      >
-                                        Delete
-                                      </button>
-                                      <details className="task-queue-more">
-                                        <summary aria-label="More queued message actions">
-                                          More
-                                        </summary>
-                                        <div>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingQueueEntryId(entry.id);
-                                              setQueueEditDraft(entry.message);
-                                            }}
-                                          >
-                                            Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={busy || index === 0}
-                                            onClick={() =>
-                                              void moveQueuedEntry(entry.id, -1)
-                                            }
-                                          >
-                                            Move earlier
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={
-                                              busy || index === queue.length - 1
-                                            }
-                                            onClick={() =>
-                                              void moveQueuedEntry(entry.id, 1)
-                                            }
-                                          >
-                                            Move later
-                                          </button>
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            ),
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy || index === 0}
+                                    onClick={() =>
+                                      void moveQueuedEntry(entry.id, -1)
+                                    }
+                                  >
+                                    Move earlier
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      busy || index === queue.length - 1
+                                    }
+                                    onClick={() =>
+                                      void moveQueuedEntry(entry.id, 1)
+                                    }
+                                  >
+                                    Move later
+                                  </button>
+                                </div>
+                              </details>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <TaskInteractionDock mode={dock?.mode ?? "compose"}>
+                  {dock?.mode === "decision" &&
+                    respondableCodexAttention &&
+                    renderCodexAttention(respondableCodexAttention)}
+                  {(dock?.mode === "browser" ||
+                    (dock?.mode === "compose" &&
+                      viewedCollaboration?.browser.state ===
+                        "takeover_available")) &&
+                    viewedCollaboration &&
+                    [
+                      "takeover_required",
+                      "takeover_available",
+                      "human_control",
+                      "checking_after_return",
+                    ].includes(viewedCollaboration.browser.state) && (
+                      <section
+                        className="attention-card attention-inline browser-collaboration"
+                        aria-label="Current browser collaboration"
+                      >
+                        <div className="eyebrow">Browser collaboration</div>
+                        <h2>{viewedCollaboration.browser.title}</h2>
+                        <p>{viewedCollaboration.browser.description}</p>
+                        <div className="attention-actions">
+                          {viewedCollaboration.browser.canTakeOver && (
+                            <button
+                              className="primary"
+                              disabled={busy}
+                              onClick={() => void takeControl(viewedTask)}
+                            >
+                              Take Over
+                            </button>
+                          )}
+                          {viewedCollaboration.browser.canReturnToRove && (
+                            <button
+                              className="primary"
+                              disabled={busy}
+                              onClick={() => void returnControl()}
+                            >
+                              Return to Rove
+                            </button>
                           )}
                         </div>
-                      )}
+                      </section>
+                    )}
+                  {!respondableCodexAttention && awaitingExplicitResponse && (
+                    <p className="task-response-hint">
+                      {activeSurfaceDescription}
+                    </p>
+                  )}
+                  {dock?.mode === "compose" && (
+                    <div className="task-dock-compose">
                       <ComposerInputShell
                         attachments={product?.draftAttachments ?? []}
                         busy={
@@ -7115,19 +7044,16 @@ export function ProductSurface({
                               modelId={viewedTask.model ?? ""}
                               effort={viewedTask.reasoningEffort ?? ""}
                             />
-                            {viewedCollaboration?.browser.canReturnToRove ? (
-                              <button
-                                className="primary composer-submit"
-                                aria-label="Resume automation"
-                                title="Return control to Rove"
-                                disabled={busy}
-                                onClick={() => void returnControl()}
-                              >
-                                <span aria-hidden="true">▶</span>
-                              </button>
-                            ) : viewedTask.availableActions.includes(
-                                "resume",
-                              ) ? (
+                            <span className="task-stop-slot">
+                              {dock?.showStop && (
+                                <TaskStopControl
+                                  disabled={false}
+                                  stopping={false}
+                                  onStop={() => void stopTask()}
+                                />
+                              )}
+                            </span>
+                            {viewedTask.availableActions.includes("resume") ? (
                               <button
                                 className="primary composer-submit"
                                 aria-label="Resume task"
@@ -7136,19 +7062,6 @@ export function ProductSurface({
                                 onClick={() => void restoreTask()}
                               >
                                 <span aria-hidden="true">▶</span>
-                              </button>
-                            ) : composerPrimaryAction?.kind === "stop" ? (
-                              <button
-                                type="button"
-                                className="primary composer-submit composer-stop"
-                                aria-label="Stop current work"
-                                title="Stop current work"
-                                disabled={
-                                  busy || composerPrimaryAction.disabled
-                                }
-                                onClick={() => void stopTask()}
-                              >
-                                <span aria-hidden="true">■</span>
                               </button>
                             ) : (
                               <button
@@ -7165,7 +7078,9 @@ export function ProductSurface({
                                 }
                                 disabled={
                                   busy ||
-                                  composerPrimaryAction?.disabled !== false
+                                  !followup.trim() ||
+                                  (!viewedTask.capabilities?.canSubmit &&
+                                    !viewedTask.capabilities?.canQueue)
                                 }
                                 onClick={() => void sendFollowup("default")}
                               >
@@ -7175,24 +7090,74 @@ export function ProductSurface({
                           </ComposerPrimaryControls>
                         </CanonicalComposerActionRow>
                       </ComposerInputShell>
+                    </div>
+                  )}
+                  {dock?.mode !== "compose" && (
+                    <>
+                      {["stopping", "checking", "capture"].includes(
+                        dock?.mode ?? "",
+                      ) && (
+                        <div
+                          className="task-dock-status"
+                          role="status"
+                          tabIndex={-1}
+                        >
+                          <strong>
+                            {dock?.mode === "stopping"
+                              ? "Stopping…"
+                              : dock?.mode === "capture"
+                                ? "Capturing"
+                                : "Checking state"}
+                          </strong>
+                          <span>
+                            {dock?.mode === "stopping"
+                              ? "Your conversation and queued messages stay here."
+                              : dock?.mode === "capture"
+                                ? "Recording controls remain in Task details."
+                                : "Rove is establishing the current task state."}
+                          </span>
+                        </div>
+                      )}
+                      <div className="task-dock-actions">
+                        {dock?.showStop && (
+                          <TaskStopControl
+                            disabled={false}
+                            stopping={dock.mode === "stopping"}
+                            onStop={() => void stopTask()}
+                          />
+                        )}
+                      </div>
                     </>
                   )}
+                </TaskInteractionDock>
               </footer>
-            </div>
-          )}
-
-          {error && activeModal === null && (
-            <div className="product-error" role="alert">
-              <strong>Rove needs attention</strong>
-              <span>{error}</span>
             </div>
           )}
         </section>
 
-        <aside
+        <ShellSecondarySurface
+          name="navigation"
+          onDismissMenu={() => {
+            if (!taskContextMenu) return false;
+            Array.from(
+              document.querySelectorAll<HTMLElement>(".task-history-select"),
+            )
+              .find(
+                (node) =>
+                  node.getAttribute("aria-label") ===
+                  `Task history: ${taskContextMenu.taskId}`,
+              )
+              ?.focus();
+            setTaskContextMenu(null);
+            setRenamingTaskId(null);
+            return true;
+          }}
+          label="Task controls and status"
           className="product-sidebar"
-          aria-label="Task controls and status"
-          tabIndex={0}
+          inline={shellComposition.navigation}
+          open={secondaryDisclosure === "navigation"}
+          suspended={activeModal !== null}
+          onClose={() => setSecondaryDisclosure(null)}
         >
           <button
             className="sidebar-new-task"
@@ -7203,6 +7168,7 @@ export function ProductSurface({
                 : undefined
             }
             onClick={() => {
+              setSecondaryDisclosure(null);
               setSelectedWorkflowWorkspaceId(null);
               setSelectedWorkflowOutputId(null);
               setSelectedWorkflowId("");
@@ -7238,6 +7204,7 @@ export function ProductSurface({
                     : undefined
                 }
                 onClick={() => {
+                  setSecondaryDisclosure(null);
                   setSelectedWorkflowWorkspaceId(workflow.workflowId);
                   setWorkflowWorkspaceSection("home");
                   setSelectedWorkflowOutputId(null);
@@ -7303,6 +7270,7 @@ export function ProductSurface({
                       entry.taskId === viewedTask?.taskId ? "true" : undefined
                     }
                     onClick={() => {
+                      setSecondaryDisclosure(null);
                       setSelectedWorkflowWorkspaceId(null);
                       setSelectedWorkflowOutputId(null);
                       setSelectedTaskId(entry.taskId);
@@ -7318,6 +7286,20 @@ export function ProductSurface({
                         {presentationForTask(entry).sidebar!.label}
                       </span>
                     )}
+                    {(presentationForTask(entry).markers ?? [])
+                      .filter(
+                        (marker) =>
+                          marker.title !==
+                          presentationForTask(entry).sidebar?.label,
+                      )
+                      .map((marker) => (
+                        <span
+                          className="customer-marker-label"
+                          key={marker.key}
+                        >
+                          {marker.title}
+                        </span>
+                      ))}
                   </button>
                   {entry.capabilities?.canArchive && (
                     <button
@@ -7425,9 +7407,17 @@ export function ProductSurface({
               )}
             </div>
           )}
-        </aside>
+        </ShellSecondarySurface>
         {viewedTask && !selectedWorkflow && (
-          <aside className="product-inspector" aria-label="Task inspector">
+          <ShellSecondarySurface
+            name="inspector"
+            label="Task inspector"
+            className="product-inspector"
+            inline={shellComposition.inspector}
+            open={secondaryDisclosure === "inspector"}
+            suspended={activeModal !== null}
+            onClose={() => setSecondaryDisclosure(null)}
+          >
             <section
               className="inspector-panel browser-status"
               aria-label="Browser status"
@@ -7444,12 +7434,61 @@ export function ProductSurface({
                   </svg>
                 </span>
                 <span>
-                  <strong>{browserResource?.title ?? identityLabel}</strong>
-                  {browserAttached && (
-                    <small>{viewedTaskControl.controllerLabel}</small>
-                  )}
+                  <strong>
+                    {browserResource?.kind === "attached"
+                      ? "Browser attached"
+                      : (browserResource?.title ?? identityLabel)}
+                  </strong>
                 </span>
               </div>
+              <dl className="browser-resource-facts">
+                <div>
+                  <dt>Attachment</dt>
+                  <dd>
+                    {browserResource?.kind === "runtime_recovery"
+                      ? "Attachment unconfirmed"
+                      : browserAttached
+                        ? "Attached to this task"
+                        : "No confirmed attachment"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    {browserResource?.kind === "runtime_recovery"
+                      ? "Last reported owner"
+                      : "Control"}
+                  </dt>
+                  <dd>
+                    {viewedTaskControl.controllerLabel === "Agent"
+                      ? "Rove"
+                      : viewedTaskControl.controllerLabel === "None"
+                        ? "No confirmed owner"
+                        : viewedTaskControl.controllerLabel}
+                  </dd>
+                </div>
+                {viewedCollaboration?.browser.state ===
+                  "checking_after_return" && (
+                  <div>
+                    <dt>State</dt>
+                    <dd>Checking the page</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Profile</dt>
+                  <dd>
+                    {browserAttached ||
+                    browserResource?.kind === "profile_missing"
+                      ? browserProfileLabel(desktop, viewedTask)
+                      : "Not yet attached"}
+                  </dd>
+                </div>
+                {browserResource?.kind === "attached" && (
+                  <div>
+                    <dt>Current page</dt>
+                    <dd>View this task’s page in the browser.</dd>
+                  </div>
+                )}
+              </dl>
               {browserResource && browserResource.kind !== "attached" && (
                 <p className="browser-recovery-copy">
                   {browserResource.description}
@@ -7491,22 +7530,13 @@ export function ProductSurface({
                     Start new task
                   </button>
                 )}
-                {viewedCollaboration?.browser.canTakeOver && (
+                {browserResource?.action !== "manage_profiles" && (
                   <button
-                    className="primary"
+                    type="button"
                     disabled={busy}
-                    onClick={() => void takeControl(viewedTask)}
+                    onClick={() => setProfileManagerOpen(true)}
                   >
-                    Take Over
-                  </button>
-                )}
-                {viewedCollaboration?.browser.canReturnToRove && (
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => void returnControl()}
-                  >
-                    Return to Rove
+                    Manage profiles
                   </button>
                 )}
               </div>
@@ -7569,6 +7599,12 @@ export function ProductSurface({
                             .stateLabel
                         }
                       </small>
+                      {recording.scope.kind === "page" && (
+                        <small>
+                          Recorded page ·{" "}
+                          {recordedPageSite(recording.scope.url)}
+                        </small>
+                      )}
                       <button
                         type="button"
                         disabled={
@@ -7633,12 +7669,15 @@ export function ProductSurface({
                         <div className="recording-history-heading">
                           <strong>Page recording</strong>
                           <span data-result-state={recording.state}>
-                            {recording.state}
+                            {
+                              recordingLifecyclePresentation(recording.state)
+                                .stateLabel
+                            }
                           </span>
                         </div>
                         <small>
                           {recording.scope.kind === "page"
-                            ? recording.scope.url
+                            ? `Recorded page · ${recordedPageSite(recording.scope.url)}`
                             : "Browser window"}{" "}
                           · no audio
                         </small>
@@ -7667,7 +7706,7 @@ export function ProductSurface({
                 </div>
               )}
             </details>
-          </aside>
+          </ShellSecondarySurface>
         )}
       </main>
     </div>

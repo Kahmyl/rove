@@ -27,6 +27,79 @@ afterEach(async () => {
 });
 
 describe("CodexExecutionCore event recovery ownership", () => {
+  it("queues conflict injection behind the owning asynchronous transaction", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-conflict-injection-"));
+    roots.push(root);
+    const path = join(root, "task-process.v1.sqlite3");
+    const store = new SqliteTaskEngineStore({ path });
+    const taskId = "task_33333333-3333-4333-8333-333333333333";
+    seed(
+      path,
+      seededAggregate(
+        taskId,
+        "thread_event_recovery",
+        `boot_${"3".repeat(32)}`,
+      ),
+    );
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const owner = store.transact(taskId, async () => {
+      entered();
+      await barrier;
+    });
+    let injection: Promise<void> | undefined;
+    try {
+      await started;
+      // Deterministic causal proof of the former second-connection injection.
+      // A zero busy budget reports the same lock without stalling this loop.
+      const outsider = new Database(path, { timeout: 0 });
+      try {
+        expect(() =>
+          outsider
+            .prepare(
+              "INSERT INTO task_engine_event(task_id, event_id, source_kind, source_id, source_generation, source_position, digest, payload_json, acceptance_json, accepted_at) VALUES (?, 'raw-conflict', 'codex', 'connection_event_recovery', 1, 1, 'conflict', '{}', '{}', 'fixture')",
+            )
+            .run(taskId),
+        ).toThrow("database is locked");
+      } finally {
+        outsider.close();
+      }
+      let injected = false;
+      injection = blockCodexSourcePosition(store, taskId, 1).then(() => {
+        injected = true;
+      });
+      await Promise.resolve();
+      expect(injected).toBe(false);
+      release();
+      await owner;
+      await injection;
+      await store.transact(taskId, async (tx) => {
+        expect(
+          await tx.sourceEvent(taskId, {
+            kind: "codex",
+            id: "connection_event_recovery",
+            generation: 1,
+            position: 1,
+          }),
+        ).toMatchObject({ digest: "conflicting-digest-1" });
+      });
+    } finally {
+      release();
+      await owner;
+      try {
+        await injection;
+      } finally {
+        store.close();
+      }
+    }
+  });
+
   it("routes only its own failed ingestion by semantic recovery class", async () => {
     const stateDirectory = await mkdtemp(
       join(tmpdir(), "rove-event-recovery-"),
@@ -75,24 +148,25 @@ describe("CodexExecutionCore event recovery ownership", () => {
       stderrTail: [],
     });
     await core.start();
-
-    thread.turns = [completedTurn("assistant_repaired")];
-    blockCodexSourcePosition(databasePath, taskId, 1);
-    await emit(listeners, {
-      method: "item/completed",
-      params: {
-        threadId,
-        turnId: "turn_repaired",
-        item: {
-          type: "agentMessage",
-          id: "assistant_repaired",
-          text: "Recovered from exact history",
-          phase: "final_answer",
+    try {
+      thread.turns = [completedTurn("assistant_repaired")];
+      await blockCodexSourcePosition(core.workflowStore(), taskId, 1);
+      await emit(listeners, {
+        method: "item/completed",
+        params: {
+          threadId,
+          turnId: "turn_repaired",
+          item: {
+            type: "agentMessage",
+            id: "assistant_repaired",
+            text: "Recovered from exact history",
+            phase: "final_answer",
+          },
         },
-      },
-    });
-    await expect(core.workflowStore().aggregate(taskId)).resolves.toMatchObject(
-      {
+      });
+      await expect(
+        core.workflowStore().aggregate(taskId),
+      ).resolves.toMatchObject({
         conversation: {
           items: {
             assistant_repaired: {
@@ -102,107 +176,107 @@ describe("CodexExecutionCore event recovery ownership", () => {
           },
         },
         codexRecoveryBlockers: {},
-      },
-    );
+      });
 
-    blockCodexSourcePosition(databasePath, taskId, 2);
-    const resolution: CodexServerEvent = {
-      method: "serverRequest/resolved",
-      params: { threadId, requestId: 41 },
-    };
-    await emit(listeners, resolution);
-    let current = await core.workflowStore().aggregate(taskId);
-    expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
-      expect.objectContaining({
-        recoveryClass: "live_attention",
-        family: "serverRequest/resolved",
-      }),
-    ]);
-    await core.recover("App Server");
-    current = await core.workflowStore().aggregate(taskId);
-    expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
-      expect.objectContaining({ recoveryClass: "live_attention" }),
-    ]);
-    await emit(listeners, resolution);
-    current = await core.workflowStore().aggregate(taskId);
-    expect(current?.codexRecoveryBlockers).toEqual({});
-    expect(current?.attentions).toEqual([
-      expect.objectContaining({
-        requestId: "connection:server:number:41",
-        status: "resolved",
-      }),
-    ]);
+      await blockCodexSourcePosition(core.workflowStore(), taskId, 2);
+      const resolution: CodexServerEvent = {
+        method: "serverRequest/resolved",
+        params: { threadId, requestId: 41 },
+      };
+      await emit(listeners, resolution);
+      let current = await core.workflowStore().aggregate(taskId);
+      expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
+        expect.objectContaining({
+          recoveryClass: "live_attention",
+          family: "serverRequest/resolved",
+        }),
+      ]);
+      await core.recover("App Server");
+      current = await core.workflowStore().aggregate(taskId);
+      expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
+        expect.objectContaining({ recoveryClass: "live_attention" }),
+      ]);
+      await emit(listeners, resolution);
+      current = await core.workflowStore().aggregate(taskId);
+      expect(current?.codexRecoveryBlockers).toEqual({});
+      expect(current?.attentions).toEqual([
+        expect.objectContaining({
+          requestId: "connection:server:number:41",
+          status: "resolved",
+        }),
+      ]);
 
-    blockCodexSourcePosition(databasePath, taskId, 4);
-    const archived: CodexServerEvent = {
-      method: "thread/archived",
-      params: { threadId },
-    };
-    await emit(listeners, archived);
-    await core.recover("App Server");
-    current = await core.workflowStore().aggregate(taskId);
-    expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
-      expect.objectContaining({
-        recoveryClass: "provider_other_authority",
-        family: "thread_archive_membership",
-      }),
-    ]);
-    expect(current?.codex.archived).toBe(false);
-    await emit(listeners, archived);
-    current = await core.workflowStore().aggregate(taskId);
-    expect(current?.codex.archived).toBe(true);
-    expect(current?.codexRecoveryBlockers).toEqual({});
+      await blockCodexSourcePosition(core.workflowStore(), taskId, 4);
+      const archived: CodexServerEvent = {
+        method: "thread/archived",
+        params: { threadId },
+      };
+      await emit(listeners, archived);
+      await core.recover("App Server");
+      current = await core.workflowStore().aggregate(taskId);
+      expect(Object.values(current?.codexRecoveryBlockers ?? {})).toEqual([
+        expect.objectContaining({
+          recoveryClass: "provider_other_authority",
+          family: "thread_archive_membership",
+        }),
+      ]);
+      expect(current?.codex.archived).toBe(false);
+      await emit(listeners, archived);
+      current = await core.workflowStore().aggregate(taskId);
+      expect(current?.codex.archived).toBe(true);
+      expect(current?.codexRecoveryBlockers).toEqual({});
 
-    blockCodexSourcePosition(databasePath, taskId, 6);
-    await emit(listeners, {
-      method: "item/commandExecution/outputDelta",
-      params: {
-        threadId,
-        turnId: "turn_progress",
-        itemId: "command_progress",
-        item: {
-          type: "commandExecution",
-          id: "command_progress",
-          command: "true",
-          status: "inProgress",
+      await blockCodexSourcePosition(core.workflowStore(), taskId, 6);
+      await emit(listeners, {
+        method: "item/commandExecution/outputDelta",
+        params: {
+          threadId,
+          turnId: "turn_progress",
+          itemId: "command_progress",
+          item: {
+            type: "commandExecution",
+            id: "command_progress",
+            command: "true",
+            status: "inProgress",
+          },
         },
-      },
-    });
-    expect(
-      (await core.workflowStore().aggregate(taskId))?.codexRecoveryBlockers,
-    ).toEqual({});
+      });
+      expect(
+        (await core.workflowStore().aggregate(taskId))?.codexRecoveryBlockers,
+      ).toEqual({});
 
-    thread.turns = [
-      ...thread.turns,
-      completedTurn("assistant_unrelated_listener"),
-    ];
-    rpc.onEvent(async () => {
-      throw new Error("unrelated listener failed");
-    });
-    const listenerErrors = await emit(listeners, {
-      method: "item/completed",
-      params: {
-        threadId,
-        turnId: "turn_assistant_unrelated_listener",
-        item: {
-          type: "agentMessage",
-          id: "assistant_unrelated_listener",
-          text: "Task ingestion committed first",
-          phase: "final_answer",
+      thread.turns = [
+        ...thread.turns,
+        completedTurn("assistant_unrelated_listener"),
+      ];
+      rpc.onEvent(async () => {
+        throw new Error("unrelated listener failed");
+      });
+      const listenerErrors = await emit(listeners, {
+        method: "item/completed",
+        params: {
+          threadId,
+          turnId: "turn_assistant_unrelated_listener",
+          item: {
+            type: "agentMessage",
+            id: "assistant_unrelated_listener",
+            text: "Task ingestion committed first",
+            phase: "final_answer",
+          },
         },
-      },
-    });
-    expect(listenerErrors).toEqual(["unrelated listener failed"]);
-    current = await core.workflowStore().aggregate(taskId);
-    expect(
-      current?.conversation.items.assistant_unrelated_listener,
-    ).toMatchObject({
-      status: "completed",
-      text: "Task ingestion committed first",
-    });
-    expect(current?.codexRecoveryBlockers).toEqual({});
-
-    await core.stop();
+      });
+      expect(listenerErrors).toEqual(["unrelated listener failed"]);
+      current = await core.workflowStore().aggregate(taskId);
+      expect(
+        current?.conversation.items.assistant_unrelated_listener,
+      ).toMatchObject({
+        status: "completed",
+        text: "Task ingestion committed first",
+      });
+      expect(current?.codexRecoveryBlockers).toEqual({});
+    } finally {
+      await core.stop();
+    }
   });
 });
 
@@ -297,25 +371,42 @@ function seed(path: string, aggregate: TaskAggregate): void {
   db.close();
 }
 
-function blockCodexSourcePosition(
-  path: string,
+async function blockCodexSourcePosition(
+  store: SqliteTaskEngineStore,
   taskId: string,
   position: number,
-): void {
-  const db = new Database(path);
-  db.prepare(
-    `INSERT INTO task_engine_event(
-      task_id, event_id, source_kind, source_id, source_generation,
-      source_position, digest, payload_json, acceptance_json, accepted_at
-    ) VALUES (?, ?, 'codex', 'connection_event_recovery', 1, ?, ?, '{}', '{}', ?)`,
-  ).run(
-    taskId,
-    `injected-conflict-${position}`,
-    position,
-    `conflicting-digest-${position}`,
-    "2026-09-20T00:00:00.000Z",
-  );
-  db.close();
+): Promise<void> {
+  // Fault injection shares the live owner's transaction queue. An independent
+  // synchronous connection would block the event loop needed to commit its lock.
+  await store.transact(taskId, async (tx) => {
+    const aggregate = await tx.aggregate(taskId);
+    if (!aggregate?.record?.identity.threadId)
+      throw new Error("Conflict injection requires a bound fixture Task.");
+    await tx.commit({
+      event: {
+        schemaVersion: 1,
+        type: "codex_turn_observed",
+        eventId: `injected-conflict-${position}`,
+        taskId,
+        source: {
+          kind: "codex",
+          id: "connection_event_recovery",
+          generation: 1,
+          position,
+        },
+        observedAt: "2026-09-20T00:00:00.000Z",
+        threadId: aggregate.record.identity.threadId,
+        turn: { turn: "completed", runtimeStatus: "idle" },
+      },
+      digest: `conflicting-digest-${position}`,
+      acceptance: {
+        duplicate: false,
+        aggregate,
+        projection: projectTaskAggregate(aggregate),
+        command: null,
+      },
+    });
+  });
 }
 
 function historyThread(

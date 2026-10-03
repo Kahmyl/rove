@@ -68,7 +68,13 @@ function refreshTaskPresentation(task) {
   }
 }
 
+let rejectNextAttentionResponse = false;
+let rejectNextBrowserReturn = false;
 function executeProductIntent(intent) {
+  if (intent.type === "attention.decide" && rejectNextAttentionResponse) {
+    rejectNextAttentionResponse = false;
+    throw new Error("private-fixture-value");
+  }
   calls.push({ type: "product", intent: structuredClone(intent) });
   const task = intent.taskId ? taskById(intent.taskId) : undefined;
   if (intent.type === "task.queue.add" && task) {
@@ -205,6 +211,14 @@ function executeProductIntent(intent) {
     }
     publish("attention.submitting");
   } else if (intent.type === "task.return-control") {
+    if (rejectNextBrowserReturn) {
+      rejectNextBrowserReturn = false;
+      throw new Error(
+        "This browser could not be returned. You remain in control.",
+      );
+    }
+    if (!task || task.runtime?.controller !== "human")
+      throw new Error("Browser return lost its exact human-owned task.");
     setScenario("browser_checking");
   }
   return {};
@@ -212,8 +226,13 @@ function executeProductIntent(intent) {
 
 function takeControl(taskId, handoffGeneration) {
   calls.push({ type: "takeControl", taskId, handoffGeneration });
-  const expected = scenarioName === "browser_voluntary" ? undefined : 7;
-  if (taskId !== "task_browser" || handoffGeneration !== expected)
+  const task = taskById(taskId);
+  const expected = task?.customerCollaboration?.browser.handoffGeneration;
+  if (
+    !task ||
+    !task.customerCollaboration?.browser.canTakeOver ||
+    handoffGeneration !== expected
+  )
     throw new Error(
       "Browser takeover does not match the exact Task generation.",
     );
@@ -293,14 +312,68 @@ if (process.type === "renderer") {
         intent: structuredClone(intent),
       });
     },
-    openRecording: async () => undefined,
+    openRecording: async (taskId, recordingId) => {
+      calls.push({ type: "openRecording", taskId, recordingId });
+    },
     exportLocalBackup: async () => ({ status: "cancelled" }),
     getBrowserWorkspaces: async () => structuredClone(snapshot.workspaces),
-    createBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
-    selectBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
-    renameBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
-    deleteBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
+    createBrowserWorkspace: async (displayName) => {
+      if (!displayName.trim() || displayName.length > 80)
+        throw new Error("Invalid fixture profile name");
+      const id = "wrk_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+      calls.push({ type: "createBrowserWorkspace", displayName });
+      snapshot.workspaces.workspaces.push({
+        id,
+        displayName,
+        browser: "chrome",
+        storageLayout: "workspace",
+        createdAt: new Date().toISOString(),
+        lastUsedAt: new Date().toISOString(),
+      });
+      snapshot.workspaces.selectedWorkspaceId = id;
+      publish("profile.created");
+      return structuredClone(snapshot.workspaces);
+    },
+    selectBrowserWorkspace: async (workspaceId) => {
+      if (
+        !snapshot.workspaces.workspaces.some(
+          (entry) => entry.id === workspaceId,
+        )
+      )
+        throw new Error("Missing fixture profile");
+      calls.push({ type: "selectBrowserWorkspace", workspaceId });
+      snapshot.workspaces.selectedWorkspaceId = workspaceId;
+      publish("profile.selected");
+      return structuredClone(snapshot.workspaces);
+    },
+    renameBrowserWorkspace: async (workspaceId, displayName) => {
+      const profile = snapshot.workspaces.workspaces.find(
+        (entry) => entry.id === workspaceId,
+      );
+      if (!profile || !displayName.trim() || displayName.length > 80)
+        throw new Error("Missing fixture profile or name");
+      calls.push({ type: "renameBrowserWorkspace", workspaceId, displayName });
+      profile.displayName = displayName;
+      publish("profile.renamed");
+      return structuredClone(snapshot.workspaces);
+    },
+    deleteBrowserWorkspace: async (workspaceId) => {
+      calls.push({ type: "deleteBrowserWorkspace", workspaceId });
+      snapshot.workspaces.workspaces = snapshot.workspaces.workspaces.filter(
+        (entry) => entry.id !== workspaceId,
+      );
+      if (snapshot.workspaces.selectedWorkspaceId === workspaceId)
+        delete snapshot.workspaces.selectedWorkspaceId;
+      publish("profile.deleted");
+      return structuredClone(snapshot.workspaces);
+    },
     executeProductIntent: async (intent) => executeProductIntent(intent),
+    rejectNextBrowserReturn: async () => {
+      rejectNextBrowserReturn = true;
+    },
+    rejectNextAttentionResponse: async () => {
+      rejectNextAttentionResponse = true;
+    },
     setJourneyScenario: async (name) => setScenario(name),
     appendJourneyActivity: async () => appendJourneyActivity(),
     appendStoppedJourneyActivity: async () => appendStoppedJourneyActivity(),
