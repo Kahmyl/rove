@@ -344,3 +344,101 @@ Generated timestamped dock/shell evidence, screenshots/DOM/geometry and prior fa
 ### MR disposition and next gate
 
 MR-034 has a machine-qualified dock/composer/queue foundation candidate, awaiting independent manager acceptance and later specialist/integrated/human qualification. MR-035/036/037/039, MR-038 integration, STAB-14, provider/platform/native/package and distribution gates remain open. UXR-04 is unstarted. Stop after normal commit and verified non-force push to PR #38, and wait for manager acceptance plus an explicit next-item message in this same implementation chat. No merge or release readiness is authorized.
+
+
+## UXR-03 manager acceptance and decision continuation — 3 October 2026
+
+The persistent manager independently accepted exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` on `codex/human-review-remediation-planning`; checkout was clean and tracked origin matched. Review covered resolver/container/Stop guard, every request coordinate negative, Task draft/read restoration, queue intents, tests, canonical/planning handoffs and representative compact light/dark queue/Stopping/attachments-overflow captures. All nine source and 32 screenshot hashes matched. Independent replay of the committed dock qualification passed 32 captures / five groups at `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-32-40-921Z/report.json`; `git diff --check b59fe4f..HEAD` passed. No manager remediation round was required. Independent stable Send and Stop geometry correctly supersedes the historical swapped-slot assertion; negative authority and ordinary-composer absence remain intact.
+
+This accepts the dock/composer/queue foundation only. MR-034 specialist/integrated/human and MR-038 integration, provider/native/platform/package/distribution gates remain open; the Vite advisory remains. The manager explicitly continued this same sole worker to bounded UXR-04 from that accepted HEAD, with focused/directly affected checks, no live model/account/service effects, normal descriptive commit/non-force push on PR #38 and a review stop before UXR-05. `pnpm codex:context` and current Git truth confirmed exact clean start before editing. No subagent or new task was created.
+
+
+## UXR-04 selected Task decisions — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and invariant
+
+Branch `codex/human-review-remediation-planning`; exact clean committed start and independently accepted dock foundation `3458fb36f5f9e0f81f9ef0e7345c5884fea52331`. The manager checkpoint immediately above records acceptance and explicit continuation in this same sole-worker chat. `pnpm codex:context` and Git truth matched before editing. One writer, no subagents/new tasks, live model/account/service effects, amend/rebase/force push or merge. Exit identity is the normal commit introducing this section, titled `Compose exact task decisions with stable submitting controls`; resolve it with `git log -1 --format=%H -S '## UXR-04 selected Task decisions' -- docs/Planning/human-review-remediation/continuity-ledger.md`. PR #38 is the only publication destination. Report `sourceHead` fields name the committed start; final fingerprints below identify the exact qualified dirty source committed.
+
+The exact applicable selected-Task blocking request occupies the accepted dock until it settles. Ordinary composition is absent, while its Task-owned draft, queue/context/attachments and reading intent remain intact. Background requests cannot replace another Task’s dock; submitting one Task does not globally disable another. Stopping retains accepted precedence and independently exact Stop capability. Provider values/order/amendment material and the existing host/adapter/TaskEngine response-once/replay fences remain authoritative.
+
+### Owning cause and correction
+
+The prior ad hoc renderer used `collaborationRequest.description` twice in its generic nonpending branch, duplicating “Submitting your response…”. Both branches removed their inputs/actions at submission, losing geometry and owned focus; generic approvals put all content and offered actions in one scroll area, making scope/refusal discoverability fragile. The global `run` busy flag also treated request submission as application-wide input gating. These are presentation ownership defects; no new provider policy, permission boundary or durable settlement mechanism was needed.
+
+`task-decision-surface.tsx` now owns conversational choice/multiple-question input, command/file/network/additional-permission approval, MCP structured form and trusted URL contents. Request instruction/context, full persistent-rule descriptions, fields and secondary exact browser controls scroll as bounded material. Provider-ordered actions stay outside that region; one-time acceptance is primary, session/policy choices and refusal/cancel remain plainly visible with consequences. Additional permission says **Allow for this turn**, matching existing host `scope: turn`; URL opening is primary, with separate Continue/refusal/cancel and explicit opening-is-not-submitting copy. The existing offered decisions/amendment objects are neither widened nor replaced. Unsupported forms expose no Submit while keeping refusal/cancel.
+
+Inputs and actions remain mounted/disabled during local submission and authoritative responding/checking/unresolved confirmation. One reserved status row renders the submitting message. Local synchronous refusal uses authority/Task/request/generation/thread/turn/item; host commands still reconstruct exact current provider coordinates and validate live identity/offered values/schema content before accepting. Client feedback focuses invalid controls and preserves exact option values/defaults, including provider-valid empty strings and false booleans. Secret question values live only in the mounted body and clear on submission/departure/rejection; response/external-opening error copy never echoes raw values. Non-secret pending field state remains transient and exactly keyed. Request-owned focus moves to status when disabled and returns to restored compose when settled, while live modal focus/inert protection is preserved. No global request-submitting busy flag is used.
+
+The candidate changes the family component/test, renderer integration and scoped CSS, pure collaboration action/description presentation helpers and exact scope-copy tests. Two qualification scripts and an additive fixture-only reject-next-response hook provide durable evidence; the fixture hook is inert by default and has no production API. Canonical application/live-state/security/testing/status, accepted UXR-03 status, UXR-04/program ledger, MR-034/035 disposition, UXR-07 entry and stabilization handoffs are reconciled. No schema, migration, persistence format, dependency, generated protocol or host/provider permission/response authority changed. UXR-05/06 specialist implementations remain unstarted; existing notification/error banner and duplicate browser inspector controls stay with their owners.
+
+### Final focused verification
+
+```sh
+pnpm codex:context
+pnpm exec vitest run apps/companion/src/main/codex/local-product-api.test.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts apps/companion/src/renderer/task-decision-surface.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-shell.test.tsx --reporter=dot
+pnpm exec vitest run apps/companion/src/main/codex/task-execution.test.ts -t 'trusted attention and continuation' --reporter=dot
+pnpm exec vitest run apps/companion/src/renderer/follower-app.test.tsx apps/companion/src/renderer/follower-state.test.ts apps/companion/src/main/codex/customer-task-presentation.test.ts --reporter=dot
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec eslint apps/companion/src/renderer/task-decision-surface.tsx apps/companion/src/renderer/task-decision-surface.test.tsx apps/companion/src/renderer/product-surface.tsx apps/companion/src/main/codex/customer-task-collaboration.ts apps/companion/src/main/codex/customer-task-collaboration.test.ts experiments/agent-execution/task-decision-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs
+node experiments/agent-execution/task-decision-rendered-qualification.mjs
+node experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-decisions-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+pnpm check:repository
+git diff --check
+```
+
+Six owning renderer/projection/API files pass 134 tests in 1.80s, including every coordinate negative, unchanged offered-decision/amendment and form validation/refusal/trusted URL host tests. The selected trusted attention/continuation owner group passes six tests in 983ms; its other 91 tests were intentionally outside this focused selection, not disabled in source. Workspace typecheck/build pass. The final companion build requalifies the scoped browser-copy CSS after the last workspace build; Vite retains the existing >500kB chunk advisory (~506.81kB). Touched lint and repository checks pass. The follower/presentation replay passes 27 tests across three files in 310ms. No full suite, `test:experiments`, system/release/recovery/platform or live provider campaign ran; integrated campaigns remain explicitly deferred to UXR-08. No packaged screen-reader or final human recording is claimed.
+
+Final production-bundle Electron evidence uses fixture accounts and temporary user data removed on exit. The decision fixture passes **94 captures / three assertion groups**: all seven families × light/dark × 1180×780/820×700 × pending/submitting/resolved (84 captures), plus validation, checking/unresolved, secret erasure/rejection, background marker, unrelated Task draft, modal ownership, browser coexistence and unsupported-form cases. Assertions prove exact intent values and command/network amendments, synchronous double-response refusal, no mode-change/rebuild replay, all offered action bounds, independent Stop capability, no peer composer, full scrollable material and unchanged action x/y/width/height (<2px unchanged budget). Keyboard focus is visible; reduced motion is exercised at compact width. Refusal for all supported families and Cancel where offered are dispatched exactly; invalid/unsupported forms cannot accept. Trusted opening sends only purpose/Task/request/generation and is not a response. Secret sentinels are absent from rendered evidence after submission/rejection; no response payloads are dumped into evidence. All recorded Stop targets remain within the viewport in an independent geometry audit.
+
+The inherited dock passes **32 captures / five groups**, retaining pre-turn/checking Stop, multiline draft/height restoration, queue/context and exact Task read ownership. The strengthened conversation/follower journey passes **28 captures**, retaining seven-family keyboard/ordinary-composer absence, queue acceptance/edit/reorder/remove/promotion/re-render, exact Steer, context/attachments, timeline/Latest, browser handoff and late-event isolation. Its old disappearance assertion now requires one retained disabled Send, zero enabled decision actions, one status, one response intent and unchanged full request geometry; no budget/authority negative was weakened. The shell fixture passes **35 captures / nine groups**, preserving nested modal resize/removal/cleanup, focus/inert, preferences, responsive allocation and no-effect negatives. These 189 captures are finite deterministic presentation/intent evidence, not live provider effect or integrated/human acceptance. Representative seven-family compact light/dark, normal network/resolved, submitting, form, secret rejection and final corrected browser coexistence captures were visually reviewed alongside DOM/geometry. Full-material scrolling intentionally leaves ordinary details above the viewport while actions stay visible.
+
+### Retained evidence and exact fingerprints
+
+| Record | SHA-256 |
+| --- | --- |
+| `artifacts/customer-journeys/task-decisions/2026-10-03T14-56-32-717Z/report.json` | `9d09cecf798b6d0e32d008a5d3d605a3a4ba9aa383ee242215f9b090742f888e` |
+| `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-56-46-940Z/report.json` | `b4f68204627b0bb1a709f425f8903e675f5876846b8e8a75b38e6e50cb8fe779` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T14-57-00-674Z/report.json` | `05779749bcf57015e922145692ff17e249774230c91e05ab190a1a5a4376ac0e` |
+| `artifacts/customer-journeys/conversation-task-decisions-isolated/manifest.json` | `185df00497fd874cd7dde583216535db6d00b8d8f46bcbb99c51ae3769f08106` |
+| `artifacts/customer-journeys/conversation-task-decisions-isolated/journey.trace.zip` | `27591156b03a5f21dd7c74e45e7b23491a463e24787d568507cb782ec9dd94ea` |
+
+Final decision source fingerprints (all 14 match the worktree; all 94 decision, 32 dock and 35 shell screenshot hashes were independently checked):
+
+- `apps/companion/src/renderer/product-shell.tsx`: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`
+- `apps/companion/src/renderer/product-shell.test.tsx`: `db618a9105a79e9fb70617535337f9371b39a89a3ec963018ffb094ef1ed6801`
+- `apps/companion/src/renderer/product-surface.tsx`: `bcff241c5d49fd38338d7ae61c1b09bd35437c168cd8f1f47cb78744d80a6d89`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `1e2e44142069a43193fc56ecc2e98994e564a04adccde35b726430f83c38a6cd`
+- `apps/companion/src/renderer/styles.css`: `ee7ddb60dde377b80ad773647dc7d327f302536ed5d85bf081edc2ad88898f94`
+- `experiments/agent-execution/task-decision-rendered-qualification.mjs`: `96bdcf9a7a2facb06adb4259e1942dd9940316d780ca900cdf0f63016bb13762`
+- `experiments/agent-execution/electron-conversation-task-qualification-fixture.cjs`: `e9d1e3b27b1cc63be07003fb2a1ec2d7c5dc4f235ca969a0f9d7d53ba6ecce40`
+- `apps/companion/src/renderer/task-decision-surface.tsx`: `e58ae172351c3babf4097065ff7758acb6ece1af14359994fc974492084aa4d3`
+- `apps/companion/src/renderer/task-decision-surface.test.tsx`: `b02d13c5e433851317c2a814742f6f2ce40f8ffe96211125c03f02e1baf6ffd1`
+- `apps/companion/src/main/codex/customer-task-collaboration.ts`: `be69ce4657d293a4d284ad40ed674a8e415ce0cfe2d1bc899094ec5f3be0ff09`
+- `apps/companion/src/main/codex/customer-task-collaboration.test.ts`: `98a4e518a98e2fe9d4f9d41fb0fc89a5882d35bde4bb36f8541266609ea8017e`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/renderer/task-interaction-dock.test.tsx`: `dbf90e8a4572a21269cfc5d9f0176e3a68fa4ffb9fb5d1b240ad772f1fdb1307`
+- `experiments/agent-execution/conversation-task-rendered-qualification.mjs`: `a2af95b2a3123ec561c54e0d485d43f7352f5f00b78f8c492767b028727a0b2f`
+
+
+### Failed candidates, review corrections and disproved hypotheses
+
+- Initial boolean default typechecking failed because a schema default has a union type; the renderer now narrows the boolean value explicitly. Exact permission-copy expectations were updated to the existing current-turn scope without changing accept/decline values; the inherited conversational eyebrow was retained. A review regression preserves valid empty string/default option values instead of conflating absence with an empty provider value.
+- `2026-10-03T14-40-30-626Z/failure.json`: pointer `.check()` targeted the established visually hidden radio (`pointer-events: none`). The fixture now clicks the visible label and asserts the exact radio value; the inherited keyboard Space route is preserved. No pointer policy or timeout changed.
+- `2026-10-03T14-40-57-479Z/failure.json` and explicit diagnostic `2026-10-03T14-41-23-669Z/failure.json`: genuine compact decision clipping. The policy action at y=655.15625 with height=49.84375 ended below 700px; refusal/Stop discovery was therefore not qualified. The bounded surface now reserves shell/capped queue/Stop/conversation space with independent material scroll, keeps full persistent rules in that material and visible action consequence copy outside it. Final action bounds and geometry pass. Disabled styling remains readable, choice labels can wrap, and required boolean controls use bounded geometry.
+- `2026-10-03T14-42-20-340Z/failure.json`: the background marker existed correctly in the compact hidden navigation drawer; querying a visible role without disclosing that drawer was a fixture defect. The committed case opens the existing navigation disclosure before asserting/capturing the marker; selected Task composition remains unchanged.
+- `2026-10-03T14-43-16-612Z/failure.json`: the fixture’s simulated Stop did not settle its pending attention. Product correctly retained the exact request after stopping. The case now positively observes fixture Stopped truth, proves the still-pending decision remains primary, then supplies an explicit settled snapshot before checking compose. No real process/provider cancellation is inferred.
+- The inherited conversation run rejected retained Send because its old assertion equated non-actionability with removal. The replacement is stronger: one disabled Send, zero enabled response actions, one status/intent, and unchanged x/y/width/height, with all original authority/queue/focus assertions retained. The current isolated output is the final pass; the earlier failure is preserved in this ledger, not claimed as a separate retained historical manifest.
+- `2026-10-03T14-51-24-301Z/failure.json`: replacing a contextBridge function did not inject rejection; the immutable bridge continued into submitting. An explicit fixture-only reject-next-response hook now proves the owner’s bounded error copy and secret erasure. The final test asserts bridge immutability; no production bridge or host policy was loosened. One copied unused lint global was removed.
+- Visual review rejected the synthetic browser combination in intermediate passing `2026-10-03T14-52-55-998Z/report.json`: Runtime/companion were copied without exact `roveSessionId`, causing an orphan-session banner. The fixture now copies that exact association and asserts absence of the orphan banner. A scoped decision-material grid separates existing secondary browser title/copy/control; it does not implement the resource inspector specialist. Final `2026-10-03T14-56-32-717Z/report.json` supersedes that combination. Existing notification/error-banner and inspector duplication findings remain open, not silently absorbed.
+
+Timestamped failures/diagnostics, screenshots, DOM/geometry and reports remain ignored and retained locally. Historical acceptance recordings are untouched; the committed scripts and fixture hook are the durable reproductions. No timeout inflation, removed case, lucky rerun or synthetic live-family pass is used as closure evidence.
+
+### MR disposition and exact next gate
+
+MR-034’s dock/composer/queue foundation is independently accepted at `3458fb3`; specialist/integrated/human qualification remains open. MR-035 has a bounded machine-qualified decision candidate awaiting manager acceptance and later integrated/human review. MR-036/037/039, MR-038 integration, STAB-14 and every provider/native/platform/package/distribution gate remain open. STAB-09’s selected-provider live family limitations are inherited, not requalified by deterministic cases, and provider-issued elevated permission consumption remains a release blocker. No notification or resource-only browser specialist implementation is included.
+
+After normal descriptive commit and verified non-force push to the same PR #38 branch, STOP WRITING for independent manager review. UXR-05 is unstarted and requires acceptance plus the next explicit continuation message in this same implementation chat. No merge or release readiness is authorized.

@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Planned — implementation not started
+**Status:** Decision composition candidate qualified — manager review pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -34,7 +34,7 @@ Permission-policy redesign, manufacturing provider families, altering exact deci
 
 Consume UXR-03 dock/Stop seam and STAB-07/08 exact emitted-decision contracts plus STAB-09 provider-family matrix. Characterize current request rendering and response state without treating deterministic fixtures as live reachability.
 
-The UXR-03 foundation candidate establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+The independently accepted UXR-03 foundation at exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
 
 ## Investigation requirements
 
@@ -42,7 +42,7 @@ Map conversational structured input, command approval, file-change approval, net
 
 ## Implementation responsibility
 
-Later implementation owns family-specific dock response surfaces, primary/secondary decision hierarchy, stable disabled/submitting state and coherent form/URL presentation. Keep exact request/generation binding, all offered material and decisions, safe Stop and ephemeral secret boundaries; provide one submitting message.
+This candidate owns family-specific dock response surfaces, primary/secondary decision hierarchy, stable disabled/submitting state and coherent form/URL presentation. Keep exact request/generation binding, all offered material and decisions, safe Stop and ephemeral secret boundaries; provide one submitting message.
 
 ## Acceptance criteria
 
@@ -73,3 +73,9 @@ Keep product/runtime/test names descriptive; ticket IDs remain bounded planning 
 ## Downstream handoff
 
 UXR-07 consumes qualified request-family composition and provider limitations. MR-035 closes only after these interaction assertions and visual review pass; no authority closure is inferred.
+
+## Qualified candidate and review stop
+
+`task-decision-surface.tsx` composes all seven families through the accepted dock with provider-ordered actions outside bounded scroll material, visible refusal/cancel and exact one-time/session/policy consequences, retained disabled controls and one status line. Per-request synchronous submission refusal uses every existing authority coordinate; client validation and focus, secret submission/departure/rejection erasure, opaque trusted opening, unrelated-Task drafts, modal focus/inert and decision/browser/Stop precedence are qualified deterministically. The existing host/adapter/TaskEngine keep exact decisions, amendments, validation, response settlement and replay fences. See the [continuity ledger](continuity-ledger.md) for final source fingerprints, evidence modes, causal failures/corrections and verification.
+
+Stop after normal commit/non-force push for independent manager review. MR-035 remains open for acceptance and later integrated/human qualification; UXR-05 is unstarted and requires the next explicit acceptance/continuation message. No policy, schema, migration, persistence or provider authority change is inferred. STAB-09 live-family limitations and all provider/native/platform/package/distribution gates remain unchanged.

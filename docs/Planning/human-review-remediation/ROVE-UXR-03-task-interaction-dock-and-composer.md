@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Dock/composer/queue foundation candidate qualified — manager review pending
+**Status:** Foundation accepted at `3458fb3` — integrated/human pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -76,4 +76,4 @@ UXR-04, UXR-05 and UXR-06 inherit one dock seam, mode responsibilities, exact ca
 
 See the [continuity ledger](continuity-ledger.md) for exact accepted start, source fingerprints, evidence and causal corrections. The typed presentation resolver prioritizes Stopping, one exact current decision, required/human/return browser collaboration, capability-blocked checking, Capture and compose. Voluntary takeover remains secondary in compose. Queue stays immediately above the mode body, with Steer primary and edit/remove/reorder in overflow. Send and independently available Stop occupy separate stable slots; pending Stop is immediately non-actionable. Shared compact composition preserves attachments/Commands/frozen settings/Output chips; per-Task text drafts and timeline reading intent restore without dispatch. Existing specialist controls are integrated through the seam without redesigning their family behavior or authority.
 
-Stop for independent manager review after normal commit/non-force push. UXR-04 remains unstarted and requires acceptance plus an explicit continuation message; MR-034 integrated/human qualification and specialist/external gates remain open. No host effect fence, provider policy, schema, persistence format or migration changes occurred.
+Independent manager review accepted exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` and explicitly continued the same worker to UXR-04; MR-034 integrated/human qualification and specialist/external gates remain open. No host effect fence, provider policy, schema, persistence format or migration changes occurred.

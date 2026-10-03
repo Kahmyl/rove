@@ -113,8 +113,19 @@ describe("customer Task collaboration projection", () => {
         attention("permission", "permission_approval", 1),
       ]).request?.actions,
     ).toEqual([
-      { kind: "respond", decision: "accept", label: "Allow" },
-      { kind: "respond", decision: "decline", label: "Deny" },
+      {
+        kind: "respond",
+        decision: "accept",
+        label: "Allow for this turn",
+        description:
+          "Grants only the requested permissions for the current turn.",
+      },
+      {
+        kind: "respond",
+        decision: "decline",
+        label: "Deny",
+        description: "Does not allow this request.",
+      },
     ]);
     expect(
       customerTaskCollaboration(task(), [

@@ -7674,3 +7674,189 @@ html[data-rove-theme="dark"]
   min-width: 36px;
   min-height: 36px;
 }
+
+/* Decision material scrolls independently; every offered action stays discoverable. */
+.product-app .task-interaction-dock .task-decision-surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(56vh, 440px, calc(100vh - 340px));
+  padding: 14px 16px 0;
+  overflow: hidden;
+  gap: 8px;
+}
+.task-decision-heading {
+  display: grid;
+  gap: 4px;
+}
+.task-decision-heading h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.35;
+}
+.task-decision-heading p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.task-decision-material {
+  min-height: 40px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 10px;
+  padding: 2px 4px;
+}
+.task-decision-context {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+}
+.task-decision-context div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 8px;
+}
+.task-decision-context dt {
+  color: var(--ink-soft);
+}
+.task-decision-context dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.product-app .task-decision-material .task-response-options {
+  margin: 0;
+  padding: 10px 12px;
+}
+.product-app .task-decision-material .task-response-options > legend {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+}
+.product-app .task-decision-material .task-response-choice {
+  padding: 9px 10px;
+}
+.product-app .task-decision-material .task-response-other {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 8px 10px;
+}
+.product-app .task-decision-material .task-response-other input {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.task-decision-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.task-decision-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.task-decision-form input:not([type="checkbox"]),
+.task-decision-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+}
+.task-decision-form select[multiple] {
+  min-height: 76px;
+}
+.task-decision-form small,
+.task-decision-secure-note,
+.task-decision-material fieldset > small {
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.task-decision-status {
+  flex: none;
+  min-height: 20px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.product-app .task-decision-surface .task-decision-actions {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.product-app .task-decision-actions button {
+  width: 100%;
+  max-width: none;
+  min-height: 42px;
+  white-space: normal;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 3px;
+}
+.product-app .task-decision-actions button > small {
+  font-size: 11px;
+  opacity: 1;
+}
+.product-app .task-decision-surface [aria-busy="true"],
+.product-app .task-decision-surface:disabled {
+  cursor: default;
+}
+
+.product-app[data-shell-mode] .task-decision-actions button:disabled {
+  opacity: 1;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  border-color: var(--border);
+}
+.product-app .task-decision-material .task-response-option-copy strong,
+.product-app .task-decision-material .task-response-option-copy small {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.task-decision-policy {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.task-decision-instruction {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.task-decision-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  justify-self: start;
+  margin: 0;
+}
+
+.task-decision-material .browser-collaboration-summary {
+  display: grid;
+  gap: 4px;
+  padding-right: 10px;
+}
+.task-decision-material .browser-collaboration-summary > span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}

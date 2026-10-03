@@ -56,6 +56,8 @@ Attention events identify the exact request generation and whether it remains ac
 
 Control transfer is represented after the underlying ownership boundary has changed. A request to take control is not yet evidence that control was acquired. Returning control emits current-state information sufficient for fresh agent grounding, not an instruction to replay an earlier click.
 
+Decision fields are ephemeral renderer state bound to authority/Task/request/generation/thread/turn/item. Non-secret pending fields survive view switching but are retired on nonpending settlement; secret question values remain only in the mounted request body and clear on submission or departure. Local submission state prevents a second same-request intent immediately and is not a durable response receipt. The exact host attention state controls responding/checking/unresolved presentation and safe settlement. One Task’s response cannot set a global input lock for another Task, and presentation rebuilding never replays it.
+
 Task needs-attention badges may aggregate in the navigation UI without globally blocking other tasks. Notification count and currently selected task are not approval authority.
 
 ## Outcome reconciliation

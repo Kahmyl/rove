@@ -68,7 +68,12 @@ function refreshTaskPresentation(task) {
   }
 }
 
+let rejectNextAttentionResponse = false;
 function executeProductIntent(intent) {
+  if (intent.type === "attention.decide" && rejectNextAttentionResponse) {
+    rejectNextAttentionResponse = false;
+    throw new Error("private-fixture-value");
+  }
   calls.push({ type: "product", intent: structuredClone(intent) });
   const task = intent.taskId ? taskById(intent.taskId) : undefined;
   if (intent.type === "task.queue.add" && task) {
@@ -301,6 +306,9 @@ if (process.type === "renderer") {
     renameBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
     deleteBrowserWorkspace: async () => structuredClone(snapshot.workspaces),
     executeProductIntent: async (intent) => executeProductIntent(intent),
+    rejectNextAttentionResponse: async () => {
+      rejectNextAttentionResponse = true;
+    },
     setJourneyScenario: async (name) => setScenario(name),
     appendJourneyActivity: async () => appendJourneyActivity(),
     appendStoppedJourneyActivity: async () => appendStoppedJourneyActivity(),

@@ -1577,6 +1577,9 @@ try {
   const requestBoxBefore = await page
     .getByLabel("Current task request")
     .boundingBox();
+  const beforeResponseCalls = (
+    await page.evaluate(() => window.rove.getJourneyState())
+  ).calls.filter((call) => call.intent?.type === "attention.decide").length;
   await page.getByRole("button", { name: "Send", exact: true }).focus();
   await page.keyboard.press("Enter");
   await page.getByText("Submitting your response…", { exact: true }).waitFor();
@@ -1584,15 +1587,42 @@ try {
     .getByLabel("Current task request")
     .boundingBox();
   assert(
-    requestBoxBefore &&
-      requestBoxAfter &&
-      Math.abs(requestBoxBefore.x - requestBoxAfter.x) < 2,
-    "Attention submission jumped horizontally.",
+    requestBoxBefore && requestBoxAfter,
+    "Attention geometry disappeared.",
+  );
+  for (const coordinate of ["x", "y", "width", "height"])
+    assert(
+      Math.abs(requestBoxBefore[coordinate] - requestBoxAfter[coordinate]) < 2,
+      `Attention submission changed ${coordinate}.`,
+    );
+  const retainedSend = page.getByRole("button", { name: "Send", exact: true });
+  assert(
+    (await retainedSend.count()) === 1 && (await retainedSend.isDisabled()),
+    "Submitting attention must retain one disabled Send.",
   );
   assert(
-    (await page.getByRole("button", { name: "Send", exact: true }).count()) ===
-      0,
+    (await page
+      .getByLabel("Current task request")
+      .locator(".task-decision-actions button:enabled")
+      .count()) === 0,
     "Submitting attention remained actionable.",
+  );
+  assert(
+    (await page
+      .getByText("Submitting your response…", { exact: true })
+      .count()) === 1,
+    "Submission status was duplicated.",
+  );
+  await retainedSend.evaluate((node) => {
+    node.click();
+    node.click();
+  });
+  const afterResponseCalls = (
+    await page.evaluate(() => window.rove.getJourneyState())
+  ).calls.filter((call) => call.intent?.type === "attention.decide").length;
+  assert(
+    afterResponseCalls === beforeResponseCalls + 1,
+    "Submitting attention dispatched a duplicate response.",
   );
 
   await setScenario(page, "browser_required");

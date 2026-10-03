@@ -49,14 +49,14 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 ## Tickets and status
 
-UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 has a bounded candidate awaiting manager review, and UXR-04–08 remain Planned.
+UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 foundation is independently accepted at `3458fb3`; UXR-04 has a qualified decision candidate awaiting manager review; UXR-05–08 remain Planned.
 
 | Ticket                                                                        | Responsibility                                        | Status                                         |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
 | [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only                 |
 | [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Foundation accepted — integrated/human pending |
-| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Candidate — manager review pending             |
-| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                                        |
+| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Foundation accepted — integrated/human pending |
+| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Candidate — manager review pending             |
 | [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                                        |
 | [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                                        |
 | [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                                        |
@@ -85,6 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-The manager independently accepted UXR-02 foundation at exact `b59fe4f071ca064b08514970259a72d3b252bab1` after one nested-focus remediation round, and explicitly continued the same worker to UXR-03. Consume the [dock ledger exit](continuity-ledger.md); the dock/composer/queue candidate now awaits independent manager review on PR #38. UXR-04 requires acceptance plus an explicit next-item message.
+The manager independently accepted UXR-03 foundation at exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` without a remediation round and explicitly continued the same sole worker to bounded UXR-04. Consume the [manager checkpoint and qualified decision exit](continuity-ledger.md). UXR-04 awaits manager review; UXR-05 remains unstarted until independent review and the next explicit continuation message.
 
 The same actual implementation chat continues UXR-02 through UXR-08, one writer and one review stop per item. After accepting each checkpoint, the persistent manager sends the next bounded item explicitly. Focused/directly affected checks apply per item; full integrated system verification follows implementation at UXR-08. Final human-recorded acceptance and provider/platform/distribution gates remain separate. Retire ticket metadata with the active program.
