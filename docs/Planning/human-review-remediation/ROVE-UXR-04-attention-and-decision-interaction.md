@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Decision composition candidate qualified — manager review pending
+**Status:** Decimal correction qualified — manager re-review pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -79,3 +79,5 @@ UXR-07 consumes qualified request-family composition and provider limitations. M
 `task-decision-surface.tsx` composes all seven families through the accepted dock with provider-ordered actions outside bounded scroll material, visible refusal/cancel and exact one-time/session/policy consequences, retained disabled controls and one status line. Per-request synchronous submission refusal uses every existing authority coordinate; client validation and focus, secret submission/departure/rejection erasure, opaque trusted opening, unrelated-Task drafts, modal focus/inert and decision/browser/Stop precedence are qualified deterministically. The existing host/adapter/TaskEngine keep exact decisions, amendments, validation, response settlement and replay fences. See the [continuity ledger](continuity-ledger.md) for final source fingerprints, evidence modes, causal failures/corrections and verification.
 
 Stop after normal commit/non-force push for independent manager review. MR-035 remains open for acceptance and later integrated/human qualification; UXR-05 is unstarted and requires the next explicit acceptance/continuation message. No policy, schema, migration, persistence or provider authority change is inferred. STAB-09 live-family limitations and all provider/native/platform/package/distribution gates remain unchanged.
+
+Manager review rejected `691bed3` for native `number` inputs inheriting integer step constraints. The bounded correction sets fractional number steps explicitly and retains integer rejection; the expanded 96-capture decision fixture includes exact 2.5 submission and zero-dispatch integer refusal. See the ledger correction below the historical candidate exit. No acceptance or UXR-05 continuation is inferred.

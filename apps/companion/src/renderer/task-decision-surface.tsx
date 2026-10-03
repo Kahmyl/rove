@@ -398,7 +398,13 @@ export function TaskDecisionSurface({
                       max={field.maximum}
                       minLength={field.minLength}
                       maxLength={field.maxLength}
-                      step={field.type === "integer" ? 1 : undefined}
+                      step={
+                        field.type === "integer"
+                          ? 1
+                          : field.type === "number"
+                            ? "any"
+                            : undefined
+                      }
                       placeholder={
                         field.format === "date-time"
                           ? "YYYY-MM-DDTHH:mm:ssZ"

@@ -285,4 +285,27 @@ describe("Task decision surface", () => {
     expect(decisionValidation(value, {}, {})).toEqual([]);
     expect(render(value)).toContain("Empty exact value");
   });
+  it("allows bounded decimals for number fields while retaining integer constraints", () => {
+    const value = entry("mcp_elicitation");
+    value.elicitation = {
+      mode: "form",
+      message: "Numeric input",
+      fields: [
+        {
+          id: "count",
+          title: "Count",
+          type: "number",
+          minimum: 1,
+          maximum: 5,
+          required: true,
+          default: 2,
+        },
+      ],
+    };
+    expect(decisionValidation(value, {}, { count: 2.5 })).toEqual([]);
+    expect(render(value)).toContain('step="any"');
+    value.elicitation.fields![0]!.type = "integer";
+    expect(decisionValidation(value, {}, { count: 2.5 })).toHaveLength(1);
+    expect(render(value)).toContain('step="1"');
+  });
 });

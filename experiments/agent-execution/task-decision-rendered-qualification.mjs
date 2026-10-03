@@ -229,6 +229,10 @@ scenarios.decision_browser.companion = browser.companion;
 scenarios.decision_unsupported = structuredClone(scenarios.decision_form);
 scenarios.decision_unsupported.product.attention[0].elicitation.unsupportedReason =
   "This fixture schema constraint is unsupported.";
+scenarios.decision_decimal = structuredClone(scenarios.decision_form);
+scenarios.decision_decimal.product.attention[0].elicitation.fields.find(
+  (field) => field.id === "count",
+).type = "number";
 await writeFile(scenarioPath, JSON.stringify(scenarios));
 const requireBrowser = createRequire(
   join(root, "packages/browser/package.json"),
@@ -659,6 +663,53 @@ try {
     ),
   );
   await capture("form-validation-required");
+  await scenario("decision_form", "task_active");
+  await fill("form");
+  const integerInput = request.getByLabel("Count", { exact: true });
+  await integerInput.fill("2.5");
+  assert.equal(await integerInput.getAttribute("step"), "1");
+  assert.equal(
+    await integerInput.evaluate((node) => node.validity.stepMismatch),
+    true,
+  );
+  const integerBefore = (await calls()).length;
+  await request.getByRole("button", { name: "Submit", exact: true }).click();
+  assert.equal(
+    (await calls()).length,
+    integerBefore,
+    "Fractional integer cannot dispatch",
+  );
+  assert.equal(
+    await integerInput.evaluate((node) => node === document.activeElement),
+    true,
+  );
+  await capture("form-integer-fraction-refused");
+  await scenario("decision_decimal", "task_active");
+  await fill("form");
+  const decimalInput = request.getByLabel("Count", { exact: true });
+  await decimalInput.fill("2.5");
+  assert.equal(await decimalInput.getAttribute("step"), "any");
+  assert.equal(
+    await decimalInput.evaluate((node) => node.validity.valid),
+    true,
+  );
+  const decimalBefore = (await calls()).length;
+  await request.getByRole("button", { name: "Submit", exact: true }).click();
+  assert.equal(
+    (await calls()).length,
+    decimalBefore + 1,
+    "Valid decimal dispatches exactly once",
+  );
+  assert.equal(
+    (await calls()).at(-1).intent.form.count,
+    2.5,
+    "Exact decimal value survives intent",
+  );
+  await capture("form-number-decimal-submitted");
+  steps.push(
+    "Valid bounded decimal emits exact 2.5 once; fractional integer remains invalid and emits no intent",
+  );
+
   await scenario("queue", "task_active");
   await message.waitFor();
   for (const family of ["command", "network"]) {
