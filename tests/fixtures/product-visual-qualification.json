@@ -1,0 +1,74 @@
+{
+  "themes": ["light", "dark"],
+  "viewports": [
+    [1180, 780],
+    [820, 700]
+  ],
+  "motion": ["normal", "reduced"],
+  "input": ["pointer", "keyboard"],
+  "composition": [
+    "working",
+    "decision",
+    "browser_required",
+    "browser_human",
+    "browser_checking",
+    "background",
+    "long",
+    "checking",
+    "failure",
+    "unresolved",
+    "stopping",
+    "stopped",
+    "offline_pending",
+    "offline_uncertain",
+    "offline_materialized",
+    "attachment"
+  ],
+  "decisionFamilies": [
+    "user",
+    "command",
+    "file",
+    "network",
+    "permission",
+    "form",
+    "url"
+  ],
+  "rubric": [
+    {
+      "id": "primary-hierarchy",
+      "expected": "One Task dock owns current interaction; secondary details do not duplicate authority or squeeze the conversation."
+    },
+    {
+      "id": "surface-coherence",
+      "expected": "Controls, panels and overlays use the established 8/12/16px scale, restrained elevation, readable typography and intentional density."
+    },
+    {
+      "id": "action-discovery",
+      "expected": "Offered refusal and scope remain readable and discoverable outside bounded request material; no unsupported provider choice is invented."
+    },
+    {
+      "id": "theme-and-controls",
+      "expected": "Actual primary hover, keyboard focus, disabled/submitting actions and consequences remain readable in both themes."
+    },
+    {
+      "id": "state-truth",
+      "expected": "Working, Checking, Stopping, Stopped, failure, uncertainty and signed-out saved history retain distinct truthful presentation and replay fences."
+    },
+    {
+      "id": "focus-and-reading",
+      "expected": "Modal/drawer focus stays owned, announcements cannot cover inert modal material, and drafts, manual reading position and Latest remain coherent."
+    },
+    {
+      "id": "long-and-resource-content",
+      "expected": "Long titles/text, attachments, many activities, profiles and resource/recording details preserve important actions without competing cards."
+    }
+  ],
+  "supplementalCoverage": "Browser/notification specialist negatives and hover/numeric/secret/threshold cases remain linked supplemental witnesses; the mandatory composition and seven-family decision cells use the complete Cartesian product above.",
+  "unqualified": [
+    "Final human Stage 1–4 acceptance",
+    "Live provider-family and elevated-grant consumption",
+    "Authoritative current-page URL",
+    "Supported-platform/native/package live browser composition",
+    "Signing/notarization/distribution"
+  ]
+}

@@ -705,7 +705,6 @@ The manager independently accepted UXR-02 foundation at exact `b59fe4f071ca064b0
 
 MR-034 remains open for manager acceptance plus specialist/integrated/human qualification; MR-038 has accepted foundation only. No schema, persistence, protocol, credentials or host authority change occurred. UXR-04 remains unstarted until acceptance and an explicit next-item message. STAB-14 and every inherited human/provider/platform/distribution gate remain open; full integrated campaigns remain UXR-08.
 
-
 ## Selected Task decision continuation — 3 October 2026
 
 The manager independently accepted UXR-03 dock/composer/queue foundation at exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` and explicitly continued this same sole worker to bounded UXR-04. Seven-family decision composition now has a qualified presentation candidate: exact provider values/order/amendments, stable retained disabled controls with one status, visible refusal/scope, client validation/focus, secret erasure/rejection, opaque trusted opening and exact request/browser/Stop precedence. The final deterministic matrix passes 94 decision captures, 32 inherited dock, 28 conversation/follower and 35 modal shell captures, plus 134 owning renderer/projection/API tests and six selected trusted attention/continuation tests. Exact source fingerprints, commands, evidence hashes, failed-candidate root causes and limitations are in the [decision ledger exit](../human-review-remediation/continuity-ledger.md).
@@ -716,13 +715,11 @@ Manager review rejected UXR-04 checkpoint `691bed3` for native number inputs rej
 
 Manager re-review confirmed decimals but rejected `59daa0c` for dark enabled primary hover contrast. The decision-only token pairing and expanded 112-capture/five-group contrast fixture now pass; action hover/focus/disabled witnesses and the failed diagnostic are retained in the [decision contrast correction ledger](../human-review-remediation/continuity-ledger.md). Broader inherited primary-hover risk is explicitly routed to UXR-07/MR-038. UXR-04/MR-035 still await acceptance; UXR-05 is unstarted.
 
-
 ### Decision acceptance and notification candidate — 3 October 2026
 
 Independent manager review accepted UXR-04 foundation at exact `eef0f8bf79995f405557ed0a470b85052928464a` (112 decision captures / five groups), retaining both rejected decimal/hover histories and routing unrelated primary hover to UXR-07/MR-038. The same sole writer then implemented bounded UXR-05 from that exact clean start. Direct human approval resolved the temporary Electron/publication review boundary.
 
 Notification separation now has a machine-qualified candidate: 140 focused tests / six files, workspace typecheck/build and 112 notification captures / three groups pass. Dismissal changes only renderer memory; Task/delivery/Output/legacy-effect/browser/device markers and every authority fence remain. Exact report/source hashes, unchanged snapshot/command-log witnesses, fixture corrections and deferred checks are in the [notification ledger exit](../human-review-remediation/continuity-ledger.md). No schema, migration, persistence preference, provider policy or host authority changed. Manager, MR-036 integrated/human, Stage 1–4, full UXR-08 campaigns and all inherited provider/elevated-grant/platform/package/distribution gates remain open. UXR-06 is unstarted; STOP after normal commit/non-force push on PR #38 for review and explicit continuation.
-
 
 ### Notification acceptance and browser presentation candidate — 3 October 2026
 
@@ -730,9 +727,14 @@ Independent manager review accepted exact UXR-05 `bad71035b7e1443941fbb031f3527c
 
 MR-036 foundation is accepted; MR-037 awaits manager and integrated/human acceptance. Current-page URL is absent from the customer read model; historical recording site text does not fill that gap. No schema, migration, persistence format, provider/native authority or recording scope change occurred. Prior shared-source renderer fingerprints remain historical pending integration. Full UXR-08 campaigns, Stage 1–4, human recording, provider/elevated grants, supported-platform/package/distribution and every inherited release gate remain open. UXR-07 is unstarted; stop for review after normal commit/non-force push on PR #38.
 
-
 ### Browser acceptance and bounded integration candidate — 3 October 2026
 
 Manager accepted UXR-06 foundation at exact `243c1dbcfc7a6909b11276c0eed2d729f92109e0` and explicitly continued the same sole writer to bounded UXR-07. Shared primary hover/disabled readability and modal drawer/announcement layering are corrected without changing host authority. The integrated temporary-fixture matrix passes 238 captures, 212 focused tests and one SQLite/API persistence-seed reconstruction test; affected specialist replays retain their negative assertions. The [integration ledger exit](../human-review-remediation/continuity-ledger.md) owns exact fingerprints, commands, failure roots and Stage-4 synthetic-history classification with its original-launch provenance limit.
 
 MR-034–MR-038 retain accepted foundations and this review-pending integrated candidate; no market blocker or release gate is closed. UXR-08 remains unstarted pending manager acceptance and explicit same-chat continuation. Full deterministic/system/recovery campaign, final human Stage 1–4, current-page URL, native/provider/elevated grants, supported-platform/package/distribution and all inherited external gates remain open. No schema, migration, persistence format, dependency or authority change occurred. Stop after normal commit/non-force push on PR #38 for review.
+
+### Integrated acceptance and retained remediation qualification candidate — 3 October 2026
+
+Manager independently accepted exact UXR-07 `b69c73534cfe1156a95ec03100668db076639fd3` and explicitly continued the same sole writer to UXR-08. The complete matrix/rubric/pointer gate candidate, full deterministic verification, local App Server stand-in recovery and unsigned macOS package fixtures are recorded with exact commands, source/media fingerprints and failure roots in the [qualification exit](../human-review-remediation/continuity-ledger.md). No production source, schema, migration, persistence format, dependency or authority change occurred. Harness mismatches were registered and reconciled against current contracts; no new product defect was silently fixed.
+
+This is a candidate awaiting independent review. Final human Stage 1–4 was not run. MR-034–MR-039 remain open for independent/final human acceptance; STAB-14 cannot close. Current-page read-model, real provider-family/elevated-grant consumption, native/live packaged browser composition, Windows/Linux process trees, signing/notarization and distribution retain their owning qualification limits. Local unsigned macOS smoke and synthetic persistence interactions establish only their explicitly recorded bounded mode. Stop after normal commit/non-force push on existing PR #38.

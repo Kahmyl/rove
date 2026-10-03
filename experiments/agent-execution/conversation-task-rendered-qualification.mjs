@@ -27,6 +27,7 @@ const outputRoot =
   join(
     repositoryRoot,
     "artifacts/customer-journeys/conversation-task-rendered-qualification",
+    new Date().toISOString().replaceAll(":", "-"),
   );
 const scenarioPath = join(outputRoot, "production-projection-scenarios.json");
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
@@ -1734,11 +1735,17 @@ try {
   await setScenario(page, "uncertain");
   await openTask(page, "task_uncertain");
   assert(
-    await page.getByText("Outcome unclear", { exact: true }).isVisible(),
+    (
+      await page.locator("#task-state-task_uncertain > summary").textContent()
+    ).includes("Outcome unclear"),
     "Uncertainty is not distinct.",
   );
   assert(
-    (await page.locator(".product-warning").count()) === 1,
+    (await page.locator("#task-state-task_uncertain").count()) === 1 &&
+      (await page
+        .getByLabel("Notifications", { exact: true })
+        .getByText("Outcome unclear", { exact: true })
+        .count()) === 1,
     "Consequential uncertainty lost its persistent warning.",
   );
   assert(
@@ -2003,6 +2010,24 @@ try {
       screenshots: steps.length,
     }),
   );
+} catch (error) {
+  if (application) {
+    const page = application.windows()[0];
+    if (page) {
+      await page
+        .screenshot({ path: join(outputRoot, "failure.png") })
+        .catch(() => undefined);
+      await writeFile(
+        join(outputRoot, "failure.html"),
+        await page.content(),
+      ).catch(() => undefined);
+    }
+  }
+  await writeFile(
+    join(outputRoot, "failure.json"),
+    JSON.stringify({ commit, error: String(error) }, null, 2),
+  );
+  throw error;
 } finally {
   if (traceStarted && application)
     await application

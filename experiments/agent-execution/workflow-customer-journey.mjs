@@ -15,6 +15,7 @@ const repositoryRoot = resolve(
 const outputRoot = join(
   repositoryRoot,
   "artifacts/customer-journeys/journey-02-workflow",
+  new Date().toISOString().replaceAll(":", "-"),
 );
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
 const fixtureMain = join(
@@ -73,7 +74,7 @@ async function visibleState(page) {
       ".workflow-context-surface",
       ".workflow-context-focused-editor",
       ".composer-command-palette",
-      ".task-response-surface",
+      ".task-decision-surface",
       ".composer-input-shell",
     ]
       .map((selector) => {
@@ -178,7 +179,7 @@ try {
   application = await electron.launch({
     executablePath: electronExecutable,
     cwd: repositoryRoot,
-    args: [fixtureMain],
+    args: [fixtureMain, `--user-data-dir=${join(outputRoot, "electron-home")}`],
     env: { ...process.env, ROVE_JOURNEY_RENDERER_ROOT: rendererRoot },
   });
   await application
@@ -345,7 +346,7 @@ try {
     ),
   );
   await page.getByRole("button", { name: /Choose the final audience/ }).click();
-  const responseSurface = page.locator(".task-response-surface");
+  const responseSurface = page.locator(".task-decision-surface");
   await responseSurface.waitFor();
   await capture(
     page,
@@ -385,7 +386,7 @@ try {
     note("Task identity and normal continuation are preserved."),
   );
   await page.evaluate(() => window.rove.seedWorkflowAttention());
-  await page.locator(".task-response-surface").waitFor();
+  await page.locator(".task-decision-surface").waitFor();
   await page.getByLabel("Audience answer").fill("Customer advisory group");
   await capture(
     page,
@@ -397,7 +398,7 @@ try {
     ),
   );
   await page
-    .locator(".task-response-surface")
+    .locator(".task-decision-surface")
     .getByRole("button", { name: "Send" })
     .click();
   await page.locator(".task-composer-shell").waitFor();
@@ -624,6 +625,24 @@ try {
   process.stdout.write(
     `${JSON.stringify({ status: "pass", output: relative(repositoryRoot, outputRoot), screenshots: steps.length }, null, 2)}\n`,
   );
+} catch (error) {
+  if (application) {
+    const page = application.windows()[0];
+    if (page) {
+      await page
+        .screenshot({ path: join(outputRoot, "failure.png") })
+        .catch(() => undefined);
+      await writeFile(
+        join(outputRoot, "failure.html"),
+        await page.content(),
+      ).catch(() => undefined);
+    }
+  }
+  await writeFile(
+    join(outputRoot, "failure.json"),
+    JSON.stringify({ commit, error: String(error) }, null, 2),
+  );
+  throw error;
 } finally {
   if (traceStarted && application)
     await application
@@ -631,4 +650,5 @@ try {
       .tracing.stop()
       .catch(() => undefined);
   await application?.close().catch(() => undefined);
+  await rm(join(outputRoot, "electron-home"), { recursive: true, force: true });
 }

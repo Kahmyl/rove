@@ -9,6 +9,8 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
+import { installEvidencePointer } from "./rendered-evidence-pointer.mjs";
+
 const root = resolve(import.meta.dirname, "../..");
 const output = join(
   root,
@@ -222,6 +224,8 @@ try {
     },
   });
   const page = await app.firstWindow();
+  if (process.env.ROVE_VISUAL_QUALIFICATION === "complete")
+    await installEvidencePointer(page);
   page.setDefaultTimeout(10_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -469,6 +473,10 @@ try {
         .update(await readFile(join(output, file)))
         .digest("hex"),
       geometry,
+      pointerEvidence:
+        process.env.ROVE_VISUAL_QUALIFICATION === "complete"
+          ? await page.evaluate(() => window.readQualificationPointer())
+          : undefined,
     });
   }
 
@@ -948,6 +956,7 @@ try {
   assert.deepEqual(errors, []);
   const sourceFiles = {};
   for (const path of [
+    "experiments/agent-execution/rendered-evidence-pointer.mjs",
     "apps/companion/src/renderer/product-surface.tsx",
     "apps/companion/src/renderer/product-surface.test.tsx",
     "apps/companion/src/renderer/styles.css",

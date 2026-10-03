@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Machine-qualified candidate — independent manager acceptance pending
+**Status:** Integrated candidate accepted at `b69c735` — UXR-08/human qualification pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 

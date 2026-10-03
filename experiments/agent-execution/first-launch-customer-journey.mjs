@@ -15,6 +15,7 @@ const repositoryRoot = resolve(
 const outputRoot = join(
   repositoryRoot,
   "artifacts/customer-journeys/journey-01-first-launch",
+  new Date().toISOString().replaceAll(":", "-"),
 );
 const rendererRoot = join(repositoryRoot, "apps/companion/dist/renderer");
 const fixtureMain = join(
@@ -153,7 +154,7 @@ try {
   application = await electron.launch({
     executablePath: electronExecutable,
     cwd: repositoryRoot,
-    args: [fixtureMain],
+    args: [fixtureMain, `--user-data-dir=${join(outputRoot, "electron-home")}`],
     env: {
       ...process.env,
       ROVE_JOURNEY_RENDERER_ROOT: rendererRoot,
@@ -331,4 +332,5 @@ try {
       .tracing.stop()
       .catch(() => undefined);
   await application?.close().catch(() => undefined);
+  await rm(join(outputRoot, "electron-home"), { recursive: true, force: true });
 }

@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Planned — implementation not started
+**Status:** Machine qualification candidate — independent review pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -34,7 +34,7 @@ Silent remediation in a qualification ticket, weakening existing functional asse
 
 Consume integrated UXR-07 candidate and specialist exits; require all remediation finding dispositions and no hidden predecessor blocker. Build qualification from current truth, not stale fixture assumptions.
 
-The bounded UXR-07 candidate starts at accepted `243c1db` and retains a 238-capture composition matrix, 212 focused tests and one SQLite/API fixture audit, with exact source/compiled/runtime/checksum linkage in the ledger. Consume its independently accepted published SHA before entry; this candidate does not authorize UXR-08 yet. Retain shared primary hover/focus/disabled contrast and drawer announcement suspension/restoration, as well as all accepted specialist authority/secret/Stop/queue/browser negatives. The Stage-4 screenshot strongly correlates with an incomplete synthetic persistence seed at original `42952a2`; production pending delivery is correct without exact facts. Missing original launch command/database remains a provenance limit. Future fixture materialization is explicitly synthetic, not provider success. Do not reopen a live-delivery defect without new owning evidence or run credentials/services to fill that gap. Full matrix/rubric, pointer indicator, broader deterministic campaign and final human/external gates remain this ticket's later work.
+The bounded UXR-07 candidate starts at accepted `243c1db` and retains a 238-capture composition matrix, 212 focused tests and one SQLite/API fixture audit, with exact source/compiled/runtime/checksum linkage in the ledger. Manager independently accepted exact `b69c73534cfe1156a95ec03100668db076639fd3` and explicitly authorized this same writer to enter UXR-08. Its independent 238-capture replay and SQLite seed audit pass; preserve the ledger acceptance and final source fingerprints. Retain shared primary hover/focus/disabled contrast and drawer announcement suspension/restoration, as well as all accepted specialist authority/secret/Stop/queue/browser negatives. The Stage-4 screenshot strongly correlates with an incomplete synthetic persistence seed at original `42952a2`; production pending delivery is correct without exact facts. Missing original launch command/database remains a provenance limit. Future fixture materialization is explicitly synthetic, not provider success. Do not reopen a live-delivery defect without new owning evidence or run credentials/services to fill that gap. The retained matrix/rubric, pointer evidence and broader deterministic campaign are recorded in the qualification exit below; final human/external gates remain separate.
 
 ## Investigation requirements
 
@@ -74,3 +74,9 @@ Keep product/runtime/test names descriptive; ticket IDs remain bounded planning 
 ## Downstream handoff
 
 Stop at the machine checkpoint. Schedule/perform final Stage 1–4 human-paced recording only in separately authorized follow-up after UXR-08 passes; then STAB-14 still owns remaining provider/platform/distribution release gates.
+
+## Machine checkpoint
+
+The complete matrix and seven-criterion attributed Codex review are retained by `visual-interaction-qualification.mjs`; the catalog lives in `tests/fixtures/product-visual-qualification.json`. There is no pairwise reduction: 512 combined-state cells and 448 seven-family decision cells cover the full theme/size/motion/input product. Specialist negatives remain supplemental. A visual review cannot replace functional authority assertions; a missing cell, stale source/media hash or absent/failing review refuses qualification. See the [qualification continuation exit](continuity-ledger.md) for exact commands, final report/checksums, broader campaign outcomes and honest failure histories. No production source, schema, migration, persistence format or provider authority changed in this ticket.
+
+MR-034–MR-038 have integrated machine evidence and MR-039 has a retained composition gate candidate. They remain open for independent acceptance and final human-recorded composition review. Stop at this machine checkpoint; STAB-14 retains all external release gates.

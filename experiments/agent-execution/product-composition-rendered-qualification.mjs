@@ -16,6 +16,9 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
+import { installEvidencePointer } from "./rendered-evidence-pointer.mjs";
+
+const completeMatrix = process.env.ROVE_VISUAL_QUALIFICATION === "complete";
 const root = resolve(import.meta.dirname, "../..");
 const output = join(
   root,
@@ -212,6 +215,14 @@ try {
     },
   });
   const page = await app.firstWindow();
+  if (completeMatrix) await installEvidencePointer(page);
+  let inputMode = "pointer";
+  async function activate(control) {
+    if (inputMode === "keyboard") {
+      await control.focus();
+      await control.press("Enter");
+    } else await control.click();
+  }
   page.setDefaultTimeout(10_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -232,19 +243,29 @@ try {
       name: "Close inspector",
       exact: true,
     });
-    if (await close.isVisible()) await close.click();
+    if (await close.isVisible()) await activate(close);
     await page.evaluate((name) => window.rove.setJourneyScenario(name), name);
     if (taskId) {
       if (!(await page.locator("#shell-navigation").isVisible()))
-        await page
-          .getByRole("button", { name: "Open navigation", exact: true })
-          .click();
-      await page
-        .getByRole("button", { name: `Task history: ${taskId}`, exact: true })
-        .click();
+        await activate(
+          page.getByRole("button", { name: "Open navigation", exact: true }),
+        );
+      await activate(
+        page.getByRole("button", {
+          name: `Task history: ${taskId}`,
+          exact: true,
+        }),
+      );
     }
   }
   async function capture(name) {
+    if (completeMatrix) {
+      const pointer = await page.evaluate(() =>
+        window.readQualificationPointer(),
+      );
+      assert.equal(pointer.pointerEvents, "none");
+      assert.equal(pointer.ariaHidden, "true");
+    }
     if (name.endsWith("-focus")) {
       const focused = await page.evaluate(
         () => document.activeElement.outerHTML,
@@ -522,6 +543,10 @@ try {
         .update(await readFile(join(output, file)))
         .digest("hex"),
       geometry,
+      pointerEvidence:
+        process.env.ROVE_VISUAL_QUALIFICATION === "complete"
+          ? await page.evaluate(() => window.readQualificationPointer())
+          : undefined,
     });
   }
 
@@ -535,9 +560,9 @@ try {
   async function openInspector() {
     inspectorNoticeCount = await page.locator(".customer-notification").count();
     if (!(await inspector.isVisible()))
-      await page
-        .getByRole("button", { name: "Open Task details", exact: true })
-        .click();
+      await activate(
+        page.getByRole("button", { name: "Open Task details", exact: true }),
+      );
     if ((await inspector.getAttribute("aria-modal")) === "true") {
       assert.equal(await page.locator(".customer-notification").count(), 0);
       await page.keyboard.press("Tab");
@@ -555,7 +580,7 @@ try {
       exact: true,
     });
     if (await close.isVisible()) {
-      await close.click();
+      await activate(close);
       assert.equal(
         await page.locator(".customer-notification").count(),
         inspectorNoticeCount,
@@ -568,11 +593,11 @@ try {
       name: "Choose profile",
       exact: true,
     });
-    if (await choose.count()) await choose.click();
+    if (await choose.count()) await activate(choose);
     else
-      await inspector
-        .getByRole("button", { name: "Manage profiles", exact: true })
-        .click();
+      await activate(
+        inspector.getByRole("button", { name: "Manage profiles", exact: true }),
+      );
     await page
       .getByRole("dialog", { name: "Browser profiles", exact: true })
       .waitFor();
@@ -588,293 +613,335 @@ try {
       [820, 700],
     ]) {
       await resize(width, height);
-      await page.emulateMedia({
-        reducedMotion: width === 820 ? "reduce" : "no-preference",
-      });
-      for (const name of [
-        "working",
-        "decision",
-        "browser_required",
-        "browser_human",
-        "browser_checking",
-        "background",
-        "long",
-        "checking",
-        "failure",
-        "unresolved",
-        "stopping",
-        "stopped",
-        "offline_pending",
-        "offline_uncertain",
-        "offline_materialized",
-        "attachment",
-      ]) {
-        const value = scenarios[`composition_${name}`],
-          task = value.product.tasks[0];
-        await scenario(`composition_${name}`, task.taskId);
-        const truth = await authority(),
-          calls = await commands();
-        if (name.startsWith("offline_")) {
+      for (const motion of completeMatrix
+        ? ["normal", "reduced"]
+        : [width === 820 ? "reduced" : "normal"]) {
+        for (const modality of completeMatrix
+          ? ["pointer", "keyboard"]
+          : ["pointer"]) {
+          inputMode = modality;
+          const cellLabel = completeMatrix
+            ? `${theme}-${width}-${motion}-${modality}`
+            : `${theme}-${width}`;
+          await page.emulateMedia({
+            reducedMotion: motion === "reduced" ? "reduce" : "no-preference",
+          });
+          for (const name of [
+            "working",
+            "decision",
+            "browser_required",
+            "browser_human",
+            "browser_checking",
+            "background",
+            "long",
+            "checking",
+            "failure",
+            "unresolved",
+            "stopping",
+            "stopped",
+            "offline_pending",
+            "offline_uncertain",
+            "offline_materialized",
+            "attachment",
+          ]) {
+            const value = scenarios[`composition_${name}`],
+              task = value.product.tasks[0];
+            await scenario(`composition_${name}`, task.taskId);
+            const truth = await authority(),
+              calls = await commands();
+            if (name.startsWith("offline_")) {
+              assert.equal(
+                await page
+                  .getByText("Not signed in to Codex", { exact: true })
+                  .isVisible(),
+                true,
+              );
+              assert.equal(
+                await page.getByText("Sending…", { exact: true }).count(),
+                name === "offline_pending" ? 1 : 0,
+              );
+            }
+            if (name === "attachment") {
+              await page.getByLabel("Selected task attachments").waitFor();
+              await page
+                .getByLabel("More queued message actions")
+                .first()
+                .focus();
+              await page.keyboard.press("Enter");
+              await page.keyboard.press("Tab");
+            }
+
+            await capture(`${cellLabel}-${name}-closed`);
+            if (name === "failure") {
+              if (!(await page.locator("#shell-navigation").isVisible()))
+                await activate(
+                  page.getByRole("button", {
+                    name: "Open navigation",
+                    exact: true,
+                  }),
+                );
+              const archive = page
+                .getByRole("button", { name: /^Archive / })
+                .first();
+              await page.locator(".task-history-row").first().hover();
+              await archive.hover();
+              await capture(`${cellLabel}-archive-hover`);
+              await archive.focus();
+              await capture(`${cellLabel}-archive-focus`);
+              const closeNav = page
+                .locator(".shell-drawer-heading")
+                .getByRole("button", { name: "Close navigation", exact: true });
+              if (await closeNav.isVisible()) await activate(closeNav);
+            }
+            if (
+              ["decision", "browser_required", "browser_human"].includes(name)
+            ) {
+              const action = page
+                .locator(".task-interaction-dock button.primary")
+                .first();
+              assert.equal(await action.count(), 1);
+              assert.equal(await action.isEnabled(), true);
+              {
+                await action.hover();
+                await capture(`${cellLabel}-${name}-primary-hover`);
+                await action.focus();
+                await capture(`${cellLabel}-${name}-primary-focus`);
+              }
+            }
+            await openInspector();
+            await capture(`${cellLabel}-${name}-inspector`);
+            assert.equal(
+              await inspector
+                .getByRole("button", { name: /^(Take Over|Return to Rove)$/ })
+                .count(),
+              0,
+            );
+            await closeInspector();
+            assert.deepEqual(await authority(), truth);
+            assert.deepEqual(await commands(), calls);
+            if (["working", "long"].includes(name)) {
+              const input = page.getByLabel("Task message", { exact: true });
+              await input.fill("Keep this draft on its owning task.");
+              const send = page.locator(
+                ".composer-action-row button.primary.composer-submit",
+              );
+              if (await send.isEnabled()) {
+                await send.hover();
+                await capture(`${cellLabel}-${name}-send-hover`);
+                await send.focus();
+                await capture(`${cellLabel}-${name}-send-focus`);
+              }
+            }
+            matrix.push({
+              theme,
+              width,
+              height,
+              state: name,
+              inspector: "closed/open",
+              motion,
+              input: modality,
+            });
+          }
+          await scenario("composition_browser_required", "task_browser");
+          const noticeTruth = await authority(),
+            noticeCalls = await commands();
+          const dismiss = page.getByRole("button", {
+            name: "Dismiss Outcome unclear notification",
+            exact: true,
+          });
+          if (await dismiss.count()) {
+            await dismiss.focus();
+            await page.keyboard.press("Enter");
+            assert.deepEqual(await authority(), noticeTruth);
+            assert.deepEqual(await commands(), noticeCalls);
+            assert.ok(
+              (await page.locator(".customer-state-marker").count()) > 0,
+            );
+            await capture(
+              `${cellLabel}-browser-notice-dismissed-marker-retained`,
+            );
+          }
+          // Submission retains all offered actions and the exact authority identity.
+          await scenario("composition_decision", "task_active");
+          const decision = page.locator(".task-interaction-dock");
+          const actions = decision.locator(".task-decision-actions button");
+          const offered = await actions.count();
+          assert.ok(offered >= 2);
+          const identity = (await authority()).attention[0];
+          const commandCount = (await commands()).length;
+          await activate(
+            decision.getByRole("button", { name: /^Approve once/ }),
+          );
+          await decision
+            .getByText("Submitting your response…", { exact: true })
+            .waitFor();
+          assert.equal(await actions.count(), offered);
+          for (const action of await actions.all())
+            assert.equal(await action.isDisabled(), true);
+          assert.equal((await commands()).length, commandCount + 1);
+          const submitted = (await commands()).at(-1).intent;
+          assert.deepEqual(submitted, {
+            type: "attention.decide",
+            taskId: identity.taskId,
+            requestId: identity.requestId,
+            generation: identity.generation,
+            decision: "accept",
+          });
+          const retained = (await authority()).attention[0];
+          for (const key of [
+            "taskId",
+            "authority",
+            "requestId",
+            "generation",
+            "threadId",
+            "turnId",
+            "itemId",
+          ])
+            assert.equal(retained[key], identity[key]);
+          await capture(`${cellLabel}-decision-submitting`);
+          // Exact Task drafts and reading position survive replacement, navigation and drawers.
+          await scenario("composition_working", "task_active");
+          const input = page.getByLabel("Task message", { exact: true });
+          const draft =
+            "Preserve the exact Task draft through these interaction modes.\n".repeat(
+              12,
+            );
+          await input.fill(draft);
+          const before = await commands();
+          for (const mode of ["decision", "stopping", "stopped", "checking"]) {
+            await scenario(`composition_transition_${mode}`, "task_active");
+            assert.equal(
+              await page
+                .locator(".task-interaction-dock")
+                .getAttribute("data-dock-mode"),
+              mode === "decision"
+                ? "decision"
+                : mode === "stopping"
+                  ? "stopping"
+                  : mode === "checking"
+                    ? "checking"
+                    : "compose",
+            );
+          }
+          await scenario("composition_working", "task_active");
+          assert.equal(await input.inputValue(), draft);
+          assert.deepEqual(await commands(), before);
+          await capture(`${cellLabel}-draft-after-modes`);
+          await scenario("multi_task", "task_a");
+          await input.fill("Draft A stays with A");
+          await scenario("multi_task", "task_c");
+          await input.fill("Draft C stays with C");
+          await scenario("multi_task", "task_a");
+          assert.equal(await input.inputValue(), "Draft A stays with A");
+          await scenario("multi_task", "task_b");
+          assert.equal(await input.count(), 0);
+          await capture(`${cellLabel}-background-attention-exact-task`);
+          await scenario("long_content", "task_long");
+          const timeline = page.locator(".task-timeline");
+          await timeline.evaluate((node) => {
+            node.scrollTop = 0;
+            node.dispatchEvent(new Event("scroll"));
+          });
+          await openInspector();
+          await closeInspector();
+          assert.equal(await timeline.evaluate((node) => node.scrollTop), 0);
+          await scenario("multi_task", "task_a");
+          await scenario("long_content", "task_long");
+          assert.equal(await timeline.evaluate((node) => node.scrollTop), 0);
+          await capture(`${cellLabel}-long-reading-position`);
+          await activate(
+            page.getByRole("button", { name: "Latest", exact: true }),
+          );
+          assert.ok(
+            await timeline.evaluate(
+              (node) =>
+                node.scrollHeight - node.scrollTop - node.clientHeight <= 24,
+            ),
+          );
+          await capture(`${cellLabel}-latest-follow`);
+          // A real modal owns focus/inert above notices and either drawer allocation.
+          await scenario("browser_voluntary", "task_browser");
+          await profileModal();
+          const modal = page.getByRole("dialog", {
+            name: "Browser profiles",
+            exact: true,
+          });
+          await page.keyboard.press("Tab");
           assert.equal(
-            await page
-              .getByText("Not signed in to Codex", { exact: true })
-              .isVisible(),
+            await modal.evaluate((node) =>
+              node.contains(document.activeElement),
+            ),
             true,
           );
-          assert.equal(
-            await page.getByText("Sending…", { exact: true }).count(),
-            name === "offline_pending" ? 1 : 0,
+          await capture(`${cellLabel}-profiles-disabled-create`);
+          await modal
+            .getByLabel("New browser profile name", { exact: true })
+            .fill("Customer work");
+          await modal
+            .getByRole("button", { name: "Create", exact: true })
+            .hover();
+          await capture(`${cellLabel}-profiles-primary-hover`);
+          await activate(
+            modal.getByRole("button", {
+              name: "Close browser profiles",
+              exact: true,
+            }),
           );
-        }
-        if (name === "attachment") {
-          await page.getByLabel("Selected task attachments").waitFor();
-          await page.getByLabel("More queued message actions").first().focus();
-          await page.keyboard.press("Enter");
-          await page.keyboard.press("Tab");
-        }
-
-        await capture(`${theme}-${width}-${name}-closed`);
-        if (name === "failure") {
+          await closeInspector();
+          // Unrelated primary controls use the same owning theme pair.
           if (!(await page.locator("#shell-navigation").isVisible()))
-            await page
-              .getByRole("button", { name: "Open navigation", exact: true })
-              .click();
-          const archive = page
-            .getByRole("button", { name: /^Archive / })
-            .first();
-          await page.locator(".task-history-row").first().hover();
-          await archive.hover();
-          await capture(`${theme}-${width}-archive-hover`);
-          await archive.focus();
-          await capture(`${theme}-${width}-archive-focus`);
-          const closeNav = page
-            .locator(".shell-drawer-heading")
-            .getByRole("button", { name: "Close navigation", exact: true });
-          if (await closeNav.isVisible()) await closeNav.click();
-        }
-        if (["decision", "browser_required", "browser_human"].includes(name)) {
-          const action = page
-            .locator(".task-interaction-dock button.primary")
-            .first();
-          assert.equal(await action.count(), 1);
-          assert.equal(await action.isEnabled(), true);
-          {
-            await action.hover();
-            await capture(`${theme}-${width}-${name}-primary-hover`);
-            await action.focus();
-            await capture(`${theme}-${width}-${name}-primary-focus`);
-          }
-        }
-        await openInspector();
-        await capture(`${theme}-${width}-${name}-inspector`);
-        assert.equal(
-          await inspector
-            .getByRole("button", { name: /^(Take Over|Return to Rove)$/ })
-            .count(),
-          0,
-        );
-        await closeInspector();
-        assert.deepEqual(await authority(), truth);
-        assert.deepEqual(await commands(), calls);
-        if (["working", "long"].includes(name)) {
-          const input = page.getByLabel("Task message", { exact: true });
-          await input.fill("Keep this draft on its owning task.");
-          const send = page.locator(
-            ".composer-action-row button.primary.composer-submit",
+            await activate(
+              page.getByRole("button", {
+                name: "Open navigation",
+                exact: true,
+              }),
+            );
+          await activate(
+            page.getByRole("button", { name: "Create Workflow", exact: true }),
           );
-          if (await send.isEnabled()) {
-            await send.hover();
-            await capture(`${theme}-${width}-${name}-send-hover`);
-            await send.focus();
-            await capture(`${theme}-${width}-${name}-send-focus`);
-          }
-        }
-        matrix.push({
-          theme,
-          width,
-          height,
-          state: name,
-          inspector: "closed/open",
-          motion: width === 820 ? "reduced" : "normal",
-        });
-      }
-      await scenario("composition_browser_required", "task_browser");
-      const noticeTruth = await authority(),
-        noticeCalls = await commands();
-      const dismiss = page.getByRole("button", {
-        name: "Dismiss Outcome unclear notification",
-        exact: true,
-      });
-      if (await dismiss.count()) {
-        await dismiss.focus();
-        await page.keyboard.press("Enter");
-        assert.deepEqual(await authority(), noticeTruth);
-        assert.deepEqual(await commands(), noticeCalls);
-        assert.ok((await page.locator(".customer-state-marker").count()) > 0);
-        await capture(
-          `${theme}-${width}-browser-notice-dismissed-marker-retained`,
-        );
-      }
-      // Submission retains all offered actions and the exact authority identity.
-      await scenario("composition_decision", "task_active");
-      const decision = page.locator(".task-interaction-dock");
-      const actions = decision.locator(".task-decision-actions button");
-      const offered = await actions.count();
-      assert.ok(offered >= 2);
-      const identity = (await authority()).attention[0];
-      const commandCount = (await commands()).length;
-      await decision.getByRole("button", { name: /^Approve once/ }).click();
-      await decision
-        .getByText("Submitting your response…", { exact: true })
-        .waitFor();
-      assert.equal(await actions.count(), offered);
-      for (const action of await actions.all())
-        assert.equal(await action.isDisabled(), true);
-      assert.equal((await commands()).length, commandCount + 1);
-      const submitted = (await commands()).at(-1).intent;
-      assert.deepEqual(submitted, {
-        type: "attention.decide",
-        taskId: identity.taskId,
-        requestId: identity.requestId,
-        generation: identity.generation,
-        decision: "accept",
-      });
-      const retained = (await authority()).attention[0];
-      for (const key of [
-        "taskId",
-        "authority",
-        "requestId",
-        "generation",
-        "threadId",
-        "turnId",
-        "itemId",
-      ])
-        assert.equal(retained[key], identity[key]);
-      await capture(`${theme}-${width}-decision-submitting`);
-      // Exact Task drafts and reading position survive replacement, navigation and drawers.
-      await scenario("composition_working", "task_active");
-      const input = page.getByLabel("Task message", { exact: true });
-      const draft =
-        "Preserve the exact Task draft through these interaction modes.\n".repeat(
-          12,
-        );
-      await input.fill(draft);
-      const before = await commands();
-      for (const mode of ["decision", "stopping", "stopped", "checking"]) {
-        await scenario(`composition_transition_${mode}`, "task_active");
-        assert.equal(
+          const workflow = page.getByRole("dialog", {
+            name: "Name your Workflow",
+            exact: true,
+          });
+          await capture(`${cellLabel}-workflow-disabled-create`);
+          await workflow
+            .getByLabel("Workflow name", { exact: true })
+            .fill("Saved customer work");
+          const create = workflow.getByRole("button", {
+            name: "Create Workflow",
+            exact: true,
+          });
+          await create.hover();
+          await capture(`${cellLabel}-workflow-primary-hover`);
+          await create.focus();
+          await capture(`${cellLabel}-workflow-primary-focus`);
+          await activate(
+            workflow.getByRole("button", { name: "Cancel", exact: true }),
+          );
+          if (!(await page.locator("#shell-navigation").isVisible()))
+            await activate(
+              page.getByRole("button", {
+                name: "Open navigation",
+                exact: true,
+              }),
+            );
+          await activate(
+            page.getByRole("button", { name: "New task", exact: true }),
+          );
           await page
-            .locator(".task-interaction-dock")
-            .getAttribute("data-dock-mode"),
-          mode === "decision"
-            ? "decision"
-            : mode === "stopping"
-              ? "stopping"
-              : mode === "checking"
-                ? "checking"
-                : "compose",
-        );
+            .getByLabel("Desired outcome", { exact: true })
+            .fill("Review the saved customer evidence");
+          const start = page.getByRole("button", {
+            name: "Start task",
+            exact: true,
+          });
+          assert.equal(await start.isEnabled(), true);
+          await start.hover();
+          await capture(`${cellLabel}-new-task-primary-hover`);
+          await start.focus();
+          await capture(`${cellLabel}-new-task-primary-focus`);
+        }
       }
-      await scenario("composition_working", "task_active");
-      assert.equal(await input.inputValue(), draft);
-      assert.deepEqual(await commands(), before);
-      await capture(`${theme}-${width}-draft-after-modes`);
-      await scenario("multi_task", "task_a");
-      await input.fill("Draft A stays with A");
-      await scenario("multi_task", "task_c");
-      await input.fill("Draft C stays with C");
-      await scenario("multi_task", "task_a");
-      assert.equal(await input.inputValue(), "Draft A stays with A");
-      await scenario("multi_task", "task_b");
-      assert.equal(await input.count(), 0);
-      await capture(`${theme}-${width}-background-attention-exact-task`);
-      await scenario("long_content", "task_long");
-      const timeline = page.locator(".task-timeline");
-      await timeline.evaluate((node) => {
-        node.scrollTop = 0;
-        node.dispatchEvent(new Event("scroll"));
-      });
-      await openInspector();
-      await closeInspector();
-      assert.equal(await timeline.evaluate((node) => node.scrollTop), 0);
-      await scenario("multi_task", "task_a");
-      await scenario("long_content", "task_long");
-      assert.equal(await timeline.evaluate((node) => node.scrollTop), 0);
-      await capture(`${theme}-${width}-long-reading-position`);
-      await page.getByRole("button", { name: "Latest", exact: true }).click();
-      assert.ok(
-        await timeline.evaluate(
-          (node) =>
-            node.scrollHeight - node.scrollTop - node.clientHeight <= 24,
-        ),
-      );
-      await capture(`${theme}-${width}-latest-follow`);
-      // A real modal owns focus/inert above notices and either drawer allocation.
-      await scenario("browser_voluntary", "task_browser");
-      await profileModal();
-      const modal = page.getByRole("dialog", {
-        name: "Browser profiles",
-        exact: true,
-      });
-      await page.keyboard.press("Tab");
-      assert.equal(
-        await modal.evaluate((node) => node.contains(document.activeElement)),
-        true,
-      );
-      await capture(`${theme}-${width}-profiles-disabled-create`);
-      await modal
-        .getByLabel("New browser profile name", { exact: true })
-        .fill("Customer work");
-      await modal.getByRole("button", { name: "Create", exact: true }).hover();
-      await capture(`${theme}-${width}-profiles-primary-hover`);
-      await modal
-        .getByRole("button", { name: "Close browser profiles", exact: true })
-        .click();
-      await closeInspector();
-      // Unrelated primary controls use the same owning theme pair.
-      if (!(await page.locator("#shell-navigation").isVisible()))
-        await page
-          .getByRole("button", { name: "Open navigation", exact: true })
-          .click();
-      await page
-        .getByRole("button", { name: "Create Workflow", exact: true })
-        .click();
-      const workflow = page.getByRole("dialog", {
-        name: "Name your Workflow",
-        exact: true,
-      });
-      await capture(`${theme}-${width}-workflow-disabled-create`);
-      await workflow
-        .getByLabel("Workflow name", { exact: true })
-        .fill("Saved customer work");
-      const create = workflow.getByRole("button", {
-        name: "Create Workflow",
-        exact: true,
-      });
-      await create.hover();
-      await capture(`${theme}-${width}-workflow-primary-hover`);
-      await create.focus();
-      await capture(`${theme}-${width}-workflow-primary-focus`);
-      await workflow
-        .getByRole("button", { name: "Cancel", exact: true })
-        .click();
-      if (!(await page.locator("#shell-navigation").isVisible()))
-        await page
-          .getByRole("button", { name: "Open navigation", exact: true })
-          .click();
-      await page.getByRole("button", { name: "New task", exact: true }).click();
-      await page
-        .getByLabel("Desired outcome", { exact: true })
-        .fill("Review the saved customer evidence");
-      const start = page.getByRole("button", {
-        name: "Start task",
-        exact: true,
-      });
-      assert.equal(await start.isEnabled(), true);
-      await start.hover();
-      await capture(`${theme}-${width}-new-task-primary-hover`);
-      await start.focus();
-      await capture(`${theme}-${width}-new-task-primary-focus`);
     }
     for (const width of [967, 968, 1279, 1280, 1440]) {
       await resize(width, 780);
@@ -898,6 +965,7 @@ try {
   assert.deepEqual(errors, []);
   const sourceFiles = {};
   for (const path of [
+    "experiments/agent-execution/rendered-evidence-pointer.mjs",
     "apps/companion/src/renderer/product-surface.tsx",
     "apps/companion/src/renderer/product-surface.test.tsx",
     "apps/companion/src/renderer/styles.css",
@@ -941,6 +1009,7 @@ try {
         }).trim(),
         mode: "deterministic production-projection Electron renderer; fixture account; temporary user data",
         sourceFiles,
+        qualificationMode: completeMatrix ? "complete" : "bounded",
         compiledFiles,
         runtime: { ...runtime, node: process.version },
         matrixSha256: createHash("sha256")

@@ -9,6 +9,9 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
+import { installEvidencePointer } from "./rendered-evidence-pointer.mjs";
+
+const completeMatrix = process.env.ROVE_VISUAL_QUALIFICATION === "complete";
 const root = resolve(import.meta.dirname, "../..");
 const output = join(
   root,
@@ -262,6 +265,14 @@ try {
     },
   });
   const page = await app.firstWindow();
+  if (completeMatrix) await installEvidencePointer(page);
+  let inputMode = "pointer";
+  async function activate(control) {
+    if (inputMode === "keyboard") {
+      await control.focus();
+      await control.press("Enter");
+    } else await control.click();
+  }
   page.setDefaultTimeout(10_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -281,15 +292,25 @@ try {
     await page.evaluate((name) => window.rove.setJourneyScenario(name), name);
     if (taskId) {
       if (!(await page.locator("#shell-navigation").isVisible()))
-        await page
-          .getByRole("button", { name: "Open navigation", exact: true })
-          .click();
-      await page
-        .getByRole("button", { name: `Task history: ${taskId}`, exact: true })
-        .click();
+        await activate(
+          page.getByRole("button", { name: "Open navigation", exact: true }),
+        );
+      await activate(
+        page.getByRole("button", {
+          name: `Task history: ${taskId}`,
+          exact: true,
+        }),
+      );
     }
   }
   async function capture(name) {
+    if (completeMatrix) {
+      const pointer = await page.evaluate(() =>
+        window.readQualificationPointer(),
+      );
+      assert.equal(pointer.pointerEvents, "none");
+      assert.equal(pointer.ariaHidden, "true");
+    }
     const geometry = await page.evaluate(() => {
       const rect = (selector) => {
         const element = document.querySelector(selector);
@@ -426,6 +447,10 @@ try {
         .update(await readFile(join(output, file)))
         .digest("hex"),
       geometry,
+      pointerEvidence:
+        process.env.ROVE_VISUAL_QUALIFICATION === "complete"
+          ? await page.evaluate(() => window.readQualificationPointer())
+          : undefined,
     });
   }
 
@@ -444,8 +469,13 @@ try {
     ).calls.filter((call) => call.intent?.type === type);
   }
   async function fill(family) {
-    if (family === "user")
-      await request.locator(".task-response-choice").first().click();
+    if (family === "user") {
+      if (inputMode === "keyboard") {
+        const radio = request.getByRole("radio").first();
+        await radio.focus();
+        await radio.press("Space");
+      } else await activate(request.locator(".task-response-choice").first());
+    }
     if (family === "user")
       assert.equal(await request.getByRole("radio").first().isChecked(), true);
     if (family === "form") {
@@ -488,190 +518,257 @@ try {
       [820, 700],
     ]) {
       await resize(width, height);
-      await page.emulateMedia({
-        reducedMotion: width === 820 ? "reduce" : "no-preference",
-      });
-      for (const family of families) {
-        const label = `${theme}-${width}-${family}`;
-        await scenario("queue", "task_active");
-        await message.fill(`Preserved draft ${label}`);
-        const baseline = await page.evaluate(() =>
-          window.rove.getJourneyState(),
-        );
-        await scenario(`decision_${family}`, "task_active");
-        await request.waitFor();
-        assert.equal(
-          await message.count(),
-          0,
-          "Ordinary composer is absent in every decision family",
-        );
-        assert.equal(await dock.getAttribute("data-dock-mode"), "decision");
-        assert.equal(
-          await dock
-            .getByRole("button", { name: "Stop current work", exact: true })
-            .isEnabled(),
-          true,
-        );
-        const queueIds = await page
-          .locator(".task-queue-entry")
-          .evaluateAll((nodes) =>
-            nodes.map((node) => node.dataset.queueEntryId),
-          );
-        assert.equal(queueIds.length, 2);
-        assert.equal(
-          (await calls()).length,
-          baseline.calls.filter(
-            (call) => call.intent?.type === "attention.decide",
-          ).length,
-          "Mode change cannot dispatch",
-        );
-        const material = request.locator(".task-decision-material");
-        assert.ok(
-          await material.evaluate(
-            (node) => node.scrollHeight > node.clientHeight,
-          ),
-          "Long request details stay scrollable",
-        );
-        await material.evaluate((node) => {
-          node.scrollTop = node.scrollHeight;
-        });
-        await request.locator("h2").focus();
-        for (let tabs = 0; tabs < 40; tabs++) {
-          await page.keyboard.press("Tab");
-          if (
-            await page.evaluate(() =>
-              document.activeElement?.matches(".task-decision-actions button"),
-            )
-          )
-            break;
-        }
-        assert.equal(
-          await page.evaluate(() =>
-            document.activeElement?.matches(
-              ".task-decision-actions button:focus-visible",
-            ),
-          ),
-          true,
-          "Keyboard action focus is visible",
-        );
-        const before = await actionGeometry();
-        for (const button of before)
-          assert.ok(
-            button.y >= 0 &&
-              button.y + button.height <= height &&
-              button.x >= 0 &&
-              button.x + button.width <= width,
-            `${label}: discoverable action bounds ${JSON.stringify(button)}`,
-          );
-        await capture(`${label}-pending-keyboard`);
-        await fill(family);
-        if (family === "url") {
-          const prior = await calls();
-          await request
-            .getByRole("button", { name: "Open secure page", exact: true })
-            .click();
-          const state = await page.evaluate(() =>
-            window.rove.getJourneyState(),
-          );
-          const external = state.calls
-            .filter((call) => call.type === "openTrustedExternal")
-            .at(-1);
-          assert.deepEqual(external.intent, {
-            purpose: "mcp_elicitation",
-            taskId: "task_active",
-            requestId: state.snapshot.product.attention[0].requestId,
-            generation: state.snapshot.product.attention[0].generation,
+      for (const motion of completeMatrix
+        ? ["normal", "reduced"]
+        : [width === 820 ? "reduced" : "normal"]) {
+        for (const modality of completeMatrix
+          ? ["pointer", "keyboard"]
+          : ["pointer"]) {
+          inputMode = modality;
+          const cellLabel = completeMatrix
+            ? `${theme}-${width}-${motion}-${modality}`
+            : `${theme}-${width}`;
+          await page.emulateMedia({
+            reducedMotion: motion === "reduced" ? "reduce" : "no-preference",
           });
-          assert.equal(
-            (await calls()).length,
-            prior.length,
-            "Opening secure page is not a decision",
-          );
-        }
-        const beforeSubmit = await actionGeometry();
-        const responseCount = (await calls()).length;
-        const submitName =
-          family === "user"
-            ? "Send"
-            : family === "form"
-              ? "Submit"
-              : family === "url"
-                ? "Continue"
-                : family === "permission"
-                  ? "Allow for this turn"
-                  : "Approve once";
-        await request
-          .getByRole("button", { name: new RegExp(`^${submitName}`) })
-          .evaluate((node) => {
-            node.click();
-            node.click();
-          });
-        await page.waitForFunction(
-          () =>
-            document
-              .querySelector(".task-decision-surface")
-              ?.getAttribute("aria-busy") === "true",
-        );
-        assert.equal(
-          (await calls()).length,
-          responseCount + 1,
-          "Synchronous double click commits one response",
-        );
-        const submission = (await calls()).at(-1).intent;
-        assert.equal(submission.taskId, "task_active");
-        if (family === "form")
-          assert.deepEqual(submission.form, {
-            workspace: "Fixture workspace",
-            email: "fixture@example.test",
-            kind: "exact_internal",
-            tags: ["first"],
-            optional: false,
-          });
-        if (family === "user")
-          assert.deepEqual(submission.answers, { audience: ["Leadership"] });
-        assert.equal(
-          await request
-            .getByText("Submitting your response…", { exact: true })
-            .count(),
-          1,
-        );
-        const after = await actionGeometry();
-        assert.equal(after.length, beforeSubmit.length);
-        for (let i = 0; i < after.length; i++) {
-          assert.equal(after[i].disabled, true);
-          for (const key of ["x", "y", "width", "height"])
-            assert.ok(
-              Math.abs(after[i][key] - beforeSubmit[i][key]) < 2,
-              `${label}: stable ${key} for ${after[i].label}`,
+          for (const family of families) {
+            const label = `${cellLabel}-${family}`;
+            await scenario("queue", "task_active");
+            await message.fill(`Preserved draft ${label}`);
+            const baseline = await page.evaluate(() =>
+              window.rove.getJourneyState(),
             );
+            await scenario(`decision_${family}`, "task_active");
+            await request.waitFor();
+            assert.equal(
+              await message.count(),
+              0,
+              "Ordinary composer is absent in every decision family",
+            );
+            assert.equal(await dock.getAttribute("data-dock-mode"), "decision");
+            assert.equal(
+              await dock
+                .getByRole("button", { name: "Stop current work", exact: true })
+                .isEnabled(),
+              true,
+            );
+            const queueIds = await page
+              .locator(".task-queue-entry")
+              .evaluateAll((nodes) =>
+                nodes.map((node) => node.dataset.queueEntryId),
+              );
+            assert.equal(queueIds.length, 2);
+            assert.equal(
+              (await calls()).length,
+              baseline.calls.filter(
+                (call) => call.intent?.type === "attention.decide",
+              ).length,
+              "Mode change cannot dispatch",
+            );
+            const material = request.locator(".task-decision-material");
+            assert.ok(
+              await material.evaluate(
+                (node) => node.scrollHeight > node.clientHeight,
+              ),
+              "Long request details stay scrollable",
+            );
+            await material.evaluate((node) => {
+              node.scrollTop = node.scrollHeight;
+            });
+            await request.locator("h2").focus();
+            for (let tabs = 0; tabs < 40; tabs++) {
+              await page.keyboard.press("Tab");
+              if (
+                await page.evaluate(() =>
+                  document.activeElement?.matches(
+                    ".task-decision-actions button",
+                  ),
+                )
+              )
+                break;
+            }
+            assert.equal(
+              await page.evaluate(() =>
+                document.activeElement?.matches(
+                  ".task-decision-actions button:focus-visible",
+                ),
+              ),
+              true,
+              "Keyboard action focus is visible",
+            );
+            const before = await actionGeometry();
+            for (const button of before)
+              assert.ok(
+                button.y >= 0 &&
+                  button.y + button.height <= height &&
+                  button.x >= 0 &&
+                  button.x + button.width <= width,
+                `${label}: discoverable action bounds ${JSON.stringify(button)}`,
+              );
+            await capture(`${label}-pending-keyboard`);
+            await fill(family);
+            if (family === "url") {
+              const prior = await calls();
+              await activate(
+                request.getByRole("button", {
+                  name: "Open secure page",
+                  exact: true,
+                }),
+              );
+              const state = await page.evaluate(() =>
+                window.rove.getJourneyState(),
+              );
+              const external = state.calls
+                .filter((call) => call.type === "openTrustedExternal")
+                .at(-1);
+              assert.deepEqual(external.intent, {
+                purpose: "mcp_elicitation",
+                taskId: "task_active",
+                requestId: state.snapshot.product.attention[0].requestId,
+                generation: state.snapshot.product.attention[0].generation,
+              });
+              assert.equal(
+                (await calls()).length,
+                prior.length,
+                "Opening secure page is not a decision",
+              );
+            }
+            const beforeSubmit = await actionGeometry();
+            const responseCount = (await calls()).length;
+            const submitName =
+              family === "user"
+                ? "Send"
+                : family === "form"
+                  ? "Submit"
+                  : family === "url"
+                    ? "Continue"
+                    : family === "permission"
+                      ? "Allow for this turn"
+                      : "Approve once";
+            const submit = request.getByRole("button", {
+              name: new RegExp(`^${submitName}`),
+            });
+            await submit.evaluate((node) => {
+              node.click();
+              node.click();
+            });
+            await page.waitForFunction(
+              () =>
+                document
+                  .querySelector(".task-decision-surface")
+                  ?.getAttribute("aria-busy") === "true",
+            );
+            assert.equal(
+              (await calls()).length,
+              responseCount + 1,
+              "Synchronous double click commits one response",
+            );
+            const submission = (await calls()).at(-1).intent;
+            assert.equal(submission.taskId, "task_active");
+            if (family === "form")
+              assert.deepEqual(submission.form, {
+                workspace: "Fixture workspace",
+                email: "fixture@example.test",
+                kind: "exact_internal",
+                tags: ["first"],
+                optional: false,
+              });
+            if (family === "user")
+              assert.deepEqual(submission.answers, {
+                audience: ["Leadership"],
+              });
+            assert.equal(
+              await request
+                .getByText("Submitting your response…", { exact: true })
+                .count(),
+              1,
+            );
+            const after = await actionGeometry();
+            assert.equal(after.length, beforeSubmit.length);
+            for (let i = 0; i < after.length; i++) {
+              assert.equal(after[i].disabled, true);
+              for (const key of ["x", "y", "width", "height"])
+                assert.ok(
+                  Math.abs(after[i][key] - beforeSubmit[i][key]) < 2,
+                  `${label}: stable ${key} for ${after[i].label}`,
+                );
+            }
+            await capture(`${label}-submitting-pointer`);
+            await scenario("queue");
+            await message.waitFor();
+            assert.equal(
+              await message.evaluate((node) => node === document.activeElement),
+              true,
+              "Settled request returns owned focus to restored composition",
+            );
+            assert.equal(
+              await message.inputValue(),
+              `Preserved draft ${label}`,
+            );
+            assert.deepEqual(
+              await page
+                .locator(".task-queue-entry")
+                .evaluateAll((nodes) =>
+                  nodes.map((node) => node.dataset.queueEntryId),
+                ),
+              queueIds,
+            );
+            assert.equal(await request.count(), 0);
+            assert.equal(
+              (await calls()).length,
+              responseCount + 1,
+              "Resolution does not replay",
+            );
+            await capture(`${label}-resolved`);
+            if (completeMatrix) {
+              // Keep the original synchronous duplicate negative above; qualify
+              // native pointer/keyboard activation in a separate fresh request.
+              await scenario(`decision_${family}`, "task_active");
+              await fill(family);
+              if (family === "url")
+                await activate(
+                  request.getByRole("button", {
+                    name: "Open secure page",
+                    exact: true,
+                  }),
+                );
+              const nativeBefore = (await calls()).length;
+              await activate(
+                request.getByRole("button", {
+                  name: new RegExp(`^${submitName}`),
+                }),
+              );
+              await page.waitForFunction(
+                () =>
+                  document
+                    .querySelector(".task-decision-surface")
+                    ?.getAttribute("aria-busy") === "true",
+              );
+              assert.equal(
+                (await calls()).length,
+                nativeBefore + 1,
+                "Native activation emits one exact response",
+              );
+              const native = (await calls()).at(-1).intent;
+              assert.equal(native.taskId, "task_active");
+              const entry =
+                scenarios[`decision_${family}`].product.attention[0];
+              assert.equal(native.requestId, entry.requestId);
+              assert.equal(native.generation, entry.generation);
+              await capture(`${label}-actual-${modality}-submitting`);
+              await scenario("queue", "task_active");
+              assert.equal(
+                (await calls()).length,
+                nativeBefore + 1,
+                "Native settlement cannot replay",
+              );
+            }
+          }
         }
-        await capture(`${label}-submitting-pointer`);
-        await scenario("queue");
-        await message.waitFor();
-        assert.equal(
-          await message.evaluate((node) => node === document.activeElement),
-          true,
-          "Settled request returns owned focus to restored composition",
-        );
-        assert.equal(await message.inputValue(), `Preserved draft ${label}`);
-        assert.deepEqual(
-          await page
-            .locator(".task-queue-entry")
-            .evaluateAll((nodes) =>
-              nodes.map((node) => node.dataset.queueEntryId),
-            ),
-          queueIds,
-        );
-        assert.equal(await request.count(), 0);
-        assert.equal(
-          (await calls()).length,
-          responseCount + 1,
-          "Resolution does not replay",
-        );
-        await capture(`${label}-resolved`);
       }
     }
   }
+  inputMode = "pointer";
   steps.push(
     "Seven-family light/dark normal/compact pending, submitting, resolved; exact intents, stable geometry, refusal/scope discoverability, scroll, keyboard, draft/queue and reduced motion",
   );
@@ -727,7 +824,7 @@ try {
   );
   await scenario("decision_form", "task_active");
   const validationBefore = (await calls()).length;
-  await request.getByRole("button", { name: "Submit", exact: true }).click();
+  await activate(request.getByRole("button", { name: "Submit", exact: true }));
   assert.equal((await calls()).length, validationBefore);
   assert.equal(
     await request
@@ -751,7 +848,7 @@ try {
     true,
   );
   const integerBefore = (await calls()).length;
-  await request.getByRole("button", { name: "Submit", exact: true }).click();
+  await activate(request.getByRole("button", { name: "Submit", exact: true }));
   assert.equal(
     (await calls()).length,
     integerBefore,
@@ -772,7 +869,7 @@ try {
     true,
   );
   const decimalBefore = (await calls()).length;
-  await request.getByRole("button", { name: "Submit", exact: true }).click();
+  await activate(request.getByRole("button", { name: "Submit", exact: true }));
   assert.equal(
     (await calls()).length,
     decimalBefore + 1,
@@ -797,9 +894,9 @@ try {
     const policy = offered.find(
       (action) => action.scope === "persistent_policy",
     );
-    await request
-      .getByRole("button", { name: new RegExp(`^${policy.label}`) })
-      .click();
+    await activate(
+      request.getByRole("button", { name: new RegExp(`^${policy.label}`) }),
+    );
     assert.deepEqual(
       (await calls()).at(-1).intent.decision,
       policy.decision,
@@ -812,7 +909,9 @@ try {
     await scenario(`decision_${family}`, "task_active");
     const before = (await calls()).length;
     const name = family === "permission" ? "Deny" : "Decline";
-    await request.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    await activate(
+      request.getByRole("button", { name: new RegExp(`^${name}`) }),
+    );
     assert.equal((await calls()).length, before + 1);
     assert.equal((await calls()).at(-1).intent.decision, "decline");
     await scenario("queue");
@@ -820,7 +919,9 @@ try {
   }
   for (const family of ["network", "form", "url"]) {
     await scenario(`decision_${family}`, "task_active");
-    await request.getByRole("button", { name: new RegExp("^Cancel") }).click();
+    await activate(
+      request.getByRole("button", { name: new RegExp("^Cancel") }),
+    );
     assert.equal((await calls()).at(-1).intent.decision, "cancel");
     await scenario("queue");
     await message.waitFor();
@@ -844,9 +945,9 @@ try {
   await scenario("decision_command", "task_active");
   await request.waitFor();
   const stopBefore = (await calls("task.stop")).length;
-  await dock
-    .getByRole("button", { name: "Stop current work", exact: true })
-    .click();
+  await activate(
+    dock.getByRole("button", { name: "Stop current work", exact: true }),
+  );
   await page.waitForFunction(
     () =>
       document.querySelector(".task-interaction-dock")?.dataset.dockMode ===
@@ -887,7 +988,7 @@ try {
   await request
     .getByLabel("Token answer", { exact: true })
     .fill("ephemeral-fixture-value");
-  await request.getByRole("button", { name: "Send", exact: true }).click();
+  await activate(request.getByRole("button", { name: "Send", exact: true }));
   await page.waitForFunction(
     () =>
       document
@@ -914,7 +1015,7 @@ try {
     "Production-style context bridge is immutable",
   );
   await page.evaluate(() => window.rove.rejectNextAttentionResponse());
-  await request.getByRole("button", { name: "Send", exact: true }).click();
+  await activate(request.getByRole("button", { name: "Send", exact: true }));
   await page
     .getByText(
       "The response could not be submitted. Check this request before trying again.",
@@ -938,9 +1039,9 @@ try {
     "Background request cannot replace selected Task composer",
   );
   if (!(await page.locator("#shell-navigation").isVisible()))
-    await page
-      .getByRole("button", { name: "Open navigation", exact: true })
-      .click();
+    await activate(
+      page.getByRole("button", { name: "Open navigation", exact: true }),
+    );
   assert.equal(
     await page
       .getByRole("button", {
@@ -957,8 +1058,8 @@ try {
   await message.fill("Exact Task A unsent draft");
   await scenario("multi_task", "task_b");
   await request.waitFor();
-  await request.locator(".task-response-choice").first().click();
-  await request.getByRole("button", { name: "Send", exact: true }).click();
+  await activate(request.locator(".task-response-choice").first());
+  await activate(request.getByRole("button", { name: "Send", exact: true }));
   await page.waitForFunction(
     () =>
       document
@@ -977,9 +1078,9 @@ try {
   await scenario("decision_command", "task_active");
   await request.waitFor();
   await request.locator(".task-decision-actions button").first().focus();
-  await page
-    .getByRole("button", { name: "Open Task details", exact: true })
-    .click();
+  await activate(
+    page.getByRole("button", { name: "Open Task details", exact: true }),
+  );
   const dialog = page.getByRole("dialog", {
     name: "Task inspector",
     exact: true,
@@ -1063,6 +1164,7 @@ try {
   for (const path of [
     "apps/companion/src/renderer/product-shell.tsx",
     "apps/companion/src/renderer/product-shell.test.tsx",
+    "experiments/agent-execution/rendered-evidence-pointer.mjs",
     "apps/companion/src/renderer/product-surface.tsx",
     "apps/companion/src/renderer/product-surface.test.tsx",
     "apps/companion/src/renderer/styles.css",
@@ -1090,6 +1192,7 @@ try {
         }).trim(),
         mode: "deterministic production-projection Electron renderer; fixture account; temporary user data",
         sourceFiles,
+        qualificationMode: completeMatrix ? "complete" : "bounded",
         captures,
         steps,
         errors,

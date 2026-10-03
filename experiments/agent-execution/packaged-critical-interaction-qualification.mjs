@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /* global document, fetch, getComputedStyle, HTMLElement, innerHeight, innerWidth */
 
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
@@ -326,6 +328,26 @@ export async function qualifyPackagedInteractions() {
     join(tmpdir(), "rove-packaged-interaction-"),
   );
   const productHome = join(qualificationRoot, "product-home");
+  const evidenceRoot = join(
+    repositoryRoot,
+    "artifacts/customer-journeys/packaged-critical",
+    new Date().toISOString().replaceAll(":", "-"),
+  );
+  await mkdir(evidenceRoot, { recursive: true });
+  const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const provenance = {
+    sourceHead: execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    }).trim(),
+    sourceSha256: digest(await readFile(fileURLToPath(import.meta.url))),
+    packagedArchiveSha256: digest(
+      await readFile(resolve(dirname(executablePath), "../Resources/app.asar")),
+    ),
+    executablePath,
+    mode: "Unsigned darwin/arm64 production package with synthetic SQLite facts, isolated homes, local services; no live model/account/browser Task",
+  };
+  let page;
   let browser;
   let desktop;
   let activator;
@@ -381,7 +403,6 @@ export async function qualifyPackagedInteractions() {
     browser = await chromium.connectOverCDP(endpoint);
     const context = browser.contexts()[0];
     assert(context, "Packaged renderer did not expose a browser context.");
-    let page;
     let targets = [];
     const pageStartedAt = Date.now();
     while (!page && Date.now() - pageStartedAt < 30_000) {
@@ -450,6 +471,13 @@ export async function qualifyPackagedInteractions() {
     const historyButton = page.getByRole("button", {
       name: `Task history: ${taskIdentity(1).taskId}`,
     });
+    const navigation = page.getByRole("button", {
+      name: "Open navigation",
+      exact: true,
+    });
+    await navigation.focus();
+    await navigation.press("Enter");
+    await page.locator("#shell-navigation").waitFor({ state: "visible" });
     await page.keyboard.press("Tab");
     await historyButton.focus();
     assert(
@@ -468,27 +496,61 @@ export async function qualifyPackagedInteractions() {
       "Packaged narrow dialog or alert escapes the viewport.",
     );
 
-    process.stdout.write(
-      `${JSON.stringify({
-        status: "qualified",
-        executablePath,
-        packagedMain: true,
-        temporaryProductionHome: true,
-        taskSwitching: true,
-        persistedConversation: true,
-        staleProviderAttentionRejected: true,
-        liveAttentionPresentation:
-          "not_exercised_without_live_provider_request",
-        stopPresentation: stopPresented
-          ? "qualified_from_reconciled_task_state"
-          : "not_exercised_without_live_stoppable_work",
-        narrowKeyboardFocus: true,
-        narrowViewport: bounds.viewport,
-        browserOwnership: "not_exercised_without_live_task_runtime_binding",
-        followerPresentation: "not_exercised_without_live_task_runtime_binding",
-        humanAcceptance: false,
-      })}\n`,
+    const result = {
+      ...provenance,
+      status: "qualified",
+      executablePath,
+      packagedMain: true,
+      temporaryProductionHome: true,
+      taskSwitching: true,
+      persistedConversation: true,
+      staleProviderAttentionRejected: true,
+      liveAttentionPresentation: "not_exercised_without_live_provider_request",
+      stopPresentation: stopPresented
+        ? "qualified_from_reconciled_task_state"
+        : "not_exercised_without_live_stoppable_work",
+      narrowKeyboardFocus: true,
+      narrowViewport: bounds.viewport,
+      browserOwnership: "not_exercised_without_live_task_runtime_binding",
+      followerPresentation: "not_exercised_without_live_task_runtime_binding",
+      humanAcceptance: false,
+    };
+    await page.screenshot({
+      path: join(evidenceRoot, "narrow-navigation.png"),
+    });
+    await writeFile(
+      join(evidenceRoot, "narrow-navigation.html"),
+      await page.content(),
     );
+    result.screenshotSha256 = digest(
+      await readFile(join(evidenceRoot, "narrow-navigation.png")),
+    );
+    await writeFile(
+      join(evidenceRoot, "report.json"),
+      JSON.stringify(result, null, 2),
+    );
+    process.stdout.write(
+      `${JSON.stringify({ ...result, evidenceRoot }, null, 2)}\n`,
+    );
+  } catch (error) {
+    if (page) {
+      await page
+        .screenshot({ path: join(evidenceRoot, "failure.png") })
+        .catch(() => undefined);
+      await writeFile(
+        join(evidenceRoot, "failure.html"),
+        await page.content(),
+      ).catch(() => undefined);
+    }
+    await writeFile(
+      join(evidenceRoot, "report.json"),
+      JSON.stringify(
+        { ...provenance, status: "failed", error: String(error) },
+        null,
+        2,
+      ),
+    );
+    throw error;
   } finally {
     await browser?.close().catch(() => undefined);
     await stopChild(activator);
