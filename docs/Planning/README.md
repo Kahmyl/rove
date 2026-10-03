@@ -46,6 +46,7 @@ Use descriptive filenames based on the work itself. Stable ticket IDs are a boun
 ## Active plans
 
 - [Rove Market-Readiness Stabilization Sprint](market-readiness-stabilization-sprint.md) — current umbrella sprint for acceptance-driven diagnosis, correction, and market qualification. Tickets and the canonical issue registry live under [stabilization/](stabilization/README.md).
+- [Rove Human-Review Remediation Program](human-review-remediation/README.md) — bounded post-recording composition remediation feeding STAB-14; UXR-01 planning setup complete, implementation Planned, final human recording only after UXR-08.
 - [Conversation and Task Experience](conversation-and-task-experience.md) — retained supporting plan for the interaction contract; new acceptance findings are sequenced through the stabilization sprint rather than ad-hoc remediation.
 
 ## Completed plans

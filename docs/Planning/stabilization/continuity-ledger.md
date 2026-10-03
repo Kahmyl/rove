@@ -610,3 +610,17 @@ Generic Runtime transport/backoff/failure-domain hardening beyond the source-coo
 ## Future ticket rows
 
 ROVE-STAB-07 through ROVE-STAB-14 receive concrete entry state when their direct dependencies complete. Their existing ticket text is provisional sequencing, not frozen implementation truth.
+
+### Post-recording human-review remediation planning handoff — 3 October 2026
+
+Program start/acceptance-record SHA: `2ff214b8f8624859c1a55bb50a16997302614560`; initial `codex/stab14-market-release-qualification` worktree clean, 1 ahead / 0 behind observed `origin/codex/stab14-market-release-qualification` at `42952a2bce699cee299a2bca6315d95d6181b54f`. New branch `codex/human-review-remediation-planning` starts from that exact local HEAD. No reset, media regeneration, source edit, Stage 1–4 rerun, push or merge occurs.
+
+Recorded E2E acceptance remains **PARTIAL**, with all 37 PASS / six UNQUALIFIED / one BLOCKED records intact. Subsequent supplied human review is **REMEDIATION REQUIRED**: MR-034–MR-039 identify dock/decision/notification/browser/visual-system composition defects and a visual qualification gap. [Family I and primary ownership](issue-registry.md) supplement rather than move existing authority/security findings. MR-038 has UXR-02 primary foundation ownership and UXR-07 integration responsibility.
+
+The [Rove Human-Review Remediation Program](../human-review-remediation/README.md) and its [continuity ledger](../human-review-remediation/continuity-ledger.md) hold exact evidence anchors, source inspection facts, reconciled canonical contracts, complete ticket boundaries and exit verification. UXR-01 planning-contract setup is Complete; UXR-02–08 remain Planned. All new MR findings remain open. The checkpoint is the local commit containing this handoff, titled `Define human-review remediation contracts and work program`; resolve exact identity from Git history rather than infer a merge.
+
+One primary selected-task dock, applicable blocking decisions replacing peer ordinary composition, safe Stop per mode, background attention isolation, resource-only inspector, notification/durable-marker separation and intentional compact collapse are now target contracts. These contracts do not assert implementation. Stage-4 Not signed in / Sending… / assistant-response coexistence remains an evidence-based UXR-07 investigation, not a pre-classified delivery bug.
+
+Dependency sequence: UXR-01 → UXR-02 → UXR-03 → (UXR-04 + UXR-05 + UXR-06) → UXR-07 → UXR-08 → final human-recorded Stage 1–4 acceptance. Final recording is not a UXR implementation ticket and must wait for UXR-08. Provider grant consumption, Windows/Linux packaged process trees, packaged live authority composition, signing/notarization and supported-platform distribution evidence remain separate STAB-12/STAB-14 release blockers. STAB-14 cannot close through functional machine passes alone.
+
+Exact next gate: **begin UXR-02 read-only baseline/design reconciliation before source edits**. Planning verification and preservation results are retained in the new program ledger. Stop at this planning checkpoint for review; implementation is not started.

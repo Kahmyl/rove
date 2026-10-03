@@ -1,8 +1,10 @@
 # ROVE-STAB-14 — Market release qualification
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Machine qualification complete; external and human release gates open  
-**Dependencies:** All nonblocked tickets; explicit disposition for STAB-12  
+**Status:** Prior functional machine qualification complete; human-review remediation required; external and final human release gates open
+
+**Dependencies:** All nonblocked tickets; UXR-01–08 remediation and subsequent final human-recorded acceptance; explicit disposition for STAB-12
+
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
 This ticket is part of one stabilization sprint. It is not a separate sprint or release phase. Work must stay within this ticket's invariant, receive ticket-level verification, and be checkpointed before the next ticket begins.
@@ -20,6 +22,12 @@ STAB-12's base-profile exact-execution boundary may enter the release matrix, bu
 Do not infer release readiness from the original sprint plan. The release matrix must be generated from the continuity ledger as it exists when STAB-14 starts.
 
 STAB-13 enters with its machine matrix complete: the 28-step development Electron projection, seven-family 820×700 keyboard/accessibility coverage, exact macOS native browser foreground/unrelated-application revocation/recovery, unsigned package smoke, and packaged persisted-Task critical interaction all pass. The packaged harness intentionally rejects stale provider attention and does not synthesize live provider or browser authority. STAB-14 must retain those limits, consume the short STAB-13 human checklist, and keep live packaged browser/follower composition distinct from deterministic evidence.
+
+### Post-recording human-review handoff
+
+Read the [Human-Review Remediation Program](../human-review-remediation/README.md) and its [continuity ledger](../human-review-remediation/continuity-ledger.md) before further release qualification. Recorded acceptance remains **PARTIAL**; current human review is **REMEDIATION REQUIRED**. MR-034–MR-039 block market readiness without falsifying the historical 37 PASS checks or reopening repaired authority absent contradictory evidence. UXR-08 adds composition-quality qualification; completion means candidate ready for final human-recorded acceptance, not a human pass.
+
+The sequence is planning → implementation → ticket verification → cross-surface qualification → UXR-08 machine gate → final human-paced recorded Stage 1–4 acceptance → remaining provider/platform/distribution gates. No Stage 1–4 rerun occurs during planning setup. Exact elevated-grant consumption, Windows/Linux packaged process trees, packaged live provider/browser composition, signing/notarization and remaining supported-platform distribution evidence stay STAB-12/STAB-14 responsibilities.
 
 ## Objective
 
@@ -52,12 +60,16 @@ Qualify the repaired system as a market candidate, not merely a development buil
 
 ### Recorded acceptance run — 27 September 2026
 
-- The complete evidence package is rooted at `artifacts/human-e2e-acceptance/20260927T144500Z/`. Its human-paced Stage 1–4 walkthrough, final composition and packaged composition are indexed by `manifest.json`, `walkthrough.md` and `SHA256SUMS`. The manifest records 44 steps: 37 passes, six unqualified steps and one blocked native-capture step. Its conclusion is `RECORDED E2E ACCEPTANCE: PARTIAL`; independent human review remains pending.
+- The complete evidence package is rooted at `artifacts/human-e2e-acceptance/20260927T144500Z/`. Its human-paced Stage 1–4 walkthrough, final composition and packaged composition are indexed by `manifest.json`, `walkthrough.md` and `SHA256SUMS`. The manifest records 44 steps: 37 passes, six unqualified steps and one blocked native-capture step. Its conclusion is `RECORDED E2E ACCEPTANCE: PARTIAL`; independent human review was pending at that recorded checkpoint. Subsequent supplied review requires remediation; the original records remain unchanged.
 - The deterministic presentation recordings qualify readable renderer transitions, keyboard focus and responsive containment only. They do not replace live provider, process, native-browser or operating-system authority. The genuine fixture `Stopping` interval remains 80 ms and was not stretched to manufacture a human-visible pass.
 - The real development application passed persisted conversation and Task switching across a stop/relaunch against the same temporary production-format home, including stale-attention rejection and reconciled Stop presentation. The real packaged `.app` passed the same persistence, switching and narrow-focus composition. Neither run exercised live provider attention or live task-bound browser/follower authority.
 - macOS Screen Recording permission was denied (`CGPreflightScreenCaptureAccess() == false`), and `/usr/sbin/screencapture` produced no evidence file. Native full-desktop Stage 3 and continuous pre-renderer launch capture are therefore blocked on this host rather than inferred from the passing machine harness.
 - The acceptance run introduced no product correctness or authorization finding. No new MR ID was opened. Exact integrity anchors are: manifest `346c58b25379a2ca1d57efdb70146fbe0bcd382ace7eb5dc75fdf76e682a9a31`, walkthrough `5a8708a0c853ded4146795c3c7c314c7c9dd1ffc3fa869ef51338d8127705aa9`, full walkthrough `d5cb5a10292729d377cc410344e9a20ffee1cb710753b0d705b09b005ecaa7eb`, final composition `ffdf24fc52089201a6cb3ddd848e7bf92860cd488646e2a03e542e2b80fb3d55`, and packaged composition `3655ad1be0694bb3c8a1bcc912adeb815ac7f3876d4beecd5d926be595fa71c2`.
 - Fresh verification passed: `pnpm customer-journey:conversation-task` (28 screenshots), `pnpm surface:native-foreground`, `pnpm surface:packaged-critical`, `pnpm agent:command-exec-stop`, `pnpm agent:attention-boundary`, `pnpm test:recovery:processes`, `pnpm check:repository` (722 files / 1,318 imports / 113 links), and `pnpm test:release` (203 files / 1,737 tests in 122.01 seconds). Initial sandboxed Electron/loopback attempts failed on host-policy denial and passed unchanged with the necessary host permissions.
+
+## Human-review composition release blocker
+
+MR-034–MR-039 remain open until their UXR owners qualify remediation, UXR-07 integrates it and UXR-08 passes its added composition-quality gate. Only then can final Stage 1–4 human-paced recording be accepted. Keyboard reachability and contained layouts in prior evidence do not establish intentional readability, discoverability or visual hierarchy. STAB-14 cannot close while this blocker remains.
 
 ## Open release gates
 
@@ -69,7 +81,7 @@ Qualify the repaired system as a market candidate, not merely a development buil
 | Packaged live authority composition  | The real `.app` passes startup, managed-service smoke, production SQLite hydration, Task switching, stale-attention rejection, reconciled Stop and narrow keyboard/overflow checks. It does not synthesize a live provider request or task-bound browser authority. | Representative packaged live provider attention and browser/follower takeover/return, plus authentication, outage recovery and OS-permission observation, without fixture authority injection.                                                                                                                |
 | Distribution breadth                 | The qualified package is unsigned darwin/arm64.                                                                                                                                                                                                                     | Signing/notarization and representative native-ABI, recording/playback and supported-platform packaging evidence required by the final distribution contract.                                                                                                                                                 |
 
-These are genuine provider, platform and human gates. The sprint and product are not market-ready while they remain open. Because elevated execution is not the only remaining gate, no release-scope product decision is requested yet.
+These are genuine provider, platform and human gates, additional to the open human-review composition remediation above. The sprint and product are not market-ready while they remain open. Because elevated execution is not the only remaining gate, no release-scope product decision is requested yet.
 
 ## Release gate
 
