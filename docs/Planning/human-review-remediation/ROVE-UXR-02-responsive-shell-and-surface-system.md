@@ -32,6 +32,8 @@ Dock orchestration, decision-family behavior, browser ownership redesign, notifi
 
 ## Continuity entry contract
 
+First consume the MR-029 qualification exit in both continuity ledgers and STAB-14, including complete source head `433a490caaccf44bd1c7901eee9e0eed704fd963`, registered MR-040/MR-041/MR-042 corrections, unchanged-gate evidence and remote PR #38 review disposition. Remote review must authorize this read-only baseline/design gate before it begins; machine qualification alone does not authorize implementation.
+
 Consume completed UXR-01 contracts and exact checkpoint; inspect current shell/CSS, tokens, overlays and focus behavior. Reconcile source against current branch before choosing breakpoints or primitives.
 
 ## Investigation requirements
