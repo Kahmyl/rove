@@ -32,7 +32,7 @@ Approval algebra changes, provider reachability work, effect-fence changes, brow
 
 ## Continuity entry contract
 
-After manager acceptance and explicit continuation in the same implementation chat, inherit the UXR-02 foundation candidate and source fingerprints in its ledger exit plus UXR-01 contracts. The shell uses compact drawers below 968px, optional 240px inline navigation from 968px, and an optional 280px inspector from 1280px; central gutters are 24px. Reuse the 8/12/16px control/panel/overlay scale and shared nested-overlay focus ownership. Keep the primary conversation/draft subtree mounted. Inspect current composer gates, typed capability/collaboration projections, queue intent paths and existing stable Send/Stop behavior; preserve exact identities.
+After manager acceptance and explicit continuation in the same implementation chat, inherit the UXR-02 foundation candidate and source fingerprints in its ledger exit plus UXR-01 contracts. The shell uses compact drawers below 968px, optional 240px inline navigation from 968px, and an optional 280px inspector from 1280px; central gutters are 24px. Reuse the 8/12/16px control/panel/overlay scale and shared nested-overlay focus ownership. Consume the correction exit that supersedes rejected checkpoint `a82a07d`: shared inert leases preserve topmost focus through underlying drawer resize/removal and release all protection on final close. Retain the committed rendered regression when introducing dock overlays. Keep the primary conversation/draft subtree mounted. Inspect current composer gates, typed capability/collaboration projections, queue intent paths and existing stable Send/Stop behavior; preserve exact identities.
 
 ## Investigation requirements
 

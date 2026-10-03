@@ -46,6 +46,27 @@ function visible(node: HTMLElement) {
   );
 }
 
+// Nested surfaces can protect the same ancestor. Cleanup releases only its own lease,
+// including when the underlying drawer closes or becomes inline beneath a live dialog.
+const inertLeases = new WeakMap<
+  HTMLElement,
+  { count: number; initial: boolean }
+>();
+
+function acquireInert(node: HTMLElement) {
+  const lease = inertLeases.get(node) ?? { count: 0, initial: node.inert };
+  lease.count += 1;
+  inertLeases.set(node, lease);
+  node.inert = true;
+  return () => {
+    lease.count -= 1;
+    if (lease.count === 0) {
+      node.inert = lease.initial;
+      inertLeases.delete(node);
+    }
+  };
+}
+
 /** Trap the topmost overlay and restore focus without moving the conversation's scroll. */
 export function useSurfaceFocus(
   active: boolean | string | null,
@@ -80,10 +101,7 @@ export function useSurfaceFocus(
       );
       if (current.parentElement.classList.contains("product-app")) break;
     }
-    const inert = background.map((entry) => entry.inert);
-    background.forEach((entry) => {
-      entry.inert = true;
-    });
+    const releaseBackground = background.map(acquireInert);
     const focusable = () =>
       Array.from(
         node.querySelectorAll<HTMLElement>(
@@ -110,9 +128,7 @@ export function useSurfaceFocus(
     node.addEventListener("keydown", keydown);
     return () => {
       node.removeEventListener("keydown", keydown);
-      background.forEach((entry, index) => {
-        entry.inert = inert[index]!;
-      });
+      releaseBackground.forEach((release) => release());
       const target =
         previous && visible(previous)
           ? previous

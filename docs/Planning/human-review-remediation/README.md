@@ -51,16 +51,16 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 now has a bounded foundation candidate awaiting manager review; UXR-03–08 remain Planned.
 
-| Ticket                                                                        | Responsibility                                        | Status                             |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------- |
-| [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only     |
-| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Candidate — manager review pending |
-| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Planned                            |
-| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                            |
-| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                            |
-| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                            |
-| [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                            |
-| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Planned                            |
+| Ticket                                                                        | Responsibility                                        | Status                                         |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
+| [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only                 |
+| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Replacement candidate — manager review pending |
+| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Planned                                        |
+| [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                                        |
+| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                                        |
+| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                                        |
+| [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                                        |
+| [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Planned                                        |
 
 ## Issue mapping
 

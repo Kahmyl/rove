@@ -399,6 +399,108 @@ try {
   steps.push(
     "Nested profile modal Escape dismisses only topmost overlay and restores exact opener",
   );
+  async function assertTopmostModal(dialog, label) {
+    assert.equal(
+      await dialog.isVisible(),
+      true,
+      `${label}: modal remains visible`,
+    );
+    const protectedState = await dialog.evaluate((node) => ({
+      focusInside: node.contains(document.activeElement),
+      topbarInert: document.querySelector(".product-topbar").inert,
+      mainInert: document.querySelector(".product-layout").inert,
+    }));
+    assert.deepEqual(
+      protectedState,
+      { focusInside: true, topbarInert: true, mainInert: true },
+      `${label}: topmost modal retains focus and inert background`,
+    );
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press(index % 2 ? "Shift+Tab" : "Tab");
+      assert.ok(
+        await dialog.evaluate((node) => node.contains(document.activeElement)),
+        `${label}: Tab stays inside topmost modal`,
+      );
+    }
+    await page.locator(".sidebar-toggle").focus();
+    assert.ok(
+      await dialog.evaluate((node) => node.contains(document.activeElement)),
+      `${label}: inert background refuses focus`,
+    );
+  }
+  async function assertReleasedBackground(label) {
+    const remaining = await page.evaluate(() =>
+      Array.from(document.querySelectorAll(".product-app [inert]")).map(
+        (node) => node.className,
+      ),
+    );
+    assert.deepEqual(remaining, [], `${label}: no stale inert flags`);
+    assert.equal(
+      await page
+        .locator(".sidebar-toggle")
+        .evaluate((node) => node === document.activeElement),
+      true,
+      `${label}: visible fallback receives focus`,
+    );
+  }
+  for (const change of ["resize", "replace-task", "remove-task"]) {
+    await resize(820, 700);
+    await scenario("missing_profile", "task_active");
+    await page
+      .getByRole("button", { name: "Open Task details", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Choose profile", exact: true })
+      .click();
+    await profiles.waitFor();
+    if (change === "resize") {
+      for (const width of [1180, 1280, 820]) {
+        await resize(width, 780);
+        await page.waitForFunction(
+          () => !document.querySelector('[role="dialog"][data-shell-drawer]'),
+        );
+        await assertTopmostModal(profiles, `inspector-${width}`);
+        await capture(`nested-profile-inspector-${width}`);
+      }
+    } else {
+      await page.evaluate(
+        (name) => window.rove.setJourneyScenario(name),
+        change === "replace-task" ? "terminal_work" : "new_task",
+      );
+      await page.waitForFunction(
+        () => !document.querySelector('[role="dialog"][data-shell-drawer]'),
+      );
+      await assertTopmostModal(profiles, `inspector-${change}`);
+      await capture(`nested-profile-inspector-${change}`);
+    }
+    await page.keyboard.press("Escape");
+    assert.equal(await profiles.count(), 0);
+    await assertReleasedBackground(`inspector-${change}`);
+  }
+  await resize(820, 700);
+  await scenario("missing_profile", "task_active");
+  await page
+    .getByRole("button", { name: "Open navigation", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Open Rove profile settings", exact: true })
+    .click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.waitFor();
+  for (const width of [1180, 1280, 820]) {
+    await resize(width, 780);
+    await page.waitForFunction(
+      () => !document.querySelector('[role="dialog"][data-shell-drawer]'),
+    );
+    await assertTopmostModal(settings, `navigation-${width}`);
+    await capture(`nested-settings-navigation-${width}`);
+  }
+  await page.keyboard.press("Escape");
+  assert.equal(await settings.count(), 0);
+  await assertReleasedBackground("navigation-resize");
+  steps.push(
+    "Inspector/profile and navigation/settings keep topmost focus and inert ownership through resize, Task replacement/removal; final close releases all flags and restores visible fallback",
+  );
   await scenario("new_task");
   await page
     .getByRole("button", { name: "Open navigation", exact: true })
