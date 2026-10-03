@@ -7860,3 +7860,13 @@ html[data-rove-theme="dark"]
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Keep decision primary hover paired with its theme foreground. */
+html[data-rove-theme]
+  .product-app
+  .task-decision-actions
+  button.primary:hover:not(:disabled) {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}

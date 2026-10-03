@@ -342,7 +342,24 @@ try {
           document.querySelectorAll(".task-decision-actions button"),
         ).map((node) => {
           const r = node.getBoundingClientRect();
+          const actionStyle = getComputedStyle(node);
+          const description = node.querySelector("small");
           return {
+            foreground: actionStyle.color,
+            background: actionStyle.backgroundColor,
+            textContrast: contrast(
+              actionStyle.color,
+              actionStyle.backgroundColor,
+            ),
+            descriptionContrast: description
+              ? contrast(
+                  getComputedStyle(description).color,
+                  actionStyle.backgroundColor,
+                )
+              : null,
+            hovered: node.matches(":hover"),
+            focusVisible: node.matches(":focus-visible"),
+            primary: node.classList.contains("primary"),
             label: node.textContent,
             x: r.x,
             y: r.y,
@@ -383,6 +400,17 @@ try {
       geometry.mutedContrast >= 4.5,
       `${name}: secondary label contrast`,
     );
+    for (const action of geometry.decisionActions) {
+      assert.ok(
+        action.textContrast >= 4.5,
+        `${name}: action text contrast ${action.textContrast}`,
+      );
+      if (action.descriptionContrast !== null)
+        assert.ok(
+          action.descriptionContrast >= 4.5,
+          `${name}: action consequence contrast`,
+        );
+    }
     if (geometry.drawer)
       assert.ok(
         geometry.drawer.x >= 0 &&
@@ -646,6 +674,56 @@ try {
   }
   steps.push(
     "Seven-family light/dark normal/compact pending, submitting, resolved; exact intents, stable geometry, refusal/scope discoverability, scroll, keyboard, draft/queue and reduced motion",
+  );
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      localStorage.setItem("rove.theme-preference.v1", value);
+      document.documentElement.dataset.roveTheme = value;
+    }, theme);
+    for (const family of ["command", "form"]) {
+      await scenario(`decision_${family}`, "task_active");
+      for (const kind of ["primary", "secondary"]) {
+        const button = request
+          .locator(
+            kind === "primary"
+              ? ".task-decision-actions button.primary"
+              : ".task-decision-actions button:not(.primary)",
+          )
+          .first();
+        const before = await actionGeometry();
+        await button.hover();
+        assert.equal(
+          await button.evaluate(
+            (node) => node.matches(":hover") && !node.disabled,
+          ),
+          true,
+        );
+        await capture(`${theme}-${family}-${kind}-hover-contrast`);
+        await page.mouse.move(0, 0);
+        await request.locator("h2").focus();
+        for (let tabs = 0; tabs < 40; tabs++) {
+          await page.keyboard.press("Tab");
+          if (await button.evaluate((node) => node === document.activeElement))
+            break;
+        }
+        assert.equal(
+          await button.evaluate((node) => node.matches(":focus-visible")),
+          true,
+        );
+        await capture(`${theme}-${family}-${kind}-keyboard-contrast`);
+        const after = await actionGeometry();
+        for (let index = 0; index < before.length; index++)
+          for (const coordinate of ["x", "y", "width", "height"])
+            assert.ok(
+              Math.abs(before[index][coordinate] - after[index][coordinate]) <
+                2,
+              "Hover/focus retains action geometry",
+            );
+      }
+    }
+  }
+  steps.push(
+    "Both themes retain readable primary/secondary hover and keyboard focus, plus all recorded disabled action text/consequence contrast and unchanged geometry",
   );
   await scenario("decision_form", "task_active");
   const validationBefore = (await calls()).length;
@@ -1024,10 +1102,18 @@ try {
     `${output}\n${captures.length} captures; ${steps.length} assertion groups passed\n`,
   );
 } catch (error) {
-  if (app) {
-    const failedPage = await app.firstWindow();
-    await failedPage.screenshot({ path: join(output, "failure.png") });
-    await writeFile(join(output, "failure.html"), await failedPage.content());
+  // Preserve the primary failure even if Electron's window has already closed.
+  const failedPage = app?.windows().find((window) => !window.isClosed());
+  if (failedPage) {
+    try {
+      await failedPage.screenshot({ path: join(output, "failure.png") });
+      await writeFile(join(output, "failure.html"), await failedPage.content());
+    } catch (captureError) {
+      await writeFile(
+        join(output, "failure-capture.txt"),
+        captureError.message,
+      );
+    }
   }
   await writeFile(
     join(output, "failure.json"),
