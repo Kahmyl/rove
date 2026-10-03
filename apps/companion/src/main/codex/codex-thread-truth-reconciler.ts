@@ -155,15 +155,19 @@ export class CodexThreadTruthReconciler {
             : turn.status === "interrupted"
               ? "interrupted"
               : "completed";
-      if (terminal)
+      if (terminal) {
+        // Preserve legacy loaded-history coordinates. Attachment changes the
+        // terminal payload, so its unloaded variant needs a distinct immutable
+        // event and source coordinate; repeated reads still deduplicate.
+        const unloadedSuffix = loaded() ? "" : ":notLoaded";
         await this.accept({
           schemaVersion: 1,
           type: "codex_turn_observed",
-          eventId: `codex-history:${threadId}:turn:${turn.id}:terminal:${terminal}`,
+          eventId: `codex-history:${threadId}:turn:${turn.id}:terminal:${terminal}${unloadedSuffix}`,
           taskId,
           source: {
             kind: "codex",
-            id: `history:${threadId}:turn:${turn.id}`,
+            id: `history:${threadId}:turn:${turn.id}${unloadedSuffix}`,
             generation: 1,
             position: 2,
           },
@@ -172,9 +176,10 @@ export class CodexThreadTruthReconciler {
           turn: {
             turn: terminal,
             turnId: turn.id,
-            runtimeStatus: loaded() ? "idle" : "notLoaded",
+            runtimeStatus: unloadedSuffix ? "notLoaded" : "idle",
           },
         });
+      }
     }
 
     const repaired = await this.store.aggregate(taskId);

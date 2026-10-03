@@ -118,6 +118,41 @@ describe("Codex thread truth reconciliation", () => {
           attached && !replaceDuringHistory,
         );
         expect(rpc.request).toHaveBeenCalledTimes(attached ? 2 : 1);
+        if (!attached) {
+          // The same immutable historical terminal is read before and after
+          // qualified attachment. Both payload variants need stable identities.
+          await session.resume({ threadId: "thread_a" } as never);
+          await reconciler.reconcile(taskId, "reconnect", 1);
+          await reconciler.reconcile(taskId, "reconnect", 1);
+          expect((await store.aggregate(taskId))?.codex.runtimeStatus).toBe(
+            "idle",
+          );
+          session.replaceConnectionGeneration(3);
+          ingress.replaceGeneration(3);
+          await new TaskEngine(store).accept({
+            schemaVersion: 1,
+            type: "host_generation_changed",
+            eventId: "replacement-generation-3",
+            taskId,
+            source: {
+              kind: "host",
+              id: "replacement",
+              generation: 3,
+              position: 1,
+            },
+            observedAt: "2026-09-19T00:00:05.000Z",
+            component: "codex",
+            generation: 3,
+          });
+          await reconciler.reconcile(taskId, "reconnect", 1);
+          expect((await store.aggregate(taskId))?.codex.runtimeStatus).toBe(
+            "notLoaded",
+          );
+          await session.resume({ threadId: "thread_a" } as never);
+          await reconciler.reconcile(taskId, "reconnect", 1);
+          expect(session.isAttached("thread_a")).toBe(true);
+          expect(rpc.request).toHaveBeenCalledTimes(7);
+        }
       } finally {
         store.close();
       }
