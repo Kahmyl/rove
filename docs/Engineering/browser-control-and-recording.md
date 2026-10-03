@@ -95,3 +95,14 @@ Browser-window recording currently returns `RECORDING_SCOPE_UNAVAILABLE`. One ph
 ## Qualification
 
 Test several tasks in one profile, task changes during browser events, popup ownership, human control, stale targets, shared account changes, clipboard/focus conflicts, profile-host restart, downloads, and recording scope. Compare alternatives on these same scenarios before replacing useful custom behavior. The capability inventory in `tests/fixtures/capabilities` is supporting coverage data, not a claim that every listed capability is implemented.
+
+
+## Customer resource and collaboration presentation
+
+The selected Task dock owns current Take Over, human control/Return to Rove and checking-after-return. A blocking decision retains its offered choices and may include exact secondary browser controls in its material, including voluntary Companion takeover. The Browser inspector has no duplicate Take Over or Return action. It describes attachment, reported owner/state and the Task's frozen profile, offers existing exact Open/View and bounded recovery, and houses requested recording. Recovery with uncertain attachment labels the last reported owner; it does not manufacture renewed authority. The follower remains another presentation of the existing exact control projection.
+
+Profile management distinguishes the default for future browser use from existing Task identities. Create/select/rename/delete use the existing host catalog operations; choosing or deleting a default cannot silently rebind a frozen Task. Missing profile recovery retains the conversation and explicitly offers a new Task. The modal keeps the selected profile readable, names deletion and its data consequence, and presents rename or delete confirmation without a competing create form.
+
+The current typed customer snapshot supplies no authoritative current-page URL. The inspector therefore directs the user to View Browser for that exact Task's page; it never labels historical activity or recording provenance as live page state. Requested/active/finalizing recordings and available/failed history label their provenance **Recorded page** using only the HTTP(S) hostname, omitting URL credentials, paths, queries and fragments. Unknown/non-HTTP provenance has a generic label. Stored scope and exact Task/session association remain unchanged. Introducing live site/page text requires an authoritative read-model field and separate qualification; that gap remains open.
+
+Bounded renderer qualification covers both themes, normal/compact drawers, exact takeover/return/failure/checking intent, frozen profile/default operations and recording lifecycle/consent/scope. It does not establish new native foreground, actual recording artifacts, process/browser recovery, provider or packaged acceptance. See [Testing and Operations](testing-and-operations.md) and [Implementation Status](implementation-status.md).

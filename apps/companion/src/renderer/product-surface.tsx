@@ -912,6 +912,37 @@ export function browserResourcePresentation(
   };
 }
 
+/** Profile labels describe the task's frozen identity, never the currently selected default. */
+export function browserProfileLabel(
+  desktop: DesktopSurfaceSnapshot | null,
+  task: ProductTaskProjection,
+): string {
+  if (task.browserIdentity?.mode === "temporary") return "Guest · temporary";
+  if (task.browserIdentity?.mode === "workspace") {
+    const profile = desktop?.workspaces.workspaces.find(
+      (entry) =>
+        entry.id ===
+        (task.browserIdentity?.mode === "workspace"
+          ? task.browserIdentity.workspaceId
+          : undefined),
+    );
+    return profile?.displayName ?? "Unavailable task profile";
+  }
+  return "Not yet attached";
+}
+
+/** Recording provenance is historical; omit credentials, paths, queries and fragments. */
+export function recordedPageSite(value: string): string {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol)
+      ? url.hostname
+      : "Recorded task page";
+  } catch {
+    return "Recorded task page";
+  }
+}
+
 export function browserOpenFailureMessage(_cause: unknown): string {
   return "Browser could not open. Check this task's browser recovery or profile and try again.";
 }
@@ -3471,9 +3502,12 @@ export function ProductSurface({
     const responseKey = attentionStateKey(entry);
     const browserCollaborationControls =
       viewedCollaboration &&
-      ["takeover_required", "human_control", "checking_after_return"].includes(
-        viewedCollaboration.browser.state,
-      ) ? (
+      [
+        "takeover_required",
+        "takeover_available",
+        "human_control",
+        "checking_after_return",
+      ].includes(viewedCollaboration.browser.state) ? (
         <div className="browser-collaboration-summary">
           <strong>{viewedCollaboration.browser.title}</strong>
           <span>{viewedCollaboration.browser.description}</span>
@@ -4587,7 +4621,7 @@ export function ProductSurface({
           }}
         >
           <section
-            className="profile-modal"
+            className="profile-modal browser-profiles-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="browser-profiles-title"
@@ -4641,7 +4675,9 @@ export function ProductSurface({
                       <span className="profile-card-copy">
                         <strong>{workspace.displayName}</strong>
                         <small>
-                          {selected ? "Default profile" : "Saved profile"}
+                          {selected
+                            ? "Default for future browser use"
+                            : "Saved profile"}
                         </small>
                       </span>
                       {selected && (
@@ -4741,9 +4777,18 @@ export function ProductSurface({
             )}
 
             {deletingProfileId !== null && (
-              <section className="profile-inline-panel profile-delete-confirm">
+              <section
+                className="profile-inline-panel profile-delete-confirm"
+                aria-label="Delete browser profile confirmation"
+              >
                 <div>
-                  <strong>Delete this profile?</strong>
+                  <strong>
+                    Delete{" "}
+                    {desktop?.workspaces.workspaces.find(
+                      (entry) => entry.id === deletingProfileId,
+                    )?.displayName ?? "this profile"}
+                    ?
+                  </strong>
                   <small>
                     Its locally saved cookies, sign-ins, and browsing data will
                     be permanently removed. Task history remains.
@@ -4783,46 +4828,51 @@ export function ProductSurface({
               </section>
             )}
 
-            <form
-              className="profile-create"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const name = workspaceDraft.trim();
-                if (!name || busy) return;
-                void run(() => window.rove.createBrowserWorkspace(name)).then(
-                  (status) => {
-                    const selected = status?.selectedWorkspaceId;
-                    if (selected) setBrowserChoice(`workspace:${selected}`);
-                    if (status !== undefined) setWorkspaceDraft("");
-                  },
-                );
-              }}
-            >
-              <div>
-                <strong>Create a profile</strong>
-                <small>Give it a familiar name such as Work or Personal.</small>
-              </div>
-              <div className="profile-create-controls">
-                <input
-                  aria-label="New browser profile name"
-                  placeholder="Profile name"
-                  maxLength={80}
-                  value={workspaceDraft}
-                  onChange={(event) => setWorkspaceDraft(event.target.value)}
-                />
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={busy || !workspaceDraft.trim()}
-                >
-                  Create
-                </button>
-              </div>
-            </form>
+            {editingProfileId === null && deletingProfileId === null && (
+              <form
+                className="profile-create"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const name = workspaceDraft.trim();
+                  if (!name || busy) return;
+                  void run(() => window.rove.createBrowserWorkspace(name)).then(
+                    (status) => {
+                      const selected = status?.selectedWorkspaceId;
+                      if (selected) setBrowserChoice(`workspace:${selected}`);
+                      if (status !== undefined) setWorkspaceDraft("");
+                    },
+                  );
+                }}
+              >
+                <div>
+                  <strong>Create a profile</strong>
+                  <small>
+                    Give it a familiar name such as Work or Personal.
+                  </small>
+                </div>
+                <div className="profile-create-controls">
+                  <input
+                    aria-label="New browser profile name"
+                    placeholder="Profile name"
+                    maxLength={80}
+                    value={workspaceDraft}
+                    onChange={(event) => setWorkspaceDraft(event.target.value)}
+                  />
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={busy || !workspaceDraft.trim()}
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            )}
 
             {renderModalError()}
             <footer>
               <p>
+                Existing task profiles stay unchanged when you choose a default.
                 Guest browsing is available from Commands under Browser profile.
                 Guest data is deleted locally when its task ends.
               </p>
@@ -7380,12 +7430,61 @@ export function ProductSurface({
                   </svg>
                 </span>
                 <span>
-                  <strong>{browserResource?.title ?? identityLabel}</strong>
-                  {browserAttached && (
-                    <small>{viewedTaskControl.controllerLabel}</small>
-                  )}
+                  <strong>
+                    {browserResource?.kind === "attached"
+                      ? "Browser attached"
+                      : (browserResource?.title ?? identityLabel)}
+                  </strong>
                 </span>
               </div>
+              <dl className="browser-resource-facts">
+                <div>
+                  <dt>Attachment</dt>
+                  <dd>
+                    {browserResource?.kind === "runtime_recovery"
+                      ? "Attachment unconfirmed"
+                      : browserAttached
+                        ? "Attached to this task"
+                        : "No confirmed attachment"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    {browserResource?.kind === "runtime_recovery"
+                      ? "Last reported owner"
+                      : "Control"}
+                  </dt>
+                  <dd>
+                    {viewedTaskControl.controllerLabel === "Agent"
+                      ? "Rove"
+                      : viewedTaskControl.controllerLabel === "None"
+                        ? "No confirmed owner"
+                        : viewedTaskControl.controllerLabel}
+                  </dd>
+                </div>
+                {viewedCollaboration?.browser.state ===
+                  "checking_after_return" && (
+                  <div>
+                    <dt>State</dt>
+                    <dd>Checking the page</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Profile</dt>
+                  <dd>
+                    {browserAttached ||
+                    browserResource?.kind === "profile_missing"
+                      ? browserProfileLabel(desktop, viewedTask)
+                      : "Not yet attached"}
+                  </dd>
+                </div>
+                {browserResource?.kind === "attached" && (
+                  <div>
+                    <dt>Current page</dt>
+                    <dd>View this task’s page in the browser.</dd>
+                  </div>
+                )}
+              </dl>
               {browserResource && browserResource.kind !== "attached" && (
                 <p className="browser-recovery-copy">
                   {browserResource.description}
@@ -7427,22 +7526,13 @@ export function ProductSurface({
                     Start new task
                   </button>
                 )}
-                {viewedCollaboration?.browser.canTakeOver && (
+                {browserResource?.action !== "manage_profiles" && (
                   <button
-                    className="primary"
+                    type="button"
                     disabled={busy}
-                    onClick={() => void takeControl(viewedTask)}
+                    onClick={() => setProfileManagerOpen(true)}
                   >
-                    Take Over
-                  </button>
-                )}
-                {viewedCollaboration?.browser.canReturnToRove && (
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => void returnControl()}
-                  >
-                    Return to Rove
+                    Manage profiles
                   </button>
                 )}
               </div>
@@ -7505,6 +7595,12 @@ export function ProductSurface({
                             .stateLabel
                         }
                       </small>
+                      {recording.scope.kind === "page" && (
+                        <small>
+                          Recorded page ·{" "}
+                          {recordedPageSite(recording.scope.url)}
+                        </small>
+                      )}
                       <button
                         type="button"
                         disabled={
@@ -7569,12 +7665,15 @@ export function ProductSurface({
                         <div className="recording-history-heading">
                           <strong>Page recording</strong>
                           <span data-result-state={recording.state}>
-                            {recording.state}
+                            {
+                              recordingLifecyclePresentation(recording.state)
+                                .stateLabel
+                            }
                           </span>
                         </div>
                         <small>
                           {recording.scope.kind === "page"
-                            ? recording.scope.url
+                            ? `Recorded page · ${recordedPageSite(recording.scope.url)}`
                             : "Browser window"}{" "}
                           · no audio
                         </small>

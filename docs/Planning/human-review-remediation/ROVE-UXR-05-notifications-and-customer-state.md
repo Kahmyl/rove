@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Qualified candidate — manager review pending
+**Status:** Foundation accepted at `bad7103` — integrated/human pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -81,3 +81,5 @@ UXR-07 inherits notification semantics, marker placement, safe dismissal/expiry,
 The candidate separates attributed dismissible notifications from independent Task/delivery/Output/legacy-effect/browser/device markers, preserving exact authority after dismissal. Six focused files pass 140 tests; typecheck/build, touched lint and repository checks pass. The deterministic production-renderer replay passes 112 captures / three groups with normal and compact light/dark, pointer/keyboard/reduced motion, long content, exact immutable state/commands, decision/Stop coexistence, Task switching, fresh-renderer reconstruction and recurrence. Stopping uses immediate authoritative state without dwell; the fixture does not prove actual process termination or SQLite restart recovery.
 
 Consume the [qualified notification exit](continuity-ledger.md) for exact report/source hashes, historical fixture corrections, approval resolution and residual gaps. No schema, persistence preference, protocol or replay/response/browser permission changed. End identity is the normal commit `Separate transient notifications from durable task state` introducing that exit; manager and integrated/human qualification remain pending. STOP after verified non-force PR #38 push; UXR-06 remains unstarted until acceptance plus explicit continuation in this same chat.
+
+Independent manager review accepted exact `bad71035b7e1443941fbb031f3527c0de90bce18` and continued the same worker to UXR-06. See the appended manager checkpoint; prior candidate and approval records remain historical.

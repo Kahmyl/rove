@@ -19,6 +19,8 @@ import {
   browserResourcePresentation,
   browserOpenFailureMessage,
   browserIdentityLabel,
+  browserProfileLabel,
+  recordedPageSite,
   canRemoveWorkflowFromCloud,
   compatibleReasoningEffort,
   commandPaletteMatches,
@@ -1065,6 +1067,29 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       summary: "Recording unavailable",
       actionLabel: null,
     });
+  });
+
+  it("keeps the task profile separate from the default and labels recording provenance safely", () => {
+    const value = snapshot();
+    const task = {
+      browserIdentity: { mode: "workspace", workspaceId },
+    } as ProductTaskProjection;
+    value.workspaces.selectedWorkspaceId = "another_profile";
+    expect(browserProfileLabel(value, task)).toBe("Personal");
+    value.workspaces.workspaces = [];
+    expect(browserProfileLabel(value, task)).toBe("Unavailable task profile");
+    expect(
+      browserProfileLabel(value, {
+        browserIdentity: { mode: "temporary" },
+      } as ProductTaskProjection),
+    ).toBe("Guest · temporary");
+    expect(
+      recordedPageSite(
+        "https://user:private@example.test/private-path?token=private#private",
+      ),
+    ).toBe("example.test");
+    expect(recordedPageSite("file:///private/path")).toBe("Recorded task page");
+    expect(recordedPageSite("invalid")).toBe("Recorded task page");
   });
 
   it("shows browser identity only for the exact attached task", () => {
@@ -2117,7 +2142,10 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("task-composer-shell");
     expect(html).toContain(">Send</button>");
     expect(html).not.toContain("File change approval");
-    expect(html).toContain("Take Over");
+    expect(html.match(/>Take Over<\/button>/g)).toHaveLength(1);
+    expect(
+      html.slice(html.indexOf('aria-label="Browser status"')),
+    ).not.toContain(">Take Over</button>");
     expect(html).toContain('aria-label="Stop current work"');
     expect(html.match(/aria-label="Stop current work"/g)).toHaveLength(1);
     expect(html).toContain("Personal");
@@ -2219,7 +2247,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     );
     expect(humanOwnedFull).toContain("You&#x27;re in control");
     expect(humanOwnedFull).not.toContain(reason);
-    expect(humanOwnedFull).toContain("Return to Rove");
+    expect(humanOwnedFull.match(/>Return to Rove<\/button>/g)).toHaveLength(1);
+    expect(
+      humanOwnedFull.slice(
+        humanOwnedFull.indexOf('aria-label="Browser status"'),
+      ),
+    ).not.toContain(">Return to Rove</button>");
     expect(humanOwnedFull).not.toContain("Retry cleanup");
 
     value.surface.presentation = "expanded";

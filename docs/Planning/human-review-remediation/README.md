@@ -49,7 +49,7 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 ## Tickets and status
 
-UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 foundation is independently accepted at `3458fb3`; UXR-04 foundation is independently accepted at `eef0f8b`; UXR-05 is In Progress; UXR-06–08 remain Planned.
+UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 foundation is independently accepted at `3458fb3`; UXR-04 foundation is independently accepted at `eef0f8b`; UXR-05 foundation is independently accepted at `bad7103`; UXR-06 has a machine-qualified candidate awaiting manager review; UXR-07–08 remain Planned.
 
 | Ticket                                                                        | Responsibility                                        | Status                                         |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
@@ -57,8 +57,8 @@ UXR-01 began In Progress / planning-contract setup; this checkpoint completes th
 | [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Foundation accepted — integrated/human pending |
 | [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Foundation accepted — integrated/human pending |
 | [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Foundation accepted — integrated/human pending             |
-| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Qualified candidate — manager review pending                                        |
-| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                                        |
+| [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Foundation accepted — integrated/human pending                                        |
+| [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Machine-qualified — manager review pending                                        |
 | [ROVE-UXR-07](ROVE-UXR-07-cross-surface-visual-and-state-coherence.md)        | Cross-surface visual and state coherence              | Planned                                        |
 | [ROVE-UXR-08](ROVE-UXR-08-visual-qualification-and-remediation-gate.md)       | Visual/interaction qualification and remediation gate | Planned                                        |
 
@@ -85,6 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-The manager independently accepted UXR-03 foundation at exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` without a remediation round and explicitly continued the same sole worker to bounded UXR-04. Consume the [manager checkpoint and qualified decision exit](continuity-ledger.md). The manager accepted UXR-04 at exact `eef0f8bf79995f405557ed0a470b85052928464a` and continued the same writer to UXR-05. Notification separation has a machine-qualified candidate with 140 focused tests and 112 rendered captures; direct human approval resolved the fixture/publication review boundary. Manager acceptance remains pending. UXR-06 remains unstarted.
+The manager independently accepted UXR-03 foundation at exact `3458fb36f5f9e0f81f9ef0e7345c5884fea52331` without a remediation round and explicitly continued the same sole worker to bounded UXR-04. Consume the [manager checkpoint and qualified decision exit](continuity-ledger.md). The manager accepted UXR-04 at exact `eef0f8bf79995f405557ed0a470b85052928464a` and continued the same writer to UXR-05. Notification separation has a machine-qualified candidate with 140 focused tests and 112 rendered captures; direct human approval resolved the fixture/publication review boundary. Manager accepted UXR-05 at exact `bad7103` and continued the same worker to bounded UXR-06. Its browser presentation candidate passes 167 + 47 focused tests and 160 rendered captures / two groups; manager review remains pending. UXR-07 remains unstarted.
 
 The same actual implementation chat continues UXR-02 through UXR-08, one writer and one review stop per item. After accepting each checkpoint, the persistent manager sends the next bounded item explicitly. Focused/directly affected checks apply per item; full integrated system verification follows implementation at UXR-08. Final human-recorded acceptance and provider/platform/distribution gates remain separate. Retire ticket metadata with the active program.

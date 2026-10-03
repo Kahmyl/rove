@@ -7921,3 +7921,56 @@ html[data-rove-theme]
   min-height: 0;
   overflow-y: auto;
 }
+
+/* Browser collaboration stays in the dock; resource details use secondary panel scale. */
+.product-app[data-shell-mode] .inspector-panel.browser-status { padding: 14px; gap: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
+.browser-status-heading strong { overflow-wrap: anywhere; line-height: 1.5; }
+.browser-resource-facts { display: grid; gap: 10px; margin: 0; font-size: 12px; }
+.browser-resource-facts > div { display: grid; gap: 3px; }
+.browser-resource-facts dt { color: var(--ink-soft); font-size: 11px; }
+.browser-resource-facts dd { margin: 0; color: var(--ink); line-height: 1.5; overflow-wrap: anywhere; }
+.browser-status .control-actions { flex-wrap: wrap; gap: 8px; }
+.browser-recovery-copy { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+.product-inspector .recording-panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); box-shadow: none; }
+.recording-summary, .recording-scope, .recording-actions, .recording-history { padding: 12px 14px; border-color: var(--border); }
+.recording-panel .inspector-heading small, .recording-summary span, .recording-actions > small, .recording-history small,
+.recording-scope, .recording-history p, .recording-consent { color: var(--ink-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.recording-history-heading { align-items: start; flex-wrap: wrap; gap: 6px; }
+.recording-history-heading strong { white-space: normal; }
+.browser-profiles-modal { width: min(560px, 100%); border-radius: 16px; gap: 16px; padding: 20px; }
+.browser-profiles-modal h2 { font-size: 20px; }
+.browser-profiles-modal .profile-card-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.browser-profiles-modal .profile-card { min-height: 68px; border-radius: 12px; }
+.product-app .browser-profiles-modal .profile-card-select { min-height: 68px; grid-template-columns: 32px minmax(0, 1fr) auto; padding: 10px 48px 10px 12px; border-radius: 12px; gap: 10px; }
+.browser-profiles-modal .profile-avatar { width: 32px; height: 32px; font-size: 13px; }
+.browser-profiles-modal .profile-card-copy strong { white-space: normal; overflow-wrap: anywhere; font-size: 13px; }
+.browser-profiles-modal .profile-card-copy small, .browser-profiles-modal small, .browser-profiles-modal footer p, .browser-profiles-modal header p { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+.browser-profiles-modal .profile-actions > summary { opacity: 1; }
+.browser-profiles-modal .profile-inline-panel { border-radius: 12px; padding: 12px; }
+.browser-profiles-modal .profile-inline-panel .profile-create-controls { grid-template-columns: minmax(0, 1fr) auto auto; }
+.browser-profiles-modal .profile-create { padding-top: 14px; gap: 10px; }
+/* Keep owning browser/profile primary controls readable under the explicit-theme hover cascade. */
+html[data-rove-theme] .browser-status button.primary:hover:not(:disabled),
+html[data-rove-theme] .browser-collaboration button.primary:hover:not(:disabled),
+html[data-rove-theme] .browser-collaboration-summary button.primary:hover:not(:disabled),
+html[data-rove-theme] .browser-profiles-modal button.primary:hover:not(:disabled) { color: var(--surface); background: var(--ink); border-color: var(--ink); }
+
+.product-app .browser-collaboration {
+  padding: 12px 14px;
+  gap: 8px;
+  max-height: min(40vh, 320px);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  box-shadow: none;
+}
+.browser-collaboration h2 { margin: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.browser-collaboration > p { min-height: 0; overflow-y: auto; font-size: 12px; line-height: 1.5; }
+.browser-collaboration .eyebrow { font-size: 11px; }
+.browser-collaboration .attention-actions { margin: 0; }
+
+.product-app[data-shell-mode] .browser-status :is(.inspector-heading, .browser-status-heading, .control-actions) { padding: 0; border: 0; }
+.product-app .browser-profiles-modal .profile-card-select:disabled { opacity: 1; color: var(--ink); }
+.product-app .browser-profiles-modal .profile-actions-popover .danger-text:hover:not(:disabled),
+.product-app .browser-profiles-modal .profile-delete-confirm button.danger { color: var(--danger); background: var(--surface-raised); border-color: var(--danger); }
+.product-app .browser-profiles-modal .profile-delete-confirm button.danger:hover:not(:disabled) { color: var(--danger); background: var(--surface); border-color: var(--danger); }
