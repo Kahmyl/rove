@@ -7870,3 +7870,54 @@ html[data-rove-theme]
   background: var(--ink);
   border-color: var(--ink);
 }
+
+/* Transient notices float outside the dock; durable details stay with their owner. */
+.customer-notifications {
+  position: fixed;
+  z-index: 35;
+  top: 68px;
+  right: 16px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(42vh, 300px);
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+.customer-notification {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.customer-notification [role="status"] { display: grid; gap: 4px; }
+.customer-notification small { color: var(--ink-soft); font-size: 11px; }
+.customer-notification strong { font-size: 13px; }
+.customer-notification p { margin: 0; font-size: 12px; line-height: 1.5; }
+.product-app .customer-notification button { justify-self: end; min-height: 32px; }
+.customer-state-marker {
+  flex: none;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  font-size: 12px;
+}
+.customer-state-marker summary { padding: 8px 10px; cursor: pointer; }
+.customer-state-marker summary span { margin-left: 8px; }
+.customer-state-marker > div { max-height: 20vh; overflow-y: auto; padding: 0 10px 8px; }
+.customer-state-marker p { margin: 4px 0 8px; line-height: 1.5; }
+.customer-marker-label { color: var(--ink-soft); font-size: 11px; }
+.customer-notification {
+  max-height: min(36vh, 250px);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.customer-notification [role="status"] {
+  min-height: 0;
+  overflow-y: auto;
+}

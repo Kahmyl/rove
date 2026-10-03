@@ -1,4 +1,9 @@
 import {
+  CustomerStateMarkers,
+  CustomerStateNotices,
+  type CustomerNotice,
+} from "./customer-state-notices.js";
+import {
   TaskDecisionSurface,
   type DecisionAnswers,
   type DecisionForm,
@@ -2561,6 +2566,29 @@ export function ProductSurface({
                 task.conversation.items[latestInputId]!.deliveryState!,
             }
           : {}),
+        ...(task.roveSessionId &&
+        (task.runtime?.attachment !== "attached" ||
+          task.runtime.recovery !== "not_needed")
+          ? {
+              browserRecoveryKey: JSON.stringify([
+                task.roveSessionId,
+                task.runtime?.attachment,
+                task.runtime?.recovery,
+              ]),
+            }
+          : {}),
+        legacyOutcomeUnclear: task.availableActions.includes(
+          "acknowledge_legacy_effects",
+        ),
+        consequentialOutcomeUnclear: task.results.some(
+          (result) => result.lifecycle === "unresolved",
+        ),
+        unresolvedResultIds: task.results
+          .filter((result) => result.lifecycle === "unresolved")
+          .map((result) => result.resultId),
+        uncertainInputIds: Object.values(task.conversation?.items ?? {})
+          .filter((item) => item.deliveryState === "uncertain")
+          .map((item) => item.id),
         ...(task.recordings ? { recordings: task.recordings } : {}),
       })
     );
@@ -3520,6 +3548,54 @@ export function ProductSurface({
       warning === RUNTIME_CONFIGURATION_WARNING ||
       warning === RUNTIME_TRANSIENT_WARNING,
   );
+
+  const taskNotices: CustomerNotice[] = (product?.tasks ?? []).flatMap((task) =>
+    (presentationForTask(task).markers ?? []).map((marker) => ({
+      ...marker,
+      key: JSON.stringify([task.taskId, marker.key]),
+      owner: displayTaskTitle(task),
+      markerId: `task-state-${task.taskId}`,
+    })),
+  );
+  const deviceMarker = runtimeWarning
+    ? [
+        {
+          key: `runtime:${runtimeWarning}`,
+          title: "Browser work is unavailable",
+          description: runtimeWarning,
+          tone: "neutral" as const,
+        },
+      ]
+    : [];
+  const deviceNotices = deviceMarker.map((marker) => ({
+    ...marker,
+    owner: "Device browser service",
+    markerId: "device-browser-state",
+  }));
+  const operationNotice =
+    error && activeModal === null
+      ? [
+          {
+            key: `operation:${error}`,
+            title: "Action could not complete",
+            description: error,
+            tone: "danger" as const,
+            owner: "Rove operation",
+          },
+        ]
+      : [];
+  const visibleNotices = [
+    ...taskNotices.filter(
+      (notice) => notice.markerId === `task-state-${viewedTask?.taskId}`,
+    ),
+    ...deviceNotices,
+    ...operationNotice,
+  ];
+  const activeNoticeKeys = [
+    ...taskNotices,
+    ...deviceNotices,
+    ...operationNotice,
+  ].map((notice) => notice.key);
 
   if (initialProductHydrationPending(desktop)) {
     const failed = connectionError !== null;
@@ -4905,6 +4981,10 @@ export function ProductSurface({
         </div>
       )}
 
+      <CustomerStateNotices
+        notices={activeModal === null ? visibleNotices : []}
+        activeKeys={activeNoticeKeys}
+      />
       {unmatchedSession !== null && (
         <section
           className="product-warning global-resource-recovery"
@@ -4938,16 +5018,11 @@ export function ProductSurface({
           }
           tabIndex={0}
         >
-          {runtimeWarning !== undefined && (
-            <section
-              className="product-warning runtime-dependency-warning"
-              aria-label="Browser service status"
-              role="status"
-            >
-              <strong>Browser work is unavailable</strong>
-              <span>{runtimeWarning}</span>
-            </section>
-          )}
+          <CustomerStateMarkers
+            markers={deviceMarker}
+            id="device-browser-state"
+            owner="Device browser service"
+          />
           {fileAttention.map((entry) => (
             <section
               key={entry.requestId}
@@ -6185,6 +6260,11 @@ export function ProductSurface({
 
           {viewedTask && !selectedWorkflow && (
             <div className="task-detail">
+              <CustomerStateMarkers
+                markers={viewedPresentation?.markers ?? []}
+                id={`task-state-${viewedTask.taskId}`}
+                owner={displayTaskTitle(viewedTask)}
+              />
               <section
                 className="task-timeline"
                 aria-label="Conversation and activity"
@@ -6203,7 +6283,9 @@ export function ProductSurface({
                 {timeline.length === 0 &&
                   viewedPresentation?.conversationStatus && (
                     <div className="timeline-empty">
-                      <span className="activity-spinner" aria-hidden="true" />
+                      {viewedPresentation.state === "checking" && (
+                        <span className="activity-spinner" aria-hidden="true" />
+                      )}
                       <p>{viewedPresentation.conversationStatus.title}</p>
                     </div>
                   )}
@@ -6530,22 +6612,6 @@ export function ProductSurface({
                   </button>
                 )}
               </section>
-              {viewedPresentation?.conversationStatus &&
-                viewedCollaboration?.browser.state !==
-                  "checking_after_return" &&
-                timeline.length > 0 && (
-                  <div
-                    className={`product-warning status-${viewedPresentation.conversationStatus.tone}`}
-                    role="status"
-                  >
-                    <strong>
-                      {viewedPresentation.conversationStatus.title}
-                    </strong>
-                    <span>
-                      {viewedPresentation.conversationStatus.description}
-                    </span>
-                  </div>
-                )}
               <footer className="task-detail-dock">
                 {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
                   <div className="task-queue" aria-label="Queued messages">
@@ -7013,13 +7079,6 @@ export function ProductSurface({
               </footer>
             </div>
           )}
-
-          {error && activeModal === null && (
-            <div className="product-error" role="alert">
-              <strong>Rove needs attention</strong>
-              <span>{error}</span>
-            </div>
-          )}
         </section>
 
         <ShellSecondarySurface
@@ -7173,6 +7232,20 @@ export function ProductSurface({
                         {presentationForTask(entry).sidebar!.label}
                       </span>
                     )}
+                    {(presentationForTask(entry).markers ?? [])
+                      .filter(
+                        (marker) =>
+                          marker.title !==
+                          presentationForTask(entry).sidebar?.label,
+                      )
+                      .map((marker) => (
+                        <span
+                          className="customer-marker-label"
+                          key={marker.key}
+                        >
+                          {marker.title}
+                        </span>
+                      ))}
                   </button>
                   {entry.capabilities?.canArchive && (
                     <button

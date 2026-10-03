@@ -2146,6 +2146,25 @@ describe("LocalProductApi native product seam", () => {
     expect(broker.respond).not.toHaveBeenCalled();
   });
 
+  it("projects legacy effect uncertainty without acknowledgement or another command", async () => {
+    const { api, tasks, legacyEffects } = fixture();
+    const task = (await tasks.productTasks())[0]!;
+    tasks.productTasks.mockResolvedValue([
+      {
+        ...task,
+        availableActions: [
+          ...task.availableActions,
+          "acknowledge_legacy_effects",
+        ],
+      },
+    ] as never);
+    const snapshot = await api.readSnapshot();
+    expect(snapshot.tasks[0]?.customerPresentation?.markers).toMatchObject([
+      { title: "Outcome unclear" },
+    ]);
+    expect(legacyEffects.acknowledgeLegacyEffectScope).not.toHaveBeenCalled();
+  });
+
   it("host-binds every allowed live renderer intent and rejects injected addressing", async () => {
     const {
       api,

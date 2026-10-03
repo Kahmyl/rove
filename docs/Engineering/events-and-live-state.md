@@ -60,6 +60,8 @@ Decision fields are ephemeral renderer state bound to authority/Task/request/gen
 
 Task needs-attention badges may aggregate in the navigation UI without globally blocking other tasks. Notification count and currently selected task are not approval authority.
 
+Notification dismissal belongs only to renderer-session memory. Source-keyed markers are reconstructed from host delivery, result and recovery projections independently of transient announcements and current active-work priority. A notification is announced once while mounted; unchanged snapshot rebuilding does not replay commands. Observed issue absence re-arms a later notification episode; restarting may announce current unresolved state once again without clearing its marker or any fence.
+
 ## Outcome reconciliation
 
 A consequential operation that may have dispatched keeps its exact operation and consequence identity while evidence is incomplete. Presentation may show **Checking outcome** while the owning capability performs bounded read-only reconciliation. Those reads are correlated observations of the existing operation, not new authorization and not a replayable mutation command.

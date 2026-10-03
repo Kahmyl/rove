@@ -229,11 +229,20 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain('aria-label="Browser service status"');
+    expect(html).toContain('aria-label="Device browser service state details"');
+    expect(html).toContain(
+      'aria-label="Dismiss Browser work is unavailable notification"',
+    );
+    expect(html).toContain('id="device-browser-state"');
     expect(html).toContain("Browser work is unavailable");
     expect(html).toContain("Conversation history remains available");
     expect(html).not.toContain("internal identity detail");
-    expect(html.match(/Browser service status/g)).toHaveLength(1);
+    expect(html.match(/id="device-browser-state"/g)).toHaveLength(1);
+    expect(
+      html.match(
+        /aria-label="Dismiss Browser work is unavailable notification"/g,
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps explicit steering out of the ordinary composer", () => {

@@ -16,6 +16,13 @@ export type CustomerTaskPresentationState =
   | "failed"
   | "outcome_unclear";
 
+export interface CustomerStateMarker {
+  key: string;
+  title: string;
+  description: string;
+  tone: "neutral" | "danger";
+}
+
 export interface CustomerTaskPresentation {
   state: CustomerTaskPresentationState;
   sidebar?: {
@@ -27,9 +34,11 @@ export interface CustomerTaskPresentation {
       | "Stopping"
       | "Stopped"
       | "Capturing"
-      | "Couldn't continue";
+      | "Couldn't continue"
+      | "Task state unclear";
     tone: "neutral" | "attention" | "muted" | "danger";
   };
+  markers?: readonly CustomerStateMarker[];
   conversationStatus?: {
     title: string;
     description: string;
@@ -45,6 +54,10 @@ export interface CustomerTaskPresentationFacts {
   capabilities?: ProductTaskCapabilities;
   latestDelivery?: "pending" | "materialized" | "not_sent" | "uncertain";
   consequentialOutcomeUnclear?: boolean;
+  legacyOutcomeUnclear?: boolean;
+  unresolvedResultIds?: readonly string[];
+  uncertainInputIds?: readonly string[];
+  browserRecoveryKey?: string;
   recordings?: readonly Recording[];
 }
 
@@ -55,6 +68,47 @@ export interface CustomerTaskPresentationFacts {
 export function customerTaskPresentation(
   facts: CustomerTaskPresentationFacts,
 ): CustomerTaskPresentation {
+  const markers: CustomerStateMarker[] = [];
+  if (facts.execution.state === "unresolved")
+    markers.push({
+      key: `task-state:${facts.execution.segments.at(-1)?.id ?? "task"}`,
+      title: "Task state unclear",
+      description:
+        "Rove could not confirm the latest task state. It will not repeat the affected action automatically. The conversation remains available; controls reflect what is safe.",
+      tone: "danger",
+    });
+  if (
+    facts.consequentialOutcomeUnclear ||
+    facts.legacyOutcomeUnclear ||
+    facts.latestDelivery === "uncertain" ||
+    facts.uncertainInputIds?.length
+  )
+    markers.push({
+      key: `outcome:${JSON.stringify([[...(facts.unresolvedResultIds ?? [])].sort(), [...(facts.uncertainInputIds ?? [])].sort(), facts.legacyOutcomeUnclear === true])}`,
+      title: "Outcome unclear",
+      description:
+        "Rove could not confirm the affected action or message. Check its work, delivery or Output details before repeating it. Rove will not repeat it automatically.",
+      tone: "danger",
+    });
+  if (
+    (facts.execution.state === "failed" && !markers.length) ||
+    facts.latestDelivery === "not_sent"
+  )
+    markers.push({
+      key: `failed:${facts.execution.segments.at(-1)?.id ?? "task"}`,
+      title: "Couldn't continue",
+      description:
+        "The latest work could not continue. Review its conversation and work details. Only recovery controls permitted for this task are available.",
+      tone: "danger",
+    });
+  if (facts.browserRecoveryKey)
+    markers.push({
+      key: `browser:${facts.browserRecoveryKey}`,
+      title: "Browser state unconfirmed",
+      description:
+        "Rove cannot confirm this task's attached browser state. Open Details to review its browser recovery. Conversation history remains available; browser controls retain their safety checks.",
+      tone: "neutral",
+    });
   const retry = facts.capabilities?.canRetry
     ? ({ kind: "cleanup", label: "Retry cleanup" } as const)
     : undefined;
@@ -66,6 +120,7 @@ export function customerTaskPresentation(
   ): CustomerTaskPresentation => ({
     state,
     terminalWorkLabel: values.terminalWorkLabel ?? "Worked",
+    ...(markers.length ? { markers } : {}),
     ...(values.sidebar ? { sidebar: values.sidebar } : {}),
     ...(values.conversationStatus
       ? { conversationStatus: values.conversationStatus }
@@ -79,7 +134,7 @@ export function customerTaskPresentation(
     });
   if (facts.execution.state === "unresolved")
     return result("outcome_unclear", {
-      sidebar: { label: "Couldn't continue", tone: "danger" },
+      sidebar: { label: "Task state unclear", tone: "muted" },
       conversationStatus: {
         title: "Task state unclear",
         description:
@@ -144,10 +199,7 @@ export function customerTaskPresentation(
       sidebar: { label: "Stopped", tone: "muted" },
       terminalWorkLabel: "Stopped",
     });
-  if (
-    facts.execution.state === "failed" ||
-    facts.latestDelivery === "not_sent"
-  )
+  if (facts.execution.state === "failed" || facts.latestDelivery === "not_sent")
     return result("failed", {
       sidebar: { label: "Couldn't continue", tone: "danger" },
       terminalWorkLabel: "Couldn't continue",

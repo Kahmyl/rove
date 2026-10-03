@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Planned — implementation not started
+**Status:** Qualified candidate — manager review pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -34,7 +34,9 @@ Clearing recovery blockers or effect truth via dismissal, relaxing replay fences
 
 Consume UXR-03 dock modes and canonical notification/marker distinction; inspect conversationStatus, customer presentation, recovery blockers and effect fences. Keep exact state/resource attribution from STAB-03/04/06.
 
-The UXR-03 foundation candidate establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+The accepted UXR-03 foundation at `3458fb3` establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+
+The decision foundation is independently accepted at exact `eef0f8bf79995f405557ed0a470b85052928464a`, including decimal and hover contrast corrections. Preserve its exact request/local submission/secret/focus/Stop seams. Both prior rejection records remain in the ledger; global unrelated primary-hover risk stays UXR-07/MR-038.
 
 ## Investigation requirements
 
@@ -42,7 +44,7 @@ Classify Outcome unclear, Task state unclear, browser/runtime degradation and re
 
 ## Implementation responsibility
 
-Later implementation owns bounded notification layer and durable state-marker projection/presentation, attribution, recovery/reconcile links and coherent state language. Use marker placement near affected work/result/action or owning Task; notifications must not occupy the dock indefinitely. Visual timing cannot change execution, duration, ownership or replay authority.
+This implementation owns bounded notification layer and durable state-marker projection/presentation, attribution, recovery/reconcile links and coherent state language. Use marker placement near affected work/result/action or owning Task; notifications must not occupy the dock indefinitely. Visual timing cannot change execution, duration, ownership or replay authority.
 
 ## Acceptance criteria
 
@@ -73,3 +75,9 @@ Keep product/runtime/test names descriptive; ticket IDs remain bounded planning 
 ## Downstream handoff
 
 UXR-07 inherits notification semantics, marker placement, safe dismissal/expiry, state language and documented Stopping timing decision. No durable safety issue is closed by presentation alone.
+
+## Candidate qualification checkpoint — 3 October 2026
+
+The candidate separates attributed dismissible notifications from independent Task/delivery/Output/legacy-effect/browser/device markers, preserving exact authority after dismissal. Six focused files pass 140 tests; typecheck/build, touched lint and repository checks pass. The deterministic production-renderer replay passes 112 captures / three groups with normal and compact light/dark, pointer/keyboard/reduced motion, long content, exact immutable state/commands, decision/Stop coexistence, Task switching, fresh-renderer reconstruction and recurrence. Stopping uses immediate authoritative state without dwell; the fixture does not prove actual process termination or SQLite restart recovery.
+
+Consume the [qualified notification exit](continuity-ledger.md) for exact report/source hashes, historical fixture corrections, approval resolution and residual gaps. No schema, persistence preference, protocol or replay/response/browser permission changed. End identity is the normal commit `Separate transient notifications from durable task state` introducing that exit; manager and integrated/human qualification remain pending. STOP after verified non-force PR #38 push; UXR-06 remains unstarted until acceptance plus explicit continuation in this same chat.

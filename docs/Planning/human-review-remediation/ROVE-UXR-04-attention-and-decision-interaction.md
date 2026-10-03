@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Action contrast correction — manager re-review pending
+**Status:** Foundation accepted at `eef0f8b` — integrated/human pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -83,3 +83,5 @@ Stop after normal commit/non-force push for independent manager review. MR-035 r
 Manager review rejected `691bed3` for native `number` inputs inheriting integer step constraints. The bounded correction sets fractional number steps explicitly and retains integer rejection; the expanded 96-capture decision fixture includes exact 2.5 submission and zero-dispatch integer refusal. See the ledger correction below the historical candidate exit. No acceptance or UXR-05 continuation is inferred.
 
 Manager re-review confirmed the decimal fix but rejected `59daa0c` for unreadable dark primary hover. The next correction scopes theme-token foreground/background pairing to decision-action primary hover and adds both-theme primary/secondary hover, keyboard focus and disabled-action contrast evidence; broader inherited primary-hover risk belongs to UXR-07/MR-038. The ledger retains both rejection checkpoints and their separate evidence.
+
+Manager independently accepted exact `eef0f8bf79995f405557ed0a470b85052928464a` after both corrections and explicitly continued the same worker to UXR-05. Independent replay passes 112 captures/five groups; MR-035 integrated/human and every external gate remain open.
