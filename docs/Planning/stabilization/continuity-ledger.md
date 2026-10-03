@@ -624,3 +624,12 @@ One primary selected-task dock, applicable blocking decisions replacing peer ord
 Dependency sequence: UXR-01 → UXR-02 → UXR-03 → (UXR-04 + UXR-05 + UXR-06) → UXR-07 → UXR-08 → final human-recorded Stage 1–4 acceptance. Final recording is not a UXR implementation ticket and must wait for UXR-08. Provider grant consumption, Windows/Linux packaged process trees, packaged live authority composition, signing/notarization and supported-platform distribution evidence remain separate STAB-12/STAB-14 release blockers. STAB-14 cannot close through functional machine passes alone.
 
 Exact next gate: **begin UXR-02 read-only baseline/design reconciliation before source edits**. Planning verification and preservation results are retained in the new program ledger. Stop at this planning checkpoint for review; implementation is not started.
+
+
+### Canonical main reconciliation and human-review PR — 3 October 2026
+
+The complete published STAB-02 through STAB-14 chain was verified as linear relative to `main` and reconciled through [PR #37](https://github.com/Kahmyl/rove/pull/37). PR #37 merged `codex/stab14-market-release-qualification` head `42952a2bce699cee299a2bca6315d95d6181b54f` into canonical `main`, producing merge commit `a0a1bfff23628da236e1737f8d396842f69da890`. The stabilization stack is therefore no longer a set of remote-only stacked branches for continuation purposes; `main` is the canonical remote product baseline.
+
+The local acceptance/planning continuation `2ff214b` → `7c1ea53` was then reconciled with that exact `origin/main` by a non-rewriting merge, producing `7a6f92bd20ce8196b101d5919b9988a6c628d1f9`, published as `origin/codex/human-review-remediation-planning`. [PR #38](https://github.com/Kahmyl/rove/pull/38) is the single draft PR for the Human-Review Remediation Program and subsequent UXR implementation. It targets canonical `main`; no remediation implementation had begun at PR creation and no merge is authorized.
+
+Continue from PR #38 / `codex/human-review-remediation-planning`. Do not reconstruct UXR work from the old stacked stabilization branches.

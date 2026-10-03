@@ -90,3 +90,12 @@ Provider-owned exact elevated-grant consumption; Windows/Linux packaged process 
 Product typecheck/build/test/process/live/package qualification is not rerun: no production source changed and documentation verification routing plus the explicit task boundary calls for docs-only checks.
 
 UXR-01 planning setup Complete; UXR-02–08 Planned. No MR implementation closure or final human acceptance is claimed. No branch push. Exact next gate: **begin UXR-02 read-only baseline/design reconciliation before source edits**. Read canonical contracts, this ledger and UXR-01 exit; verify current branch/HEAD/status, inspect shell/CSS/projections and measure current layouts before selecting coherent surface/responsive primitives.
+
+
+## Remote canonicalization and review surface — 3 October 2026
+
+The previously stacked STAB-02 through STAB-14 chain was reconciled into canonical remote `main` through [PR #37](https://github.com/Kahmyl/rove/pull/37), producing merge commit `a0a1bfff23628da236e1737f8d396842f69da890`. The local acceptance/planning continuation was then merged with that exact `origin/main` without rebasing or rewriting `2ff214b` or `7c1ea53`, producing branch reconciliation commit `7a6f92bd20ce8196b101d5919b9988a6c628d1f9`.
+
+The branch is published as `origin/codex/human-review-remediation-planning` and [PR #38](https://github.com/Kahmyl/rove/pull/38) is the single remote review and implementation surface for UXR-02 through UXR-08. At PR creation it targeted `main`, was 3 commits ahead / 0 behind, and contained only the immutable acceptance records plus the UXR planning/contract checkpoint beyond canonical `main`. PR #38 remains draft and must not merge without explicit human authorization after implementation and required qualification.
+
+This remote reconciliation changes no UXR contract or finding ownership. It only establishes one canonical remote base and one reviewable continuation branch. Exact next gate remains **UXR-02 read-only baseline/design reconciliation before source edits**.

@@ -8,6 +8,10 @@
 
 **Branch:** `codex/human-review-remediation-planning`
 
+**Canonical remote base:** `main` at `a0a1bfff23628da236e1737f8d396842f69da890`
+
+**Review PR:** [#38 — Human-review remediation program and implementation](https://github.com/Kahmyl/rove/pull/38)
+
 ## Origin and evidence boundary
 
 Post-STAB-14 recorded E2E human review found market-significant interaction/presentation defects that the existing machine pass criteria did not classify. The recorded package remains immutable: `artifacts/human-e2e-acceptance/20260927T144500Z/{manifest.json,walkthrough.md,SHA256SUMS}`, committed by `2ff214b`; its run source was `42952a2bce699cee299a2bca6315d95d6181b54f`.
