@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Page } from "playwright";
 
 import type {
@@ -19,14 +19,16 @@ const config: BrowserLaunchConfig = {
   browser: "chromium",
   profile: { mode: "temporary" },
 };
-const sessions: BrowserSession[] = [];
+const starts: Promise<BrowserSession>[] = [];
+let currentFixture: Awaited<ReturnType<typeof setup>>;
 const servers: FixtureServer[] = [];
 
 async function setup() {
   const server = await startFixtureServer();
-  const session = await new PlaywrightBrowserEngine().start(config);
   servers.push(server);
-  sessions.push(session);
+  const start = new PlaywrightBrowserEngine().start(config);
+  starts.push(start);
+  const session = await start;
   await session.navigate(`${server.url}/dynamic-freshness`);
   return { server, session, page: testPage(session) };
 }
@@ -63,13 +65,20 @@ async function dispatchCount(page: Page): Promise<number> {
 }
 
 afterEach(async () => {
-  while (sessions.length > 0) await sessions.pop()?.close();
-  while (servers.length > 0) await servers.pop()?.close();
+  try {
+    for (const result of await Promise.allSettled(starts.splice(0)))
+      if (result.status === "fulfilled") await result.value.close();
+  } finally {
+    while (servers.length > 0) await servers.pop()?.close();
+  }
 });
 
 describe("target-scoped dynamic-page freshness", () => {
+  beforeEach(async () => {
+    currentFixture = await setup();
+  });
   it("permits one stable-target dispatch and a viewport capture during unrelated marked churn", async () => {
-    const { session, page } = await setup();
+    const { session, page } = currentFixture;
     const observation = await session.inspect();
     const originalMutationVersion = observation.mutationVersion;
 
@@ -115,7 +124,7 @@ describe("target-scoped dynamic-page freshness", () => {
     "navigation",
     "ambiguity",
   ] as const)("rejects %s before dispatch", async (scenario) => {
-    const { server, session, page } = await setup();
+    const { server, session, page } = currentFixture;
     const observation = await session.inspect();
     const targetName =
       scenario === "root-replaced"
@@ -213,7 +222,7 @@ describe("target-scoped dynamic-page freshness", () => {
   it.each(["navigation", "viewport", "scroll", "page-closed"] as const)(
     "keeps %s as a hard delayed-screenshot boundary",
     async (scenario) => {
-      const { server, session, page } = await setup();
+      const { server, session, page } = currentFixture;
       const observation = await session.inspect();
       if (scenario === "navigation") {
         await page.goto(`${server.url}/result`, {
@@ -238,7 +247,7 @@ describe("target-scoped dynamic-page freshness", () => {
   );
 
   it("keeps coordinate actions on strict whole-observation freshness", async () => {
-    const { session, page } = await setup();
+    const { session, page } = currentFixture;
     const observation = await session.inspect();
     await page.waitForTimeout(50);
     await expect(

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   PlaywrightBrowserEngine,
@@ -59,6 +59,7 @@ interface Harness {
 const homes: string[] = [];
 const servers: FixtureServer[] = [];
 const active: { runtime: RuntimeService; id: string }[] = [];
+const fixtureStarts: Promise<void>[] = [];
 const testCapabilities: BrowserRuntimeCapabilities = {
   browserFamily: "chromium",
   distribution: "chromium",
@@ -294,6 +295,7 @@ async function allFileText(directory: string): Promise<string> {
 }
 
 afterEach(async () => {
+  await Promise.allSettled(fixtureStarts.splice(0));
   while (active.length > 0) {
     const item = active.pop()!;
     await item.runtime.endSession(item.id).catch(() => undefined);
@@ -302,6 +304,36 @@ afterEach(async () => {
   while (homes.length > 0)
     await rm(homes.pop()!, { recursive: true, force: true });
 });
+
+type RuntimeBrowserFixture = Harness & {
+  server: FixtureServer;
+  session: Awaited<ReturnType<RuntimeService["startSession"]>>;
+};
+
+function browserInvariant(
+  name: string,
+  path: string,
+  verify: (fixture: RuntimeBrowserFixture) => Promise<void>,
+) {
+  describe(name, () => {
+    let ready: RuntimeBrowserFixture;
+    beforeEach(async () => {
+      const start = (async () => {
+        const server = await fixture();
+        const state = await harness();
+        const session = await state.runtime.startSession({
+          mode: "agent",
+          startUrl: `${server.url}${path}`,
+        });
+        active.push({ runtime: state.runtime, id: session.id });
+        ready = { ...state, server, session };
+      })();
+      fixtureStarts.push(start);
+      await start;
+    });
+    it("preserves the owning invariant", () => verify(ready));
+  });
+}
 
 describe("runtime integration", () => {
   it("rejects stale browser-focus authority immediately before showing the owned browser", async () => {
@@ -3350,115 +3382,109 @@ describe("runtime integration", () => {
     );
   });
 
-  it("keeps durable unknown truth and its replay fence when terminal settlement fails", async () => {
-    const server = await fixture();
-    const { runtime, effectJournal } = await harness();
-    const session = await runtime.startSession({
-      mode: "agent",
-      startUrl: `${server.url}/consequential-action`,
-    });
-    active.push({ runtime, id: session.id });
-    const observation = await runtime.inspectBrowser(session.id);
-    const consequenceKey = "fixture:late-settlement:write-failure";
-    const prepared = await effectJournal.prepare({
-      taskScope: session.bootstrapId ?? session.id,
-      browserWorkspaceScope: session.workspace?.id ?? session.id,
-      consequenceKey,
-      actionFingerprint: "d".repeat(64),
-      verificationBasis: {
-        schemaVersion: 1,
-        effects: [
-          {
-            effect: {
-              kind: "text_present",
-              text: "Apply consequential mutation",
-            },
-            predecessorState: "contradicted",
-          },
-        ],
-      },
-      state: "prepared",
-      ownershipGeneration: 1,
-      cutoverEpoch: "phase5-effect-journal-v1",
-      preparedAt: "2026-09-19T12:00:00.000Z",
-      updatedAt: "2026-09-19T12:00:00.000Z",
-    });
-    const unresolved = await effectJournal.update(
-      prepared.effectId,
-      prepared.version,
-      {
-        state: "unresolved",
-        updatedAt: "2026-09-19T12:00:01.000Z",
-      },
-    );
-    const settle = effectJournal.settleUnresolved.bind(effectJournal);
-    effectJournal.settleUnresolved = async () => {
-      throw new Error("forced durable settlement failure");
-    };
-
-    await expect(
-      runtime.reconcileConsequentialEffect(session.id, {
+  browserInvariant(
+    "keeps durable unknown truth and its replay fence when terminal settlement fails",
+    "/consequential-action",
+    async ({ runtime, effectJournal, session }) => {
+      const observation = await runtime.inspectBrowser(session.id);
+      const consequenceKey = "fixture:late-settlement:write-failure";
+      const prepared = await effectJournal.prepare({
+        taskScope: session.bootstrapId ?? session.id,
+        browserWorkspaceScope: session.workspace?.id ?? session.id,
         consequenceKey,
-        observationId: observation.observationId,
-      }),
-    ).rejects.toThrow("forced durable settlement failure");
-    await expect(effectJournal.findById(unresolved.effectId)).resolves.toEqual(
-      unresolved,
-    );
-    const replayFence = (
-      runtime as unknown as {
-        consequenceReplayFence: {
-          assertAvailable(sessionId: string, consequenceKey: string): void;
-        };
-      }
-    ).consequenceReplayFence;
-    expect(() =>
-      replayFence.assertAvailable(session.id, consequenceKey),
-    ).toThrow();
-    effectJournal.settleUnresolved = settle;
-  });
+        actionFingerprint: "d".repeat(64),
+        verificationBasis: {
+          schemaVersion: 1,
+          effects: [
+            {
+              effect: {
+                kind: "text_present",
+                text: "Apply consequential mutation",
+              },
+              predecessorState: "contradicted",
+            },
+          ],
+        },
+        state: "prepared",
+        ownershipGeneration: 1,
+        cutoverEpoch: "phase5-effect-journal-v1",
+        preparedAt: "2026-09-19T12:00:00.000Z",
+        updatedAt: "2026-09-19T12:00:00.000Z",
+      });
+      const unresolved = await effectJournal.update(
+        prepared.effectId,
+        prepared.version,
+        {
+          state: "unresolved",
+          updatedAt: "2026-09-19T12:00:01.000Z",
+        },
+      );
+      const settle = effectJournal.settleUnresolved.bind(effectJournal);
+      effectJournal.settleUnresolved = async () => {
+        throw new Error("forced durable settlement failure");
+      };
 
-  it("reconciles delayed expected effects for ordinary navigation", async () => {
-    const server = await fixture();
-    const { runtime, browser } = await harness();
-    const session = await runtime.startSession({
-      mode: "agent",
-      startUrl: `${server.url}/actions`,
-    });
-    active.push({ runtime, id: session.id });
-    const predecessor = await runtime.inspectBrowser(session.id);
-    const liveBrowser = browser.get(session.id);
-    const inspect = liveBrowser.inspect.bind(liveBrowser);
-    let successorInspectionCalls = 0;
+      await expect(
+        runtime.reconcileConsequentialEffect(session.id, {
+          consequenceKey,
+          observationId: observation.observationId,
+        }),
+      ).rejects.toThrow("forced durable settlement failure");
+      await expect(
+        effectJournal.findById(unresolved.effectId),
+      ).resolves.toEqual(unresolved);
+      const replayFence = (
+        runtime as unknown as {
+          consequenceReplayFence: {
+            assertAvailable(sessionId: string, consequenceKey: string): void;
+          };
+        }
+      ).consequenceReplayFence;
+      expect(() =>
+        replayFence.assertAvailable(session.id, consequenceKey),
+      ).toThrow();
+      effectJournal.settleUnresolved = settle;
+    },
+  );
 
-    Object.defineProperty(liveBrowser, "inspect", {
-      configurable: true,
-      value: async (...args: Parameters<typeof inspect>) => {
-        successorInspectionCalls += 1;
+  browserInvariant(
+    "reconciles delayed expected effects for ordinary navigation",
+    "/actions",
+    async ({ runtime, browser, server, session }) => {
+      const predecessor = await runtime.inspectBrowser(session.id);
+      const liveBrowser = browser.get(session.id);
+      const inspect = liveBrowser.inspect.bind(liveBrowser);
+      let successorInspectionCalls = 0;
 
-        if (successorInspectionCalls === 1) return predecessor;
+      Object.defineProperty(liveBrowser, "inspect", {
+        configurable: true,
+        value: async (...args: Parameters<typeof inspect>) => {
+          successorInspectionCalls += 1;
 
-        return inspect(...args);
-      },
-    });
+          if (successorInspectionCalls === 1) return predecessor;
 
-    const receipt = await runtime.interact(session.id, {
-      observationId: predecessor.observationId,
-      action: {
-        kind: "click",
-        target: target(predecessor, "Navigate result"),
-      },
-      expectedEffects: [{ kind: "url_changed" }],
-      effect: "navigate",
-    });
+          return inspect(...args);
+        },
+      });
 
-    expect(successorInspectionCalls).toBeGreaterThan(1);
-    expect(receipt).toMatchObject({
-      outcome: "applied",
-      pageChanged: true,
-      url: `${server.url}/result`,
-    });
-  });
+      const receipt = await runtime.interact(session.id, {
+        observationId: predecessor.observationId,
+        action: {
+          kind: "click",
+          target: target(predecessor, "Navigate result"),
+        },
+        expectedEffects: [{ kind: "url_changed" }],
+        effect: "navigate",
+      });
+
+      expect(successorInspectionCalls).toBeGreaterThan(1);
+      expect(receipt).toMatchObject({
+        outcome: "applied",
+        pageChanged: true,
+        url: `${server.url}/result`,
+      });
+    },
+  );
 
   it("fences unresolved workspace work across origin, Runtime, and task replacement while permitting one trusted attempt", async () => {
     const affectedServer = await fixture();
