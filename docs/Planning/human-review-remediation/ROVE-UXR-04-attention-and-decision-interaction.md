@@ -34,6 +34,8 @@ Permission-policy redesign, manufacturing provider families, altering exact deci
 
 Consume UXR-03 dock/Stop seam and STAB-07/08 exact emitted-decision contracts plus STAB-09 provider-family matrix. Characterize current request rendering and response state without treating deterministic fixtures as live reachability.
 
+The UXR-03 foundation candidate establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+
 ## Investigation requirements
 
 Map conversational structured input, command approval, file-change approval, network approval, additional permission, MCP structured form and trusted URL. Inspect duplicate request.description render sites and submitting projection; trace exactly-once response. Examine refusal/decline visibility, one-time/session/policy-amendment explanation, focus restoration, form validation and secure/external intent handling.

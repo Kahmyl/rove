@@ -34,6 +34,8 @@ Browser ownership or follower-authority redesign, silently rebinding deleted fro
 
 Consume UXR-02 drawer rules and UXR-03 dock seam; inherit exact STAB-10 Task/session/page/handoff/ownership generations and STAB-11 profile recovery/native foreground constraints. Read Browser Control and Recording before edits.
 
+The UXR-03 foundation candidate establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+
 ## Investigation requirements
 
 Trace attached identity/owner/state/profile/site/page, Open/View Browser and bounded recovery. Compare dock, inspector and compact follower so full-surface versus follower presentation preserves one authority. Review Browser Profiles management create/select/rename/delete, selected/default state, missing/deleted profile recovery, narrow typography/copy density and Recording panel density.

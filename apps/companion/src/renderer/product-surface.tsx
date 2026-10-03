@@ -1,5 +1,11 @@
 import {
+  resolveTaskDock,
+  TaskInteractionDock,
+  TaskStopControl,
+} from "./task-interaction-dock.js";
+import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -38,7 +44,6 @@ import type {
 import { legacyCustomerTaskExecution } from "../main/codex/customer-task-execution.js";
 import { customerTaskCollaboration } from "../main/codex/customer-task-collaboration.js";
 import { customerTaskPresentation } from "../main/codex/customer-task-presentation.js";
-import type { CustomerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
 import {
@@ -1494,22 +1499,6 @@ export function followupKeyboardAction(
   return capabilities.canSubmit ? "submit" : "none";
 }
 
-export function taskComposerPrimaryAction(input: {
-  state: CustomerTaskPresentation["state"];
-  hasDraft: boolean;
-  canStop: boolean;
-  canSubmit: boolean;
-  canQueue: boolean;
-}): { kind: "stop" | "send"; disabled: boolean } {
-  if (input.state === "stopping") return { kind: "stop", disabled: true };
-  if (input.canStop && !input.hasDraft)
-    return { kind: "stop", disabled: false };
-  return {
-    kind: "send",
-    disabled: !input.hasDraft || (!input.canSubmit && !input.canQueue),
-  };
-}
-
 export function timelineIsAtBottom(input: {
   scrollHeight: number;
   scrollTop: number;
@@ -2274,6 +2263,8 @@ export function ProductSurface({
   const [renameDraft, setRenameDraft] = useState("");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
   const [timelineNow, setTimelineNow] = useState(() => Date.now());
+  const pendingStopIds = useRef(new Set<string>());
+  const [stoppingTaskIds, setStoppingTaskIds] = useState(new Set<string>());
   const [editingQueueEntryId, setEditingQueueEntryId] = useState<string | null>(
     null,
   );
@@ -2289,6 +2280,9 @@ export function ProductSurface({
   const followupComposer = useRef<HTMLTextAreaElement | null>(null);
   const taskTimeline = useRef<HTMLElement | null>(null);
   const followTimeline = useRef(true);
+  const timelineReading = useRef(
+    new Map<string, { top: number; following: boolean }>(),
+  );
   const savingOutputItemIds = useRef(new Set<string>());
 
   useEffect(() => {
@@ -2475,20 +2469,11 @@ export function ProductSurface({
     const textarea = outcomeComposer.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const maximumHeight = 240;
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
-    textarea.style.overflowY =
-      textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
-  }, [outcome]);
-  useEffect(() => {
-    const textarea = followupComposer.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
     const maximumHeight = 180;
     textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
     textarea.style.overflowY =
       textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
-  }, [followup]);
+  }, [outcome, viewedTask?.taskId, selectedWorkflow?.workflowId]);
 
   useEffect(() => {
     if (viewedTaskExecution?.state !== "working") return;
@@ -2525,6 +2510,14 @@ export function ProductSurface({
     node.scrollTop = node.scrollHeight;
     setShowLatest(false);
   }, [executionRevision]);
+  useLayoutEffect(() => {
+    const node = taskTimeline.current;
+    if (!node || !viewedTask) return;
+    const reading = timelineReading.current.get(viewedTask.taskId);
+    followTimeline.current = reading?.following ?? true;
+    node.scrollTop = followTimeline.current ? node.scrollHeight : reading!.top;
+    setShowLatest(!followTimeline.current);
+  }, [viewedTask?.taskId]);
   const gate = composerGate(desktop, {
     outcome,
     mode,
@@ -2567,27 +2560,42 @@ export function ProductSurface({
   const viewedPresentation = viewedTask
     ? presentationForTask(viewedTask)
     : undefined;
-  const composerPrimaryAction = viewedPresentation
-    ? taskComposerPrimaryAction({
-        state: viewedPresentation.state,
-        hasDraft: followup.trim().length > 0,
-        canStop: viewedTask?.capabilities?.canStop === true,
-        canSubmit: viewedTask?.capabilities?.canSubmit === true,
-        canQueue: viewedTask?.capabilities?.canQueue === true,
-      })
-    : undefined;
-  const respondableCodexAttention = viewedCollaboration?.request
-    ? product?.attention.find(
-        (entry) =>
-          entry.authority === viewedCollaboration.request!.identity.authority &&
-          entry.taskId === viewedCollaboration.request!.identity.taskId &&
-          entry.requestId === viewedCollaboration.request!.identity.requestId &&
-          entry.generation === viewedCollaboration.request!.identity.generation,
+  const dock =
+    viewedTask && viewedPresentation && viewedCollaboration
+      ? resolveTaskDock({
+          task: viewedTask,
+          presentation: viewedPresentation,
+          collaboration: viewedCollaboration,
+          attention: product?.attention ?? [],
+          stopPending: stoppingTaskIds.has(viewedTask.taskId),
+        })
+      : undefined;
+  useEffect(() => {
+    const textarea = followupComposer.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maximumHeight = 180;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maximumHeight)}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > maximumHeight ? "auto" : "hidden";
+  }, [followup, dock?.mode, viewedTask?.taskId]);
+  const respondableCodexAttention = dock?.request;
+  useEffect(() => {
+    const terminal = (product?.tasks ?? [])
+      .filter(
+        (task) =>
+          !task.capabilities?.canStop &&
+          task.customerPresentation?.state !== "stopping",
       )
-    : undefined;
-  const attentionReplacesComposer =
-    respondableCodexAttention?.kind === "user_input" ||
-    respondableCodexAttention?.kind === "mcp_elicitation";
+      .map((task) => task.taskId);
+    for (const taskId of terminal) pendingStopIds.current.delete(taskId);
+    setStoppingTaskIds((current) => {
+      if (!terminal.some((taskId) => current.has(taskId))) return current;
+      return new Set(
+        [...current].filter((taskId) => !terminal.includes(taskId)),
+      );
+    });
+  }, [product?.tasks]);
   const viewedCompanion =
     viewedTask?.roveSessionId !== undefined &&
     desktop?.companion?.session.id === viewedTask.roveSessionId
@@ -3129,15 +3137,36 @@ export function ProductSurface({
     await run(() => window.rove.takeControl(task.taskId, handoffGeneration));
   };
   const stopTask = async () => {
-    if (!viewedTask?.capabilities?.canStop) return;
-    await run(() =>
-      command({
+    if (
+      !viewedTask?.capabilities?.canStop ||
+      pendingStopIds.current.has(viewedTask.taskId)
+    )
+      return;
+    const taskId = viewedTask.taskId;
+    pendingStopIds.current.add(taskId);
+    setStoppingTaskIds((current) => new Set(current).add(taskId));
+    try {
+      await command({
         type: "task.stop",
-        taskId: viewedTask.taskId,
+        taskId,
         operationId:
           viewedTask.operation?.operationId ?? `intent_${crypto.randomUUID()}`,
-      }),
-    );
+      });
+      await refresh();
+      setOperationError(null);
+    } catch (cause) {
+      pendingStopIds.current.delete(taskId);
+      setStoppingTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(taskId);
+        return next;
+      });
+      setOperationError(
+        cause instanceof Error
+          ? cause.message
+          : "Stopping failed. Try again when safe.",
+      );
+    }
   };
   const restoreTask = async (task = viewedTask) => {
     if (!task?.availableActions.includes("resume")) return;
@@ -6467,6 +6496,10 @@ export function ProductSurface({
                   const node = event.currentTarget;
                   const atBottom = timelineIsAtBottom(node);
                   followTimeline.current = atBottom;
+                  timelineReading.current.set(viewedTask.taskId, {
+                    top: node.scrollTop,
+                    following: atBottom,
+                  });
                   setShowLatest(!atBottom);
                 }}
               >
@@ -6817,167 +6850,176 @@ export function ProductSurface({
                   </div>
                 )}
               <footer className="task-detail-dock">
-                {respondableCodexAttention &&
-                  renderCodexAttention(respondableCodexAttention)}
-                {!respondableCodexAttention &&
-                  viewedCollaboration &&
-                  [
-                    "takeover_required",
-                    "takeover_available",
-                    "human_control",
-                    "checking_after_return",
-                  ].includes(viewedCollaboration.browser.state) && (
-                    <section
-                      className="attention-card attention-inline browser-collaboration"
-                      aria-label="Current browser collaboration"
-                    >
-                      <div className="eyebrow">Browser collaboration</div>
-                      <h2>{viewedCollaboration.browser.title}</h2>
-                      <p>{viewedCollaboration.browser.description}</p>
-                      <div className="attention-actions">
-                        {viewedCollaboration.browser.canTakeOver && (
-                          <button
-                            className="primary"
-                            disabled={busy}
-                            onClick={() => void takeControl(viewedTask)}
+                {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
+                  <div className="task-queue" aria-label="Queued messages">
+                    {viewedTaskExecution!.queue.map((entry, index, queue) => (
+                      <div className="task-queue-entry" key={entry.id}>
+                        {editingQueueEntryId === entry.id ? (
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void editQueuedEntry(entry.id);
+                            }}
                           >
-                            Take Over
-                          </button>
-                        )}
-                        {viewedCollaboration.browser.canReturnToRove && (
-                          <button
-                            className="primary"
-                            disabled={busy}
-                            onClick={() => void returnControl()}
-                          >
-                            Return to Rove
-                          </button>
-                        )}
-                      </div>
-                    </section>
-                  )}
-                {!respondableCodexAttention && awaitingExplicitResponse && (
-                  <p className="task-response-hint">
-                    {activeSurfaceDescription}
-                  </p>
-                )}
-                {!attentionReplacesComposer &&
-                  viewedTask.executionMode !== "capture" &&
-                  (viewedTask.capabilities?.canSubmit ||
-                    viewedTask.capabilities?.canQueue ||
-                    viewedTask.capabilities?.canSteer ||
-                    viewedTask.capabilities?.canStop ||
-                    viewedPresentation?.state === "stopping" ||
-                    viewedTask.availableActions.includes("resume") ||
-                    viewedCollaboration?.browser.canReturnToRove) && (
-                    <>
-                      {(viewedTaskExecution?.queue.length ?? 0) > 0 && (
-                        <div
-                          className="task-queue"
-                          aria-label="Queued messages"
-                        >
-                          {viewedTaskExecution!.queue.map(
-                            (entry, index, queue) => (
-                              <div className="task-queue-entry" key={entry.id}>
-                                {editingQueueEntryId === entry.id ? (
-                                  <form
-                                    onSubmit={(event) => {
-                                      event.preventDefault();
-                                      void editQueuedEntry(entry.id);
+                            <input
+                              aria-label="Edit queued message"
+                              maxLength={16_000}
+                              value={queueEditDraft}
+                              onChange={(event) =>
+                                setQueueEditDraft(event.target.value)
+                              }
+                            />
+                            <button
+                              type="submit"
+                              disabled={busy || !queueEditDraft.trim()}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingQueueEntryId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="task-queue-copy">
+                              <span>{entry.message}</span>
+                              {entry.attachmentIds.length > 0 && (
+                                <small>
+                                  {entry.attachmentIds.length} attachment
+                                  {entry.attachmentIds.length === 1 ? "" : "s"}
+                                </small>
+                              )}
+                              {(entry.selectedResultContext?.references
+                                ?.length ?? 0) > 0 && (
+                                <small>
+                                  {
+                                    entry.selectedResultContext!.references
+                                      .length
+                                  }{" "}
+                                  Output context
+                                </small>
+                              )}
+                            </div>
+                            <div className="task-queue-actions">
+                              {viewedTask.capabilities?.canSteer && (
+                                <button
+                                  type="button"
+                                  className="task-queue-steer"
+                                  title="Apply this queued instruction to the current work now"
+                                  onClick={() =>
+                                    void steerQueuedEntry(entry.id)
+                                  }
+                                >
+                                  Steer
+                                </button>
+                              )}
+                              <details className="task-queue-more">
+                                <summary aria-label="More queued message actions">
+                                  More
+                                </summary>
+                                <div>
+                                  <button
+                                    type="button"
+                                    aria-label="Delete queued message"
+                                    onClick={() =>
+                                      void removeQueuedEntry(entry.id)
+                                    }
+                                  >
+                                    Delete
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingQueueEntryId(entry.id);
+                                      setQueueEditDraft(entry.message);
                                     }}
                                   >
-                                    <input
-                                      aria-label="Edit queued message"
-                                      maxLength={16_000}
-                                      value={queueEditDraft}
-                                      onChange={(event) =>
-                                        setQueueEditDraft(event.target.value)
-                                      }
-                                    />
-                                    <button
-                                      type="submit"
-                                      disabled={busy || !queueEditDraft.trim()}
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setEditingQueueEntryId(null)
-                                      }
-                                    >
-                                      Cancel
-                                    </button>
-                                  </form>
-                                ) : (
-                                  <>
-                                    <span>{entry.message}</span>
-                                    <div className="task-queue-actions">
-                                      {viewedTask.capabilities?.canSteer && (
-                                        <button
-                                          type="button"
-                                          className="task-queue-steer"
-                                          title="Apply this queued instruction to the current work now"
-                                          onClick={() =>
-                                            void steerQueuedEntry(entry.id)
-                                          }
-                                        >
-                                          Steer
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        aria-label="Delete queued message"
-                                        onClick={() =>
-                                          void removeQueuedEntry(entry.id)
-                                        }
-                                      >
-                                        Delete
-                                      </button>
-                                      <details className="task-queue-more">
-                                        <summary aria-label="More queued message actions">
-                                          More
-                                        </summary>
-                                        <div>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingQueueEntryId(entry.id);
-                                              setQueueEditDraft(entry.message);
-                                            }}
-                                          >
-                                            Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={busy || index === 0}
-                                            onClick={() =>
-                                              void moveQueuedEntry(entry.id, -1)
-                                            }
-                                          >
-                                            Move earlier
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={
-                                              busy || index === queue.length - 1
-                                            }
-                                            onClick={() =>
-                                              void moveQueuedEntry(entry.id, 1)
-                                            }
-                                          >
-                                            Move later
-                                          </button>
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            ),
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy || index === 0}
+                                    onClick={() =>
+                                      void moveQueuedEntry(entry.id, -1)
+                                    }
+                                  >
+                                    Move earlier
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      busy || index === queue.length - 1
+                                    }
+                                    onClick={() =>
+                                      void moveQueuedEntry(entry.id, 1)
+                                    }
+                                  >
+                                    Move later
+                                  </button>
+                                </div>
+                              </details>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <TaskInteractionDock mode={dock?.mode ?? "compose"}>
+                  {dock?.mode === "decision" &&
+                    respondableCodexAttention &&
+                    renderCodexAttention(respondableCodexAttention)}
+                  {(dock?.mode === "browser" ||
+                    (dock?.mode === "compose" &&
+                      viewedCollaboration?.browser.state ===
+                        "takeover_available")) &&
+                    viewedCollaboration &&
+                    [
+                      "takeover_required",
+                      "takeover_available",
+                      "human_control",
+                      "checking_after_return",
+                    ].includes(viewedCollaboration.browser.state) && (
+                      <section
+                        className="attention-card attention-inline browser-collaboration"
+                        aria-label="Current browser collaboration"
+                      >
+                        <div className="eyebrow">Browser collaboration</div>
+                        <h2>{viewedCollaboration.browser.title}</h2>
+                        <p>{viewedCollaboration.browser.description}</p>
+                        <div className="attention-actions">
+                          {viewedCollaboration.browser.canTakeOver && (
+                            <button
+                              className="primary"
+                              disabled={busy}
+                              onClick={() => void takeControl(viewedTask)}
+                            >
+                              Take Over
+                            </button>
+                          )}
+                          {viewedCollaboration.browser.canReturnToRove && (
+                            <button
+                              className="primary"
+                              disabled={busy}
+                              onClick={() => void returnControl()}
+                            >
+                              Return to Rove
+                            </button>
                           )}
                         </div>
-                      )}
+                      </section>
+                    )}
+                  {!respondableCodexAttention && awaitingExplicitResponse && (
+                    <p className="task-response-hint">
+                      {activeSurfaceDescription}
+                    </p>
+                  )}
+                  {dock?.mode === "compose" && (
+                    <div className="task-dock-compose">
                       <ComposerInputShell
                         attachments={product?.draftAttachments ?? []}
                         busy={
@@ -7185,19 +7227,16 @@ export function ProductSurface({
                               modelId={viewedTask.model ?? ""}
                               effort={viewedTask.reasoningEffort ?? ""}
                             />
-                            {viewedCollaboration?.browser.canReturnToRove ? (
-                              <button
-                                className="primary composer-submit"
-                                aria-label="Resume automation"
-                                title="Return control to Rove"
-                                disabled={busy}
-                                onClick={() => void returnControl()}
-                              >
-                                <span aria-hidden="true">▶</span>
-                              </button>
-                            ) : viewedTask.availableActions.includes(
-                                "resume",
-                              ) ? (
+                            <span className="task-stop-slot">
+                              {dock?.showStop && (
+                                <TaskStopControl
+                                  disabled={false}
+                                  stopping={false}
+                                  onStop={() => void stopTask()}
+                                />
+                              )}
+                            </span>
+                            {viewedTask.availableActions.includes("resume") ? (
                               <button
                                 className="primary composer-submit"
                                 aria-label="Resume task"
@@ -7206,19 +7245,6 @@ export function ProductSurface({
                                 onClick={() => void restoreTask()}
                               >
                                 <span aria-hidden="true">▶</span>
-                              </button>
-                            ) : composerPrimaryAction?.kind === "stop" ? (
-                              <button
-                                type="button"
-                                className="primary composer-submit composer-stop"
-                                aria-label="Stop current work"
-                                title="Stop current work"
-                                disabled={
-                                  busy || composerPrimaryAction.disabled
-                                }
-                                onClick={() => void stopTask()}
-                              >
-                                <span aria-hidden="true">■</span>
                               </button>
                             ) : (
                               <button
@@ -7235,7 +7261,9 @@ export function ProductSurface({
                                 }
                                 disabled={
                                   busy ||
-                                  composerPrimaryAction?.disabled !== false
+                                  !followup.trim() ||
+                                  (!viewedTask.capabilities?.canSubmit &&
+                                    !viewedTask.capabilities?.canQueue)
                                 }
                                 onClick={() => void sendFollowup("default")}
                               >
@@ -7245,8 +7273,42 @@ export function ProductSurface({
                           </ComposerPrimaryControls>
                         </CanonicalComposerActionRow>
                       </ComposerInputShell>
+                    </div>
+                  )}
+                  {dock?.mode !== "compose" && (
+                    <>
+                      {["stopping", "checking", "capture"].includes(
+                        dock?.mode ?? "",
+                      ) && (
+                        <div className="task-dock-status" role="status">
+                          <strong>
+                            {dock?.mode === "stopping"
+                              ? "Stopping…"
+                              : dock?.mode === "capture"
+                                ? "Capturing"
+                                : "Checking state"}
+                          </strong>
+                          <span>
+                            {dock?.mode === "stopping"
+                              ? "Your conversation and queued messages stay here."
+                              : dock?.mode === "capture"
+                                ? "Recording controls remain in Task details."
+                                : "Rove is establishing the current task state."}
+                          </span>
+                        </div>
+                      )}
+                      <div className="task-dock-actions">
+                        {dock?.showStop && (
+                          <TaskStopControl
+                            disabled={false}
+                            stopping={dock.mode === "stopping"}
+                            onStop={() => void stopTask()}
+                          />
+                        )}
+                      </div>
                     </>
                   )}
+                </TaskInteractionDock>
               </footer>
             </div>
           )}

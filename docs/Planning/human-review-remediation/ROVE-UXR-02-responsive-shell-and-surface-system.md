@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Replacement foundation candidate machine-qualified after rejected nested-focus checkpoint — manager review pending
+**Status:** Foundation accepted by independent manager at `b59fe4f` — integrated/human boundaries remain open
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 

@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Planned — implementation not started
+**Status:** Dock/composer/queue foundation candidate qualified — manager review pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -40,7 +40,7 @@ Map New Task and existing Task input, draft retention, accepted/queued delivery,
 
 ## Implementation responsibility
 
-Later implementation owns canonical dock container and mode seam, ordinary composer, queue hierarchy, Stop/Stopping/Stopped presentation and stable primary actions. Queue defaults expose primary Steer when relevant; secondary edit/reorder/remove use overflow. Progressive disclosure keeps all implemented settings and attachments reachable at compact widths.
+This candidate owns the canonical dock container and mode seam, ordinary composer, queue hierarchy, Stop/Stopping/Stopped presentation and stable primary actions. Queue defaults expose primary Steer when relevant; secondary edit/reorder/remove use overflow. Progressive disclosure keeps all implemented settings and attachments reachable at compact widths.
 
 ## Acceptance criteria
 
@@ -71,3 +71,9 @@ Keep product/runtime/test names descriptive; ticket IDs remain bounded planning 
 ## Downstream handoff
 
 UXR-04, UXR-05 and UXR-06 inherit one dock seam, mode responsibilities, exact capability inputs and quiet queue/Stop geometry. The graph permits independent scopes after this checkpoint; shared-file writes still require isolation.
+
+## Candidate exit
+
+See the [continuity ledger](continuity-ledger.md) for exact accepted start, source fingerprints, evidence and causal corrections. The typed presentation resolver prioritizes Stopping, one exact current decision, required/human/return browser collaboration, capability-blocked checking, Capture and compose. Voluntary takeover remains secondary in compose. Queue stays immediately above the mode body, with Steer primary and edit/remove/reorder in overflow. Send and independently available Stop occupy separate stable slots; pending Stop is immediately non-actionable. Shared compact composition preserves attachments/Commands/frozen settings/Output chips; per-Task text drafts and timeline reading intent restore without dispatch. Existing specialist controls are integrated through the seam without redesigning their family behavior or authority.
+
+Stop for independent manager review after normal commit/non-force push. UXR-04 remains unstarted and requires acceptance plus an explicit continuation message; MR-034 integrated/human qualification and specialist/external gates remain open. No host effect fence, provider policy, schema, persistence format or migration changes occurred.

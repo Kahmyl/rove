@@ -258,3 +258,89 @@ Affected Vitest: eight files / 115 tests pass, 1.43s total (593ms tests). Worksp
 The passing report names committed start `a82a07d` in `sourceHead`; its seven source fingerprints identify the tested dirty source and are unchanged at commit. Changed shell hash: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`; changed qualification script hash: `138390afbbdabfcadc4e5b20806b5a53340831d76178aaef71cc5646b836c666`. Each capture has its own SHA and geometry in the report. Ignored evidence remains retained locally; the durable reproduction lives in the committed qualification script. Historical evidence is preserved rather than overwritten. Canonical focus/testing/status contracts, bounded ticket/downstream/registry entries and stabilization handoffs now distinguish the rejected checkpoint from this replacement candidate.
 
 **Stop/next gate:** independent manager review of the new PR #38 checkpoint. UXR-03 is unstarted and requires acceptance plus an explicit next-item message in this same implementation chat. MR-038 remains open through foundation acceptance and UXR-07 integration; specialist composition, human/provider/platform/distribution gates and STAB-14 remain open. No schema, persistence format, migrations, credentials, protocol, dependency or host authority changed.
+
+## UXR-02 manager acceptance and dock continuation — 3 October 2026
+
+The persistent manager independently accepted exact `b59fe4f071ca064b08514970259a72d3b252bab1` on `codex/human-review-remediation-planning`, with clean checkout and matching tracked origin. Review covered production changes, tests/harness, semantic docs and representative light/dark compact/profile captures. All seven source hashes and 35 screenshot hashes matched. Independent committed qualification replay passed 35 captures / nine groups at `artifacts/customer-journeys/responsive-shell/2026-10-03T14-03-51-135Z/report.json`; `git diff --check 4f44a2c..HEAD` passed. One remediation round corrected the rejected nested modal cleanup defect at `a82a07d`. This accepts the shell/surface foundation only; MR-038 integrated/human, provider/platform/native/package and release gates remain open. Historical rejected and pending entries are retained.
+
+The manager explicitly continued this same sole-worker chat to bounded UXR-03 implementation from that accepted identity, with focused causal verification, normal commit/non-force push on PR #38 and a review stop before UXR-04. No specialist decision/notification/browser authority implementation, live effects, subagents or integrated campaign is authorized here. `pnpm codex:context` confirmed the exact accepted start and clean branch before edits.
+
+## UXR-03 dock foundation — candidate qualified, manager review pending, 3 October 2026
+
+### Exact continuation and owned boundary
+
+Branch `codex/human-review-remediation-planning`; committed start and independently accepted shell foundation `b59fe4f071ca064b08514970259a72d3b252bab1`. The manager's acceptance and explicit bounded continuation are recorded immediately above. `pnpm codex:context` confirmed clean checkout and that exact HEAD before editing. One worker, no subagents/new tasks, amend, rebase, force push or merge. The exit is the normal commit introducing this section, titled `Compose task interaction in one dock with independent Stop`; resolve exact identity with `git log -1 --format=%H -S '## UXR-03 dock foundation' -- docs/Planning/human-review-remediation/continuity-ledger.md`. PR #38 remains the only publication surface. Source-head fields intentionally name committed start; fingerprints below identify the dirty source tested and committed.
+
+The existing renderer already preserved text drafts per Task and routed queue/edit/reorder/remove/Steer through qualified Task-engine and LocalProductApi owners. The defect was composition responsibility: independent cards stacked around ordinary input, only user-input/MCP decisions replaced it, queue disappeared with that conditional, and typing swapped Stop for Send. Retaining those ad hoc conditions or selecting modes from sidebar labels would not satisfy exact capability ownership. A small typed presentation resolver/container reuses the current projections and commands; no new lifecycle engine, persistence model, authority list or library is needed.
+
+### Implementation and invariant
+
+- `task-interaction-dock.tsx` owns presentation precedence and the named container: local/authoritative Stopping, one exact current selected-Task request, required/human/return browser collaboration, capability-blocked checking, Capture, then compose. Voluntary Companion takeover stays secondary within compose. Request matching retains authority, Task, request, generation, thread, turn and item. The resolver cannot grant commands; existing exact backend capability and generation checks remain authoritative.
+- `product-surface.tsx` routes existing family contents into that seam, keeps queue immediately above it through every mode, preserves Task-specific drafts, and provides separate stable Send/Stop slots. Stop is independently available even with a draft, decision or browser mode; a synchronous per-Task pending guard refuses a second intent before React commits. Its existing Task/operation routing is unchanged. Authoritative settlement restores composition; failure preserves the draft and exposes the existing operation error. No termination delay or minimum animation dwell was added. Existing attachments, Commands, frozen mode/approval/model-reasoning, Output-context chips, exact queue IDs/order/edit/remove/reorder/Steer and explicit resume/return paths remain.
+- Ordinary input uses the existing shared New/existing shell, 50px minimum text region, 180px maximum autosize, shared compact row spacing and 36px action slots. The text resize effects also run on mode/Task restoration, so a retained multiline draft keeps its bounded geometry. Queue is quiet adjacent material with contextual counts; Steer remains primary, and edit/remove/reorder are keyboard-accessible overflow. Its bounded scroll does not clip the fixed overflow menu.
+- A causally exposed view-state defect used one timeline-follow flag across Task selection. The unchanged long-content journey failed with `{scrollTop:0, scrollHeight:6294, clientHeight:356}` on first entry. Reading/follow intent is now stored in renderer memory per exact Task: fresh views follow latest; revisits restore their own upward reading position. The primary conversation subtree stays mounted through same-Task mode changes. This changes presentation ownership only, not event/execution reduction.
+- `task-interaction-dock.test.tsx` uses real collaboration/presentation projections, covers all request kinds, stale/background identity negatives and precedence. The obsolete draft-driven primary-action helper/test is replaced by independent-control behavior; the actual geometry assertions now prove both Send and Stop stay fixed rather than treating their intentional separation as a regression. Existing SSR negative assertions still require ordinary composer absence for blocking decisions; conditional composition retains draft state without leaving a hidden peer form. No assertion is weakened for relocation.
+
+Decision-family contents, response-state copy/form refinement (UXR-04), notifications/durable markers (UXR-05), and resource-only inspector/profile/collaboration composition (UXR-06) remain specialist work. Inspector collaboration duplication remains explicitly unqualified. Exact host fences, provider policy, Task/session/request/browser generations, queue promotion/restart admission, attachment/Output context and Stop process semantics were not redesigned. No schema, persistence format, storage key, migration, protocol, dependency or credential changes occurred. Canonical application/live-state/testing/status contracts and downstream UXR-04/05/06 entries were reconciled; runtime/test names remain descriptive.
+
+### Verification and retained evidence
+
+```sh
+pnpm codex:context
+pnpm exec vitest run apps/companion/src/main/codex/customer-task-collaboration.test.ts apps/companion/src/main/codex/customer-task-execution.test.ts apps/companion/src/main/codex/customer-task-presentation.test.ts apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-shell.test.tsx apps/companion/src/renderer/product-surface-state.test.ts apps/companion/src/renderer/product-surface-truth.test.ts apps/companion/src/renderer/follower-app.test.tsx --reporter=dot
+pnpm exec vitest run apps/companion/src/main/codex/product-task-port.test.ts apps/companion/src/main/codex/local-product-api.test.ts --reporter=dot
+pnpm exec vitest run apps/companion/src/renderer/task-interaction-dock.test.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/product-shell.test.tsx --reporter=dot
+pnpm typecheck
+pnpm build
+pnpm --filter @rove/companion build
+pnpm exec eslint apps/companion/src/renderer/product-surface.tsx apps/companion/src/renderer/product-surface.test.tsx apps/companion/src/renderer/task-interaction-dock.tsx apps/companion/src/renderer/task-interaction-dock.test.tsx experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs experiments/agent-execution/conversation-task-rendered-qualification.mjs
+node experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs
+node experiments/agent-execution/responsive-shell-rendered-qualification.mjs
+ROVE_RENDERED_EVIDENCE_ROOT="$PWD/artifacts/customer-journeys/conversation-task-dock-isolated" node experiments/agent-execution/conversation-task-rendered-qualification.mjs
+pnpm check:repository
+git diff --check
+```
+
+Projection/renderer suites pass nine files / 120 tests (3.13s); unchanged owner suites pass all two files / 83 tests (2.62s), including durable ordered queue, exact Steer, context/attachments, atomic promotion and restart inertness. After the final textarea restoration review fix, the three directly affected renderer files pass 59 tests (852ms). Workspace typecheck/build pass; final companion build requalifies the renderer after the last restoration/CSS corrections. Touched lint and repository checks pass. The existing Vite >500kB size advisory remains. No full system/release/recovery/platform campaign, live model, real account, consequential external service effect, packaged accessibility test or human recording ran; full integrated campaigns remain deferred to UXR-08 under the explicit instruction.
+
+Final deterministic production-bundle Electron evidence uses fixture accounts and temporary user data, removed on exit:
+
+- Dock report: 32 captures / five assertion groups, all four theme/viewport combinations (1180×780 and 820×700), New/ready composition, queue, decision seam, Stopping/Stopped, attachments/keyboard overflow, exact Task draft isolation, no mode-change dispatch, ready/stopped Send admission, fixed Stop with empty/nonempty drafts, multiline restoration bounded at 180px, reduced motion and long content. Pre-turn and checking witnesses have no active provider turn and still expose exact Stop; synchronous double clicks issue exactly one intent. These are presentation witnesses, not live provider/process termination proof.
+- Existing conversation journey: all retained assertions pass with 28 captures, seven attention-family keyboard checks, queue acceptance/edit/reorder/remove/promotion/re-render, queued and direct exact Steer, late-event isolation, browser handoff/return/checking and main/follower parity. All blocking request families now additionally assert absence of ordinary composition. Timeline entry/follow/reading/Latest assertions remain intact; its recorded entry geometry explains failures instead of masking them.
+- Inherited shell fixture: 35 captures / nine groups pass, retaining the accepted 968/1280 composition, draft/DOM/read position, intent/identity negatives, nested profile/inspector and settings/navigation resize/removal focus/inert ownership and final cleanup. Body/secondary contrast, reduced motion and preference reload remain qualified only within this fixture scope.
+
+Representative normal/compact light/dark queue, attachments/overflow and Stopping captures were visually inspected against DOM geometry; final multiline restoration is separately asserted and captured. This is finite foundation evidence, not integrated specialist or human composition acceptance.
+
+| Retained record                                                                          | SHA-256                                                            |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `artifacts/customer-journeys/task-interaction-dock/2026-10-03T14-24-46-720Z/report.json` | `748e635106732c54d80a8dcdda07c807e06ceedf16200884ca505d767cf26381` |
+| `artifacts/customer-journeys/responsive-shell/2026-10-03T14-23-53-772Z/report.json`      | `2a8fbf2a4f1915683c3a27774a767b378766ceaa1973337858c99bb653a2dedb` |
+| `artifacts/customer-journeys/conversation-task-dock-isolated/manifest.json`              | `0aa44703871dfa477f956ede96b12fb1f3c7725e28de4f9593a09e21c83be2ed` |
+| `artifacts/customer-journeys/conversation-task-dock-isolated/journey.trace.zip`          | `ad5211a80ecab8a65c9a757de8492167b30863b2972532287c99226fe06d6619` |
+
+All final dock source and capture hashes match the worktree at commit. Dock source fingerprints:
+
+- `apps/companion/src/renderer/product-shell.tsx`: `c3194ab1a61c9ff2138d04ef9b418d2539bd4562b44f0e41f845c4752b7a2723`
+- `apps/companion/src/renderer/product-shell.test.tsx`: `db618a9105a79e9fb70617535337f9371b39a89a3ec963018ffb094ef1ed6801`
+- `apps/companion/src/renderer/product-surface.tsx`: `106e06de8f35bdc56942411b8ddb7f50a3502003e573dbbcce08b74be3e95c8a`
+- `apps/companion/src/renderer/product-surface.test.tsx`: `1e2e44142069a43193fc56ecc2e98994e564a04adccde35b726430f83c38a6cd`
+- `apps/companion/src/renderer/styles.css`: `f063430bdb2cffb2c6d1841998a657a73557d58591c205fbcb1e5520290ecb9b`
+- `experiments/agent-execution/task-interaction-dock-rendered-qualification.mjs`: `8cccbf5404deba40f88c73922d138b9204142f0ee06106de244c0bbdd05bf9fc`
+- `apps/companion/src/renderer/task-interaction-dock.tsx`: `fbb46e65bbe0a7ee2845d34b2372f5365589ee44fbecef8e0f4eab0a84543e5e`
+- `apps/companion/src/renderer/task-interaction-dock.test.tsx`: `dbf90e8a4572a21269cfc5d9f0176e3a68fa4ffb9fb5d1b240ad772f1fdb1307`
+- `experiments/agent-execution/conversation-task-rendered-qualification.mjs`: `8bdeee0f76e478f9ec6a6d459c0d885673b76502f72a4587daaf54d47b3d45ae`
+
+Generated timestamped dock/shell evidence, screenshots/DOM/geometry and prior failed dock runs remain ignored and retained locally. Existing historical acceptance evidence remains untouched. The committed qualification scripts contain the durable reproductions; generated reports are evidence rather than design authority.
+
+### Failed candidates and causal classification
+
+- Initial test-fixture type errors (unsupported attention field/state) were corrected to existing protocol types. Existing SSR composer-absence negatives rejected a hidden peer form; the candidate instead conditionally renders the mode body with draft state preserved at its Task owner.
+- The inherited same-slot Send/Stop assertion rejected the newly required independent layout. It now asserts unchanged x/y/width/height for each control across typing plus Stop remaining enabled; no geometry budget was enlarged.
+- Dock keyboard failures at `2026-10-03T14-11-42-928Z/failure.json` and `2026-10-03T14-13-14-714Z/failure.json` were qualification-method defects: programmatic focus after pointer use does not imply `:focus-visible`, and Delete precedes Edit in the overflow. Explicit Enter/Tab/Tab traversal now proves keyboard-visible Edit and Escape focus return without changing product focus rules.
+- The conversation timeline entry failure above exposed global reading-state ownership; the selected-Task presentation fix passes the unchanged assertions and new Task-revisit regression. Failed geometry is preserved here; the current isolated journey output is the final pass, not the failed run.
+- Dock failures at `2026-10-03T14-19-20-432Z/failure.json` and `2026-10-03T14-23-50-423Z/failure.json` were fixture sequencing: the bridge's Stopped snapshot was observed before React restored composition, then another synthetic snapshot reused the same Task identity. Each Stop case now positively awaits/asserts visible compose before another case or Task switch. Timeout budgets, duplicate-refusal and restoration assertions are unchanged. The final run includes the barrier rather than relying on a lucky delay.
+- Review found multiline textarea sizing needed mode/Task dependencies; final 32-capture evidence proves identical restored height and exact text. No source changes follow that qualified final bundle. A missing browser-global ESLint declaration was corrected in the fixture script; no production lint policy changed.
+
+### MR disposition and next gate
+
+MR-034 has a machine-qualified dock/composer/queue foundation candidate, awaiting independent manager acceptance and later specialist/integrated/human qualification. MR-035/036/037/039, MR-038 integration, STAB-14, provider/platform/native/package and distribution gates remain open. UXR-04 is unstarted. Stop after normal commit and verified non-force push to PR #38, and wait for manager acceptance plus an explicit next-item message in this same implementation chat. No merge or release readiness is authorized.

@@ -7568,3 +7568,109 @@ html[data-rove-theme="dark"]
     animation-duration: 0s !important;
   }
 }
+
+/* One selected-Task interaction owner; queue remains adjacent conversation material. */
+.task-interaction-dock {
+  min-width: 0;
+}
+.task-interaction-dock:not([data-dock-mode="compose"]) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel, 12px);
+  background: var(--surface-raised);
+}
+.task-interaction-dock > .attention-inline {
+  border: 0;
+  box-shadow: none;
+  border-radius: inherit;
+}
+.task-dock-status {
+  display: grid;
+  min-height: 62px;
+  gap: 4px;
+  padding: 14px 16px 6px;
+  font-size: 13px;
+}
+.task-dock-status span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.task-dock-actions {
+  display: flex;
+  min-height: 50px;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 14px 12px;
+}
+.task-dock-actions::after {
+  content: "";
+  width: 36px;
+  flex: none;
+}
+.task-stop-slot {
+  display: flex;
+  width: 36px;
+  flex: none;
+}
+.product-app .task-stop-control {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  color: var(--ink);
+  background: transparent;
+}
+.product-app .task-stop-control > span:first-child {
+  font-size: 10px;
+}
+.task-queue {
+  margin-inline: 0;
+  max-height: 142px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.product-app[data-shell-mode] .task-queue-entry {
+  background: transparent;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding: 6px 2px;
+  font-size: 12px;
+}
+.task-queue-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-queue-copy > span {
+  display: block;
+}
+.task-queue-copy small {
+  display: inline-block;
+  margin: 3px 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.task-queue-more > div {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  transform: translate(-75%, -100%);
+}
+.composer-input-shell > textarea,
+.followup.composer-input-shell > textarea {
+  min-height: 50px;
+  padding: 14px 16px 4px;
+  font-size: 14px;
+}
+.followup.composer-input-shell {
+  min-height: 106px;
+}
+.composer-input-shell .composer-action-row,
+.task-composer-shell .composer-action-row {
+  padding: 6px 14px 12px;
+}
+.product-app .followup button.composer-submit {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}

@@ -34,6 +34,8 @@ Clearing recovery blockers or effect truth via dismissal, relaxing replay fences
 
 Consume UXR-03 dock modes and canonical notification/marker distinction; inspect conversationStatus, customer presentation, recovery blockers and effect fences. Keep exact state/resource attribution from STAB-03/04/06.
 
+The UXR-03 foundation candidate establishes `task-interaction-dock.tsx` as presentation resolver/container ownership. Consume its accepted ledger exit before edits: exact request coordinates select one primary surface, Stopping takes precedence, Stop is independent of input and browser controls, queue stays above every mode, and drafts/read intent remain Task-owned. Reuse the existing response/control paths and retained renderer/queue/negative regressions. Specialist family contents and durable authority remain with this ticket; do not infer acceptance from the seam alone.
+
 ## Investigation requirements
 
 Classify Outcome unclear, Task state unclear, browser/runtime degradation and recoverable service warnings as transient notification plus durable marker where warranted. Determine safe dismissal/expiry, recurrence, Task switching, restart and accessible announcement behavior. Investigate minimum conservative visual dwell for extremely fast Stopping only after actual termination is proven; record whether justified and how newer state wins.

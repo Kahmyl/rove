@@ -49,13 +49,13 @@ This graph is frozen unless current repository evidence proves it unsound. Recor
 
 ## Tickets and status
 
-UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 now has a bounded foundation candidate awaiting manager review; UXR-03–08 remain Planned.
+UXR-01 began In Progress / planning-contract setup; this checkpoint completes that setup only. UXR-02 foundation is independently accepted at `b59fe4f`; UXR-03 has a bounded candidate awaiting manager review, and UXR-04–08 remain Planned.
 
 | Ticket                                                                        | Responsibility                                        | Status                                         |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
 | [ROVE-UXR-01](ROVE-UXR-01-evidence-and-interaction-contract.md)               | Evidence and interaction-contract freeze              | Complete — planning setup only                 |
-| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Replacement candidate — manager review pending |
-| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Planned                                        |
+| [ROVE-UXR-02](ROVE-UXR-02-responsive-shell-and-surface-system.md)             | Responsive shell and surface-system foundation        | Foundation accepted — integrated/human pending |
+| [ROVE-UXR-03](ROVE-UXR-03-task-interaction-dock-and-composer.md)              | Task Interaction Dock and composer                    | Candidate — manager review pending             |
 | [ROVE-UXR-04](ROVE-UXR-04-attention-and-decision-interaction.md)              | Attention and decision interaction                    | Planned                                        |
 | [ROVE-UXR-05](ROVE-UXR-05-notifications-and-customer-state.md)                | Notifications and customer-state presentation         | Planned                                        |
 | [ROVE-UXR-06](ROVE-UXR-06-browser-resource-and-collaboration-presentation.md) | Browser resource and collaboration presentation       | Planned                                        |
@@ -85,6 +85,6 @@ The sequence is planning → implementation → ticket verification → cross-su
 
 ## Next checkpoint
 
-The user handoff explicitly accepts the remote MR-029/040/041/042 technical review and completed UXR-02 read-only/design reconciliation at baseline `4f44a2c33406fe5f1c3e40dae56eeb1094d554df`. The implementation worker reconciled the transferred unverified edits and has completed bounded shell qualification. Consume the [UXR-02 ledger exit](continuity-ledger.md); its checkpoint awaits independent manager review on PR #38. No later implementation is authorized by this candidate alone.
+The manager independently accepted UXR-02 foundation at exact `b59fe4f071ca064b08514970259a72d3b252bab1` after one nested-focus remediation round, and explicitly continued the same worker to UXR-03. Consume the [dock ledger exit](continuity-ledger.md); the dock/composer/queue candidate now awaits independent manager review on PR #38. UXR-04 requires acceptance plus an explicit next-item message.
 
 The same actual implementation chat continues UXR-02 through UXR-08, one writer and one review stop per item. After accepting each checkpoint, the persistent manager sends the next bounded item explicitly. Focused/directly affected checks apply per item; full integrated system verification follows implementation at UXR-08. Final human-recorded acceptance and provider/platform/distribution gates remain separate. Retire ticket metadata with the active program.

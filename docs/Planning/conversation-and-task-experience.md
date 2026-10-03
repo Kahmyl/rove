@@ -441,3 +441,7 @@ This plan becomes complete only when:
 - sidebar and multi-Task presentation are coherent and do not expose mode/lifecycle noise;
 - important journeys pass through production projections with functional, interaction, visual, responsive, accessibility, and recovery evidence; and
 - manual development-app acceptance is satisfactory.
+
+## Dock foundation continuation
+
+The bounded active human-review program now establishes one typed selected-Task interaction owner and exact mode seam, while specialist decision/notification/browser presentation remains pending. The earlier same-slot Send/Stop implementation is superseded: separate stable slots keep Stop available while a draft exists and throughout decision, collaboration and checking modes wherever exact capability permits. The existing rendered geometry check now proves both slots remain fixed during typing. Queue stays above all modes with overflow edit/remove/reorder, exact text drafts and reading choice remain Task-owned, and inherited queue promotion/restart/authority assertions remain unchanged. See the [owning application contract](../Engineering/application-and-capability-contracts.md) and [active continuity exit](human-review-remediation/continuity-ledger.md) for evidence; no human acceptance or process-termination claim is inferred.

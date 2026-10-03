@@ -38,7 +38,6 @@ import {
   removeWorkflowGuidanceEntry,
   removeWorkflowResourceEntry,
   taskNeedsCustomerInput,
-  taskComposerPrimaryAction,
   timelineIsAtBottom,
   workflowConfigurationFromDraft,
   workflowDraft,
@@ -237,54 +236,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html.match(/Browser service status/g)).toHaveLength(1);
   });
 
-  it("keeps one primary composer slot across ready, active, stopping, and stopped states", () => {
-    expect(
-      taskComposerPrimaryAction({
-        state: "working",
-        hasDraft: false,
-        canStop: true,
-        canSubmit: false,
-        canQueue: true,
-      }),
-    ).toEqual({ kind: "stop", disabled: false });
-    expect(
-      taskComposerPrimaryAction({
-        state: "working",
-        hasDraft: true,
-        canStop: true,
-        canSubmit: false,
-        canQueue: true,
-      }),
-    ).toEqual({ kind: "send", disabled: false });
-    expect(
-      taskComposerPrimaryAction({
-        state: "stopping",
-        hasDraft: true,
-        canStop: false,
-        canSubmit: false,
-        canQueue: false,
-      }),
-    ).toEqual({ kind: "stop", disabled: true });
-    for (const state of ["ready", "stopped"] as const) {
-      expect(
-        taskComposerPrimaryAction({
-          state,
-          hasDraft: false,
-          canStop: false,
-          canSubmit: true,
-          canQueue: false,
-        }),
-      ).toEqual({ kind: "send", disabled: true });
-      expect(
-        taskComposerPrimaryAction({
-          state,
-          hasDraft: true,
-          canStop: false,
-          canSubmit: true,
-          canQueue: false,
-        }),
-      ).toEqual({ kind: "send", disabled: false });
-    }
+  it("keeps explicit steering out of the ordinary composer", () => {
     const source = readFileSync(
       new URL("./product-surface.tsx", import.meta.url),
       "utf8",
@@ -550,7 +502,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
     expect(stoppingHtml).toContain("Stopping… · 0s worked");
     expect(stoppingHtml).toContain(
-      'class="primary composer-submit composer-stop" aria-label="Stop current work" title="Stop current work" disabled=""',
+      'class="composer-submit task-stop-control" aria-label="Stop current work" title="Stopping…" disabled=""',
     );
 
     for (const [state, status, ariaLabel, heading] of [
@@ -2157,7 +2109,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain(">Send</button>");
     expect(html).not.toContain("File change approval");
     expect(html).toContain("Take Over");
-    expect(html).not.toContain('aria-label="Stop current work"');
+    expect(html).toContain('aria-label="Stop current work"');
+    expect(html.match(/aria-label="Stop current work"/g)).toHaveLength(1);
     expect(html).toContain("Personal");
     expect(html).toContain('aria-label="Browser status"');
     expect(html).toContain(">View Browser</button>");
