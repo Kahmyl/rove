@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Planned — implementation not started
+**Status:** Machine-qualified candidate — independent manager acceptance pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
@@ -40,7 +40,7 @@ The UXR-04 manager's second rejection identified a broader inherited theme casca
 
 Consume the manager-accepted UXR-05 exit at exact `bad7103` before integration: notification dismissal is presentation only; Task/delivery/Output/browser/device markers remain tied to their owning authority, and observed resolution/restart recurrence does not replay effects. The notification candidate is machine-qualified (140 focused tests, 112 captures / three groups) and independently manager-accepted. Dismissal remains renderer-session memory, fresh renderer reconstruction may re-announce once, and Stopping has no fabricated dwell. Legacy effect acknowledgment remains an owning host fact, never a notification action. Process/SQLite restart and packaged screen-reader qualification were not repeated. Recheck combined notification/dock/decision/modal geometry and focus during integration rather than inferring them from independent surface witnesses.
 
-Consume the eventual manager-accepted UXR-06 exit before integration. The current candidate removes inspector Take Over/Return duplicates, keeps exact collaboration in the dock/decision material, and qualifies resource/profile/recording hierarchy with 167 + 47 tests and 160 captures / two groups. Frozen Task identities remain independent of the future default; missing profiles do not rebind. Current typed snapshots have no authoritative page URL: View Browser is the current-page path and recording site labels are historical. Do not infer live page identity from recording/activity, redesign native following, or claim new host/profile/recording durability from renderer intents. Browser/profile owning hover fixes do not resolve the unrelated global cascade risk. Shared fixture changes make prior specialist report fingerprints historical; integrated replay must retain all negatives and contrast/focus witnesses.
+Consume the manager-accepted UXR-06 exit at exact `243c1db` before integration. The accepted foundation removes inspector Take Over/Return duplicates, keeps exact collaboration in the dock/decision material, and qualifies resource/profile/recording hierarchy with 167 + 47 tests and 160 captures / two groups. Frozen Task identities remain independent of the future default; missing profiles do not rebind. Current typed snapshots have no authoritative page URL: View Browser is the current-page path and recording site labels are historical. Do not infer live page identity from recording/activity, redesign native following, or claim new host/profile/recording durability from renderer intents. Browser/profile owning hover fixes do not resolve the unrelated global cascade risk. Shared fixture changes make prior specialist report fingerprints historical; integrated replay must retain all negatives and contrast/focus witnesses.
 
 ## Investigation requirements
 
@@ -78,3 +78,11 @@ Keep product/runtime/test names descriptive; ticket IDs remain bounded planning 
 ## Downstream handoff
 
 UXR-08 inherits integrated candidate SHA, all MR dispositions, exact matrix evidence and Stage-4 classification/routing. Qualification cannot begin on unexplained composition inconsistencies.
+
+## Bounded integration candidate — 3 October 2026
+
+Started at exact accepted `243c1dbcfc7a6909b11276c0eed2d729f92109e0` on `codex/human-review-remediation-planning`. The candidate pairs shared explicit-theme primary hover colors, restores readable disabled controls without changing their disabled semantics, and suspends announcements above modal secondary drawers while retaining markers/dismissal memory. No host authority, schema, migration or persistence format changes.
+
+Combined qualification passes 238 captures, with 212 focused tests plus one temporary SQLite/API seed reconstruction test. Final accepted-specialist replays retain decision, browser and notification negative assertions. The [ledger exit](continuity-ledger.md) owns report/source/compiled hashes, matrix axes, exact commands, failures, visual review and limits. Stage-4 is correlated synthetic-history incoherence: the old seed inserted assistant text without exact accepted-message delivery facts; missing original command/database prevents proof of the exact recorded launch. Production correctly keeps that item pending and offline history readable. Future seeds carry explicit synthetic materialization; no live delivery failure or success is inferred from text.
+
+MR-034–MR-038 have accepted foundations and this bounded integrated candidate only; all manager, UXR-08 and human closure remain pending. MR-039, live current-page URL, native/provider/elevated grants, supported-platform/package/distribution and final Stage 1–4 gates remain open. Publish a normal commit/non-force push on PR #38, then stop for independent manager review. UXR-08 remains unstarted until acceptance and explicit continuation.

@@ -5032,7 +5032,11 @@ export function ProductSurface({
       )}
 
       <CustomerStateNotices
-        notices={activeModal === null ? visibleNotices : []}
+        notices={
+          activeModal === null && secondaryDisclosure === null
+            ? visibleNotices
+            : []
+        }
         activeKeys={activeNoticeKeys}
       />
       {unmatchedSession !== null && (

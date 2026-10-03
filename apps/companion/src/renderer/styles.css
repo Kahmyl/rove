@@ -1651,9 +1651,13 @@ select:focus-visible {
   font-weight: 680;
 }
 
-.product-app button:disabled {
+.product-app[data-shell-mode] button:disabled,
+.product-app[data-shell-mode] button.primary:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 1;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  border-color: var(--border);
 }
 
 .product-app button.primary,
@@ -5767,6 +5771,13 @@ html[data-rove-theme="dark"] .product-expanded button.primary {
   background: #edede9;
 }
 
+/* Shared explicit-theme primary hover keeps foreground and background paired. */
+html[data-rove-theme] :is(.product-app, .product-expanded) button.primary:hover:not(:disabled) {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
 html[data-rove-theme="dark"] .task-history-row[data-current="true"],
 html[data-rove-theme="dark"] .account-menu > summary:hover,
 html[data-rove-theme="dark"] .message-user,
@@ -7861,16 +7872,6 @@ html[data-rove-theme="dark"]
   line-height: 1.4;
 }
 
-/* Keep decision primary hover paired with its theme foreground. */
-html[data-rove-theme]
-  .product-app
-  .task-decision-actions
-  button.primary:hover:not(:disabled) {
-  color: var(--surface);
-  background: var(--ink);
-  border-color: var(--ink);
-}
-
 /* Transient notices float outside the dock; durable details stay with their owner. */
 .customer-notifications {
   position: fixed;
@@ -7949,11 +7950,6 @@ html[data-rove-theme]
 .browser-profiles-modal .profile-inline-panel { border-radius: 12px; padding: 12px; }
 .browser-profiles-modal .profile-inline-panel .profile-create-controls { grid-template-columns: minmax(0, 1fr) auto auto; }
 .browser-profiles-modal .profile-create { padding-top: 14px; gap: 10px; }
-/* Keep owning browser/profile primary controls readable under the explicit-theme hover cascade. */
-html[data-rove-theme] .browser-status button.primary:hover:not(:disabled),
-html[data-rove-theme] .browser-collaboration button.primary:hover:not(:disabled),
-html[data-rove-theme] .browser-collaboration-summary button.primary:hover:not(:disabled),
-html[data-rove-theme] .browser-profiles-modal button.primary:hover:not(:disabled) { color: var(--surface); background: var(--ink); border-color: var(--ink); }
 
 .product-app .browser-collaboration {
   padding: 12px 14px;

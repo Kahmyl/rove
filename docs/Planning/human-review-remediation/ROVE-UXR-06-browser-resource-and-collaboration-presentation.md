@@ -2,7 +2,7 @@
 
 **Program:** [Rove Human-Review Remediation Program](README.md)
 
-**Status:** Machine-qualified candidate — independent manager review pending
+**Status:** Foundation accepted at `243c1db` — integrated/human pending
 
 **Program start:** `2ff214b8f8624859c1a55bb50a16997302614560`
 
