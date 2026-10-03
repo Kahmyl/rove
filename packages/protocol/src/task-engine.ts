@@ -1792,6 +1792,10 @@ export function foldTaskEvent(
           ),
           structuredClone(event.completedHandoff.attention),
         ];
+        // Corroborated completion can restore the current Runtime fingerprint.
+        // Reconcile its own stale handoff marker here; an identical later poll
+        // need not emit another event, and unrelated recovery remains owned.
+        reconcileHandoffAttentionProjection(aggregate);
       }
       break;
     case "codex_reconciliation_observed":

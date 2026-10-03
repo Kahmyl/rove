@@ -148,6 +148,52 @@ export class ProcessProductHarness {
     return this.request({ type: "snapshot" });
   }
 
+  async attachBrowser(taskId: string): Promise<string> {
+    const sessionId = String(
+      await this.request({ type: "browser.attach", taskId }),
+    );
+    await this.until((snapshot) => {
+      const owningTask = task(snapshot, taskId);
+      return (
+        owningTask.roveSessionId === sessionId &&
+        typeof owningTask.codexThreadId === "string" &&
+        owningTask.codexThreadId.length > 0
+      );
+    });
+    return sessionId;
+  }
+
+  async untilHandoff(
+    taskId: string,
+    controller: "human" | null = "human",
+  ): Promise<ProductValue> {
+    return this.until((snapshot) => {
+      const owningTask = task(snapshot, taskId);
+      const runtime = owningTask.runtime as ProductValue | undefined;
+      const execution = owningTask.customerExecution as
+        ProductValue | undefined;
+      return (
+        typeof owningTask.roveSessionId === "string" &&
+        typeof owningTask.codexThreadId === "string" &&
+        runtime?.controller === controller &&
+        runtime.status ===
+          (controller === "human" ? "active" : "awaiting_human") &&
+        runtime.attachment === "attached" &&
+        runtime.recovery === "not_needed" &&
+        execution?.state ===
+          (controller === "human" ? "human_control" : "waiting_for_you") &&
+        ((snapshot.attention as ProductValue[]) ?? []).some(
+          (attention) =>
+            attention.taskId === taskId &&
+            attention.threadId === owningTask.codexThreadId &&
+            attention.kind === "control_handoff" &&
+            attention.status === "pending" &&
+            attention.generation === runtime.handoffGeneration,
+        )
+      );
+    });
+  }
+
   async until(
     predicate: (snapshot: ProductValue) => boolean,
     timeoutMs = 45_000,

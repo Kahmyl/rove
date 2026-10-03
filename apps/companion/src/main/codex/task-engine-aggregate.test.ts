@@ -15,6 +15,8 @@ import {
   type TaskObservedFact,
 } from "@rove/protocol";
 
+import { customerTaskExecution } from "./customer-task-execution.js";
+
 const taskId = "task_12345678-1234-4123-8123-123456789abc";
 const sessionId = "ses_1234567890abcdef1234567890abcdef";
 const threadId = "thread-1";
@@ -665,6 +667,116 @@ describe("TaskAggregate exact event fold", () => {
     );
     expect(cleared.continuation).toEqual({ status: "none" });
     expect(cleared.attentions).toEqual([]);
+  });
+
+  it("reconciles handoff recovery when completed metadata already matches Runtime truth", () => {
+    const initial = launchedAggregate();
+    initial.conversation.items = {
+      ...initial.conversation.items,
+      "user:handoff": {
+        id: "user:handoff",
+        kind: "user_message",
+        status: "completed",
+        clientId: initial.launch!.operationId,
+        turnId: "turn-1",
+        acceptedAt: initial.launch!.requestedAt,
+        text: "Complete the browser handoff.",
+      },
+    };
+    initial.conversation.itemOrder = ["user:handoff"];
+    const inventoryBeforeTakeover = {
+      ...initial.runtime,
+      ownershipGeneration: 3,
+      observationSeq: 9,
+    };
+    const completedHandoff = {
+      sessionId,
+      handoffId,
+      handoffGeneration: 3,
+      ownershipGeneration: 3,
+      controller: "human" as const,
+      status: "active" as const,
+      continuation: {
+        status: "pending" as const,
+        id: "continuation-1",
+        taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        policy: "resume_after_control_return" as const,
+        freshInspectionRequired: true,
+      },
+      attention: {
+        authority: "rove_control" as const,
+        kind: "control_handoff" as const,
+        requestId: "control-1",
+        taskId,
+        sessionId,
+        threadId,
+        handoffId,
+        generation: 3,
+        status: "pending" as const,
+      },
+    };
+    const completed = event(3, {
+      type: "codex_item_observed",
+      threadId,
+      turnId: "turn-1",
+      itemId: "completed-handoff",
+      terminal: true,
+      completedHandoff,
+    });
+    let value = foldTaskEvent(
+      initial,
+      event(1, {
+        type: "runtime_handoff_observed",
+        ...completedHandoff,
+      }),
+    );
+    // An inventory read begun before takeover can arrive after the handoff.
+    value = foldTaskEvent(
+      value,
+      event(2, {
+        type: "runtime_inventory_observed",
+        runtime: inventoryBeforeTakeover,
+      }),
+    );
+    expect(value.recoveryRequired).toMatch(/handoff identities do not match/);
+    expect(customerTaskExecution(value).state).toBe("checking");
+    const waiting = structuredClone(value);
+    value = foldTaskEvent(value, completed);
+    // Completed metadata restores the current fingerprint, so a poll of this
+    // exact truth may emit no new inventory event. It must converge here.
+    expect(value.runtime).toEqual({
+      ...inventoryBeforeTakeover,
+      controller: "human",
+      status: "active",
+      handoffId,
+      handoffGeneration: 3,
+    });
+    expect(value.recoveryRequired).toBeNull();
+    expect(value.attentions).toEqual([completedHandoff.attention]);
+    expect(customerTaskExecution(value).state).toBe("human_control");
+    expect(customerTaskExecution(value).segments.at(-1)?.status).toBe(
+      "human_control",
+    );
+
+    const unrelated = structuredClone(waiting);
+    unrelated.recoveryRequired =
+      "Unrelated provider authority needs reconciliation";
+    const stillBlocked = foldTaskEvent(unrelated, completed);
+    expect(stillBlocked.recoveryRequired).toBe(unrelated.recoveryRequired);
+    expect(customerTaskExecution(stillBlocked).state).toBe("checking");
+
+    const uncorroborated = structuredClone(waiting);
+    uncorroborated.runtime.bootstrapLookup = "unknown";
+    const mismatched = foldTaskEvent(uncorroborated, completed);
+    expect(mismatched.recoveryRequired).toMatch(
+      /handoff identities do not match/,
+    );
+    expect(mismatched.attentions[0]?.status).toBe("stale");
+    expect(customerTaskExecution(mismatched).state).toBe("checking");
   });
 
   it("recreates a missing handoff attention from matching Runtime and continuation truth", () => {

@@ -153,34 +153,14 @@ describe("21 real process stop/restart interruption cases", () => {
       await current.start();
       // The full process-tree cut also detaches Chromium. Recover that same
       // Runtime session before exercising its live ownership boundary.
-      expect(
-        String(
-          await current.request({
-            type: "browser.attach",
-            taskId: expectedTaskId,
-          }),
-        ),
-      ).toBe(attachedSessionId);
-      await current.until((snapshot) => {
-        const owningTask = task(snapshot, expectedTaskId);
-        return (
-          owningTask.roveSessionId === attachedSessionId &&
-          typeof owningTask.codexThreadId === "string" &&
-          owningTask.codexThreadId.length > 0
-        );
-      });
+      expect(await current.attachBrowser(expectedTaskId)).toBe(
+        attachedSessionId,
+      );
       await current.request({
         type: "handoff.prepare",
         taskId: expectedTaskId,
       });
-      await current.until((snapshot) =>
-        attention(snapshot).some(
-          (request) =>
-            request.taskId === expectedTaskId &&
-            request.kind === "control_handoff" &&
-            request.status === "pending",
-        ),
-      );
+      await current.untilHandoff(expectedTaskId);
       const recovered = await current.request({ type: "external.actions" });
       expect(
         (recovered.runtime as ProductValue[]).filter(
@@ -232,10 +212,7 @@ describe("21 real process stop/restart interruption cases", () => {
               (snapshot) =>
                 task(snapshot, expectedTaskId).bootstrapStage === "complete",
             );
-            await current.request({
-              type: "browser.attach",
-              taskId: expectedTaskId,
-            });
+            await current.attachBrowser(expectedTaskId);
             // Component replacement is its own cut, not an accidental
             // interruption of the still-asynchronous initial dispatch.
             await current.untilResult(
@@ -286,12 +263,7 @@ describe("21 real process stop/restart interruption cases", () => {
             "ready",
           );
 
-          const attachedSessionId = String(
-            await current.request({
-              type: "browser.attach",
-              taskId: expectedTaskId,
-            }),
-          );
+          await current.attachBrowser(expectedTaskId);
 
           const afterRecovery = await current.untilResult(
             { type: "external.actions" },
@@ -323,29 +295,11 @@ describe("21 real process stop/restart interruption cases", () => {
               ).length,
             ).toBeGreaterThan(0);
 
-          // Runtime acceptance and its external receipt precede the Task's
-          // asynchronous bind_runtime_identity commit. Handoff needs the exact
-          // durable binding, not process health or elapsed startup time.
-          await current.until((snapshot) => {
-            const owningTask = task(snapshot, expectedTaskId);
-            return (
-              owningTask.roveSessionId === attachedSessionId &&
-              typeof owningTask.codexThreadId === "string" &&
-              owningTask.codexThreadId.length > 0
-            );
-          });
           await current.request({
             type: "handoff.prepare",
             taskId: expectedTaskId,
           });
-          const handedOff = await current.until((snapshot) =>
-            attention(snapshot).some(
-              (request) =>
-                request.taskId === expectedTaskId &&
-                request.kind === "control_handoff" &&
-                request.status === "pending",
-            ),
-          );
+          const handedOff = await current.untilHandoff(expectedTaskId);
           expect(attention(handedOff).length).toBeGreaterThan(0);
 
           await current.stopAllHard();
