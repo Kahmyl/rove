@@ -333,7 +333,8 @@ describe("runtime integration", () => {
   });
 
   it("persists two browser recovery admissions and refuses the third", async () => {
-    const { home, runtime, sessions, browser, evidence } = await harness();
+    const { home, runtime, sessions, browser, evidence, effectJournal } =
+      await harness();
     const starting = await sessions.start(
       { mode: "agent", browser: { mode: "temporary" } },
       { profile: { mode: "temporary" } },
@@ -365,6 +366,11 @@ describe("runtime integration", () => {
     const restartedObservations = new ObservationService(
       new FileObservationStore(home),
     );
+    const restartedConfig = loadConfig({
+      cwd: home,
+      env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
+    });
+    const restartedJournal = new FileEffectJournalStore(restartedConfig.home);
     const restartedRuntime = new RuntimeService(
       restartedSessions,
       new ControlService(),
@@ -373,12 +379,20 @@ describe("runtime integration", () => {
       browser,
       restartedObservations,
       evidence,
-      loadConfig({
-        cwd: home,
-        env: { ROVE_BROWSER: "chromium", ROVE_BROWSER_HEADLESS: "true" },
-      }),
+      restartedConfig,
       new BrowserOwnershipFence(),
-      new FileEffectJournalStore(home),
+      restartedJournal,
+    );
+    // This read-only boundary drains constructor initialization before any
+    // admission-only fixture can finish and delete the Runtime's home.
+    await expect(
+      restartedRuntime.consequentialEffect(
+        session.id,
+        "recovery-admission-readiness",
+      ),
+    ).resolves.toBeNull();
+    expect(await restartedJournal.cutover()).toEqual(
+      await effectJournal.cutover(),
     );
     await expect(
       restartedRuntime.admitBrowserRecovery(session.id, recovery),

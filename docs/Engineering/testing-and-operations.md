@@ -31,6 +31,8 @@ Retain existing negative cases and outcome assertions during naming cleanup. Do 
 
 A cumulative recycled-list/grid browser journey keeps one session and ordered create, rename, move and remove operations. Lifecycle setup/teardown use the runner's existing hook budget (10 seconds); each authority invariant retains the existing five-second test budget. Grouping these assertions sequentially preserves their state dependency while separating launch, recycling/stale-reference checks and each off-window consequence. No fixed delay, larger test timeout, reduced worker count or weaker authority assertion substitutes for readiness.
 
+Manually reconstructed Runtime fixtures use the same configured effect-journal home as their original Runtime. Recovery-admission calls alone do not await constructor journal initialization. Drain it through the existing read-only effect lookup before fixture teardown and verify the persisted cutover epoch, creation time and legacy cohort survive restart. Never mask a late writer by retrying recursive temporary-home removal.
+
 ## Product acceptance matrix
 
 | Scenario                | Required evidence                                                                                                                                                                                                                                                                            |
