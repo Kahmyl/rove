@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { Buffer } from "node:buffer";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
@@ -45,6 +46,38 @@ function run(command, args, environment = {}) {
   });
 }
 
+function runJson(command, args, environment = {}) {
+  return new Promise((resolveRun, reject) => {
+    const child = spawn(command, args, {
+      cwd: repositoryRoot,
+      env: { ...process.env, ...environment },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    const output = [];
+    child.stdout.on("data", (chunk) => output.push(chunk));
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      const text = Buffer.concat(output).toString("utf8");
+      if (code !== 0) {
+        process.stdout.write(text);
+        reject(new Error(`${command} ${args.join(" ")} exited ${code}.`));
+        return;
+      }
+      try {
+        const result = JSON.parse(text);
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        resolveRun(result);
+      } catch (error) {
+        reject(
+          new Error(
+            `${command} ${args.join(" ")} did not return JSON: ${String(error)}`,
+          ),
+        );
+      }
+    });
+  });
+}
+
 const command = process.argv[2];
 if (command === "promote" && process.argv.includes("--purpose"))
   throw new Error(
@@ -75,21 +108,32 @@ if (command === "inspect") {
     throw new Error(
       `Candidate is not registered as qualified component ${component.id}; qualification cannot promote an unknown digest.`,
     );
-  await run("pnpm", ["agent:schema"], {
-    ROVE_CODEX_EXECUTABLE: resolve(source),
-  });
+  if (!process.argv.includes("--verify-registered-schema"))
+    await run("pnpm", ["agent:schema"], {
+      ROVE_CODEX_EXECUTABLE: resolve(source),
+    });
   await verifyCompiledSchemaBinding(component, schemaBindings);
   await run(
     process.execPath,
     ["experiments/agent-execution/live-app-server.mjs", "--mcp-boundary"],
     { ROVE_CODEX_EXECUTABLE: resolve(source) },
   );
+  const exactLocalExecutionEvidence =
+    component.capabilities?.exactLocalExecution === true
+      ? await runJson(
+          process.execPath,
+          [
+            "experiments/agent-execution/command-exec-termination-qualification.mjs",
+          ],
+          { ROVE_CODEX_EXECUTABLE: resolve(source) },
+        )
+      : undefined;
   const evidencePath = qualificationEvidencePath(component);
   const evidenceRoot = dirname(evidencePath);
   await mkdir(evidenceRoot, { recursive: true });
   await writeFile(
     evidencePath,
-    `${JSON.stringify(createQualificationReceipt(component, candidate, new Date().toISOString()), null, 2)}\n`,
+    `${JSON.stringify(createQualificationReceipt(component, candidate, new Date().toISOString(), exactLocalExecutionEvidence), null, 2)}\n`,
     { mode: 0o600 },
   );
   process.stdout.write(
@@ -129,6 +173,6 @@ if (command === "inspect") {
   process.stdout.write(`Promoted coherent component set ${componentId}.\n`);
 } else {
   throw new Error(
-    "Usage: codex-component-manager.mjs <inspect|qualify|install|verify|promote> [--source <path>] [--component <id>]",
+    "Usage: codex-component-manager.mjs <inspect|qualify|install|verify|promote> [--source <path>] [--component <id>] [--verify-registered-schema]",
   );
 }

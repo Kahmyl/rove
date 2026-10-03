@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -162,9 +162,206 @@ describe("SQLite task engine ledger", () => {
         recoveryClass: "live_attention",
         family: "live_attention",
         threadId: "thread_legacy",
+        state: "unresolved",
+        attempt: 1,
+        attemptLimit: 1,
       }),
     ]);
     store.close();
+  });
+
+  it("restores Codex recovery authority when an older reason marker was cleared", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const aggregate = structuredClone(accepted.aggregate);
+    const projection = structuredClone(accepted.projection);
+    const blocker = {
+      blockerId: "codex-recovery:thread-history:preserved",
+      recoveryClass: "thread_history_reconstructible" as const,
+      family: "thread_history_reconstructible",
+      threadId: "thread_preserved",
+      unresolvedAt: "2026-09-09T12:00:01.000Z",
+      lastObservedAt: "2026-09-09T12:00:02.000Z",
+    };
+    aggregate.codexRecoveryBlockers = { [blocker.blockerId]: blocker };
+    projection.codexRecoveryBlockers = { [blocker.blockerId]: blocker };
+    aggregate.recoveryRequired = null;
+    projection.recoveryRequired = null;
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        "UPDATE task_engine_projection SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(projection), aggregate.taskId);
+    database.close();
+
+    await expect(store.aggregate(aggregate.taskId)).resolves.toMatchObject({
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
+      codexRecoveryBlockers: {
+        [blocker.blockerId]: {
+          state: "unresolved",
+          attempt: 3,
+          attemptLimit: 3,
+        },
+      },
+    });
+    await expect(store.projection(aggregate.taskId)).resolves.toMatchObject({
+      recoveryRequired: expect.stringContaining("authoritative reconciliation"),
+    });
+    store.close();
+  });
+
+  it("settles a legacy Stop intent only from a later succeeded interrupt command", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const operationId = "intent_92345678-1234-4123-8123-123456789abc";
+    const aggregate = structuredClone(accepted.aggregate);
+    aggregate.requestedOperation = {
+      type: "interrupt",
+      taskId: aggregate.taskId,
+      operationId,
+    };
+    store.close();
+
+    const database = new Database(path);
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(aggregate), aggregate.taskId);
+    database
+      .prepare(
+        `INSERT INTO task_engine_event(task_id, event_id, source_kind, source_id,
+         source_generation, source_position, digest, payload_json,
+         acceptance_json, accepted_at)
+         VALUES (?, ?, 'product', ?, 1, 2, ?, ?, ?, ?)`,
+      )
+      .run(
+        aggregate.taskId,
+        `product:v2:interrupt:${operationId}`,
+        `operation:${operationId}`,
+        "legacy-interrupt-request",
+        JSON.stringify({
+          schemaVersion: 1,
+          type: "task_interrupt_requested",
+          eventId: `product:v2:interrupt:${operationId}`,
+          taskId: aggregate.taskId,
+          source: {
+            kind: "product",
+            id: `operation:${operationId}`,
+            generation: 1,
+            position: 2,
+          },
+          observedAt: "2026-09-09T12:00:01.000Z",
+          operationId,
+        }),
+        JSON.stringify({ aggregate, projection: accepted.projection }),
+        "2026-09-09T12:00:01.000Z",
+      );
+    database
+      .prepare(
+        `INSERT INTO task_engine_outbox(command_id, task_id, aggregate_revision,
+         command_type, classification_json, payload_json, status, attempts,
+         created_at, updated_at)
+         VALUES (?, ?, 2, 'interrupt_codex_turn', ?, ?, 'succeeded', 1, ?, ?)`,
+      )
+      .run(
+        `command:${aggregate.taskId}:legacy-interrupt`,
+        aggregate.taskId,
+        JSON.stringify({ execute: "uncertain_write", reconcile: "read_truth" }),
+        JSON.stringify({
+          type: "interrupt_codex_turn",
+          taskId: aggregate.taskId,
+          threadId: "thread-1",
+          turnId: "turn-1",
+        }),
+        "2026-09-09T12:00:01.000Z",
+        "2026-09-09T12:00:02.000Z",
+      );
+    database.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    expect(
+      (await reopened.aggregate(aggregate.taskId))?.requestedOperation,
+    ).toEqual({ type: "observe", taskId: aggregate.taskId });
+    reopened.close();
+  });
+
+  it("persists exact recovery success so delayed older failure cannot re-block after restart", async () => {
+    const { path, store, engine } = await fixture();
+    const accepted = await engine.accept(launch());
+    const blockerId = "codex-recovery:thread-history:restart";
+    const observe = (
+      suffix: string,
+      outcome: "unresolved" | "succeeded",
+      observedAt: string,
+    ): TaskEvent => ({
+      schemaVersion: 1,
+      type: "codex_reconciliation_observed",
+      eventId: `recovery:${suffix}`,
+      taskId: accepted.aggregate.taskId,
+      source: {
+        kind: "host",
+        id: `recovery:${suffix}`,
+        generation: 1,
+        position: 1,
+      },
+      observedAt,
+      diagnostic: {
+        trigger: "startup",
+        outcome,
+        recoveryClass: "thread_history_reconstructible",
+        blockerId,
+        threadId: "thread_restart",
+        attempt: 3,
+        attemptLimit: 3,
+        observedAt,
+      },
+    });
+    await engine.accept(
+      observe("unresolved", "unresolved", "2026-09-09T12:00:10.000Z"),
+    );
+    await engine.accept(
+      observe("success", "succeeded", "2026-09-09T12:00:20.000Z"),
+    );
+    store.close();
+
+    const database = new Database(path);
+    const row = database
+      .prepare(
+        "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+      )
+      .get(accepted.aggregate.taskId) as { payload_json: string };
+    const legacyAggregate = JSON.parse(row.payload_json) as TaskAggregate & {
+      codexRecoveryResolutions?: unknown;
+    };
+    delete legacyAggregate.codexRecoveryResolutions;
+    database
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(legacyAggregate), accepted.aggregate.taskId);
+    database.close();
+
+    const reopened = new SqliteTaskEngineStore({ path });
+    await new TaskEngine(reopened).accept(
+      observe("delayed", "unresolved", "2026-09-09T12:00:15.000Z"),
+    );
+    await expect(
+      reopened.aggregate(accepted.aggregate.taskId),
+    ).resolves.toMatchObject({
+      recoveryRequired: null,
+      codexRecoveryBlockers: {},
+      codexRecoveryResolutions: {
+        [blockerId]: "2026-09-09T12:00:20.000Z",
+      },
+    });
+    reopened.close();
   });
 
   it("commits mismatched handoff truth as fail-closed recovery", async () => {
@@ -526,6 +723,86 @@ describe("SQLite task engine ledger", () => {
       (await reopened.aggregate(accepted.aggregate.taskId))?.launch?.cwd,
     ).toBe("/tmp/rove");
     reopened.close();
+  });
+
+  it("accepts only the canonical protected per-task workspace identity", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-task-engine-workspace-"));
+    roots.push(root);
+    const taskId = launch().taskId;
+    const taskWorkspaceRoot = join(root, "protected-task-workspaces");
+    const expectedWorkspace = join(taskWorkspaceRoot, taskId);
+    const aliasRoot = join(root, "workspace-alias");
+    await mkdir(expectedWorkspace, { recursive: true });
+    await symlink(taskWorkspaceRoot, aliasRoot, "dir");
+
+    const safePath = join(root, "safe.sqlite3");
+    const safeStore = new SqliteTaskEngineStore({ path: safePath });
+    const safeLaunch = launch();
+    safeLaunch.launch.cwd = join(aliasRoot, taskId);
+    await new TaskEngine(safeStore).accept(safeLaunch);
+    safeStore.close();
+    const safeDatabase = new Database(safePath);
+    const safeRow = safeDatabase
+      .prepare(
+        "SELECT payload_json FROM task_engine_aggregate WHERE task_id = ?",
+      )
+      .get(taskId) as { payload_json: string };
+    const safeAggregate = JSON.parse(safeRow.payload_json) as TaskAggregate;
+    safeAggregate.recoveryRequired =
+      "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+    safeDatabase
+      .prepare(
+        "UPDATE task_engine_aggregate SET payload_json = ? WHERE task_id = ?",
+      )
+      .run(JSON.stringify(safeAggregate), taskId);
+    safeDatabase.close();
+    const safeReopened = new SqliteTaskEngineStore({
+      path: safePath,
+      taskWorkspaceRoot,
+    });
+    expect((await safeReopened.aggregate(taskId))?.recoveryRequired).toBeNull();
+    safeReopened.close();
+
+    const outsideWorkspace = join(root, "outside-workspace");
+    await rm(expectedWorkspace, { recursive: true });
+    await mkdir(outsideWorkspace);
+    await symlink(outsideWorkspace, expectedWorkspace, "dir");
+    const escapedPath = join(root, "escaped.sqlite3");
+    const escapedStore = new SqliteTaskEngineStore({ path: escapedPath });
+    const escapedLaunch = launch();
+    escapedLaunch.launch.cwd = expectedWorkspace;
+    await new TaskEngine(escapedStore).accept(escapedLaunch);
+    escapedStore.close();
+    const escapedReopened = new SqliteTaskEngineStore({
+      path: escapedPath,
+      taskWorkspaceRoot,
+    });
+    expect(await escapedReopened.projection(taskId)).toMatchObject({
+      phase: "recovering",
+      recoveryRequired: expect.stringContaining(
+        "outside the protected per-task root",
+      ),
+    });
+    escapedReopened.close();
+
+    await rm(expectedWorkspace);
+    const missingPath = join(root, "missing.sqlite3");
+    const missingStore = new SqliteTaskEngineStore({ path: missingPath });
+    const missingLaunch = launch();
+    missingLaunch.launch.cwd = expectedWorkspace;
+    await new TaskEngine(missingStore).accept(missingLaunch);
+    missingStore.close();
+    const missingReopened = new SqliteTaskEngineStore({
+      path: missingPath,
+      taskWorkspaceRoot,
+    });
+    expect(await missingReopened.projection(taskId)).toMatchObject({
+      phase: "recovering",
+      recoveryRequired: expect.stringContaining(
+        "outside the protected per-task root",
+      ),
+    });
+    missingReopened.close();
   });
 
   it("rejects an unknown future persisted task schema", async () => {

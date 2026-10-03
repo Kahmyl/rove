@@ -347,6 +347,7 @@ describe("local Workflow environments", () => {
       { migration_id: "0004_add_task_results" },
       { migration_id: "0005_bind_selected_result_revision" },
       { migration_id: "0006_atomically_consume_selected_results" },
+      { migration_id: "0007_add_local_execution_supervision" },
     ]);
     inspected.close();
   });

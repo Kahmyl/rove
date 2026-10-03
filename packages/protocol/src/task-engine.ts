@@ -167,6 +167,7 @@ export interface TaskCodexReconciliationDiagnostic {
   blockerId: string;
   threadId: string;
   attempt: number;
+  attemptLimit?: number;
   observedAt: string;
   eventFamily?: string;
   errorCategory?: string;
@@ -186,6 +187,9 @@ export interface TaskCodexRecoveryBlocker {
   correlationId?: string;
   unresolvedAt: string;
   lastObservedAt: string;
+  state?: "checking" | "unresolved";
+  attempt?: number;
+  attemptLimit?: number;
 }
 
 export interface TaskMessageDeliveryEvidence {
@@ -424,6 +428,7 @@ export interface TaskAggregate {
   recoveryRequired: string | null;
   codexReconciliation?: readonly TaskCodexReconciliationDiagnostic[];
   codexRecoveryBlockers?: Readonly<Record<string, TaskCodexRecoveryBlocker>>;
+  codexRecoveryResolutions?: Readonly<Record<string, string>>;
 }
 
 export interface TaskProjection {
@@ -690,6 +695,7 @@ export function emptyTaskAggregate(taskId: string): TaskAggregate {
     recoveryRequired: null,
     codexReconciliation: [],
     codexRecoveryBlockers: {},
+    codexRecoveryResolutions: {},
   };
 }
 
@@ -698,6 +704,26 @@ const CODEX_RECOVERY_REQUIRED =
 const LEGACY_CODEX_RECOVERY_REQUIRED =
   "Codex history reconciliation could not establish current durable task truth.";
 const MAX_CODEX_RECOVERY_BLOCKERS_PER_CLASS = 32;
+const MAX_CODEX_RECOVERY_RESOLUTIONS = 128;
+
+function recordCodexRecoveryResolution(
+  current: Readonly<Record<string, string>>,
+  blockerId: string,
+  observedAt: string,
+): Readonly<Record<string, string>> {
+  const existing = current[blockerId];
+  const next = {
+    ...current,
+    [blockerId]:
+      existing && Date.parse(existing) >= Date.parse(observedAt)
+        ? existing
+        : observedAt,
+  };
+  const ordered = Object.entries(next).sort(
+    ([, left], [, right]) => Date.parse(right) - Date.parse(left),
+  );
+  return Object.fromEntries(ordered.slice(0, MAX_CODEX_RECOVERY_RESOLUTIONS));
+}
 
 function addCodexRecoveryBlocker(
   current: Readonly<Record<string, TaskCodexRecoveryBlocker>>,
@@ -1381,6 +1407,7 @@ export function foldTaskEvent(
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
   aggregate.codexRecoveryBlockers ??= {};
+  aggregate.codexRecoveryResolutions ??= {};
   if (aggregate.taskId !== event.taskId)
     throw new Error("Task event targets a different aggregate.");
   const sourceKey = `${event.source.kind}:${event.source.id}`;
@@ -1777,7 +1804,18 @@ export function foldTaskEvent(
         ...(aggregate.codexReconciliation ?? []),
         structuredClone(event.diagnostic),
       ].slice(-32);
-      if (event.diagnostic.outcome === "unresolved")
+      if (
+        event.diagnostic.outcome !== "succeeded" &&
+        (!aggregate.codexRecoveryResolutions?.[event.diagnostic.blockerId] ||
+          Date.parse(
+            aggregate.codexRecoveryResolutions[event.diagnostic.blockerId]!,
+          ) < Date.parse(event.diagnostic.observedAt)) &&
+        (!aggregate.codexRecoveryBlockers?.[event.diagnostic.blockerId] ||
+          Date.parse(
+            aggregate.codexRecoveryBlockers[event.diagnostic.blockerId]!
+              .lastObservedAt,
+          ) < Date.parse(event.diagnostic.observedAt))
+      )
         aggregate.codexRecoveryBlockers = addCodexRecoveryBlocker(
           aggregate.codexRecoveryBlockers ?? {},
           {
@@ -1793,11 +1831,29 @@ export function foldTaskEvent(
               aggregate.codexRecoveryBlockers?.[event.diagnostic.blockerId]
                 ?.unresolvedAt ?? event.diagnostic.observedAt,
             lastObservedAt: event.diagnostic.observedAt,
+            state:
+              event.diagnostic.outcome === "scheduled"
+                ? "checking"
+                : "unresolved",
+            attempt: event.diagnostic.attempt,
+            attemptLimit:
+              event.diagnostic.attemptLimit ?? event.diagnostic.attempt,
           },
         );
       else if (event.diagnostic.outcome === "succeeded") {
+        aggregate.codexRecoveryResolutions = recordCodexRecoveryResolution(
+          aggregate.codexRecoveryResolutions ?? {},
+          event.diagnostic.blockerId,
+          event.diagnostic.observedAt,
+        );
         const blockers = { ...(aggregate.codexRecoveryBlockers ?? {}) };
-        delete blockers[event.diagnostic.blockerId];
+        const blocker = blockers[event.diagnostic.blockerId];
+        if (
+          !blocker ||
+          Date.parse(blocker.lastObservedAt) <=
+            Date.parse(event.diagnostic.observedAt)
+        )
+          delete blockers[event.diagnostic.blockerId];
         aggregate.codexRecoveryBlockers = blockers;
       }
       break;
@@ -2445,6 +2501,10 @@ function makeCommand(
     type,
     payload: structuredClone({
       ...output.nextCommand,
+      ...(type === "interrupt_codex_turn" &&
+      aggregate.requestedOperation.type === "interrupt"
+        ? { operationId: aggregate.requestedOperation.operationId }
+        : {}),
       ...((event.type === "task_message_requested" ||
         event.type === "explicit_continuation_response_requested") &&
       event.workflowContext

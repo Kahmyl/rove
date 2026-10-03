@@ -352,7 +352,58 @@ try {
     "Inspect the healthy task.",
     "Browser status explicitly says No browser attached and offers Open Browser; no identity or controller is implied.",
   );
+  await setScenario(page, "browser_profile_required");
+  await openTask(page, "task_browser_recovery");
+  await page.getByText("Choose a browser profile", { exact: true }).waitFor();
+  assert(
+    (await page.getByRole("button", { name: "Open Browser" }).count()) === 0,
+    "Profile recovery still offered an invalid Open Browser action.",
+  );
+  await capture(
+    page,
+    "browser-collaboration",
+    "profile-required",
+    "Recover browser work after creating a task before any saved profile exists.",
+    "Inspect the task browser resource.",
+    "The exact task keeps its conversation, explains profile setup, and offers Choose profile instead of raw Runtime failure.",
+  );
+  await setScenario(page, "browser_profile_missing");
+  await page
+    .getByText("This task's browser profile is unavailable", { exact: true })
+    .waitFor();
+  assert(
+    (await page.getByRole("button", { name: "Open Browser" }).count()) === 0,
+    "A task with a deleted frozen profile still offered Open Browser.",
+  );
+  await capture(
+    page,
+    "browser-collaboration",
+    "frozen-profile-missing",
+    "Understand how to continue when this task's frozen browser profile was removed.",
+    "Inspect the task browser resource.",
+    "The task preserves conversation history and offers a new-task recovery without silently rebinding its frozen profile.",
+  );
+  await setScenario(page, "browser_unmatched_resource");
+  await openTask(page, "task_launch_checklist");
+  const globalRecovery = page.getByLabel("Device browser recovery");
+  await globalRecovery.waitFor();
+  assert(
+    (await page.locator(".product-layout").getByLabel("Device browser recovery").count()) === 0,
+    "Unmatched cleanup leaked into selected task content.",
+  );
+  await capture(
+    page,
+    "browser-collaboration",
+    "global-resource-recovery",
+    "Clean up a device browser resource without attributing it to the selected task.",
+    "Inspect Task B while an unmatched Runtime session exists.",
+    "The cleanup notice is a device-global region outside task content; Task B remains selected and unchanged.",
+  );
+  await globalRecovery.getByRole("button", { name: "Finish session" }).click();
+  await globalRecovery.waitFor({ state: "detached" });
+  await page.waitForTimeout(300);
   await setScenario(page, "browser_attached");
+  await openTask(page, "task_vendor_research");
   await capture(
     page,
     "browser-collaboration",

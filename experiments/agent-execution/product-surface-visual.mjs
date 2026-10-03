@@ -137,7 +137,7 @@ function baseSnapshot(presentation, accountStatus) {
       ],
     },
     product: {
-      version: 9,
+      version: 10,
       host: {
         state: "ready",
         ready: true,
@@ -2610,10 +2610,12 @@ try {
       await commandPalette
         .getByLabel("Approval policy: Approve for me", { exact: true })
         .click();
-      await commandPalette.getByText("Always ask", { exact: true }).click();
+      await commandPalette
+        .getByText("Ask for approval", { exact: true })
+        .click();
       const paletteApprovalUpdatedVisibleState =
         (await visibleConfiguration
-          .getByLabel("Approval policy: Always ask", { exact: true })
+          .getByLabel("Approval policy: Ask for approval", { exact: true })
           .count()) === 1;
       if (!paletteApprovalUpdatedVisibleState)
         throw new Error(

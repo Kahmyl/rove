@@ -46,6 +46,10 @@ import {
   compactFollowerWindowOptions,
 } from "./compact-follower-window-options.js";
 import { CompanionRuntimeClient } from "./runtime-client.js";
+import {
+  runContainedRuntimeProbe,
+  withRuntimeDependencyWarning,
+} from "./runtime-failure-containment.js";
 import { resolveDesktopProductHome } from "./desktop-product-home.js";
 import { endUnmatchedRuntimeSession } from "./unmatched-runtime-session.js";
 import type { RuntimeCompanionSnapshot } from "./runtime-client.js";
@@ -187,28 +191,46 @@ async function refreshDesktopSurfaceSnapshot(
   companionOverride?: RuntimeCompanionSnapshot | null,
 ): Promise<DesktopSurfaceSnapshot> {
   return desktopSnapshotCoordinator.refresh(async () => {
+    const current = desktopSnapshotCoordinator.current();
     let nextProductError = codexProductError;
-    const [companion, workspaces, product] = await Promise.all([
-      companionOverride === undefined
-        ? runtime.getSnapshot()
-        : Promise.resolve(companionOverride),
-      runtime.getBrowserWorkspaceStatus(),
-      codexExecutionCore === undefined || codexExecutionCoreStarting
-        ? Promise.resolve(null)
-        : codexExecutionCore
-            .api()
-            .readSnapshot()
-            .catch((error) => {
-              nextProductError =
-                error instanceof Error ? error.message : String(error);
-              return null;
-            }),
-    ]);
+    const [companionResult, workspacesResult, productResult] =
+      await Promise.allSettled([
+        companionOverride === undefined
+          ? runtime.getSnapshot()
+          : Promise.resolve(companionOverride),
+        runtime.getBrowserWorkspaceStatus(),
+        codexExecutionCore === undefined || codexExecutionCoreStarting
+          ? Promise.resolve(null)
+          : codexExecutionCore
+              .api()
+              .readSnapshot()
+              .catch((error) => {
+                nextProductError =
+                  error instanceof Error ? error.message : String(error);
+                return null;
+              }),
+      ]);
+    const companion =
+      companionResult.status === "fulfilled"
+        ? projectCompanionSnapshot(companionResult.value)
+        : (current?.companion ?? null);
+    const workspaces =
+      workspacesResult.status === "fulfilled"
+        ? toDesktopBrowserWorkspaceStatus(workspacesResult.value)
+        : (current?.workspaces ?? { workspaces: [] });
+    let product =
+      productResult.status === "fulfilled"
+        ? productResult.value
+        : (current?.product ?? null);
+    product = withRuntimeDependencyWarning(
+      product,
+      runtime.getDependencyHealth(),
+    );
     return {
       surface: unifiedSurfaceState.snapshot(),
-      companion: projectCompanionSnapshot(companion),
+      companion,
       notice: desktopNotice,
-      workspaces: toDesktopBrowserWorkspaceStatus(workspaces),
+      workspaces,
       product,
       productError: nextProductError,
       ...(roveAccountService
@@ -590,7 +612,8 @@ function registerIpc(
         if (changed)
           void workflowSyncCoordinator
             ?.synchronize()
-            .then(() => refreshDesktopSurfaceSnapshot(runtime));
+            .then(() => refreshDesktopSurfaceSnapshot(runtime))
+            .catch(() => undefined);
       },
     ),
   );
@@ -768,7 +791,6 @@ function registerIpc(
       throw new Error("Browser attachment returned mismatched task authority.");
     const shown = await runtime.showBrowserForSession(sessionId, authority);
     if (shown) {
-      closeFullSurface();
       await browserFollowController?.reconcileNow();
     }
     return shown;
@@ -1098,25 +1120,33 @@ function startSessionSurfaceMonitor(
     sessionSurfaceMonitorBusy = true;
 
     try {
-      const companion = await runtime.getSnapshot();
-      await refreshDesktopSurfaceSnapshot(runtime, companion);
-      const session = companion?.session ?? null;
+      await runContainedRuntimeProbe({
+        health: runtime.getDependencyHealth(),
+        probe: async () => {
+          const companion = await runtime.getSnapshot();
+          await refreshDesktopSurfaceSnapshot(runtime, companion);
+          const session = companion?.session ?? null;
 
-      const signal = toCompanionSurfaceSignal(session);
+          const signal = toCompanionSurfaceSignal(session);
 
-      if (signal !== null && signal.key !== previousSignalKey) {
-        if (signal.action === "attention") {
-          openFullSurface();
-        } else {
-          unifiedSurfaceCoordinator?.present(unifiedSurfaceState.snapshot());
-        }
-      }
+          if (signal !== null && signal.key !== previousSignalKey) {
+            if (signal.action === "attention") {
+              openFullSurface();
+            } else {
+              unifiedSurfaceCoordinator?.present(
+                unifiedSurfaceState.snapshot(),
+              );
+            }
+          }
 
-      onSession?.(session);
-
-      previousSignalKey = signal?.key;
-    } catch {
-      previousSignalKey = undefined;
+          onSession?.(session);
+          previousSignalKey = signal?.key;
+        },
+        onFailure: async () => {
+          previousSignalKey = undefined;
+          await refreshDesktopSurfaceSnapshot(runtime);
+        },
+      });
     } finally {
       sessionSurfaceMonitorBusy = false;
     }
@@ -1441,81 +1471,88 @@ async function startDesktop(): Promise<void> {
     codexComponentRoot,
     codexBaseline.codeModeHostFilename,
   );
-  if (codexMcpLaunch !== undefined) {
-    console.info(
-      `[codex] Resolving ${codexSource} component ${codexBaseline.id} at ${configuredCodexExecutable}.`,
-    );
-    codexExecutionCore = new CodexExecutionCore({
-      isPackaged: app.isPackaged,
-      ...(app.isPackaged
-        ? { packagedExecutablePath: configuredCodexExecutable }
-        : {
-            developmentExecutablePath: configuredCodexExecutable,
-            developmentCodeModeHostPath: configuredCodeModeHost,
-          }),
-      clientVersion: COMPANION_PROVENANCE.version,
-      stateDirectory: join(desktopHome, "codex-product"),
-      taskWorkingDirectory: desktopHome,
-      taskWorkspaceRoot: join(desktopHome, "task-workspaces"),
-      runtime,
-      attachmentAuthority,
-      attachmentRuntime: runtime,
-      onFileAttention: () => openFullSurface(),
-      mcpLaunch: codexMcpLaunch,
-      onProductStateChanged: async () => {
-        await refreshDesktopSurfaceSnapshot(runtime);
-      },
-    });
-    codexExecutionCoreStarting = true;
-    try {
-      await codexExecutionCore.start();
-      if (roveAccountService.client) {
-        workflowSyncStateStore = new WorkflowSyncStateStore(
-          join(desktopHome, "identity", "workflow-sync.v1.sqlite3"),
-        );
-        workflowSyncCoordinator = new WorkflowSyncCoordinator(
-          codexExecutionCore.workflowStore(),
-          workflowSyncStateStore,
-          new SupabaseWorkflowConfigurationProvider(roveAccountService.client),
-          () => roveAccountService?.ownerId() ?? null,
-          () => roveAccountService?.authEpoch() ?? 0,
-        );
-        if (
-          roveAccountService.ownerId() &&
-          workflowSyncCoordinator.projection().boundOwnerId &&
-          workflowSyncCoordinator.projection().status !== "account_mismatch"
-        )
-          void workflowSyncCoordinator
-            .synchronize()
-            .then(() => refreshDesktopSurfaceSnapshot(runtime));
-        workflowSyncMonitor = setInterval(() => {
+  const accountService = roveAccountService;
+  const startCodexExecutionCore = async (): Promise<void> => {
+    if (codexMcpLaunch !== undefined) {
+      console.info(
+        `[codex] Resolving ${codexSource} component ${codexBaseline.id} at ${configuredCodexExecutable}.`,
+      );
+      codexExecutionCore = new CodexExecutionCore({
+        isPackaged: app.isPackaged,
+        ...(app.isPackaged
+          ? { packagedExecutablePath: configuredCodexExecutable }
+          : {
+              developmentExecutablePath: configuredCodexExecutable,
+              developmentCodeModeHostPath: configuredCodeModeHost,
+            }),
+        clientVersion: COMPANION_PROVENANCE.version,
+        stateDirectory: join(desktopHome, "codex-product"),
+        taskWorkingDirectory: desktopHome,
+        taskWorkspaceRoot: join(desktopHome, "task-workspaces"),
+        runtime,
+        attachmentAuthority,
+        attachmentRuntime: runtime,
+        onFileAttention: () => openFullSurface(),
+        mcpLaunch: codexMcpLaunch,
+        onProductStateChanged: async () => {
+          await refreshDesktopSurfaceSnapshot(runtime);
+        },
+      });
+      codexExecutionCoreStarting = true;
+      try {
+        await codexExecutionCore.start();
+        if (accountService.client) {
+          workflowSyncStateStore = new WorkflowSyncStateStore(
+            join(desktopHome, "identity", "workflow-sync.v1.sqlite3"),
+          );
+          workflowSyncCoordinator = new WorkflowSyncCoordinator(
+            codexExecutionCore.workflowStore(),
+            workflowSyncStateStore,
+            new SupabaseWorkflowConfigurationProvider(accountService.client),
+            () => roveAccountService?.ownerId() ?? null,
+            () => roveAccountService?.authEpoch() ?? 0,
+          );
           if (
-            roveAccountService?.ownerId() &&
-            workflowSyncCoordinator?.projection().boundOwnerId &&
-            workflowSyncCoordinator?.projection().status !== "account_mismatch"
+            accountService.ownerId() &&
+            workflowSyncCoordinator.projection().boundOwnerId &&
+            workflowSyncCoordinator.projection().status !== "account_mismatch"
           )
             void workflowSyncCoordinator
-              ?.synchronize()
-              .then(() => refreshDesktopSurfaceSnapshot(runtime));
-        }, 60_000);
-        workflowSyncMonitor.unref();
+              .synchronize()
+              .then(() => refreshDesktopSurfaceSnapshot(runtime))
+              .catch(() => undefined);
+          workflowSyncMonitor = setInterval(() => {
+            if (
+              roveAccountService?.ownerId() &&
+              workflowSyncCoordinator?.projection().boundOwnerId &&
+              workflowSyncCoordinator?.projection().status !==
+                "account_mismatch"
+            )
+              void workflowSyncCoordinator
+                ?.synchronize()
+                .then(() => refreshDesktopSurfaceSnapshot(runtime))
+                .catch(() => undefined);
+          }, 60_000);
+          workflowSyncMonitor.unref();
+        }
+        codexExecutionCoreStarting = false;
+        codexProductError = null;
+        await refreshDesktopSurfaceSnapshot(runtime);
+        console.info(
+          `[codex] Trusted App Server execution core is ready (${codexBaseline.cliVersion}; ${codexBaseline.executableSha256}).`,
+        );
+      } catch (error) {
+        codexExecutionCoreStarting = false;
+        codexProductError =
+          error instanceof Error ? error.message : "Codex App Server failed.";
+        console.error(`[codex] ${codexProductError}`);
+        await refreshDesktopSurfaceSnapshot(runtime);
       }
-      codexExecutionCoreStarting = false;
-      codexProductError = null;
-      await refreshDesktopSurfaceSnapshot(runtime);
-      console.info(
-        `[codex] Trusted App Server execution core is ready (${codexBaseline.cliVersion}; ${codexBaseline.executableSha256}).`,
-      );
-    } catch (error) {
-      codexExecutionCoreStarting = false;
-      codexProductError =
-        error instanceof Error ? error.message : "Codex App Server failed.";
-      console.error(`[codex] ${codexProductError}`);
+    } else {
+      codexProductError = "Codex MCP launch configuration is unavailable.";
       await refreshDesktopSurfaceSnapshot(runtime);
     }
-  } else {
-    codexProductError = "Codex MCP launch configuration is unavailable.";
-  }
+  };
 
   registerIpc(
     runtime,
@@ -1566,8 +1603,7 @@ async function startDesktop(): Promise<void> {
   unifiedSurfaceCoordinator.present(unifiedSurfaceState.snapshot());
 
   const controlledFollowerSurface: BrowserFollowSurface = {
-    isFollowEnabled: () =>
-      followerSurface.isFollowEnabled() && !surface.isVisible(),
+    isFollowEnabled: () => followerSurface.isFollowEnabled(),
     isFocused: () => followerSurface.isFocused(),
     isVisible: () => followerSurface.isVisible(),
     followPresentation: (windowState) => {
@@ -1644,6 +1680,8 @@ async function startDesktop(): Promise<void> {
 
     followController.setSession(followerSession);
   });
+
+  await startCodexExecutionCore();
 }
 
 if (!hasSingleInstanceLock) {

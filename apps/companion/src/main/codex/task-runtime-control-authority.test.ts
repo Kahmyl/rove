@@ -127,20 +127,16 @@ describe("task Runtime control authority", () => {
       resolveTaskRuntimeControlAuthority("task_a", taskA, [liveA], 2),
     ).toThrow(/handoff is stale or mismatched/);
     expect(() =>
-      resolveTaskRuntimeControlAuthority(
-        "task_a",
-        taskA,
-        [
-          inventory(
-            session("ses_a", "boot_a", {
-              status: "awaiting_human",
-              controller: null,
-              activeHandoffId: handoffId,
-              activeHandoffGeneration: 4,
-            }),
-          ),
-        ],
-      ),
+      resolveTaskRuntimeControlAuthority("task_a", taskA, [
+        inventory(
+          session("ses_a", "boot_a", {
+            status: "awaiting_human",
+            controller: null,
+            activeHandoffId: handoffId,
+            activeHandoffGeneration: 4,
+          }),
+        ),
+      ]),
     ).toThrow(/handoff is stale or mismatched/);
     expect(() =>
       resolveTaskRuntimeControlAuthority("task_a", taskA, [liveA]),
@@ -153,11 +149,9 @@ describe("task Runtime control authority", () => {
       ),
     ).toThrow(/handoff is stale or mismatched/);
     expect(() =>
-      resolveTaskRuntimeControlAuthority(
-        "task_a",
-        taskA,
-        [inventory(session("ses_a", "boot_a"))],
-      ),
+      resolveTaskRuntimeControlAuthority("task_a", taskA, [
+        inventory(session("ses_a", "boot_a")),
+      ]),
     ).toThrow(/handoff is stale or mismatched/);
   });
 });

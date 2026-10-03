@@ -55,6 +55,14 @@ function availableActions(value: ProductValue): string[] {
   return (value.availableActions as string[]) ?? [];
 }
 
+function customerExecution(value: ProductValue): ProductValue {
+  return value.customerExecution as ProductValue;
+}
+
+function currentWorkSegment(value: ProductValue): ProductValue {
+  return ((customerExecution(value).segments as ProductValue[]) ?? []).at(-1)!;
+}
+
 function processAlive(processId: number): boolean {
   try {
     process.kill(processId, 0);
@@ -74,9 +82,10 @@ const ids = {
   handoff: "intent_33333333-3333-4333-8333-333333333333",
   finish: "intent_44444444-4444-4444-8444-444444444444",
   restart: "intent_55555555-5555-4555-8555-555555555555",
+  approval: "intent_66666666-6666-4666-8666-666666666666",
 } as const;
 
-describe("five process-backed production-composition lifecycle traces", () => {
+describe("process-backed production-composition lifecycle traces", () => {
   it("1. launches browserlessly with local attachments and exact Rove MCP/model parameters, and rejects a bad catalog", async () => {
     const current = await product();
     const selected = await current.request({
@@ -137,8 +146,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
       model: "l2-model",
       reasoningEffort: "low",
       approvalsReviewer: "auto_review",
+      approvalPolicy: "on-request",
       permissions: "rove_task",
       defaultPermissions: "rove_task",
+      workspaceAccess: "write",
     });
     expect(start?.developerInstructions).toContain("Rove browser route policy");
     const rove = start?.rove as ProductValue | undefined;
@@ -182,6 +193,57 @@ describe("five process-backed production-composition lifecycle traces", () => {
         (action) => action.method === "turn/start",
       ),
     ).toHaveLength(0);
+  }, 120_000);
+
+  it("preserves the human-reviewed approval contract across thread start and resume", async () => {
+    const current = await product();
+    await current.request(
+      launchIntent(ids.approval, { approvalsReviewer: "user" }),
+    );
+    const started = await current.until(
+      (value) =>
+        task(value, taskId(ids.approval)).bootstrapStage === "complete",
+    );
+    const threadId = String(task(started, taskId(ids.approval)).codexThreadId);
+    let requests = (await current.request({
+      type: "appserver.requests",
+    })) as unknown as ProductValue[];
+    expect(
+      requests.find(
+        (request) =>
+          request.method === "thread/start" &&
+          (request.rove as ProductValue | null)?.taskId ===
+            taskId(ids.approval),
+      ),
+    ).toMatchObject({
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      permissions: "rove_task",
+      defaultPermissions: "rove_task",
+      workspaceAccess: "write",
+    });
+
+    await current.request({ type: "appserver.kill" });
+    requests = (await current.untilResult(
+      { type: "appserver.requests" },
+      (value) =>
+        (value as unknown as ProductValue[]).some(
+          (request) =>
+            request.method === "thread/resume" && request.threadId === threadId,
+        ),
+    )) as unknown as ProductValue[];
+    expect(
+      requests.find(
+        (request) =>
+          request.method === "thread/resume" && request.threadId === threadId,
+      ),
+    ).toMatchObject({
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      permissions: "rove_task",
+      defaultPermissions: "rove_task",
+      workspaceAccess: "write",
+    });
   }, 120_000);
 
   it("2. publishes conversation/progress and Codex attention through awaited ingress, response, and resolution", async () => {
@@ -239,6 +301,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     )!;
     expect(request.itemId).toBe("item_approval_trace_2");
     expect(secondRequest.itemId).toBe("item_approval_trace_2b");
+    const pendingTask = task(pending, taskId(ids.attention));
+    expect(customerExecution(pendingTask).state).toBe("waiting_for_you");
+    expect(currentWorkSegment(pendingTask).status).toBe("waiting_for_customer");
+    expect(currentWorkSegment(pendingTask).activeSince).toBeUndefined();
     await current.request({
       type: "attention.decide",
       taskId: taskId(ids.attention),
@@ -348,6 +414,10 @@ describe("five process-backed production-composition lifecycle traces", () => {
     expect(task(handedOff, taskId(ids.handoff)).availableActions).toContain(
       "return_control",
     );
+    const handedOffTask = task(handedOff, taskId(ids.handoff));
+    expect(customerExecution(handedOffTask).state).toBe("human_control");
+    expect(currentWorkSegment(handedOffTask).status).toBe("human_control");
+    expect(currentWorkSegment(handedOffTask).activeSince).toBeUndefined();
     const handoffAttention = attention(handedOff).find(
       (request) =>
         request.taskId === taskId(ids.handoff) &&
@@ -439,10 +509,7 @@ describe("five process-backed production-composition lifecycle traces", () => {
     const database = new Database(
       join(current.home, "codex-product", "task-process.v1.sqlite3"),
     );
-    for (const table of [
-      "task_engine_aggregate",
-      "task_engine_projection",
-    ]) {
+    for (const table of ["task_engine_aggregate", "task_engine_projection"]) {
       const row = database
         .prepare(`SELECT payload_json FROM ${table} WHERE task_id = ?`)
         .get(taskId(ids.handoff)) as { payload_json: string };

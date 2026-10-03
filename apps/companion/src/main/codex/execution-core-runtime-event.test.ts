@@ -1,15 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 import {
   emptyTaskAggregate,
   foldTaskEvent,
   hasActionableTaskHandoff,
   projectTaskAggregate,
+  TaskEngine,
+  type NativeRuntimeTruth,
+  type TaskEvent,
 } from "@rove/protocol";
 
 import {
   composeCompletedRequestHumanHandoff,
   runtimeInventoryEventId,
+  runtimeInventorySourceId,
 } from "./execution-core.js";
+import { SqliteTaskEngineStore } from "./sqlite-task-engine-store.js";
+
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
 
 describe("Runtime inventory event identity", () => {
   it("separates observations by generation, position, and state", () => {
@@ -26,7 +42,126 @@ describe("Runtime inventory event identity", () => {
       first,
     );
   });
+
+  it("keeps one stable Runtime inventory producer independent of provider observation sequence", () => {
+    expect(runtimeInventorySourceId("ses_runtime")).toBe(
+      "inventory:ses_runtime",
+    );
+  });
+
+  it("keeps identical truth idempotent while accepting changed same-sequence truth before a later task", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rove-runtime-inventory-"));
+    roots.push(root);
+    const store = new SqliteTaskEngineStore({
+      path: join(root, "tasks.sqlite3"),
+    });
+    const engine = new TaskEngine(store);
+    const firstTaskId = "task_11111111-1111-4111-8111-111111111111";
+    const laterTaskId = "task_22222222-2222-4222-8222-222222222222";
+    await engine.accept(launch(firstTaskId, 1, "1"));
+    await engine.accept(launch(laterTaskId, 2, "2"));
+
+    const firstSessionId = `ses_${"a".repeat(32)}`;
+    const laterSessionId = `ses_${"b".repeat(32)}`;
+    const active = runtimeTruth(firstSessionId, "active", "agent");
+    const awaiting = runtimeTruth(firstSessionId, "awaiting_human", null);
+    const first = runtimeEvent(firstTaskId, active, 1, "active-agent");
+    const changed = runtimeEvent(firstTaskId, awaiting, 2, "awaiting-human");
+    await engine.accept(first);
+    await expect(engine.accept(changed)).resolves.toMatchObject({
+      duplicate: false,
+    });
+    await expect(
+      engine.accept(structuredClone(changed)),
+    ).resolves.toMatchObject({ duplicate: true });
+
+    const later = runtimeEvent(
+      laterTaskId,
+      runtimeTruth(laterSessionId, "active", "agent"),
+      3,
+      "later-active",
+    );
+    await expect(engine.accept(later)).resolves.toMatchObject({
+      duplicate: false,
+      aggregate: {
+        taskId: laterTaskId,
+        runtime: { sessionId: laterSessionId, status: "active" },
+      },
+    });
+    store.close();
+  });
 });
+
+function launch(
+  taskId: string,
+  position: number,
+  seed: string,
+): Extract<TaskEvent, { type: "task_launch_requested" }> {
+  const operationId = `intent_${seed.repeat(8)}-${seed.repeat(4)}-4${seed.repeat(3)}-8${seed.repeat(3)}-${seed.repeat(12)}`;
+  return {
+    schemaVersion: 1,
+    type: "task_launch_requested",
+    eventId: `product:${operationId}`,
+    taskId,
+    source: { kind: "product", id: "runtime-test", generation: 1, position },
+    observedAt: "2026-09-19T00:00:00.000Z",
+    operationId,
+    launch: {
+      operationId,
+      bootstrapId: `boot_${seed.repeat(32)}`,
+      requestedAt: "2026-09-19T00:00:00.000Z",
+      outcome: "Observe Runtime truth",
+      executionMode: "companion",
+      browserIdentity: { mode: "temporary" },
+      approvalsReviewer: "auto_review",
+      cwd: "/work",
+      attachmentIds: [],
+    },
+  };
+}
+
+function runtimeTruth(
+  sessionId: string,
+  status: NativeRuntimeTruth["status"],
+  controller: NativeRuntimeTruth["controller"],
+): NativeRuntimeTruth {
+  return {
+    availability: "available",
+    sessionExists: true,
+    sessionId,
+    bootstrapLookup: "exact",
+    status,
+    controller,
+    attachment: "attached",
+    profileLock: "released",
+    browserIdentity: { mode: "temporary" },
+    recovery: "not_needed",
+    ownershipGeneration: 2,
+    observationSeq: 2,
+  };
+}
+
+function runtimeEvent(
+  taskId: string,
+  runtime: NativeRuntimeTruth,
+  position: number,
+  fingerprint: string,
+): Extract<TaskEvent, { type: "runtime_inventory_observed" }> {
+  return {
+    schemaVersion: 1,
+    type: "runtime_inventory_observed",
+    eventId: runtimeInventoryEventId(taskId, 1, position, fingerprint),
+    taskId,
+    source: {
+      kind: "runtime",
+      id: runtimeInventorySourceId(runtime.sessionId!),
+      generation: 1,
+      position,
+    },
+    observedAt: "2026-09-19T00:00:01.000Z",
+    runtime,
+  };
+}
 
 describe("request-human live event composition", () => {
   const taskId = "task_11111111-1111-4111-8111-111111111111";

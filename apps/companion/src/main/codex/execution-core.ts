@@ -43,8 +43,17 @@ import type {
   TaskAttachmentAuthority,
 } from "./task-attachments.js";
 import type { LocalFileGrantSelection } from "../host/hub-command-executor.js";
+import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+  runtimeDependencyWarning,
+} from "../runtime-failure-containment.js";
 import type { RoveMcpLaunch, TaskRuntimePort } from "./task-coordinator.js";
 import { resolveTaskRuntimeControlAuthority } from "./task-runtime-control-authority.js";
+import {
+  LocalExecutionSupervisor,
+  ROVE_TASK_PERMISSION_PROFILE_ID,
+} from "./local-execution-supervision.js";
 export { composeCompletedRequestHumanHandoff } from "./codex-task-observations.js";
 
 export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
@@ -55,6 +64,11 @@ export const PRODUCTION_LIFECYCLE_AUTHORITY = Object.freeze({
   projection: "sqlite",
   command: "sqlite",
 } as const);
+
+const RUNTIME_DEPENDENCY_WARNINGS = [
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+] as const;
 
 export function requiresRuntimeGenerationReconciliation(input: {
   sessionId?: string;
@@ -130,6 +144,10 @@ export function runtimeInventoryEventId(
   return `runtime:${taskId}:${generation}:${position}:${fingerprint}`;
 }
 
+export function runtimeInventorySourceId(runtimeIdentity: string): string {
+  return `inventory:${runtimeIdentity}`;
+}
+
 /** Sole production composition root for the event-sourced task engine. */
 export class CodexExecutionCore {
   readonly host: CodexAppServerHost;
@@ -140,9 +158,12 @@ export class CodexExecutionCore {
   private ingress: OrderedTaskIngress | undefined;
   private detachEvents: (() => void) | undefined;
   private detachHealth: (() => void) | undefined;
+  private detachExecutionSupervisor: (() => void) | undefined;
+  private executionSupervisor: LocalExecutionSupervisor | undefined;
   private reconciler: CodexThreadTruthReconciler | undefined;
   private readonly reconciliationByTask = new Map<string, Promise<void>>();
   private recoveryWarnings: string[] = [];
+  private runtimeObservationPosition = 0;
   private connectionGeneration = 0;
   private connectionId: string | undefined;
   private codexPosition = 0;
@@ -198,6 +219,7 @@ export class CodexExecutionCore {
     this.store = store;
     this.connectionGeneration = store.nextHostGeneration("codex");
     this.runtimeGeneration = store.nextHostGeneration("runtime");
+    this.runtimeObservationPosition = 0;
     const engine = new TaskEngine(store);
     let rpc;
     try {
@@ -247,6 +269,49 @@ export class CodexExecutionCore {
     const sessionSupervisor = new CodexThreadSessionSupervisor(rpc);
     if (this.connectionGeneration > 1)
       sessionSupervisor.replaceConnectionGeneration(this.connectionGeneration);
+    const executionSupervisor = new LocalExecutionSupervisor({
+      rpc,
+      store,
+      ownerInstanceId: this.hostInstanceId,
+      connectionGeneration: () => this.connectionGeneration,
+      resolveTaskAuthority: async (threadId, turnId) => {
+        const matches = [];
+        for (const projection of await store.projections()) {
+          const aggregate = await store.aggregate(projection.taskId);
+          if (
+            aggregate?.record?.identity.threadId !== threadId ||
+            aggregate.codex.turn !== "active" ||
+            aggregate.codex.turnId !== turnId ||
+            !aggregate.launch
+          )
+            continue;
+          const deliveries = Object.values(aggregate.messageDeliveries).filter(
+            (delivery) =>
+              delivery.threadId === threadId && delivery.turnId === turnId,
+          );
+          if (deliveries.length !== 1)
+            throw new Error(
+              "Codex execution lacks one exact Task operation binding.",
+            );
+          matches.push({
+            taskId: aggregate.taskId,
+            taskOperationId: deliveries[0]!.operationId,
+            threadId,
+            turnId,
+            cwd: aggregate.launch.cwd,
+            permissionProfile: ROVE_TASK_PERMISSION_PROFILE_ID,
+          });
+        }
+        if (matches.length !== 1)
+          throw new Error(
+            "Codex execution lacks one exact Rove Task authority.",
+          );
+        return matches[0]!;
+      },
+    });
+    await executionSupervisor.recoverPriorOwners();
+    this.executionSupervisor = executionSupervisor;
+    this.detachExecutionSupervisor = executionSupervisor.attach();
     const adapter = new CodexRuntimeTaskAdapter({
       rpc,
       sessionSupervisor,
@@ -254,6 +319,7 @@ export class CodexExecutionCore {
       store,
       mcpLaunch: this.options.mcpLaunch,
       capabilityIssuer,
+      executionSupervisor,
       ...(this.options.attachmentAuthority && this.options.attachmentRuntime
         ? {
             attachments: {
@@ -367,7 +433,22 @@ export class CodexExecutionCore {
       this.connectionGeneration = store.nextHostGeneration("codex");
       sessionSupervisor.replaceConnectionGeneration(this.connectionGeneration);
       ingress.replaceGeneration(this.connectionGeneration);
-      void this.recover("App Server");
+      void executionSupervisor
+        .recoverPriorOwners()
+        .then(() => this.recover("App Server"))
+        .catch(async (error) => {
+          const detail =
+            error instanceof Error ? error.message : String(error);
+          this.recoveryWarnings = [
+            ...this.recoveryWarnings,
+            `Exact execution recovery: ${detail}`,
+          ].slice(-64);
+          try {
+            await this.options.onProductStateChanged?.();
+          } catch {
+            // Recovery remains failed closed even if warning publication fails.
+          }
+        });
     });
     this.detachEvents = rpc.onEvent(async (event) => {
       const recovery = classifyCodexEventRecovery(
@@ -405,7 +486,7 @@ export class CodexExecutionCore {
     await this.options.onTaskProcessRecoveryPoint?.("outbox_recovery_started");
     worker.signal();
     this.runtimePoll = setInterval(() => {
-      void this.pollRuntimeTruth();
+      void this.pollRuntimeTruth().catch(() => undefined);
     }, 750);
     await attention.refresh();
     this.apiValue = new LocalProductApi(
@@ -833,6 +914,7 @@ export class CodexExecutionCore {
     } else {
       this.runtimeGeneration =
         this.store?.nextHostGeneration("runtime") ?? this.runtimeGeneration + 1;
+      this.runtimeObservationPosition = 0;
       await this.enqueueGenerationFacts("runtime", this.runtimeGeneration);
     }
     if (source === "Desktop startup" || source.includes("App Server"))
@@ -945,6 +1027,7 @@ export class CodexExecutionCore {
         blockerId: recovery.blockerId,
         threadId: recovery.threadId,
         attempt: 1,
+        attemptLimit: 1,
         observedAt,
         eventFamily: recovery.family,
         ...(recovery.correlationId
@@ -1048,11 +1131,14 @@ export class CodexExecutionCore {
   }
 
   private async pollRuntimeTruth(): Promise<void> {
+    const dependencyHealth = this.options.runtime.getDependencyHealth?.();
     if (
       this.runtimePollActive ||
       !this.store ||
       !this.ingress ||
-      !this.options.runtime.listSessionInventory
+      !this.options.runtime.listSessionInventory ||
+      (dependencyHealth?.state === "degraded" &&
+        Date.now() < dependencyHealth.nextProbeAt)
     )
       return;
     this.runtimePollActive = true;
@@ -1064,6 +1150,20 @@ export class CodexExecutionCore {
         throw new Error(
           `inventory read failed: ${error instanceof Error ? error.message : String(error)}`,
         );
+      }
+      const retainedWarnings = this.recoveryWarnings.filter(
+        (warning) =>
+          !RUNTIME_DEPENDENCY_WARNINGS.some(
+            (runtimeWarning) => runtimeWarning === warning,
+          ),
+      );
+      if (retainedWarnings.length !== this.recoveryWarnings.length) {
+        this.recoveryWarnings = retainedWarnings;
+        try {
+          await this.options.onProductStateChanged?.();
+        } catch {
+          // A failed surface publication must not escape a background poll.
+        }
       }
       for (const projection of await this.store.projections()) {
         if (projection.phase === "closed") continue;
@@ -1146,35 +1246,38 @@ export class CodexExecutionCore {
               recovery: "cleanup_required",
             };
         const fingerprint = digest(runtime);
-        const position = control?.observationSeq ?? 1;
         const sourceGeneration = this.runtimeGeneration;
         const observedAt =
           control?.updatedAt ??
           (match?.session as { updatedAt?: string } | undefined)?.updatedAt ??
           aggregate.launch.requestedAt;
-        await this.ingress.enqueue(Math.max(1, this.connectionGeneration), {
-          schemaVersion: 1,
-          type: "runtime_inventory_observed",
-          eventId: runtimeInventoryEventId(
-            projection.taskId,
-            sourceGeneration,
-            position,
-            fingerprint,
-          ),
-          taskId: projection.taskId,
-          source: {
-            kind: "runtime",
-            id:
-              control?.observationSeq === undefined
-                ? `inventory:${match?.session.id ?? aggregate.launch.bootstrapId}:${fingerprint}`
-                : `inventory:${match?.session.id ?? aggregate.launch.bootstrapId}`,
-            generation: sourceGeneration,
-            position,
-          },
-          observedAt,
-          runtime,
-        });
-        const refreshed = await this.store.aggregate(projection.taskId);
+        let refreshed = aggregate;
+        if (digest(aggregate.runtime) !== fingerprint) {
+          const position = ++this.runtimeObservationPosition;
+          await this.ingress.enqueue(Math.max(1, this.connectionGeneration), {
+            schemaVersion: 1,
+            type: "runtime_inventory_observed",
+            eventId: runtimeInventoryEventId(
+              projection.taskId,
+              sourceGeneration,
+              position,
+              fingerprint,
+            ),
+            taskId: projection.taskId,
+            source: {
+              kind: "runtime",
+              id: runtimeInventorySourceId(
+                match?.session.id ?? aggregate.launch.bootstrapId,
+              ),
+              generation: sourceGeneration,
+              position,
+            },
+            observedAt,
+            runtime,
+          });
+          refreshed =
+            (await this.store.aggregate(projection.taskId)) ?? aggregate;
+        }
         if (
           refreshed?.runtime.status === "awaiting_human" &&
           refreshed.runtime.handoffId &&
@@ -1188,12 +1291,19 @@ export class CodexExecutionCore {
             { eventFamily: "control.request_human" },
           );
       }
-    } catch (error) {
-      this.recoveryWarnings = [
-        ...this.recoveryWarnings,
-        `Runtime observation: ${error instanceof Error ? error.message : String(error)}`,
-      ].slice(-64);
-      await this.options.onProductStateChanged?.();
+    } catch {
+      const health = this.options.runtime.getDependencyHealth?.();
+      const warning = health
+        ? (runtimeDependencyWarning(health) ?? RUNTIME_TRANSIENT_WARNING)
+        : RUNTIME_TRANSIENT_WARNING;
+      if (!this.recoveryWarnings.includes(warning)) {
+        this.recoveryWarnings = [...this.recoveryWarnings, warning].slice(-64);
+        try {
+          await this.options.onProductStateChanged?.();
+        } catch {
+          // A failed surface publication must not escape a background poll.
+        }
+      }
     } finally {
       this.runtimePollActive = false;
     }
@@ -1202,8 +1312,10 @@ export class CodexExecutionCore {
   async stop(): Promise<void> {
     if (this.runtimePoll) clearInterval(this.runtimePoll);
     this.runtimePoll = undefined;
+    await this.executionSupervisor?.shutdown();
     this.detachEvents?.();
     this.detachHealth?.();
+    this.detachExecutionSupervisor?.();
     await Promise.allSettled(this.reconciliationByTask.values());
     await this.ingress?.drain();
     await this.host.drainEvents();
@@ -1213,6 +1325,8 @@ export class CodexExecutionCore {
     this.taskPort = undefined;
     this.ingress = undefined;
     this.reconciler = undefined;
+    this.executionSupervisor = undefined;
+    this.detachExecutionSupervisor = undefined;
     this.store?.close();
     this.store = undefined;
     await this.host.stop();

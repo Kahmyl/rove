@@ -14,6 +14,8 @@ External observations are facts from Codex, the browser, or an integration. Vali
 
 For the Codex adapter, qualified exact `thread/read` history is the resnapshot source for reconstructible turn, item, message-correlation, tool, and completed request-human facts. Live notifications and history observations enter the same Task reducer with stable semantic identities. Durable recovery blockers retain their authority class and exact correlation: a history success clears only thread-history uncertainty. Normal thread history does not reconstruct outstanding server-request attention or provider archive membership, so those families remain independently generation-fenced and fail-closed rather than inferred from nearby prose. Intermediate progress/delta delivery is presentation-only when terminal history is sufficient.
 
+Codex recovery observations carry a bounded attempt and attempt limit. A scheduled attempt is active checking; exhausting the limit is durable unresolved state until newer exact evidence succeeds. Per-blocker success watermarks prevent delayed older failures from recreating cleared uncertainty, while an older success cannot erase a newer failure. Persisted compatibility normalization reconstructs this lifecycle from the blocker and diagnostic ledger rather than trusting an obsolete presentation reason string.
+
 ## Logical event shape
 
 ```json
@@ -38,7 +40,7 @@ The application service may publish a bounded change feed or invalidate a snapsh
 
 Streaming deltas carry exact task, turn, and item association. A component switching views unsubscribes or changes its displayed selector; it does not alter the producer's task association. A late delta for an interrupted turn cannot activate a new turn or append to another task.
 
-Customer active-work state is derived from the combination of accepted work, current exact turn/dispatch facts, waiting and attention state, browser ownership, stopping intent, and recovery blockers. It does not blindly mirror one stale provider `turnStatus`. Active-duration intervals open and close from that customer projection; waiting for the user, human ownership, checking/recovery, stopping, and stopped time do not accumulate.
+Customer active-work state is derived from the combination of accepted work, current exact turn/dispatch facts, waiting and attention state, browser ownership, stopping intent, and recovery blockers. It does not blindly mirror one stale provider `turnStatus`. Active-duration intervals open and close from that customer projection; waiting for the user, human ownership, active checking, bounded unresolved recovery, stopping, and stopped time do not accumulate.
 
 ## Initial snapshot and resubscription
 

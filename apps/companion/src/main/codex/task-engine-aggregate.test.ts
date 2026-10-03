@@ -169,6 +169,96 @@ describe("TaskAggregate exact event fold", () => {
     expect(value.recoveryRequired).toBeNull();
   });
 
+  it("does not let an older unresolved observation shadow newer exact success", () => {
+    const blockerId = "codex-recovery:thread-history:test";
+    const diagnostic = (
+      position: number,
+      outcome: "unresolved" | "succeeded",
+      observedAt: string,
+    ) =>
+      event(position, {
+        type: "codex_reconciliation_observed",
+        diagnostic: {
+          trigger: "event_delivery_failure",
+          outcome,
+          recoveryClass: "thread_history_reconstructible",
+          blockerId,
+          threadId,
+          attempt: 3,
+          observedAt,
+          eventFamily: "item/completed",
+        },
+      });
+
+    let value = foldTaskEvent(
+      aggregate(),
+      diagnostic(1, "unresolved", "2026-09-09T12:00:10.000Z"),
+    );
+    value = foldTaskEvent(
+      value,
+      diagnostic(2, "succeeded", "2026-09-09T12:00:20.000Z"),
+    );
+    value = foldTaskEvent(
+      value,
+      diagnostic(3, "unresolved", "2026-09-09T12:00:15.000Z"),
+    );
+
+    expect(value.codexRecoveryBlockers).toEqual({});
+    expect(value.recoveryRequired).toBeNull();
+  });
+
+  it("tracks bounded checking separately from exhausted recovery and rejects stale success", () => {
+    const blockerId = "codex-recovery:thread-history:bounded";
+    const diagnostic = (
+      position: number,
+      outcome: "scheduled" | "unresolved" | "succeeded",
+      observedAt: string,
+      attempt: number,
+    ) =>
+      event(position, {
+        type: "codex_reconciliation_observed",
+        diagnostic: {
+          trigger: "startup",
+          outcome,
+          recoveryClass: "thread_history_reconstructible",
+          blockerId,
+          threadId,
+          attempt,
+          attemptLimit: 3,
+          observedAt,
+        },
+      });
+
+    let value = foldTaskEvent(
+      aggregate(),
+      diagnostic(1, "scheduled", "2026-09-09T12:00:10.000Z", 1),
+    );
+    expect(value.codexRecoveryBlockers?.[blockerId]).toMatchObject({
+      state: "checking",
+      attempt: 1,
+      attemptLimit: 3,
+    });
+
+    value = foldTaskEvent(
+      value,
+      diagnostic(2, "unresolved", "2026-09-09T12:00:20.000Z", 3),
+    );
+    expect(value.codexRecoveryBlockers?.[blockerId]).toMatchObject({
+      state: "unresolved",
+      attempt: 3,
+      attemptLimit: 3,
+    });
+
+    value = foldTaskEvent(
+      value,
+      diagnostic(3, "succeeded", "2026-09-09T12:00:15.000Z", 2),
+    );
+    expect(value.codexRecoveryBlockers?.[blockerId]).toMatchObject({
+      state: "unresolved",
+      lastObservedAt: "2026-09-09T12:00:20.000Z",
+    });
+  });
+
   it("bounds recovery blockers per authority without dropping overflow uncertainty", () => {
     let value = aggregate();
     for (let position = 1; position <= 34; position += 1)

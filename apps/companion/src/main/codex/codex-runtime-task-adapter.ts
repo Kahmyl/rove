@@ -42,6 +42,12 @@ import {
   isPinnedThreadNotLoadedFailure,
 } from "./history-compatibility.js";
 import type { TaskCommandResult } from "./task-engine-worker.js";
+import {
+  type LocalExecutionSupervisor,
+  ROVE_EXECUTION_TOOL,
+  ROVE_TASK_PERMISSION_PROFILE,
+  ROVE_TASK_PERMISSION_PROFILE_ID,
+} from "./local-execution-supervision.js";
 
 interface RuntimeInventoryLike {
   session: {
@@ -85,6 +91,7 @@ export interface CodexRuntimeTaskAdapterOptions {
     runtime: AttachmentRuntimeMaterializer;
   };
   now?: () => string;
+  executionSupervisor?: LocalExecutionSupervisor;
 }
 
 export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
@@ -682,6 +689,9 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
             options,
             aggregate,
             capability.token,
+            undefined,
+            undefined,
+            true,
           );
           let matches = (await listThreads()).filter(
             (entry) => entry.thread.threadSource === source,
@@ -790,12 +800,35 @@ export class CodexRuntimeTaskAdapter extends ExactTaskCommandAdapter {
         execute: async (command) => {
           const aggregate = await readAggregate(command);
           const threadId = aggregate.record?.identity.threadId;
-          if (!threadId || typeof command.payload.turnId !== "string")
+          if (
+            !threadId ||
+            typeof command.payload.turnId !== "string" ||
+            typeof command.payload.operationId !== "string"
+          )
             throw new Error("Interrupt lacks exact identities.");
+          await options.executionSupervisor?.terminateTaskTurn(
+            aggregate.taskId,
+            command.payload.turnId,
+            command.payload.operationId,
+          );
           await session.interrupt(threadId, command.payload.turnId);
           return observeCodex(command);
         },
-        reconcile: observeCodex,
+        reconcile: async (command) => {
+          const aggregate = await readAggregate(command);
+          if (
+            options.executionSupervisor &&
+            aggregate.codex.turn === "active" &&
+            aggregate.codex.turnId &&
+            typeof command.payload.operationId === "string"
+          )
+            await options.executionSupervisor.terminateTaskTurn(
+              aggregate.taskId,
+              aggregate.codex.turnId,
+              command.payload.operationId,
+            );
+          return observeCodex(command);
+        },
       },
       end_runtime_session: {
         execute: runtimeClose,
@@ -991,6 +1024,7 @@ function threadLaunchParams(
   capability: string,
   workflowContext = aggregate.launch.workflowContext,
   selectedResultContext?: TaskSelectedResultContextSnapshot,
+  includeDynamicTools = false,
 ) {
   const sessionId = aggregate.record?.identity.sessionId;
   const attachmentInstructions = sessionId
@@ -1001,7 +1035,7 @@ function threadLaunchParams(
     ...(aggregate.launch.model ? { model: aggregate.launch.model } : {}),
     approvalPolicy: "on-request",
     approvalsReviewer: aggregate.launch.approvalsReviewer,
-    permissions: "rove_task",
+    permissions: ROVE_TASK_PERMISSION_PROFILE_ID,
     runtimeWorkspaceRoots: [aggregate.launch.cwd],
     // workflowContext exists only after the user explicitly chose to share the
     // approved Workflow guidance with Codex for this task. Mere Workflow
@@ -1018,19 +1052,18 @@ function threadLaunchParams(
       // App Server requires an explicit default whenever named permission
       // profiles are supplied. Keep this aligned with the top-level selector
       // so start and resume resolve the same frozen task boundary.
-      default_permissions: "rove_task",
+      default_permissions: ROVE_TASK_PERMISSION_PROFILE_ID,
       permissions: {
-        rove_task: {
-          description: "Rove task workspace only",
-          filesystem: {
-            ":root": "deny",
-            ":minimal": "read",
-            ":workspace_roots": { ".": "write" },
-            ":tmpdir": "deny",
-            ":slash_tmp": "deny",
-          },
-          network: { enabled: false },
-        },
+        [ROVE_TASK_PERMISSION_PROFILE_ID]: ROVE_TASK_PERMISSION_PROFILE,
+      },
+      features: {
+        shell_tool: false,
+        unified_exec: false,
+        code_mode: false,
+        code_mode_host: false,
+        code_mode_only: false,
+        js_repl: false,
+        multi_agent: false,
       },
       mcp_servers: {
         rove: {
@@ -1073,6 +1106,7 @@ function threadLaunchParams(
       },
       computer_use: { default_app_access: "deny" },
     },
+    ...(includeDynamicTools ? { dynamicTools: [ROVE_EXECUTION_TOOL] } : {}),
   };
 }
 

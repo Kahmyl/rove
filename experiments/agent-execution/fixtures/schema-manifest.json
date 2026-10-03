@@ -1,35 +1,35 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-14",
+  "generatedAt": "2026-09-27",
   "command": [
     "codex app-server generate-ts --experimental --out <temporary>/ts",
     "codex app-server generate-json-schema --experimental --out <temporary>/json"
   ],
-  "cliVersion": "0.154.0-alpha.6.2",
+  "cliVersion": "0.155.0-alpha.9.2",
   "executable": {
-    "configured": "/Applications/ChatGPT.app/Contents/Resources/codex",
+    "configured": "/Users/habibkamil/.local/bin/codex",
     "resolved": "/Applications/ChatGPT.app/Contents/Resources/codex",
-    "sha256": "ecad78dbf98adb89ec475edac86630406cbe59d9f3070b17d88065f136b94bcb"
+    "sha256": "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9"
   },
-  "files": 1273,
-  "bytes": 4709440,
-  "aggregateSha256": "b785999e1b1f5945fc343cec18b0654863fe22eac0ce8a37d1e9a8f01d0b872e",
-  "runtimeValidatorCatalogSha256": "61400fa7a6cd186c0189fc7f16644fa803c1ef60fc5c66a27e561ceadd1b7afd",
+  "files": 1300,
+  "bytes": 4761217,
+  "aggregateSha256": "aa59c91333de37d2fd81cb3ffcc0075266e1b45ab52813d3b1786d116a78f59d",
+  "runtimeValidatorCatalogSha256": "05f41eb9ff46307c86daddaaaf6c4cb452d8526e1159fb7b06bb6f5e3c75b67a",
   "canonicalBundles": {
     "legacyJson": {
       "path": "json/codex_app_server_protocol.schemas.json",
-      "bytes": 833569,
-      "sha256": "24df528acec2952e6b96c1c2b061f98e60177d059e12c90cf318621380c9de9e"
+      "bytes": 852623,
+      "sha256": "6eb6205c196729896ac3cff340d3a5eb947d6f99e10cca83383766aeae28f31c"
     },
     "v2Json": {
       "path": "json/codex_app_server_protocol.v2.schemas.json",
-      "bytes": 723247,
-      "sha256": "7b9e7d385fffef8d428cc5490b56ce9c393bd3ed7bc7ccd730956387e723ec05"
+      "bytes": 741218,
+      "sha256": "48368bf71d00498557245665dd4581f9b0d5381561a2c8ba1ef4eb26ea4a1632"
     },
     "clientRequestTs": {
       "path": "ts/ClientRequest.ts",
-      "bytes": 26222,
-      "sha256": "bebfc45d9c84db8036cbf410417f78aa6ab9df157d68edaed0ee5f7cd08a4a17"
+      "bytes": 26929,
+      "sha256": "b315946b67086ba7eda2b85a1d98a6e5abb7b416416fb74e74d5d44000401402"
     },
     "serverRequestTs": {
       "path": "ts/ServerRequest.ts",

@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import currentSchemaCatalogJson from "./app-server-0.154.0-alpha.6.2.schemas.generated.json" with { type: "json" };
-import retainedSchemaCatalogJson from "./app-server-0.153.4.schemas.generated.json" with { type: "json" };
+import selectedSchemaCatalogJson from "./app-server-0.155.0-alpha.9.2.schemas.generated.json" with { type: "json" };
+import rollbackSchemaCatalogJson from "./app-server-0.154.0-alpha.6.2.schemas.generated.json" with { type: "json" };
+import historicalSchemaCatalogJson from "./app-server-0.153.4.schemas.generated.json" with { type: "json" };
 import approvedComponentsJson from "./approved-components.json" with { type: "json" };
 import compiledSchemaBindingsJson from "./compiled-schema-bindings.json" with { type: "json" };
 import type { GeneratedSchemaCatalog } from "./generated-schema-validator.js";
@@ -15,6 +16,7 @@ export interface ApprovedCodexComponent {
   nodePlatform: string;
   architecture: string;
   historyMode: "legacy" | "paginated";
+  capabilities?: { exactLocalExecution?: boolean };
   executable: { filename: string; sha256: string; bytes?: number };
   codeModeHost: { filename: string; sha256: string; bytes: number };
   schema: {
@@ -66,13 +68,17 @@ function catalogEvidence(
 const schemaCatalogsByFilename: Readonly<
   Record<string, RuntimeSchemaCatalogEvidence>
 > = Object.freeze({
+  "app-server-0.155.0-alpha.9.2.schemas.generated.json": catalogEvidence(
+    "app-server-0.155.0-alpha.9.2.schemas.generated.json",
+    selectedSchemaCatalogJson as unknown as RuntimeSchemaCatalog,
+  ),
   "app-server-0.154.0-alpha.6.2.schemas.generated.json": catalogEvidence(
     "app-server-0.154.0-alpha.6.2.schemas.generated.json",
-    currentSchemaCatalogJson as unknown as RuntimeSchemaCatalog,
+    rollbackSchemaCatalogJson as unknown as RuntimeSchemaCatalog,
   ),
   "app-server-0.153.4.schemas.generated.json": catalogEvidence(
     "app-server-0.153.4.schemas.generated.json",
-    retainedSchemaCatalogJson as unknown as RuntimeSchemaCatalog,
+    historicalSchemaCatalogJson as unknown as RuntimeSchemaCatalog,
   ),
 });
 

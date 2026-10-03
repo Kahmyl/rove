@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Session } from "@rove/protocol";
 
-import { CompanionRuntimeClient } from "./runtime-client.js";
+import {
+  CompanionRuntimeClient,
+  RuntimeRequestError,
+} from "./runtime-client.js";
 
 const session: Session = {
   id: "ses_companion",
@@ -43,9 +46,7 @@ describe("CompanionRuntimeClient", () => {
     };
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
-      if (url.endsWith("?mode=agent")) return jsonResponse([awaiting, newer]);
-      if (url.endsWith("?mode=companion") || url.endsWith("?mode=capture"))
-        return jsonResponse([]);
+      if (url.endsWith("/sessions")) return jsonResponse([awaiting, newer]);
       throw new Error(`Unexpected request: ${url}`);
     }) as typeof fetch;
     const client = new CompanionRuntimeClient({
@@ -57,6 +58,98 @@ describe("CompanionRuntimeClient", () => {
       id: "ses_task_a",
       status: "awaiting_human",
     });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds permanent Runtime configuration failure and recovers through one later probe", async () => {
+    let now = 1_000;
+    let healthy = false;
+    const fetchImpl = vi.fn(async () =>
+      healthy
+        ? jsonResponse([])
+        : jsonResponse(
+            {
+              ok: false,
+              error: {
+                code: "INVALID_CONFIGURATION",
+                message: "The browser workspace catalog is invalid.",
+                retryable: false,
+              },
+            },
+            400,
+          ),
+    ) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+      now: () => now,
+      permanentProbeDelayMs: 30_000,
+    });
+
+    await expect(client.getActiveSession()).rejects.toBeInstanceOf(
+      RuntimeRequestError,
+    );
+    expect(client.getDependencyHealth()).toMatchObject({
+      state: "degraded",
+      classification: "permanent_configuration",
+      code: "INVALID_CONFIGURATION",
+      firstFailureAt: 1_000,
+      lastFailureAt: 1_000,
+      nextProbeAt: 31_000,
+      failureCount: 1,
+    });
+
+    await expect(client.listSessionInventory()).rejects.toMatchObject({
+      code: "INVALID_CONFIGURATION",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    now = 31_000;
+    healthy = true;
+    await expect(client.getActiveSession()).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(client.getDependencyHealth()).toEqual({ state: "ready" });
+  });
+
+  it("backs off transient Runtime transport failure without concurrent probes", async () => {
+    let now = 5_000;
+    let attempts = 0;
+    const fetchImpl = vi.fn(async () => {
+      attempts += 1;
+      if (attempts < 3) throw new TypeError("fetch failed");
+      return jsonResponse([]);
+    }) as typeof fetch;
+    const client = new CompanionRuntimeClient({
+      baseUrl: "http://127.0.0.1:47820",
+      fetchImpl,
+      now: () => now,
+      transientBaseDelayMs: 750,
+    });
+
+    await expect(client.getActiveSession()).rejects.toMatchObject({
+      code: "RUNTIME_TRANSPORT_UNAVAILABLE",
+    });
+    expect(client.getDependencyHealth()).toMatchObject({
+      classification: "transient",
+      nextProbeAt: 5_750,
+      failureCount: 1,
+    });
+    await expect(client.listSessionInventory()).rejects.toBeInstanceOf(
+      RuntimeRequestError,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    now = 5_750;
+    await expect(client.listSessionInventory()).rejects.toMatchObject({
+      code: "RUNTIME_TRANSPORT_UNAVAILABLE",
+    });
+    expect(client.getDependencyHealth()).toMatchObject({
+      nextProbeAt: 7_250,
+      failureCount: 2,
+    });
+    now = 7_250;
+    await expect(client.listSessionInventory()).resolves.toEqual([]);
+    expect(client.getDependencyHealth()).toEqual({ state: "ready" });
   });
 
   it("reads exact consequential effect truth without authorizing or dispatching", async () => {
@@ -307,16 +400,8 @@ describe("CompanionRuntimeClient", () => {
 
         expect(authorization).toBe("Bearer runtime-secret-123456789012");
 
-        if (url.endsWith("/sessions?mode=agent")) {
-          return jsonResponse([]);
-        }
-
-        if (url.endsWith("/sessions?mode=companion")) {
+        if (url.endsWith("/sessions")) {
           return jsonResponse([session]);
-        }
-
-        if (url.endsWith("/sessions?mode=capture")) {
-          return jsonResponse([]);
         }
 
         if (url.includes("/observations?")) {
@@ -384,16 +469,8 @@ describe("CompanionRuntimeClient", () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
 
-      if (url.endsWith("/sessions?mode=agent")) {
-        return jsonResponse([]);
-      }
-
-      if (url.endsWith("/sessions?mode=companion")) {
-        return jsonResponse([session]);
-      }
-
-      if (url.endsWith("/sessions?mode=capture")) {
-        return jsonResponse([capture]);
+      if (url.endsWith("/sessions")) {
+        return jsonResponse([session, capture]);
       }
 
       if (url.includes("/observations?")) {
@@ -441,15 +518,8 @@ describe("CompanionRuntimeClient", () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
 
-      if (url.endsWith("/sessions?mode=agent")) {
+      if (url.endsWith("/sessions")) {
         return jsonResponse([agent]);
-      }
-
-      if (
-        url.endsWith("/sessions?mode=companion") ||
-        url.endsWith("/sessions?mode=capture")
-      ) {
-        return jsonResponse([]);
       }
 
       if (url.includes("/observations?")) {

@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 
 import Database from "better-sqlite3";
 import type {
@@ -47,6 +47,20 @@ import {
   type PortableWorkflowSnapshot,
 } from "./workflow-portability.js";
 import { threadHistoryBlockerId } from "./codex-event-recovery.js";
+import {
+  localExecutionExitReceiptDigest,
+  sameLocalExecutionAuthority,
+  validateLocalExecutionAuthority,
+  validateLocalExecutionObservedAt,
+  validateLocalExecutionOperationId,
+  validateLocalExecutionRequest,
+  type LocalExecutionAuthority,
+  type LocalExecutionExitObservation,
+  type LocalExecutionRecord,
+  type LocalExecutionRequest,
+  type LocalExecutionStore,
+  type LocalExecutionTerminationCause,
+} from "./local-execution-supervision.js";
 
 const MIGRATION_ID = "0002_task_engine_event_aggregate_outbox";
 const WORKFLOW_MIGRATION_ID = "0003_add_workflow_configuration";
@@ -54,8 +68,34 @@ const RESULT_MIGRATION_ID = "0004_add_task_results";
 const RESULT_SELECTION_MIGRATION_ID = "0005_bind_selected_result_revision";
 const RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID =
   "0006_atomically_consume_selected_results";
+const LOCAL_EXECUTION_MIGRATION_ID = "0007_add_local_execution_supervision";
 const PERSISTED_TASK_SCHEMA_VERSION = 3;
 const MAX_AUTOMATIC_COMMAND_ATTEMPTS = 3;
+const MAX_CODEX_RECOVERY_RESOLUTIONS = 128;
+const OUTSIDE_PROTECTED_TASK_WORKSPACE =
+  "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+const CODEX_RECOVERY_REQUIRED =
+  "Codex external truth requires authoritative reconciliation.";
+const LEGACY_CODEX_RECOVERY_REQUIRED =
+  "Codex history reconciliation could not establish current durable task truth.";
+
+function hasCanonicalTaskWorkspaceAuthority(
+  cwd: string,
+  taskWorkspaceRoot: string,
+  taskId: string,
+): boolean {
+  try {
+    const canonicalRoot = realpathSync.native(taskWorkspaceRoot);
+    const canonicalExpected = realpathSync.native(join(canonicalRoot, taskId));
+    const canonicalPersisted = realpathSync.native(cwd);
+    return (
+      dirname(canonicalExpected) === canonicalRoot &&
+      canonicalPersisted === canonicalExpected
+    );
+  } catch {
+    return false;
+  }
+}
 
 function json(value: unknown): string {
   return JSON.stringify(value);
@@ -85,6 +125,15 @@ function normalizeAggregate(value: string): TaskAggregate {
   aggregate.conversation.terminalTurns ??= {};
   aggregate.codexReconciliation ??= [];
   aggregate.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(aggregate);
+  aggregate.codexRecoveryBlockers = normalizeCodexRecoveryBlockers(
+    aggregate.codexRecoveryBlockers,
+    aggregate.codexReconciliation,
+  );
+  aggregate.codexRecoveryResolutions = normalizeCodexRecoveryResolutions(
+    aggregate.codexRecoveryResolutions ?? {},
+    aggregate.codexReconciliation,
+  );
+  normalizeCodexRecoveryRequired(aggregate);
   return aggregate;
 }
 
@@ -106,7 +155,70 @@ function normalizeProjection(value: string): TaskProjection {
   projection.conversation.terminalTurns ??= {};
   projection.codexReconciliation ??= [];
   projection.codexRecoveryBlockers ??= legacyCodexRecoveryBlockers(projection);
+  projection.codexRecoveryBlockers = normalizeCodexRecoveryBlockers(
+    projection.codexRecoveryBlockers,
+    projection.codexReconciliation,
+  );
+  normalizeCodexRecoveryRequired(projection);
   return projection;
+}
+
+function normalizeCodexRecoveryRequired(value: {
+  recoveryRequired: string | null;
+  codexRecoveryBlockers?: Readonly<Record<string, TaskCodexRecoveryBlocker>>;
+}): void {
+  const ownsRecoveryString =
+    value.recoveryRequired === CODEX_RECOVERY_REQUIRED ||
+    value.recoveryRequired === LEGACY_CODEX_RECOVERY_REQUIRED;
+  if (Object.keys(value.codexRecoveryBlockers ?? {}).length > 0) {
+    if (value.recoveryRequired === null || ownsRecoveryString)
+      value.recoveryRequired = CODEX_RECOVERY_REQUIRED;
+  } else if (ownsRecoveryString) value.recoveryRequired = null;
+}
+
+function normalizeCodexRecoveryResolutions(
+  resolutions: Readonly<Record<string, string>>,
+  diagnostics: TaskAggregate["codexReconciliation"],
+): Readonly<Record<string, string>> {
+  const next = { ...resolutions };
+  for (const diagnostic of diagnostics ?? []) {
+    if (diagnostic.outcome !== "succeeded" || !diagnostic.blockerId) continue;
+    const existing = next[diagnostic.blockerId];
+    if (!existing || Date.parse(existing) < Date.parse(diagnostic.observedAt))
+      next[diagnostic.blockerId] = diagnostic.observedAt;
+  }
+  return Object.fromEntries(
+    Object.entries(next)
+      .sort(([, left], [, right]) => Date.parse(right) - Date.parse(left))
+      .slice(0, MAX_CODEX_RECOVERY_RESOLUTIONS),
+  );
+}
+
+function normalizeCodexRecoveryBlockers(
+  blockers: Readonly<Record<string, TaskCodexRecoveryBlocker>>,
+  diagnostics: TaskAggregate["codexReconciliation"],
+): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
+  return Object.fromEntries(
+    Object.entries(blockers).map(([blockerId, blocker]) => {
+      const diagnostic = [...(diagnostics ?? [])]
+        .reverse()
+        .find((entry) => entry.blockerId === blockerId);
+      const attemptLimit =
+        diagnostic?.attemptLimit ??
+        (blocker.recoveryClass === "thread_history_reconstructible" ? 3 : 1);
+      return [
+        blockerId,
+        {
+          ...blocker,
+          state:
+            blocker.state ??
+            (diagnostic?.outcome === "scheduled" ? "checking" : "unresolved"),
+          attempt: blocker.attempt ?? diagnostic?.attempt ?? attemptLimit,
+          attemptLimit: blocker.attemptLimit ?? attemptLimit,
+        },
+      ];
+    }),
+  );
 }
 
 function legacyConversationItemOrder(
@@ -127,11 +239,7 @@ function legacyCodexRecoveryBlockers(value: {
   recoveryRequired: string | null;
   codexReconciliation?: TaskAggregate["codexReconciliation"];
 }): Readonly<Record<string, TaskCodexRecoveryBlocker>> {
-  if (
-    value.recoveryRequired !==
-    "Codex history reconciliation could not establish current durable task truth."
-  )
-    return {};
+  if (value.recoveryRequired !== LEGACY_CODEX_RECOVERY_REQUIRED) return {};
   const diagnostic = [...(value.codexReconciliation ?? [])]
     .reverse()
     .find((entry) => entry.outcome === "unresolved");
@@ -167,6 +275,11 @@ function legacyCodexRecoveryBlockers(value: {
         : {}),
       unresolvedAt: diagnostic.observedAt,
       lastObservedAt: diagnostic.observedAt,
+      state: "unresolved",
+      attempt: diagnostic.attempt,
+      attemptLimit:
+        diagnostic.attemptLimit ??
+        (recoveryClass === "thread_history_reconstructible" ? 3 : 1),
     },
   };
 }
@@ -194,10 +307,41 @@ export interface SqliteTaskEngineStoreOptions {
   }) => void;
 }
 
+interface LocalExecutionRow {
+  execution_id: string;
+  task_id: string;
+  task_operation_id: string;
+  thread_id: string;
+  turn_id: string;
+  tool_call_id: string;
+  owner_instance_id: string;
+  connection_generation: number;
+  delegate_process_id: string;
+  invocation_digest: string;
+  command_digest: string;
+  permission_profile: string;
+  state: LocalExecutionRecord["state"];
+  revision: number;
+  requested_at: string;
+  dispatch_started_at: string | null;
+  running_observed_at: string | null;
+  termination_requested_at: string | null;
+  termination_operation_id: string | null;
+  exit_code: number | null;
+  termination_cause: LocalExecutionTerminationCause | null;
+  output_finalized: number | null;
+  stdout_bytes: number | null;
+  stderr_bytes: number | null;
+  output_truncated: number | null;
+  exited_at: string | null;
+  receipt_digest: string | null;
+  last_observed_at: string;
+}
+
 /** The single production lifecycle ledger. Every accepted event, aggregate,
  * projection and next command is committed by one IMMEDIATE transaction. */
 export class SqliteTaskEngineStore
-  implements TaskEngineStore, WorkflowStore, ResultStore
+  implements TaskEngineStore, WorkflowStore, ResultStore, LocalExecutionStore
 {
   private readonly db: Database.Database;
   private readonly now: () => string;
@@ -288,14 +432,49 @@ export class SqliteTaskEngineStore
           )
             item.phase = event.item.phase;
         }
+        if (aggregate.launch && this.taskWorkspaceRoot) {
+          if (
+            hasCanonicalTaskWorkspaceAuthority(
+              aggregate.launch.cwd,
+              this.taskWorkspaceRoot,
+              aggregate.taskId,
+            )
+          ) {
+            if (aggregate.recoveryRequired === OUTSIDE_PROTECTED_TASK_WORKSPACE)
+              aggregate.recoveryRequired = null;
+          } else aggregate.recoveryRequired = OUTSIDE_PROTECTED_TASK_WORKSPACE;
+        }
         if (
-          aggregate.launch &&
-          this.taskWorkspaceRoot &&
-          resolve(aggregate.launch.cwd) !==
-            resolve(join(this.taskWorkspaceRoot, aggregate.taskId))
-        )
-          aggregate.recoveryRequired =
-            "Persisted task workspace is outside the protected per-task root and requires explicit recovery.";
+          aggregate.requestedOperation.type === "interrupt" &&
+          aggregate.requestedOperation.operationId
+        ) {
+          const request = this.db
+            .prepare(
+              `SELECT accepted_at FROM task_engine_event
+               WHERE task_id = ?
+                 AND json_extract(payload_json, '$.type') = 'task_interrupt_requested'
+                 AND json_extract(payload_json, '$.operationId') = ?
+               ORDER BY accepted_at DESC, rowid DESC LIMIT 1`,
+            )
+            .get(row.task_id, aggregate.requestedOperation.operationId) as
+            { accepted_at: string } | undefined;
+          const succeeded = request
+            ? (this.db
+                .prepare(
+                  `SELECT command_id FROM task_engine_outbox
+                   WHERE task_id = ? AND command_type = 'interrupt_codex_turn'
+                     AND status = 'succeeded' AND updated_at >= ?
+                   ORDER BY aggregate_revision DESC LIMIT 1`,
+                )
+                .get(row.task_id, request.accepted_at) as
+                { command_id: string } | undefined)
+            : undefined;
+          if (succeeded)
+            aggregate.requestedOperation = {
+              type: "observe",
+              taskId: aggregate.taskId,
+            };
+        }
         this.db
           .prepare(
             "UPDATE task_engine_aggregate SET schema_version = ?, payload_json = ? WHERE task_id = ?",
@@ -414,6 +593,68 @@ export class SqliteTaskEngineStore
       );
       CREATE INDEX IF NOT EXISTS task_engine_outbox_due
         ON task_engine_outbox(status, aggregate_revision);
+      CREATE TABLE IF NOT EXISTS task_local_execution (
+        execution_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        task_operation_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        turn_id TEXT NOT NULL,
+        tool_call_id TEXT NOT NULL,
+        owner_instance_id TEXT NOT NULL,
+        connection_generation INTEGER NOT NULL CHECK (connection_generation > 0),
+        delegate_process_id TEXT NOT NULL,
+        invocation_digest TEXT NOT NULL,
+        command_digest TEXT NOT NULL,
+        permission_profile TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN (
+          'requested', 'dispatching', 'running', 'termination_requested',
+          'dispatch_unknown', 'exit_observed'
+        )),
+        revision INTEGER NOT NULL CHECK (revision > 0),
+        requested_at TEXT NOT NULL,
+        dispatch_started_at TEXT,
+        running_observed_at TEXT,
+        termination_requested_at TEXT,
+        termination_operation_id TEXT,
+        exit_code INTEGER,
+        termination_cause TEXT CHECK (termination_cause IS NULL OR termination_cause IN (
+          'natural_exit', 'stop_requested', 'cancelled_before_dispatch',
+          'owner_shutdown', 'timeout'
+        )),
+        output_finalized INTEGER CHECK (output_finalized IS NULL OR output_finalized = 1),
+        stdout_bytes INTEGER CHECK (stdout_bytes IS NULL OR stdout_bytes >= 0),
+        stderr_bytes INTEGER CHECK (stderr_bytes IS NULL OR stderr_bytes >= 0),
+        output_truncated INTEGER CHECK (output_truncated IS NULL OR output_truncated IN (0, 1)),
+        exited_at TEXT,
+        receipt_digest TEXT,
+        last_observed_at TEXT NOT NULL,
+        UNIQUE(thread_id, turn_id, tool_call_id),
+        UNIQUE(owner_instance_id, connection_generation, delegate_process_id),
+        FOREIGN KEY(task_id) REFERENCES task_engine_aggregate(task_id) ON DELETE RESTRICT,
+        CHECK (
+          (state = 'exit_observed'
+            AND exit_code IS NOT NULL
+            AND termination_cause IS NOT NULL
+            AND output_finalized = 1
+            AND stdout_bytes IS NOT NULL
+            AND stderr_bytes IS NOT NULL
+            AND output_truncated IS NOT NULL
+            AND exited_at IS NOT NULL
+            AND receipt_digest IS NOT NULL)
+          OR
+          (state <> 'exit_observed'
+            AND exit_code IS NULL
+            AND termination_cause IS NULL
+            AND output_finalized IS NULL
+            AND stdout_bytes IS NULL
+            AND stderr_bytes IS NULL
+            AND output_truncated IS NULL
+            AND exited_at IS NULL
+            AND receipt_digest IS NULL)
+        )
+      );
+      CREATE INDEX IF NOT EXISTS task_local_execution_nonterminal
+        ON task_local_execution(task_id, turn_id, state, requested_at);
       CREATE TABLE IF NOT EXISTS workflow_environment (
         workflow_id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -544,6 +785,8 @@ export class SqliteTaskEngineStore
       VALUES ('${RESULT_SELECTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
       VALUES ('${RESULT_CONTEXT_CONSUMPTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
+      INSERT OR IGNORE INTO schema_migration(migration_id, applied_at, compatibility_json)
+      VALUES ('${LOCAL_EXECUTION_MIGRATION_ID}', datetime('now'), '{"minReader":2,"minWriter":2}');
       COMMIT;
     `);
   }
@@ -2310,6 +2553,401 @@ export class SqliteTaskEngineStore
         .run(json(projection), now, taskId);
     });
     update.immediate();
+  }
+
+  private localExecutionFromRow(row: LocalExecutionRow): LocalExecutionRecord {
+    const record: LocalExecutionRecord = {
+      schemaVersion: 1,
+      executionId: row.execution_id,
+      taskId: row.task_id,
+      taskOperationId: row.task_operation_id,
+      threadId: row.thread_id,
+      turnId: row.turn_id,
+      toolCallId: row.tool_call_id,
+      ownerInstanceId: row.owner_instance_id,
+      connectionGeneration: row.connection_generation,
+      delegateProcessId: row.delegate_process_id,
+      invocationDigest: row.invocation_digest,
+      commandDigest: row.command_digest,
+      permissionProfile: row.permission_profile,
+      requestedAt: row.requested_at,
+      state: row.state,
+      revision: row.revision,
+      ...(row.dispatch_started_at
+        ? { dispatchStartedAt: row.dispatch_started_at }
+        : {}),
+      ...(row.running_observed_at
+        ? { runningObservedAt: row.running_observed_at }
+        : {}),
+      ...(row.termination_requested_at
+        ? { terminationRequestedAt: row.termination_requested_at }
+        : {}),
+      ...(row.termination_operation_id
+        ? { terminationOperationId: row.termination_operation_id }
+        : {}),
+    };
+    if (row.state === "exit_observed") {
+      if (
+        row.exit_code === null ||
+        row.termination_cause === null ||
+        row.output_finalized !== 1 ||
+        row.stdout_bytes === null ||
+        row.stderr_bytes === null ||
+        row.output_truncated === null ||
+        row.exited_at === null ||
+        row.receipt_digest === null
+      )
+        throw new Error("Persisted execution exit receipt is incomplete.");
+      record.exit = {
+        exitCode: row.exit_code,
+        cause: row.termination_cause,
+        outputFinalized: true,
+        stdoutBytes: row.stdout_bytes,
+        stderrBytes: row.stderr_bytes,
+        outputTruncated: row.output_truncated === 1,
+        observedAt: row.exited_at,
+        receiptDigest: row.receipt_digest,
+      };
+      const expectedReceipt = localExecutionExitReceiptDigest({
+        executionId: row.execution_id,
+        taskId: row.task_id,
+        taskOperationId: row.task_operation_id,
+        threadId: row.thread_id,
+        turnId: row.turn_id,
+        toolCallId: row.tool_call_id,
+        ownerInstanceId: row.owner_instance_id,
+        connectionGeneration: row.connection_generation,
+        delegateProcessId: row.delegate_process_id,
+        invocationDigest: row.invocation_digest,
+        commandDigest: row.command_digest,
+        exitCode: row.exit_code,
+        cause: row.termination_cause,
+        outputFinalized: true,
+        stdoutBytes: row.stdout_bytes,
+        stderrBytes: row.stderr_bytes,
+        outputTruncated: row.output_truncated === 1,
+        observedAt: row.exited_at,
+      });
+      if (expectedReceipt !== row.receipt_digest)
+        throw new Error("Persisted execution exit receipt digest is invalid.");
+    }
+    return record;
+  }
+
+  private requireLocalExecutionAuthority(
+    authority: LocalExecutionAuthority,
+  ): LocalExecutionRecord {
+    validateLocalExecutionAuthority(authority);
+    const record = this.execution(authority.executionId);
+    if (!record) throw new Error("Exact local execution was not found.");
+    if (!sameLocalExecutionAuthority(record, authority))
+      throw new Error("Local execution authority does not match.");
+    return record;
+  }
+
+  requestExecution(request: LocalExecutionRequest): LocalExecutionRecord {
+    validateLocalExecutionRequest(request);
+    const apply = this.db.transaction(() => {
+      const existing = this.db
+        .prepare(
+          `SELECT * FROM task_local_execution
+           WHERE execution_id = ?
+              OR (task_id = ? AND thread_id = ? AND turn_id = ? AND tool_call_id = ?)
+              OR (owner_instance_id = ? AND connection_generation = ? AND delegate_process_id = ?)
+           LIMIT 1`,
+        )
+        .get(
+          request.executionId,
+          request.taskId,
+          request.threadId,
+          request.turnId,
+          request.toolCallId,
+          request.ownerInstanceId,
+          request.connectionGeneration,
+          request.delegateProcessId,
+        ) as LocalExecutionRow | undefined;
+      if (existing) {
+        const record = this.localExecutionFromRow(existing);
+        if (
+          !sameLocalExecutionAuthority(record, request) ||
+          record.permissionProfile !== request.permissionProfile ||
+          record.requestedAt !== request.requestedAt
+        )
+          throw new Error(
+            "Local execution identity conflicts with durable authority.",
+          );
+        return record;
+      }
+      this.db
+        .prepare(
+          `INSERT INTO task_local_execution(
+             execution_id, task_id, task_operation_id, thread_id, turn_id,
+             tool_call_id, owner_instance_id, connection_generation,
+             delegate_process_id, invocation_digest, command_digest,
+             permission_profile, state,
+             revision, requested_at, last_observed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', 1, ?, ?)`,
+        )
+        .run(
+          request.executionId,
+          request.taskId,
+          request.taskOperationId,
+          request.threadId,
+          request.turnId,
+          request.toolCallId,
+          request.ownerInstanceId,
+          request.connectionGeneration,
+          request.delegateProcessId,
+          request.invocationDigest,
+          request.commandDigest,
+          request.permissionProfile,
+          request.requestedAt,
+          request.requestedAt,
+        );
+      return this.execution(request.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  markExecutionDispatching(
+    authority: LocalExecutionAuthority,
+    observedAt: string,
+  ): LocalExecutionRecord {
+    validateLocalExecutionObservedAt(observedAt);
+    const apply = this.db.transaction(() => {
+      const current = this.requireLocalExecutionAuthority(authority);
+      if (current.state === "dispatching") return current;
+      if (current.state !== "requested")
+        throw new Error("Local execution dispatch transition is invalid.");
+      const changed = this.db
+        .prepare(
+          `UPDATE task_local_execution
+           SET state = 'dispatching', revision = revision + 1,
+               dispatch_started_at = ?, last_observed_at = ?
+           WHERE execution_id = ? AND state = 'requested'`,
+        )
+        .run(observedAt, observedAt, authority.executionId);
+      if (changed.changes !== 1)
+        throw new Error("Local execution dispatch transition raced.");
+      return this.execution(authority.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  markExecutionRunning(
+    authority: LocalExecutionAuthority,
+    observedAt: string,
+  ): LocalExecutionRecord {
+    validateLocalExecutionObservedAt(observedAt);
+    const apply = this.db.transaction(() => {
+      const current = this.requireLocalExecutionAuthority(authority);
+      if (current.runningObservedAt) return current;
+      if (
+        !["dispatching", "termination_requested", "dispatch_unknown"].includes(
+          current.state,
+        )
+      )
+        throw new Error("Local execution running transition is invalid.");
+      const state = current.state === "dispatching" ? "running" : current.state;
+      const changed = this.db
+        .prepare(
+          `UPDATE task_local_execution
+           SET state = ?, revision = revision + 1,
+               running_observed_at = ?, last_observed_at = ?
+           WHERE execution_id = ? AND running_observed_at IS NULL`,
+        )
+        .run(state, observedAt, observedAt, authority.executionId);
+      if (changed.changes !== 1)
+        throw new Error("Local execution running transition raced.");
+      return this.execution(authority.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  requestExecutionTermination(
+    authority: LocalExecutionAuthority,
+    operationId: string,
+    observedAt: string,
+  ): LocalExecutionRecord {
+    validateLocalExecutionOperationId(operationId);
+    validateLocalExecutionObservedAt(observedAt);
+    const apply = this.db.transaction(() => {
+      const current = this.requireLocalExecutionAuthority(authority);
+      if (current.state === "exit_observed") return current;
+      if (current.state === "termination_requested") {
+        if (current.terminationOperationId !== operationId)
+          throw new Error(
+            "Local execution already has another Stop authority.",
+          );
+        return current;
+      }
+      if (
+        !["requested", "dispatching", "running", "dispatch_unknown"].includes(
+          current.state,
+        )
+      )
+        throw new Error("Local execution termination transition is invalid.");
+      const changed = this.db
+        .prepare(
+          `UPDATE task_local_execution
+           SET state = 'termination_requested', revision = revision + 1,
+               termination_requested_at = ?, termination_operation_id = ?,
+               last_observed_at = ?
+           WHERE execution_id = ? AND state = ?`,
+        )
+        .run(
+          observedAt,
+          operationId,
+          observedAt,
+          authority.executionId,
+          current.state,
+        );
+      if (changed.changes !== 1)
+        throw new Error("Local execution termination transition raced.");
+      return this.execution(authority.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  markExecutionDispatchUnknown(
+    authority: LocalExecutionAuthority,
+    observedAt: string,
+  ): LocalExecutionRecord {
+    validateLocalExecutionObservedAt(observedAt);
+    const apply = this.db.transaction(() => {
+      const current = this.requireLocalExecutionAuthority(authority);
+      if (current.state === "dispatch_unknown") return current;
+      if (!["dispatching", "running"].includes(current.state))
+        throw new Error("Local execution uncertainty transition is invalid.");
+      const changed = this.db
+        .prepare(
+          `UPDATE task_local_execution
+           SET state = 'dispatch_unknown', revision = revision + 1,
+               last_observed_at = ?
+           WHERE execution_id = ? AND state = ?`,
+        )
+        .run(observedAt, authority.executionId, current.state);
+      if (changed.changes !== 1)
+        throw new Error("Local execution uncertainty transition raced.");
+      return this.execution(authority.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  observeExecutionExit(
+    observation: LocalExecutionExitObservation,
+  ): LocalExecutionRecord {
+    const receiptDigest = localExecutionExitReceiptDigest(observation);
+    const apply = this.db.transaction(() => {
+      const current = this.requireLocalExecutionAuthority(observation);
+      if (current.state === "exit_observed") {
+        if (current.exit?.receiptDigest !== receiptDigest)
+          throw new Error(
+            "Local execution exit receipt conflicts with durable truth.",
+          );
+        return current;
+      }
+      const validCause =
+        observation.cause === "owner_shutdown" ||
+        (observation.cause === "cancelled_before_dispatch" &&
+          current.state === "requested") ||
+        (observation.cause === "stop_requested" &&
+          current.state === "termination_requested") ||
+        (["natural_exit", "timeout"].includes(observation.cause) &&
+          ["dispatching", "running", "dispatch_unknown"].includes(
+            current.state,
+          ));
+      if (!validCause)
+        throw new Error(
+          "Local execution exit cause conflicts with its durable state.",
+        );
+      const changed = this.db
+        .prepare(
+          `UPDATE task_local_execution
+           SET state = 'exit_observed', revision = revision + 1,
+               exit_code = ?, termination_cause = ?, output_finalized = 1,
+               stdout_bytes = ?, stderr_bytes = ?, output_truncated = ?,
+               exited_at = ?, receipt_digest = ?, last_observed_at = ?
+           WHERE execution_id = ? AND state <> 'exit_observed'`,
+        )
+        .run(
+          observation.exitCode,
+          observation.cause,
+          observation.stdoutBytes,
+          observation.stderrBytes,
+          observation.outputTruncated ? 1 : 0,
+          observation.observedAt,
+          receiptDigest,
+          observation.observedAt,
+          observation.executionId,
+        );
+      if (changed.changes !== 1)
+        throw new Error("Local execution exit transition raced.");
+      return this.execution(observation.executionId)!;
+    });
+    return apply.immediate();
+  }
+
+  execution(executionId: string): LocalExecutionRecord | null {
+    const row = this.db
+      .prepare("SELECT * FROM task_local_execution WHERE execution_id = ?")
+      .get(executionId) as LocalExecutionRow | undefined;
+    return row ? this.localExecutionFromRow(row) : null;
+  }
+
+  executionForToolCall(
+    threadId: string,
+    turnId: string,
+    toolCallId: string,
+  ): LocalExecutionRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM task_local_execution
+         WHERE thread_id = ? AND turn_id = ? AND tool_call_id = ?
+         LIMIT 1`,
+      )
+      .get(threadId, turnId, toolCallId) as
+      | LocalExecutionRow
+      | undefined;
+    return row ? this.localExecutionFromRow(row) : null;
+  }
+
+  executionsForTask(taskId: string): readonly LocalExecutionRecord[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM task_local_execution
+           WHERE task_id = ? ORDER BY requested_at ASC, execution_id ASC`,
+        )
+        .all(taskId) as LocalExecutionRow[]
+    ).map((row) => this.localExecutionFromRow(row));
+  }
+
+  nonterminalExecutions(
+    taskId: string,
+    turnId?: string,
+  ): readonly LocalExecutionRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM task_local_execution
+         WHERE task_id = ? AND state <> 'exit_observed'
+           AND (? IS NULL OR turn_id = ?)
+         ORDER BY requested_at ASC, execution_id ASC`,
+      )
+      .all(taskId, turnId ?? null, turnId ?? null) as LocalExecutionRow[];
+    return rows.map((row) => this.localExecutionFromRow(row));
+  }
+
+  allNonterminalExecutions(): readonly LocalExecutionRecord[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM task_local_execution
+           WHERE state <> 'exit_observed'
+           ORDER BY requested_at ASC, execution_id ASC`,
+        )
+        .all() as LocalExecutionRow[]
+    ).map((row) => this.localExecutionFromRow(row));
   }
 
   close(): void {

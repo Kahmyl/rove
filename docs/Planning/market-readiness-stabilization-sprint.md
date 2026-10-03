@@ -21,7 +21,7 @@ The 26 September 2026 development-app walkthrough against `f26f2f1e7ff3bf3ff4f67
 - Stage 2 attention/approvals closed with three confirmed defects, four live qualification gaps, and an unqualified 820×700 keyboard-only check.
 - Stage 3 browser collaboration closed with blocking authority/handoff defects. Automatic browser launch passed, but requested Agent handoff and Companion voluntary takeover did not reach stable human control.
 - Stage 4 startup/recovery closed with blocking persisted-task recovery and Runtime rejection-storm defects.
-- Hard Stop remains a separate release-level provider blocker: Codex turn interruption does not prove termination of a yielded local process.
+- Hard Stop remains a separate release-level blocker: Rove-owned exact base-profile execution termination is now macOS-qualified, while turn-scoped approval-amendment enforcement and packaged Windows/Linux process trees remain open.
 
 The detailed evidence baseline and issue registry are under [stabilization/](stabilization/README.md).
 
@@ -37,7 +37,7 @@ The acceptance stages are discovery organization, not engineering ownership.
 | D. Approval policy and decision fidelity | Customer policy promise, provider configuration, exact approval decision algebra |
 | E. Attention capability reachability | Live request-family characterization and safe fixtures |
 | F. Browser resource/surface UX | Profile recovery, orphan presentation, foreground/window coordination |
-| G. Hard Stop execution ownership | Exact process termination or explicit provider/architecture blocker |
+| G. Hard Stop execution ownership | Exact Rove-owned process termination plus approval-preserving delegate authority |
 | H. Qualification infrastructure | Real-boundary E2E, restart/process fixtures, packaged and human qualification |
 
 The canonical issue mapping is [stabilization/issue-registry.md](stabilization/issue-registry.md).
@@ -47,17 +47,17 @@ The canonical issue mapping is [stabilization/issue-registry.md](stabilization/i
 | Ticket | Title | Current status |
 | --- | --- | --- |
 | [ROVE-STAB-01](stabilization/ROVE-STAB-01-issue-registry-and-reproduction-baseline.md) | Issue registry and reproduction baseline | Complete |
-| [ROVE-STAB-02](stabilization/ROVE-STAB-02-task-runtime-codex-authority-convergence.md) | Task / Runtime / Codex authority convergence | Ready |
-| [ROVE-STAB-03](stabilization/ROVE-STAB-03-recovery-lifecycle-and-bounded-reconciliation.md) | Recovery lifecycle and bounded reconciliation | Depends on STAB-02 |
-| [ROVE-STAB-04](stabilization/ROVE-STAB-04-runtime-failure-containment-and-observability.md) | Runtime failure containment and observability | Ready after baseline |
-| [ROVE-STAB-05](stabilization/ROVE-STAB-05-startup-hydration-and-degraded-state.md) | Startup hydration and degraded-state UX | Depends on STAB-03/04 |
+| [ROVE-STAB-02](stabilization/ROVE-STAB-02-task-runtime-codex-authority-convergence.md) | Task / Runtime / Codex authority convergence | Complete |
+| [ROVE-STAB-03](stabilization/ROVE-STAB-03-recovery-lifecycle-and-bounded-reconciliation.md) | Recovery lifecycle and bounded reconciliation | Complete |
+| [ROVE-STAB-04](stabilization/ROVE-STAB-04-runtime-failure-containment-and-observability.md) | Runtime failure containment and observability | Complete |
+| [ROVE-STAB-05](stabilization/ROVE-STAB-05-startup-hydration-and-degraded-state.md) | Startup hydration and degraded-state UX | Ready |
 | [ROVE-STAB-06](stabilization/ROVE-STAB-06-authoritative-customer-execution-state.md) | Authoritative customer execution-state model | Depends on authority/recovery facts |
 | [ROVE-STAB-07](stabilization/ROVE-STAB-07-approval-policy-contract.md) | Approval policy contract | Ready after characterization |
 | [ROVE-STAB-08](stabilization/ROVE-STAB-08-approval-decision-fidelity-and-ux.md) | Approval decision fidelity and UX | Depends on STAB-07 |
 | [ROVE-STAB-09](stabilization/ROVE-STAB-09-attention-family-reachability.md) | Attention-family reachability and live fixtures | Can characterize early; product fixes depend on STAB-07/08 |
 | [ROVE-STAB-10](stabilization/ROVE-STAB-10-browser-ownership-and-handoff-lifecycle.md) | Browser task ownership and handoff lifecycle | Depends on STAB-02/03/06 |
 | [ROVE-STAB-11](stabilization/ROVE-STAB-11-browser-resource-and-surface-ux.md) | Browser resource and surface UX | Depends on authority truth where applicable |
-| [ROVE-STAB-12](stabilization/ROVE-STAB-12-hard-stop-provider-qualification.md) | Hard Stop provider qualification / execution ownership decision | External provider blocker |
+| [ROVE-STAB-12](stabilization/ROVE-STAB-12-hard-stop-provider-qualification.md) | Hard Stop provider qualification / execution ownership decision | In progress; approval/security gate |
 | [ROVE-STAB-13](stabilization/ROVE-STAB-13-cross-cutting-interaction-qualification.md) | Cross-cutting interaction and accessibility qualification | Depends on repaired product tickets |
 | [ROVE-STAB-14](stabilization/ROVE-STAB-14-market-release-qualification.md) | Market release qualification | Final sprint gate |
 

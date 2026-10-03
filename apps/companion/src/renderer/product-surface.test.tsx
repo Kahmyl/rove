@@ -4,13 +4,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
+import type { ProductTaskProjection } from "../main/codex/local-product-api.js";
 import type { ProductTaskCapabilities } from "../main/codex/task-coordinator.js";
+import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+} from "../main/runtime-failure-containment.js";
 import {
   ArchivedTaskSettings,
   LocalBackupSettings,
   ProductSurface,
   SettingsNavigation,
   TaskArchiveConfirmation,
+  browserResourcePresentation,
+  browserOpenFailureMessage,
   browserIdentityLabel,
   canRemoveWorkflowFromCloud,
   compatibleReasoningEffort,
@@ -89,7 +96,7 @@ function snapshot(
       ],
     },
     product: {
-      version: 9,
+      version: 10,
       host: { state: "ready", ready: true, restartAttempt: 0 },
       catalog: {
         account: { status: "logged_out" },
@@ -162,6 +169,74 @@ function synchronizedWorkflowSnapshot(): DesktopSurfaceSnapshot {
 }
 
 describe("ProductSurface accessibility and presentation continuity", () => {
+  it("shows only neutral local hydration before the first coherent Product snapshot", () => {
+    const nullHtml = renderToStaticMarkup(
+      <ProductSurface
+        desktop={null}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    const partial = snapshot();
+    partial.product = null;
+    const partialHtml = renderToStaticMarkup(
+      <ProductSurface
+        desktop={partial}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+
+    for (const html of [nullHtml, partialHtml]) {
+      expect(html).toContain('class="product-hydration"');
+      expect(html).toContain("Opening Rove");
+      expect(html).toContain("Loading your local tasks");
+      expect(html).not.toContain("New task");
+      expect(html).not.toContain("Codex couldn&#x27;t start");
+      expect(html).not.toContain('class="composer-card"');
+    }
+  });
+
+  it("turns initial host failure into a bounded local recovery action", () => {
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={null}
+        connectionError="raw IPC failure"
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Rove couldn&#x27;t open");
+    expect(html).toContain("Your local tasks are still on this device");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("raw IPC failure");
+    expect(html).not.toContain('aria-busy="true"');
+  });
+
+  it("shows only the customer-safe Runtime dependency warning", () => {
+    const value = snapshot();
+    value.product!.recoveryWarnings = [
+      "Codex event recovery: internal identity detail.",
+      RUNTIME_CONFIGURATION_WARNING,
+      RUNTIME_TRANSIENT_WARNING,
+    ];
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Browser service status"');
+    expect(html).toContain("Browser work is unavailable");
+    expect(html).toContain("Conversation history remains available");
+    expect(html).not.toContain("internal identity detail");
+    expect(html.match(/Browser service status/g)).toHaveLength(1);
+  });
+
   it("keeps one primary composer slot across ready, active, stopping, and stopped states", () => {
     expect(
       taskComposerPrimaryAction({
@@ -457,9 +532,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       ...stopping.customerExecution!,
       state: "stopping",
       segments: stopping.customerExecution!.segments.map(
-        ({ activeSince: _activeSince, ...segment }) => ({
+        ({ activeSince: _activeSince, ...segment }, index, segments) => ({
           ...segment,
-          status: "terminal",
+          status: index === segments.length - 1 ? "stopping" : "terminal",
         }),
       ),
     };
@@ -473,10 +548,52 @@ describe("ProductSurface accessibility and presentation continuity", () => {
       />,
     );
     expect(stoppingHtml).toContain('aria-label="Stopping work"');
-    expect(stoppingHtml).toContain("Stopping… for 0s");
+    expect(stoppingHtml).toContain("Stopping… · 0s worked");
     expect(stoppingHtml).toContain(
       'class="primary composer-submit composer-stop" aria-label="Stop current work" title="Stop current work" disabled=""',
     );
+
+    for (const [state, status, ariaLabel, heading] of [
+      [
+        "waiting_for_you",
+        "waiting_for_customer",
+        "Work waiting for you",
+        "Waiting for you · 0s worked",
+      ],
+      [
+        "checking",
+        "checking",
+        "Work state checking",
+        "Checking task state… · 0s worked",
+      ],
+      [
+        "human_control",
+        "human_control",
+        "Work under human control",
+        "You&#x27;re in control · 0s worked",
+      ],
+    ] as const) {
+      stopping.customerExecution = {
+        ...stopping.customerExecution!,
+        state,
+        segments: stopping.customerExecution!.segments.map(
+          (segment, index, segments) => ({
+            ...segment,
+            status: index === segments.length - 1 ? status : "terminal",
+          }),
+        ),
+      };
+      const semanticHtml = renderToStaticMarkup(
+        <ProductSurface
+          desktop={value}
+          connectionError={null}
+          follower={false}
+          refresh={async () => undefined}
+        />,
+      );
+      expect(semanticHtml).toContain(`aria-label="${ariaLabel}"`);
+      expect(semanticHtml).toContain(heading);
+    }
   });
 
   it("discloses optional Workflow synchronization without broadening its data boundary", () => {
@@ -1008,6 +1125,74 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(browserIdentityLabel(value, anotherTaskAttached)).toBe(
       "No browser attached",
     );
+  });
+
+  it("guides exact task browser recovery without offering an invalid open action", () => {
+    const value = snapshot();
+    const task = {
+      taskId: "task_profile_recovery",
+      executionMode: "agent",
+      selectionSource: "user_selected",
+      selectedAt: "2026-09-27T12:00:00.000Z",
+      approvalsReviewer: "auto_review",
+      bootstrapStage: "complete",
+      results: [],
+      lifecycle: { phase: "ready", reason: "Ready." },
+      availableActions: [],
+      capabilities: taskCapabilities(),
+    } satisfies ProductTaskProjection;
+
+    value.workspaces = { workspaces: [] };
+    expect(browserResourcePresentation(value, task)).toEqual({
+      kind: "profile_required",
+      title: "Choose a browser profile",
+      description:
+        "Create or select a browser profile, then retry this task. Its conversation will stay here.",
+      action: "manage_profiles",
+    });
+
+    const missingWorkspaceTask = {
+      ...task,
+      browserIdentity: {
+        mode: "workspace",
+        workspaceId: "wrk_00000000-0000-4000-8000-000000000099",
+      },
+    } satisfies ProductTaskProjection;
+    expect(
+      browserResourcePresentation(snapshot(), missingWorkspaceTask),
+    ).toEqual({
+      kind: "profile_missing",
+      title: "This task's browser profile is unavailable",
+      description:
+        "The conversation is safe, but its frozen browser profile cannot be replaced. Start a new task with an available profile.",
+      action: "new_task",
+    });
+
+    const recoveringTask = {
+      ...task,
+      roveSessionId: "ses_recovering",
+      runtime: {
+        status: "missing",
+        controller: null,
+        attachment: "missing",
+        recovery: "cleanup_required",
+        profileOwnership: "released",
+      },
+    } satisfies ProductTaskProjection;
+    expect(
+      browserResourcePresentation(snapshot(), recoveringTask),
+    ).toMatchObject({
+      kind: "runtime_recovery",
+      action: null,
+    });
+
+    const safeError = browserOpenFailureMessage(
+      new Error(
+        "Error invoking remote method 'rove:show-browser': Rove runtime request failed (404): PROFILE_NOT_FOUND /secret/profile",
+      ),
+    );
+    expect(safeError).toContain("Browser could not open");
+    expect(safeError).not.toMatch(/PROFILE_NOT_FOUND|remote method|\/secret/);
   });
 
   it("marks only pending task-scoped conversational attention as needing input", () => {
@@ -1724,7 +1909,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).toContain('aria-label="Approval policy: Approve for me"');
     expect(html).toContain('aria-label="Model and reasoning effort:');
     expect(html).toContain('aria-pressed="true"><span>Approve for me</span>');
-    expect(html).toContain("Always ask");
+    expect(html).toContain("Ask for approval");
+    expect(html).toContain("You review requests that cross task permissions");
+    expect(html).not.toContain("Always ask");
     expect(html).not.toContain("Routine eligible requests are reviewed");
     expect(html).toContain("Codex ready");
     expect(html).not.toContain("ChatGPT account");
@@ -1738,6 +1925,12 @@ describe("ProductSurface accessibility and presentation continuity", () => {
   });
 
   it("states that permission review is unused by Capture and starts no Codex turn", () => {
+    expect(permissionReviewDescription("agent", "user")).toBe(
+      "Codex will pause and ask you to review permission requests.",
+    );
+    expect(permissionReviewDescription("agent", "auto_review")).toBe(
+      "Routine eligible requests are reviewed automatically; important handoffs can still pause for you.",
+    );
     expect(permissionReviewDescription("capture", "auto_review")).toBe(
       "Permission review is unused in Capture mode because Capture starts no Codex turn.",
     );
@@ -1784,7 +1977,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Rove needs attention");
   });
 
-  it("shows an unmatched Runtime cleanup card without inventing a product task", () => {
+  it("keeps unmatched Runtime cleanup in a global resource region", () => {
     const value = snapshot();
     value.product!.catalog.account = {
       status: "logged_in",
@@ -1809,11 +2002,14 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(html).toContain('aria-label="Unmatched browser session"');
-    expect(html).toContain("Browser session needs cleanup");
+    expect(html).toContain('aria-label="Device browser recovery"');
+    expect(html).toContain("A device browser session needs cleanup");
     expect(html).toContain("Status: active. Controller: agent.");
     expect(html).toContain("Finish session");
     expect(html).toContain('aria-label="Desired outcome"');
+    expect(html.indexOf('aria-label="Device browser recovery"')).toBeLessThan(
+      html.indexOf('class="product-layout"'),
+    );
 
     value.surface.presentation = "expanded";
     value.surface.activeHost = "browser_follower";
@@ -1825,9 +2021,9 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(expanded).toContain("Browser session needs cleanup");
-    expect(expanded).toContain("Automate · Agent mode · active");
-    expect(expanded).toContain("Finish session");
+    expect(expanded).not.toContain("Browser session needs cleanup");
+    expect(expanded).not.toContain("Finish session");
+    expect(expanded).toContain("Open Rove to start a task");
 
     value.surface.presentation = "chip";
     const chip = renderToStaticMarkup(
@@ -1838,9 +2034,7 @@ describe("ProductSurface accessibility and presentation continuity", () => {
         refresh={async () => undefined}
       />,
     );
-    expect(chip).toContain(
-      'aria-label="Expand Rove. Browser session needs cleanup"',
-    );
+    expect(chip).not.toContain("Browser session needs cleanup");
   });
 
   it("renders distinct Codex approval and Rove handoff actions with current task identity", () => {
@@ -2081,6 +2275,91 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(humanOwnedCompact).not.toContain(reason);
     expect(humanOwnedCompact).toContain("Return Control");
     expect(humanOwnedCompact).not.toContain("Retry cleanup");
+  });
+
+  it("renders only exact approval choices and explains broader scope before acceptance", () => {
+    const value = snapshot();
+    value.product!.catalog.account = {
+      status: "logged_in",
+      authMode: "chatgpt",
+    };
+    value.product!.tasks = [
+      {
+        taskId: "task_approval",
+        executionMode: "agent",
+        selectionSource: "user_selected",
+        selectedAt: "2026-09-27T09:00:00.000Z",
+        approvalsReviewer: "user",
+        bootstrapStage: "complete",
+        results: [],
+        codexThreadId: "thread_approval",
+        lifecycle: { phase: "waiting_for_human", reason: "Waiting." },
+        availableActions: ["interrupt"],
+        capabilities: taskCapabilities({ canStop: true, canRespond: true }),
+        conversation: {
+          turnStatus: "in_progress",
+          archived: false,
+          items: {},
+          turnOrder: ["turn_approval"],
+          activeTurnId: "turn_approval",
+        },
+      },
+    ];
+    value.product!.currentTaskId = "task_approval";
+    value.product!.attention = [
+      {
+        authority: "codex",
+        kind: "command_approval",
+        requestId: "approval_exact",
+        taskId: "task_approval",
+        threadId: "thread_approval",
+        turnId: "turn_approval",
+        itemId: "item_approval",
+        generation: 2,
+        status: "pending",
+        sequence: 1,
+        title: "Command approval",
+        context: [{ label: "Command", value: "git status" }],
+        approvalDecisions: [
+          {
+            id: "approval_0",
+            decision: "accept",
+            label: "Approve once",
+            description: "Allows only this command request.",
+            scope: "once",
+          },
+          {
+            id: "approval_1",
+            decision: "acceptForSession",
+            label: "Approve for session",
+            description: "Applies for the current Codex session.",
+            scope: "session",
+          },
+          {
+            id: "approval_2",
+            decision: "decline",
+            label: "Decline",
+            description: "Does not allow this command request.",
+            scope: "none",
+          },
+        ],
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <ProductSurface
+        desktop={value}
+        connectionError={null}
+        follower={false}
+        refresh={async () => undefined}
+      />,
+    );
+    expect(html).toContain("Approve once");
+    expect(html).toContain("Allows only this command request.");
+    expect(html).toContain("Approve for session");
+    expect(html).toContain("Applies for the current Codex session.");
+    expect(html).toContain("Decline");
+    expect(html).not.toContain(">Approve</");
   });
 
   it("presents one bounded user question as a focused choice response", () => {
@@ -2490,7 +2769,8 @@ describe("ProductSurface accessibility and presentation continuity", () => {
     expect(html).not.toContain("Structured progress");
     expect(html).not.toContain(">CODEX<");
     expect(html).toContain("Worked for 0s");
-    expect(html).not.toContain(">Working for ");
+    expect(html).toContain('aria-label="Active work"');
+    expect(html).toContain(">Working for 0s");
     expect(html).toContain("The Drive folder is organized.");
     expect(html).toContain("<h2>Result</h2>");
     expect(html).toContain("<li>The Drive folder is organized.</li>");

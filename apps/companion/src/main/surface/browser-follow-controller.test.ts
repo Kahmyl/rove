@@ -454,10 +454,7 @@ describe("decideBrowserFollow", () => {
 describe("BrowserFollowController", () => {
   it("transfers the unified surface back to the follower when the owned browser regains foreground", async () => {
     const surface = new FakeSurface();
-    surface.enabled = false;
-    const onOwnedBrowserForeground = vi.fn(() => {
-      surface.enabled = true;
-    });
+    const onOwnedBrowserForeground = vi.fn();
     const controller = new BrowserFollowController(
       {
         getBrowserWindowState: vi.fn(async () =>
@@ -487,6 +484,71 @@ describe("BrowserFollowController", () => {
     expect(onOwnedBrowserForeground).toHaveBeenCalledOnce();
     expect(surface.shown).toHaveLength(1);
     expect(surface.visible).toBe(true);
+  });
+
+  it("keeps the full surface until owned-browser follower placement is viable", async () => {
+    const surface = new FakeSurface();
+    const onOwnedBrowserForeground = vi.fn();
+    const controller = new BrowserFollowController(
+      {
+        getBrowserWindowState: vi.fn(async () =>
+          windowState({ bounds: { left: 0, top: 0, width: 0, height: 0 } }),
+        ),
+      },
+      { getAllDisplays: () => [display] },
+      surface,
+      {
+        browserIdentity: {
+          getBrowserHostIdentity: vi.fn(async () => ({
+            kind: "owned_process" as const,
+            processId: 410,
+          })),
+        },
+        foreground: {
+          getForegroundProcessId: vi.fn(async () => 410),
+        },
+        followerProcessId: 411,
+        onOwnedBrowserForeground,
+      },
+    );
+
+    controller.setSession(session);
+    await controller.reconcileNow();
+
+    expect(onOwnedBrowserForeground).not.toHaveBeenCalled();
+    expect(surface.visible).toBe(false);
+  });
+
+  it("does not transfer the surface when browser following is disabled", async () => {
+    const surface = new FakeSurface();
+    surface.enabled = false;
+    const onOwnedBrowserForeground = vi.fn();
+    const controller = new BrowserFollowController(
+      {
+        getBrowserWindowState: vi.fn(async () => windowState()),
+      },
+      { getAllDisplays: () => [display] },
+      surface,
+      {
+        browserIdentity: {
+          getBrowserHostIdentity: vi.fn(async () => ({
+            kind: "owned_process" as const,
+            processId: 410,
+          })),
+        },
+        foreground: {
+          getForegroundProcessId: vi.fn(async () => 410),
+        },
+        followerProcessId: 411,
+        onOwnedBrowserForeground,
+      },
+    );
+
+    controller.setSession(session);
+    await controller.reconcileNow();
+
+    expect(onOwnedBrowserForeground).not.toHaveBeenCalled();
+    expect(surface.visible).toBe(false);
   });
 
   it("suppresses duplicate geometry and applies movement", async () => {

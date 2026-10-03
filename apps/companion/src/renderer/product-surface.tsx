@@ -12,6 +12,7 @@ import remarkGfm from "remark-gfm";
 import type {
   RendererProductIntent,
   LocalProductSnapshot,
+  ProductAttentionDecision,
   ProductAttentionProjection,
   ProductElicitationField,
   ProductTaskProjection,
@@ -40,6 +41,10 @@ import { customerTaskPresentation } from "../main/codex/customer-task-presentati
 import type { CustomerTaskPresentation } from "../main/codex/customer-task-presentation.js";
 import type { DesktopSurfaceSnapshot } from "../shared/desktop-api.js";
 import type { WorkflowSyncBindingProjection } from "../main/codex/workflow-sync-coordinator.js";
+import {
+  RUNTIME_CONFIGURATION_WARNING,
+  RUNTIME_TRANSIENT_WARNING,
+} from "../main/runtime-failure-containment.js";
 import { unmatchedRuntimeSession } from "../shared/desktop-api.js";
 import roveMarkUrl from "./assets/rove-mark.png";
 import { toCompanionViewModel } from "./state.js";
@@ -48,6 +53,7 @@ import {
   archivedProductTasks,
   codexCustomerStatus,
   composerGate,
+  initialProductHydrationPending,
   modeLabel,
   reconcileSelectedTaskId,
   selectableProductTasks,
@@ -788,6 +794,106 @@ export function browserIdentityLabel(
   return "No browser attached";
 }
 
+export type BrowserResourcePresentation = {
+  kind:
+    | "attached"
+    | "available"
+    | "profile_required"
+    | "profile_missing"
+    | "runtime_recovery"
+    | "unavailable";
+  title: string;
+  description: string;
+  action: "show_browser" | "manage_profiles" | "new_task" | null;
+};
+
+export function browserResourcePresentation(
+  desktop: DesktopSurfaceSnapshot | null,
+  task: ProductTaskProjection,
+): BrowserResourcePresentation {
+  if (
+    task.runtime?.attachment === "attached" &&
+    task.runtime.recovery === "not_needed"
+  ) {
+    return {
+      kind: "attached",
+      title: browserIdentityLabel(desktop, task),
+      description: "This task has exact live browser authority.",
+      action: "show_browser",
+    };
+  }
+
+  if (
+    task.roveSessionId !== undefined &&
+    (task.runtime?.attachment !== "attached" ||
+      task.runtime.recovery !== "not_needed")
+  ) {
+    return {
+      kind: "runtime_recovery",
+      title: "Browser recovery is required",
+      description:
+        "Rove cannot confirm this task's browser authority yet. Use the task recovery controls before opening it.",
+      action: null,
+    };
+  }
+
+  if (
+    task.browserIdentity?.mode === "workspace" &&
+    !desktop?.workspaces.workspaces.some(
+      (workspace) =>
+        workspace.id ===
+        (task.browserIdentity?.mode === "workspace"
+          ? task.browserIdentity.workspaceId
+          : undefined),
+    )
+  ) {
+    return {
+      kind: "profile_missing",
+      title: "This task's browser profile is unavailable",
+      description:
+        "The conversation is safe, but its frozen browser profile cannot be replaced. Start a new task with an available profile.",
+      action: "new_task",
+    };
+  }
+
+  if (
+    task.browserIdentity === undefined &&
+    desktop?.workspaces.selectedWorkspaceId === undefined
+  ) {
+    return {
+      kind: "profile_required",
+      title: "Choose a browser profile",
+      description:
+        "Create or select a browser profile, then retry this task. Its conversation will stay here.",
+      action: "manage_profiles",
+    };
+  }
+
+  if (
+    task.bootstrapStage === "complete" &&
+    ["ready", "working", "waiting_for_human"].includes(task.lifecycle.phase)
+  ) {
+    return {
+      kind: "available",
+      title: "No browser attached",
+      description: "A browser can be attached to this exact task on demand.",
+      action: "show_browser",
+    };
+  }
+
+  return {
+    kind: "unavailable",
+    title: "Browser unavailable",
+    description:
+      "This task is not ready to open a browser. Its conversation remains available.",
+    action: null,
+  };
+}
+
+export function browserOpenFailureMessage(_cause: unknown): string {
+  return "Browser could not open. Check this task's browser recovery or profile and try again.";
+}
+
 export function recordingLifecyclePresentation(state: RecordingState): {
   summary: string;
   stateLabel: string;
@@ -1148,7 +1254,7 @@ function ComposerPermissionMenu({
   onChange?: (approvalsReviewer: ApprovalsReviewer) => void;
 }) {
   const label =
-    approvalsReviewer === "auto_review" ? "Approve for me" : "Always ask";
+    approvalsReviewer === "auto_review" ? "Approve for me" : "Ask for approval";
   return (
     <details className="composer-menu composer-permission-menu">
       <summary aria-label={`Approval policy: ${label}`}>
@@ -1194,8 +1300,8 @@ function ComposerPermissionMenu({
                 closeParentMenu(event);
               }}
             >
-              <span>Always ask</span>
-              <small>You review every request</small>
+              <span>Ask for approval</span>
+              <small>You review requests that cross task permissions</small>
             </button>
           </section>
         ) : (
@@ -2492,6 +2598,9 @@ export function ProductSurface({
   }, [product?.attention, product?.tasks]);
   const browserAttached = viewedTask?.runtime?.attachment === "attached";
   const identityLabel = browserIdentityLabel(desktop, viewedTask);
+  const browserResource = viewedTask
+    ? browserResourcePresentation(desktop, viewedTask)
+    : undefined;
 
   const run = async <T,>(
     operation: () => Promise<T>,
@@ -2510,6 +2619,15 @@ export function ProductSurface({
     } finally {
       setBusy(false);
     }
+  };
+  const showTaskBrowser = async (taskId: string): Promise<void> => {
+    await run(async () => {
+      try {
+        await window.rove.showBrowser(taskId);
+      } catch (cause) {
+        throw new Error(browserOpenFailureMessage(cause));
+      }
+    });
   };
   const command = <T,>(value: RendererProductIntent) =>
     window.rove.executeProductIntent(value) as Promise<T>;
@@ -2937,7 +3055,7 @@ export function ProductSurface({
   };
   const answerAttention = async (
     entry: ProductAttentionProjection,
-    decision: "accept" | "decline" | "cancel",
+    decision: ProductAttentionDecision,
   ) => {
     if (
       viewedTask?.taskId !== entry.taskId ||
@@ -3590,14 +3708,27 @@ export function ProductSurface({
                   </button>
                 ) : (
                   <button
-                    key={action.decision}
+                    key={action.id ?? String(action.decision)}
                     className={
-                      action.decision === "accept" ? "primary" : undefined
+                      action.scope !== undefined
+                        ? action.scope === "none"
+                          ? undefined
+                          : "primary"
+                        : action.decision === "accept"
+                          ? "primary"
+                          : undefined
                     }
                     disabled={busy}
                     onClick={() => void answerAttention(entry, action.decision)}
                   >
-                    {action.label}
+                    {action.description ? (
+                      <>
+                        <span>{action.label}</span>
+                        <small>{action.description}</small>
+                      </>
+                    ) : (
+                      action.label
+                    )}
                   </button>
                 ),
               )}
@@ -3628,6 +3759,43 @@ export function ProductSurface({
     void window.rove.endFollowerDrag();
   };
 
+  const runtimeWarning = product?.recoveryWarnings.find(
+    (warning) =>
+      warning === RUNTIME_CONFIGURATION_WARNING ||
+      warning === RUNTIME_TRANSIENT_WARNING,
+  );
+
+  if (initialProductHydrationPending(desktop)) {
+    const failed = connectionError !== null;
+    return (
+      <main
+        className={`product-hydration${follower ? " product-hydration-follower" : ""}`}
+        aria-live="polite"
+        aria-busy={!failed}
+      >
+        <section>
+          <img src={roveMarkUrl} alt="" />
+          {!failed && <span className="activity-spinner" aria-hidden="true" />}
+          <strong>{failed ? "Rove couldn't open" : "Opening Rove"}</strong>
+          <p>
+            {failed
+              ? "Your local tasks are still on this device. Try again."
+              : "Loading your local tasks…"}
+          </p>
+          {failed && (
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void refresh()}
+            >
+              Try again
+            </button>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   if (presentation === "chip") {
     return (
       <div
@@ -3642,7 +3810,7 @@ export function ProductSurface({
         />
         <button
           type="button"
-          aria-label={`Expand Rove. ${unmatchedSession ? "Browser session needs cleanup" : awaitingExplicitResponse ? "Your response is needed" : viewedCollaboration?.needsCustomerAction ? "Attention required" : customerCodexStatus.label}`}
+          aria-label={`Expand Rove. ${awaitingExplicitResponse ? "Your response is needed" : viewedCollaboration?.needsCustomerAction ? "Attention required" : customerCodexStatus.label}`}
           onClick={() =>
             void run(() => window.rove.transitionSurface("expand"))
           }
@@ -3669,28 +3837,20 @@ export function ProductSurface({
       >
         <div className="expanded-copy">
           <span>
-            {unmatchedSession
-              ? "Cleanup required"
-              : viewedCollaboration?.needsCustomerAction || fileAttention.length
-                ? "Attention needed"
-                : customerCodexStatus.label}
+            {viewedCollaboration?.needsCustomerAction || fileAttention.length
+              ? "Attention needed"
+              : customerCodexStatus.label}
           </span>
           <strong>
-            {unmatchedSession
-              ? "Browser session needs cleanup"
-              : activeTask
-                ? activeSurfaceTitle
-                : "Rove is ready"}
+            {activeTask ? activeSurfaceTitle : "Rove is ready"}
           </strong>
           {activeCollaboration?.browser.canReturnToRove && (
             <small>{activeCollaboration.browser.description}</small>
           )}
           <small>
-            {unmatchedSession
-              ? `${modeLabel(unmatchedSession.session.mode)} · ${unmatchedSession.session.status}`
-              : activeTask
-                ? `${modeLabel(activeTask.executionMode)} · ${workspaceName(desktop, activeTask.browserIdentity?.mode === "workspace" ? activeTask.browserIdentity.workspaceId : "")} · Controller: ${activeTaskControl.controllerLabel}`
-                : "Open Rove to start a task"}
+            {activeTask
+              ? `${modeLabel(activeTask.executionMode)} · ${workspaceName(desktop, activeTask.browserIdentity?.mode === "workspace" ? activeTask.browserIdentity.workspaceId : "")} · Controller: ${activeTaskControl.controllerLabel}`
+              : "Open Rove to start a task"}
           </small>
         </div>
         <div className="expanded-actions">
@@ -3701,18 +3861,6 @@ export function ProductSurface({
           )}
           {activeCollaboration?.browser.canReturnToRove && (
             <button onClick={() => void returnControl()}>Return Control</button>
-          )}
-          {unmatchedSession && (
-            <button
-              className="danger"
-              onClick={() =>
-                void run(() =>
-                  window.rove.finishSession(unmatchedSession.session.id),
-                )
-              }
-            >
-              Finish session
-            </button>
           )}
           <button onClick={() => void run(window.rove.openRove)}>
             Go to Rove
@@ -4961,6 +5109,31 @@ export function ProductSurface({
         </div>
       )}
 
+      {unmatchedSession !== null && (
+        <section
+          className="product-warning global-resource-recovery"
+          aria-label="Device browser recovery"
+        >
+          <strong>A device browser session needs cleanup</strong>
+          <span>
+            This device resource is not attached to the selected task. Status:{" "}
+            {unmatchedSession.session.status}. Controller:{" "}
+            {unmatchedSession.session.controller ?? "none"}.
+          </span>
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() =>
+              void run(() =>
+                window.rove.finishSession(unmatchedSession.session.id),
+              )
+            }
+          >
+            Finish session
+          </button>
+        </section>
+      )}
+
       <main className="product-layout">
         <section
           className={`product-main${selectedWorkflow ? " product-main-workflow" : viewedTask ? " product-main-task" : " product-main-composer"}`}
@@ -4969,28 +5142,14 @@ export function ProductSurface({
           }
           tabIndex={0}
         >
-          {unmatchedSession !== null && (
+          {runtimeWarning !== undefined && (
             <section
-              className="product-warning"
-              aria-label="Unmatched browser session"
+              className="product-warning runtime-dependency-warning"
+              aria-label="Browser service status"
+              role="status"
             >
-              <strong>Browser session needs cleanup</strong>
-              <span>
-                Rove found an unmatched {unmatchedSession.session.mode} session.
-                Status: {unmatchedSession.session.status}. Controller:{" "}
-                {unmatchedSession.session.controller ?? "none"}.
-              </span>
-              <button
-                className="danger"
-                disabled={busy}
-                onClick={() =>
-                  void run(() =>
-                    window.rove.finishSession(unmatchedSession.session.id),
-                  )
-                }
-              >
-                Finish session
-              </button>
+              <strong>Browser work is unavailable</strong>
+              <span>{runtimeWarning}</span>
             </section>
           )}
           {fileAttention.map((entry) => (
@@ -6325,7 +6484,7 @@ export function ProductSurface({
                         </footer>
                       </article>
                     )}
-                    {(segment.status === "active" ||
+                    {(segment.status !== "terminal" ||
                       segment.commentary.length > 0 ||
                       segment.activities.length > 0) &&
                       (segment.status !== "active" || workingVisible) &&
@@ -6374,33 +6533,55 @@ export function ProductSurface({
                           segment.id ===
                             viewedTaskExecution?.segments.at(-1)?.id &&
                           viewedPresentation?.state === "stopping";
-                        if (segment.status === "active" || currentStopping)
+                        const nonterminal =
+                          segment.status !== "terminal" || currentStopping;
+                        if (nonterminal) {
+                          const status = currentStopping
+                            ? "stopping"
+                            : segment.status;
+                          const heading = {
+                            active: "Working",
+                            waiting_for_customer: "Waiting for you",
+                            checking: "Checking task state…",
+                            human_control: "You're in control",
+                            stopping: "Stopping…",
+                            terminal: "Worked",
+                          }[status];
+                          const ariaLabel = {
+                            active: "Active work",
+                            waiting_for_customer: "Work waiting for you",
+                            checking: "Work state checking",
+                            human_control: "Work under human control",
+                            stopping: "Stopping work",
+                            terminal: "Completed work",
+                          }[status];
                           return (
                             <section
                               className="timeline-work timeline-work-active"
-                              aria-label={
-                                currentStopping
-                                  ? "Stopping work"
-                                  : "Active work"
-                              }
+                              aria-label={ariaLabel}
                             >
                               <header className="timeline-work-heading">
-                                {!currentStopping && (
+                                {["active", "checking", "stopping"].includes(
+                                  status,
+                                ) && (
                                   <span
                                     className="activity-spinner"
                                     aria-hidden="true"
                                   />
                                 )}
                                 <strong>
-                                  {currentStopping ? "Stopping…" : "Working"}
+                                  {heading}
                                   {segment.elapsed
-                                    ? ` for ${segment.elapsed}`
+                                    ? status === "active"
+                                      ? ` for ${segment.elapsed}`
+                                      : ` · ${segment.elapsed} worked`
                                     : ""}
                                 </strong>
                               </header>
                               {content}
                             </section>
                           );
+                        }
                         return (
                           <details
                             className="timeline-work"
@@ -6852,74 +7033,74 @@ export function ProductSurface({
                             id="task-followup-command-palette"
                             data-composer-group="commands"
                           >
-                              <summary aria-label="Commands" title="Commands">
-                                <span aria-hidden="true">/</span>
-                              </summary>
-                              <div
-                                className="composer-command-palette"
-                                aria-label="Task commands and settings"
-                              >
-                                <label className="composer-command-search">
-                                  <span>Commands</span>
-                                  <input
-                                    type="search"
-                                    aria-label="Search commands"
-                                    placeholder="Search task settings"
-                                    value={commandPaletteQuery}
-                                    onChange={(event) =>
-                                      setCommandPaletteQuery(event.target.value)
-                                    }
-                                  />
-                                </label>
-                                {commandPaletteMatches(
-                                  commandPaletteQuery,
-                                  "task",
-                                  "mode",
-                                  "browser",
-                                  "approval",
-                                ) && (
-                                  <section>
-                                    <strong>Task</strong>
-                                    <div className="composer-control-rail">
-                                      <ComposerModeMenu
-                                        mode={viewedTask.executionMode}
-                                      />
-                                      <ComposerPermissionMenu
-                                        approvalsReviewer={
-                                          viewedTask.approvalsReviewer
-                                        }
-                                        mode={viewedTask.executionMode}
-                                      />
-                                      <details className="composer-menu composer-setup-menu">
-                                        <summary aria-label="Browser profile">
-                                          Browser profile
-                                        </summary>
-                                        <div className="composer-popover compact-popover task-settings-popover">
-                                          <div className="task-frozen-option">
-                                            <span>{identityLabel}</span>
-                                            <small>Fixed for this task</small>
-                                          </div>
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </section>
-                                )}
-                                {commandPaletteMatches(
-                                  commandPaletteQuery,
-                                  "model",
-                                  "reasoning",
-                                  "effort",
-                                ) && (
-                                  <section>
-                                    <strong>Model</strong>
-                                    <ComposerModelMenu
-                                      models={product?.catalog.models ?? []}
-                                      modelId={viewedTask.model ?? ""}
-                                      effort={viewedTask.reasoningEffort ?? ""}
+                            <summary aria-label="Commands" title="Commands">
+                              <span aria-hidden="true">/</span>
+                            </summary>
+                            <div
+                              className="composer-command-palette"
+                              aria-label="Task commands and settings"
+                            >
+                              <label className="composer-command-search">
+                                <span>Commands</span>
+                                <input
+                                  type="search"
+                                  aria-label="Search commands"
+                                  placeholder="Search task settings"
+                                  value={commandPaletteQuery}
+                                  onChange={(event) =>
+                                    setCommandPaletteQuery(event.target.value)
+                                  }
+                                />
+                              </label>
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "task",
+                                "mode",
+                                "browser",
+                                "approval",
+                              ) && (
+                                <section>
+                                  <strong>Task</strong>
+                                  <div className="composer-control-rail">
+                                    <ComposerModeMenu
+                                      mode={viewedTask.executionMode}
                                     />
-                                  </section>
-                                )}
-                              </div>
+                                    <ComposerPermissionMenu
+                                      approvalsReviewer={
+                                        viewedTask.approvalsReviewer
+                                      }
+                                      mode={viewedTask.executionMode}
+                                    />
+                                    <details className="composer-menu composer-setup-menu">
+                                      <summary aria-label="Browser profile">
+                                        Browser profile
+                                      </summary>
+                                      <div className="composer-popover compact-popover task-settings-popover">
+                                        <div className="task-frozen-option">
+                                          <span>{identityLabel}</span>
+                                          <small>Fixed for this task</small>
+                                        </div>
+                                      </div>
+                                    </details>
+                                  </div>
+                                </section>
+                              )}
+                              {commandPaletteMatches(
+                                commandPaletteQuery,
+                                "model",
+                                "reasoning",
+                                "effort",
+                              ) && (
+                                <section>
+                                  <strong>Model</strong>
+                                  <ComposerModelMenu
+                                    models={product?.catalog.models ?? []}
+                                    modelId={viewedTask.model ?? ""}
+                                    effort={viewedTask.reasoningEffort ?? ""}
+                                  />
+                                </section>
+                              )}
+                            </div>
                           </details>
                           <ComposerAmbientControls>
                             <ComposerModeMenu mode={viewedTask.executionMode} />
@@ -7263,24 +7444,53 @@ export function ProductSurface({
                   </svg>
                 </span>
                 <span>
-                  <strong>{identityLabel}</strong>
+                  <strong>{browserResource?.title ?? identityLabel}</strong>
                   {browserAttached && (
                     <small>{viewedTaskControl.controllerLabel}</small>
                   )}
                 </span>
               </div>
+              {browserResource && browserResource.kind !== "attached" && (
+                <p className="browser-recovery-copy">
+                  {browserResource.description}
+                </p>
+              )}
               <div className="control-actions">
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(() => window.rove.showBrowser(viewedTask.taskId))
-                  }
-                >
-                  {viewedCompanion?.browserOpen
-                    ? "View Browser"
-                    : "Open Browser"}
-                </button>
+                {browserResource?.action === "show_browser" && (
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() => void showTaskBrowser(viewedTask.taskId)}
+                  >
+                    {viewedCompanion?.browserOpen
+                      ? "View Browser"
+                      : "Open Browser"}
+                  </button>
+                )}
+                {browserResource?.action === "manage_profiles" && (
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() => setProfileManagerOpen(true)}
+                  >
+                    Choose profile
+                  </button>
+                )}
+                {browserResource?.action === "new_task" && (
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() => {
+                      setSelectedWorkflowWorkspaceId(null);
+                      setSelectedWorkflowOutputId(null);
+                      setSelectedTaskId(null);
+                      setArchivedPreviewTaskId(null);
+                      setShowNewTask(true);
+                    }}
+                  >
+                    Start new task
+                  </button>
+                )}
                 {viewedCollaboration?.browser.canTakeOver && (
                   <button
                     className="primary"

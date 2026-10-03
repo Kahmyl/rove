@@ -196,6 +196,7 @@ export interface ThreadStartParams {
   experimentalRawEvents?: boolean;
   threadSource?: string | null;
   developerInstructions?: string | null;
+  dynamicTools?: DynamicToolSpec[] | null;
 }
 export interface ThreadResumeParams {
   threadId: string;
@@ -258,12 +259,37 @@ export interface TurnSteerResponse {
   turnId: string;
 }
 
+export type DynamicToolSpec = {
+  type: "function";
+  name: string;
+  description: string;
+  inputSchema: JsonValue;
+  deferLoading?: boolean;
+};
+
+export interface CommandExecParams {
+  command: string[];
+  processId: string;
+  cwd: string;
+  permissionProfile: string;
+  streamStdoutStderr?: boolean;
+  disableTimeout?: boolean;
+  timeoutMs?: number;
+  outputBytesCap?: number;
+}
+export interface CommandExecResponse {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
 export interface CodexModel {
   id: string;
   model: string;
   upgrade: string | null;
   upgradeInfo: JsonValue | null;
   availabilityNux: JsonValue | null;
+  availableAccessPrograms: JsonValue | null;
   displayName: string;
   description: string;
   modelSpecialty: string | null;
@@ -292,6 +318,7 @@ export type CodexAccount =
 export interface GetAccountResponse {
   account: CodexAccount | null;
   requiresOpenaiAuth: boolean;
+  workspaceRouting: JsonValue | null;
 }
 export type LoginAccountResponse =
   | { type: "chatgpt"; loginId: string; authUrl: string }
@@ -351,6 +378,7 @@ export interface McpServerStatus {
     | "disabled"
     | null;
   pluginId: string | null;
+  serverCapabilities: JsonValue;
   serverInfo: {
     name: string;
     title: string | null;
@@ -359,6 +387,7 @@ export interface McpServerStatus {
     websiteUrl: string | null;
   } | null;
   tools: Record<string, McpToolDefinition>;
+  toolsError: string | null;
   resources: JsonValue[];
   resourceTemplates: JsonValue[];
   authStatus:
@@ -383,6 +412,8 @@ export const CODEX_REVIEWED_METHODS = [
   "turn/start",
   "turn/steer",
   "turn/interrupt",
+  "command/exec",
+  "command/exec/terminate",
   "mcpServerStatus/list",
 ] as const;
 export interface CodexRequestMap {
@@ -444,6 +475,14 @@ export interface CodexRequestMap {
     params: { threadId: string; turnId: string };
     result: Record<string, never>;
   };
+  "command/exec": {
+    params: CommandExecParams;
+    result: CommandExecResponse;
+  };
+  "command/exec/terminate": {
+    params: { processId: string };
+    result: Record<string, never>;
+  };
   "mcpServerStatus/list": {
     params: {
       cursor?: string | null;
@@ -492,6 +531,7 @@ export const CODEX_SERVER_NOTIFICATION_METHODS = [
   "item/mcpToolCall/progress",
   "serverRequest/resolved",
   "mcpServer/startupStatus/updated",
+  "command/exec/outputDelta",
 ] as const;
 export type CodexServerNotificationMethod =
   (typeof CODEX_SERVER_NOTIFICATION_METHODS)[number];
@@ -532,6 +572,43 @@ export function validateCodexRequestParams<M extends CodexMethod>(
   method: M,
   value: CodexRequestMap[M]["params"],
 ): void {
+  if (method === "command/exec") {
+    const params = value as CommandExecParams;
+    if (
+      !Array.isArray(params.command) ||
+      params.command.length === 0 ||
+      params.command.some(
+        (entry) => typeof entry !== "string" || entry.length === 0,
+      ) ||
+      typeof params.processId !== "string" ||
+      params.processId.length === 0 ||
+      typeof params.cwd !== "string" ||
+      params.cwd.length === 0 ||
+      typeof params.permissionProfile !== "string" ||
+      params.permissionProfile.length === 0 ||
+      (params.timeoutMs !== undefined &&
+        (!Number.isSafeInteger(params.timeoutMs) || params.timeoutMs <= 0)) ||
+      (params.outputBytesCap !== undefined &&
+        (!Number.isSafeInteger(params.outputBytesCap) ||
+          params.outputBytesCap <= 0))
+    )
+      throw new Error("command/exec params are invalid.");
+    if (params.disableTimeout && params.timeoutMs !== undefined)
+      throw new Error(
+        "command/exec cannot combine disableTimeout and timeoutMs.",
+      );
+    return;
+  }
+  if (method === "command/exec/terminate") {
+    const params = value as { processId: string };
+    if (
+      !params ||
+      typeof params.processId !== "string" ||
+      params.processId.length === 0
+    )
+      throw new Error("command/exec/terminate params are invalid.");
+    return;
+  }
   if (method === "account/logout" || method === "account/rateLimits/read") {
     if (value !== undefined)
       throw new Error(`${method} does not accept params.`);
@@ -568,6 +645,23 @@ export function validateCodexResponse<M extends CodexMethod>(
   method: M,
   value: unknown,
 ): CodexRequestMap[M]["result"] {
+  if (method === "command/exec") {
+    const result = objectValue(value, "command/exec result");
+    if (
+      typeof result.exitCode !== "number" ||
+      !Number.isInteger(result.exitCode) ||
+      typeof result.stdout !== "string" ||
+      typeof result.stderr !== "string"
+    )
+      throw new Error("command/exec result is invalid.");
+    return value as CodexRequestMap[M]["result"];
+  }
+  if (method === "command/exec/terminate") {
+    const result = objectValue(value, "command/exec/terminate result");
+    if (Object.keys(result).length !== 0)
+      throw new Error("command/exec/terminate result is invalid.");
+    return value as CodexRequestMap[M]["result"];
+  }
   assertGeneratedSchema(
     generatedSchemaCatalog,
     generatedSchemaCatalog.roots.clientResponses[method],
@@ -605,6 +699,17 @@ export function parseCodexServerEvent(
   )
     return undefined;
   const typedMethod = method as CodexServerNotificationMethod;
+  if (typedMethod === "command/exec/outputDelta") {
+    const params = objectValue(paramsValue, `${method} params`);
+    if (
+      typeof params.processId !== "string" ||
+      !["stdout", "stderr"].includes(String(params.stream)) ||
+      typeof params.deltaBase64 !== "string" ||
+      typeof params.capReached !== "boolean"
+    )
+      throw new Error(`${method} params are invalid.`);
+    return { method: typedMethod, params };
+  }
   assertGeneratedSchema(
     generatedSchemaCatalog,
     generatedSchemaCatalog.roots.notifications[typedMethod],

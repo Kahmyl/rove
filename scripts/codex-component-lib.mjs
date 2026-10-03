@@ -218,7 +218,60 @@ export function qualificationEvidencePath(component) {
   );
 }
 
-export function createQualificationReceipt(component, candidate, qualifiedAt) {
+function exactLocalExecutionEvidence(component, evidence) {
+  if (component.capabilities?.exactLocalExecution !== true) return undefined;
+  if (
+    evidence?.status !== "qualified" ||
+    evidence.provider?.executableSha256 !== component.executable.sha256 ||
+    evidence.permissionProfile?.name !== "rove_task" ||
+    evidence.permissionProfile?.outsideSecretDenied !== true ||
+    evidence.permissionProfile?.workspaceWriteObserved !== true ||
+    evidence.permissionProfile?.networkEnabled !== false ||
+    evidence.threadBoundary?.startAccepted !== true ||
+    evidence.threadBoundary?.exactReadAccepted !== true ||
+    evidence.threadBoundary?.dynamicToolName !== "rove_exec" ||
+    evidence.threadBoundary?.providerExecutionFeaturesDisabled !== true ||
+    evidence.threadBoundary?.permissionProfile !== "rove_task" ||
+    evidence.providerGrantBoundary?.status !== "blocked" ||
+    evidence.providerGrantBoundary?.elevatedEffectObserved !== false ||
+    evidence.providerGrantBoundary?.authority !== "provider" ||
+    evidence.providerGrantBoundary?.requiredBeforeElevatedAdoption !== true ||
+    evidence.providerGrantBoundary?.humanAndAutomaticGrantConsumptionQualified !==
+      false ||
+    evidence.ownerCrash?.controllerKilled !== true ||
+    evidence.ownerCrash?.sentinelPresent !== false ||
+    evidence.ownerCrash?.appServerExited !== true ||
+    evidence.authority?.identitiesDistinct !== true ||
+    evidence.authority?.terminateAcknowledged !== true ||
+    evidence.authority?.finalExitObserved !== true ||
+    evidence.authority?.stoppedSentinelPresent !== false ||
+    evidence.authority?.unrelatedExitCode !== 0 ||
+    evidence.authority?.unrelatedSentinelPresent !== true
+  )
+    throw new Error(
+      `Exact local execution qualification evidence is incomplete for ${component.id}.`,
+    );
+  return {
+    processTreeTerminationObserved: true,
+    exactExitObserved: true,
+    unrelatedExecutionSurvived: true,
+    namedPermissionProfileEnforced: true,
+    ownerCrashTerminatesExecution: true,
+    elevatedPermissionGrantConsumption: false,
+    providerExecutableSha256: evidence.provider.executableSha256,
+    providerVersion: evidence.provider.version,
+    stoppedExitCode: evidence.authority.stoppedExitCode,
+    terminateToExitMs: evidence.authority.terminateToExitMs,
+  };
+}
+
+export function createQualificationReceipt(
+  component,
+  candidate,
+  qualifiedAt,
+  evidence,
+) {
+  const exactExecution = exactLocalExecutionEvidence(component, evidence);
   return {
     schemaVersion: 1,
     qualifiedAt,
@@ -238,6 +291,9 @@ export function createQualificationReceipt(component, candidate, qualifiedAt) {
       isolatedAppServerLifecycle: true,
       mcpBoundary: true,
       liveModelTurn: false,
+      ...(exactExecution === undefined
+        ? {}
+        : { exactLocalExecution: exactExecution }),
     },
   };
 }
@@ -250,6 +306,22 @@ export async function verifyQualificationReceipt(path, component) {
         `Immutable qualification receipt is unavailable for ${component.id}: ${path}`,
       );
     });
+  const exactExecution = receipt.compatibility?.exactLocalExecution;
+  const exactExecutionMatches =
+    component.capabilities?.exactLocalExecution !== true ||
+    (exactExecution?.processTreeTerminationObserved === true &&
+      exactExecution?.exactExitObserved === true &&
+      exactExecution?.unrelatedExecutionSurvived === true &&
+      exactExecution?.namedPermissionProfileEnforced === true &&
+      exactExecution?.ownerCrashTerminatesExecution === true &&
+      exactExecution?.elevatedPermissionGrantConsumption === false &&
+      exactExecution?.providerExecutableSha256 ===
+        component.executable.sha256 &&
+      typeof exactExecution?.providerVersion === "string" &&
+      exactExecution.providerVersion.includes(component.cliVersion) &&
+      typeof exactExecution?.stoppedExitCode === "number" &&
+      Number.isFinite(exactExecution?.terminateToExitMs) &&
+      exactExecution.terminateToExitMs >= 0);
   const exact =
     receipt.schemaVersion === 1 &&
     typeof receipt.qualifiedAt === "string" &&
@@ -271,7 +343,8 @@ export async function verifyQualificationReceipt(path, component) {
     receipt.compatibility?.schemaBindingVerified === true &&
     receipt.compatibility?.isolatedAppServerLifecycle === true &&
     receipt.compatibility?.mcpBoundary === true &&
-    receipt.compatibility?.liveModelTurn === false;
+    receipt.compatibility?.liveModelTurn === false &&
+    exactExecutionMatches;
   if (!exact)
     throw new Error(
       `Immutable qualification receipt does not match component ${component.id} and its required compatibility evidence.`,
@@ -322,8 +395,21 @@ async function inspectInstalledQualificationReceipt(path, component) {
     receipt.schemaVersion !== undefined ||
     receipt.qualifiedAt !== undefined
   ) {
-    await verifyQualificationReceipt(path, component);
-    return { kind: "current", raw };
+    try {
+      await verifyQualificationReceipt(path, component);
+      return { kind: "current", raw };
+    } catch (error) {
+      const identityMatches =
+        receipt.schemaVersion === 1 &&
+        receipt.componentId === component.id &&
+        receipt.executable?.sha256 === component.executable.sha256 &&
+        receipt.codeModeHost?.sha256 === component.codeModeHost.sha256 &&
+        receipt.schema?.sha256 === component.schema.sha256 &&
+        receipt.schema?.aggregateSha256 === component.schema.aggregateSha256 &&
+        receipt.historyMode === component.historyMode;
+      if (identityMatches) return { kind: "stale-current", raw };
+      throw error;
+    }
   }
   const legacyExact =
     hasExactKeys(receipt, ["componentId", "installedAt", "sourceDigests"]) &&

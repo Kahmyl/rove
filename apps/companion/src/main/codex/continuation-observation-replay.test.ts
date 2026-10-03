@@ -48,7 +48,7 @@ function thread(
     updatedAt: 1,
     recencyAt: 1,
     cwd: "/work",
-    cliVersion: "0.154.0-alpha.6.2",
+    cliVersion: "0.155.0-alpha.9.2",
     status,
     path: null,
     source: "appServer",

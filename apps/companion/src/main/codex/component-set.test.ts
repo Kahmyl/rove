@@ -39,8 +39,8 @@ describe("qualified Codex component set", () => {
       bindings,
     );
 
-    expect(rolledBack.component.cliVersion).toBe("0.153.4");
-    expect(rolledBack.schemaCatalog.generatedBy).toContain("0.153.4");
+    expect(rolledBack.component.cliVersion).toBe("0.154.0-alpha.6.2");
+    expect(rolledBack.schemaCatalog.generatedBy).toContain("0.154.0-alpha.6.2");
     expect(rolledBack.binding.filename).toBe(retained!.schema.filename);
     expect(rolledBack.binding.historyMode).toBe(retained!.historyMode);
   });

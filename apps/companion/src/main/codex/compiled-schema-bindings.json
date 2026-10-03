@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "bindings": [
     {
+      "componentId": "codex-0.155.0-alpha.9.2-macos-arm64-9280c0754e8f",
+      "filename": "app-server-0.155.0-alpha.9.2.schemas.generated.json",
+      "sha256": "05f41eb9ff46307c86daddaaaf6c4cb452d8526e1159fb7b06bb6f5e3c75b67a",
+      "compiledRuntimeSha256": "1fdc88d9d020e8c2417dbbee16e2d134c4b3e9e68e3810aa7a4c505b7e818975",
+      "aggregateSha256": "aa59c91333de37d2fd81cb3ffcc0075266e1b45ab52813d3b1786d116a78f59d",
+      "generatedTsAggregateSha256": "aecec61189ee331bd45bc22cde9bf30f4dbb1016c69b16e53b43d5cdd7d1bf0d",
+      "historyMode": "legacy"
+    },
+    {
       "componentId": "codex-0.154.0-alpha.6.2-macos-arm64-ecad78dbf98a",
       "filename": "app-server-0.154.0-alpha.6.2.schemas.generated.json",
       "sha256": "61400fa7a6cd186c0189fc7f16644fa803c1ef60fc5c66a27e561ceadd1b7afd",

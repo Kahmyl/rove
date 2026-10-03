@@ -299,6 +299,7 @@ describe("customer Task execution projection", () => {
         ];
       },
       "waiting_for_you",
+      "waiting_for_customer",
     ],
     [
       "human browser ownership",
@@ -307,6 +308,7 @@ describe("customer Task execution projection", () => {
         value.runtime.status = "active";
       },
       "human_control",
+      "human_control",
     ],
     [
       "checking",
@@ -314,6 +316,28 @@ describe("customer Task execution projection", () => {
         value.recoveryRequired = "Reconcile exact truth";
       },
       "checking",
+      "checking",
+    ],
+    [
+      "exhausted recovery",
+      (value: ReturnType<typeof aggregate>) => {
+        value.recoveryRequired = "Reconcile exact truth";
+        value.codexRecoveryBlockers = {
+          history: {
+            blockerId: "history",
+            recoveryClass: "thread_history_reconstructible",
+            family: "thread_history_reconstructible",
+            threadId: "thread-1",
+            unresolvedAt: "2026-09-09T12:00:00.000Z",
+            lastObservedAt: "2026-09-09T12:00:01.000Z",
+            state: "unresolved",
+            attempt: 3,
+            attemptLimit: 3,
+          },
+        };
+      },
+      "unresolved",
+      "terminal",
     ],
     [
       "stopping",
@@ -325,6 +349,7 @@ describe("customer Task execution projection", () => {
         };
       },
       "stopping",
+      "stopping",
     ],
     [
       "stopped",
@@ -332,14 +357,19 @@ describe("customer Task execution projection", () => {
         value.codex.turn = "interrupted";
       },
       "stopped",
+      "terminal",
     ],
-  ])("freezes presentation during %s", (_label, mutate, expected) => {
-    const value = aggregate();
-    mutate(value);
-    const projection = customerTaskExecution(value);
-    expect(projection.state).toBe(expected);
-    expect(projection.segments[1]?.accumulatedActiveMs).toBe(0);
-  });
+  ])(
+    "freezes presentation without inventing terminal work during %s",
+    (_label, mutate, expected, segmentStatus) => {
+      const value = aggregate();
+      mutate(value);
+      const projection = customerTaskExecution(value);
+      expect(projection.state).toBe(expected);
+      expect(projection.segments[1]?.accumulatedActiveMs).toBe(0);
+      expect(projection.segments[1]?.status).toBe(segmentStatus);
+    },
+  );
 
   it("does not let a stale provider-active interval extend completed work", () => {
     const value = aggregate();

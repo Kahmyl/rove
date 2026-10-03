@@ -19,11 +19,12 @@ The [Product Brief](Products/product-brief.md) establishes purpose. The [Product
 | [Security and Authentication](Engineering/security-and-authentication.md)                           | Rove identity, Codex connection, device secrets, untrusted input, and data disclosure.        |
 | [Workflow Context and Portability](Engineering/workflow-context-and-portability.md)                 | Guided setup, context assembly, curated knowledge, and limited synchronization.               |
 | [Workflow Portability Decision](Engineering/workflow-portability-decision.md)                       | Provider/identity authority decision, evaluated alternatives, and completed neutral boundary. |
+| [Hard Stop Execution Decision](Engineering/hard-stop-execution-decision.md)                         | Product/architecture authority required for exact local-work termination semantics.           |
 | [Structured Results and Actions](Engineering/structured-results-and-actions.md)                     | Stable local results, draft revisions, selected follow-up, and evidence-backed action states. |
 | [Browser Control and Recording](Engineering/browser-control-and-recording.md)                       | Task-owned pages, shared resources, perception, handoff, capture, and requested video.        |
 | [Testing and Operations](Engineering/testing-and-operations.md)                                     | Executable checks, acceptance scenarios, packaging, recovery, backup, and evidence.           |
 | [Implementation Status](Engineering/implementation-status.md)                                       | Evidence-backed implemented, partial, unimplemented, qualification, and authority boundaries. |
-| [Planning](Planning/README.md)                                                                       | Active implementation sequencing derived from approved Product and Engineering contracts.      |
+| [Planning](Planning/README.md)                                                                      | Active implementation sequencing derived from approved Product and Engineering contracts.     |
 | [Engineering Agent Environment](Engineering/engineering-agent-environment.md)                       | Repository-owned Codex guidance, safety defaults, verification, and continuation workflow.    |
 | [Repository Convergence Record](Engineering/repository-convergence.md)                              | One-time provenance for preserved worktrees, reconciled source, and final-main accounting.    |
 

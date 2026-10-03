@@ -77,6 +77,17 @@ export function customerTaskPresentation(
     return result("stopping", {
       sidebar: { label: "Stopping", tone: "muted" },
     });
+  if (facts.execution.state === "unresolved")
+    return result("outcome_unclear", {
+      sidebar: { label: "Couldn't continue", tone: "danger" },
+      conversationStatus: {
+        title: "Task state unclear",
+        description:
+          "Rove could not confirm the latest task state. It will not repeat the affected action automatically.",
+        tone: "danger",
+      },
+      terminalWorkLabel: "Couldn't continue",
+    });
   if (facts.execution.state === "checking")
     return result("checking", {
       sidebar: { label: "Checking state", tone: "neutral" },

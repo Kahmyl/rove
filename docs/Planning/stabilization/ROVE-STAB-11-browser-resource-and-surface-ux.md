@@ -1,7 +1,7 @@
 # ROVE-STAB-11 — Browser resource and surface UX
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready after authority prerequisites  
+**Status:** Complete
 **Dependencies:** STAB-02 where authority-related; STAB-10 for handoff state  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -14,6 +14,8 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 ### Required inherited state
 
 Consume the browser authority/handoff result from STAB-10 and the exact authority foundations from STAB-02. Resource/profile/surface UX may only present states those tickets can prove; it must not manufacture attachment or control authority.
+
+STAB-10 qualified requested and voluntary takeover through real Runtime HTTP and Chromium, including durable acknowledgement, exact Task/session/handoff generation, document focus on the exact task-owned page, Return to Rove, mandatory fresh inspection, stale-target rejection, restart reconstruction, and main/follower projection agreement. Treat those authorities as established. This ticket retains guided profile recovery, unmatched-resource scoping, full-surface/native foreground coordination, and the customer-safe presentation portion of MR-023; it must not reopen the control lifecycle without contradictory evidence.
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 

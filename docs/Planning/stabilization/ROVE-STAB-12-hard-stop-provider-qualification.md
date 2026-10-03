@@ -1,7 +1,7 @@
 # ROVE-STAB-12 — Hard Stop provider qualification / execution ownership decision
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Externally blocked; research continues  
+**Status:** In progress; Rove-owned exact execution boundary authorized 27 September 2026
 **Dependencies:** STAB-01  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -17,7 +17,6 @@ Carry forward the exact Stop blocker evidence from STAB-01 and the separately pr
 
 At every provider requalification, record provider version/hash, exact process-backed reproduction, termination receipt/evidence, and whether the result changes the architectural decision. Reconcile current `main` with the continuity ledger before integrating any Stop work.
 
-
 ## Invariant
 
 Rove may say local work is Stopped only when it has evidence that the exact owned local operation can no longer continue normal execution.
@@ -26,20 +25,30 @@ Rove may say local work is Stopped only when it has evidence that the exact owne
 
 MR-026.
 
-## Current provider evidence — 26 September 2026
+## Current provider evidence — 27 September 2026
 
-- Pinned Rove baseline remains Codex App Server `0.154.0-alpha.6.2`.
+- Selected Rove component is now exact Codex App Server `0.155.0-alpha.9.2` (SHA-256 `9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9`); exact `0.154.0-alpha.6.2` remains a qualified rollback component.
 - Prior Rove live probe: `turn/interrupt` succeeded and the turn became interrupted, but the long local command still reached natural completion.
 - openai/codex issue #42717 remains open.
 - Current upstream `ProcessEntry` still has no owning-turn identity.
-- Newer prereleases exist, including `0.159.0-alpha.6`, but Rove has not qualified any candidate as proving exact process termination.
+- Exact `0.155.0-alpha.9.2` was live-qualified in default and supported `--disable unified_exec` modes. Both runs accepted `turn/interrupt`, reported the exact turn `interrupted`, retained exact command-process metadata, and still wrote the delayed completion sentinel. This disproves turn interruption as process authority.
+- The separate credential-free `command/exec` qualification passes on macOS arm64 for both selected and rollback components under the named `rove_task` profile: exact termination observes exit 137, kills the delayed child tree, preserves an unrelated execution, and owner crash also prevents the child sentinel.
+- Production registers the exact thread/turn/call-bound `rove_exec` dynamic tool, disables provider local-execution features, persists the immutable authority tuple and final receipt in SQLite migration `0007_add_local_execution_supervision`, and settles Stop only after exact command exit plus provider terminal truth.
+- Upstream issue #42717 remains open. Current upstream protocol explicitly separates ordinary turn interruption from thread-wide background-terminal cleanup; neither supplies exact Task/turn/process termination authority to Rove.
+- The unresolved product/architecture alternatives are recorded in [hard-stop-execution-decision.md](../../Engineering/hard-stop-execution-decision.md).
 - Rove does not use `pkill`, process-name killing, guessed OS PIDs, or UI-only settlement.
 
 ## Work
 
-For each promising provider candidate, run the exact process-backed Stop characterization before adopting it. If a supported exact termination/exit proof becomes available, complete the preserved Stop operation identity/restart work and qualify the full Stop journey.
+For each promising provider candidate, run the exact process-backed Stop characterization before adopting it. Preserve selected and rollback qualification receipts, and reject component manifests whose exact execution evidence is missing or stale.
 
 If upstream intentionally retains background processes and exposes no suitable exact cancellation proof, stop implementation and produce an architecture/product ADR for either Rove-owned exact execution cancellation or explicitly weaker customer semantics.
+
+The required architecture decision has now authorized Rove-owned exact local execution supervision. Implement the bounded subsystem in [hard-stop-execution-decision.md](../../Engineering/hard-stop-execution-decision.md). Provider turn interruption remains one input to Stop settlement; it is not execution termination evidence.
+
+The base-profile supervision path is implemented. The remaining architecture/security gate is not process identity: standalone `command/exec` accepts the frozen named permission profile but cannot consume the existing turn-scoped human/automatic approval decision or its exact permission amendment. Commands outside the base profile fail closed. Human authority selected a provider-owned grant boundary: Rove will not build a separate per-grant App Server delegate or derive grants heuristically. STAB-12 cannot complete until a supported provider extension satisfies the exact binding/replay/expiry contract, followed by packaged Windows/Linux process-tree qualification.
+
+`pnpm agent:provider-grant-boundary` is the retained credential-free candidate probe. While the seam is unsupported it must prove that synthetic grant-binding fields cannot produce an elevated effect. Current providers permissively accept the unknown fields but still enforce `rove_task`; that is blocked evidence, not grant consumption. A candidate cannot close this ticket from schema shape or permissive parsing alone: update the harness for the supported provider protocol and prove human plus automatic review, exact consumption, refusal, changed-material and stale-authority rejection, replay, expiry, restart, and Stop behavior through real process-backed execution.
 
 ## Acceptance criteria
 

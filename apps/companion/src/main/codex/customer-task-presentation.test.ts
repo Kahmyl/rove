@@ -78,6 +78,17 @@ describe("customer Task presentation", () => {
     ).toBeUndefined();
   });
 
+  it("projects exhausted recovery as a bounded inability to confirm", () => {
+    expect(
+      customerTaskPresentation({ execution: execution("unresolved") }),
+    ).toMatchObject({
+      state: "outcome_unclear",
+      sidebar: { label: "Couldn't continue", tone: "danger" },
+      conversationStatus: { title: "Task state unclear" },
+      terminalWorkLabel: "Couldn't continue",
+    });
+  });
+
   it("uses turn and consequential-effect authority instead of activity-row outcomes", () => {
     const failed = customerTaskPresentation({
       execution: execution("failed", "failed"),

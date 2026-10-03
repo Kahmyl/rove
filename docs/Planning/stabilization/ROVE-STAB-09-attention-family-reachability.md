@@ -1,7 +1,7 @@
 # ROVE-STAB-09 — Attention-family reachability and live fixtures
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Ready for characterization  
+**Status:** Complete
 **Dependencies:** STAB-01; product-policy fixes may depend on STAB-07/08  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -13,7 +13,7 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 ### Required inherited state
 
-Consume STAB-07/STAB-08 decisions when those tickets are complete; if provider characterization work begins earlier, it remains read-only/fixture work and must not preempt their product contract. Preserve STAB-01's distinction between a product defect and an unqualified request family.
+Consume STAB-07/STAB-08 decisions without reopening them. Permission modes share `on-request` and `rove_task`, with reviewer `user` versus `auto_review`. Once an approval request is emitted, Rove preserves its exact advertised one-time, session, refusal/cancel and policy-amendment decisions; requests without an advertised richer set do not invent broader scope. Provider characterization must prove actual family emission and the emitted decision set, not merely replay the deterministic renderer fixture. Preserve STAB-01's distinction between a product defect and an unqualified request family.
 
 At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
@@ -50,6 +50,8 @@ If the pinned provider cannot emit a family, record the exact version/schema/run
 ## Verification
 
 Provider characterization harness → live App Server/MCP fixture → LocalProductApi/attention broker integration → Electron attention journey.
+
+The pinned Codex `0.154.0-alpha.6.2` boundary was live-qualified for structured conversational input, file-change approval, and generic command approval. Conversational input requires the App Server `default_mode_request_user_input` feature, which the production host enables explicitly. The pinned provider did not expose the fixture MCP tools to the model, did not emit `networkApprovalContext`, and did not offer an additional-filesystem-permission request. Candidate Codex `0.155.0-alpha.9.2` live-qualified both MCP elicitation variants. These are recorded provider compatibility boundaries, not renderer passes.
 
 Checkpoint before STAB-13.
 

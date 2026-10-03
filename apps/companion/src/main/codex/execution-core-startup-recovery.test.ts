@@ -388,7 +388,7 @@ describe("CodexExecutionCore cold-start recovery", () => {
       updatedAt: 2,
       recencyAt: 2,
       cwd: "/host/work",
-      cliVersion: "0.154.0-alpha.6.2",
+      cliVersion: "0.155.0-alpha.9.2",
       status: { type: "idle" },
       path: null,
       source: "appServer",

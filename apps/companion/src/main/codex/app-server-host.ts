@@ -1,5 +1,6 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { delimiter, dirname } from "node:path";
 import { promisify } from "node:util";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
@@ -19,6 +20,7 @@ import type {
   JsonRpcId,
   InitializeResponse,
 } from "./protocol.js";
+import { CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS } from "./local-execution-supervision.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -43,6 +45,17 @@ function sanitizedEnvironment(
     ),
     ...Object.entries(additions),
   ]);
+}
+
+export function codexAppServerEnvironment(
+  executablePath: string,
+  additions: Readonly<Record<string, string>> = {},
+): NodeJS.ProcessEnv {
+  const environment = sanitizedEnvironment(additions);
+  environment.PATH = [dirname(executablePath), environment.PATH]
+    .filter(Boolean)
+    .join(delimiter);
+  return environment;
 }
 
 export async function readCodexVersion(
@@ -263,10 +276,15 @@ export class CodexAppServerHost implements CodexRpcPort {
       this.options.spawnProcess ??
       ((path, args) =>
         spawn(path, [...args], {
-          env: sanitizedEnvironment(this.options.environment),
+          env: codexAppServerEnvironment(path, this.options.environment),
           stdio: ["pipe", "pipe", "pipe"],
         }))
-    )(this.executable.executablePath, ["app-server"]);
+    )(this.executable.executablePath, [
+      ...CODEX_ROVE_TASK_PERMISSION_CONFIG_ARGS,
+      "app-server",
+      "--enable",
+      "default_mode_request_user_input",
+    ]);
     this.process = child;
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {

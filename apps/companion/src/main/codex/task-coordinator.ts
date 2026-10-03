@@ -899,6 +899,13 @@ export class TaskCapabilityIssuer {
 }
 
 export interface TaskRuntimePort {
+  getDependencyHealth?():
+    | { state: "ready" }
+    | {
+        state: "degraded";
+        classification: "permanent_configuration" | "transient";
+        nextProbeAt: number;
+      };
   startSession(request: StartSessionRequest): Promise<Session>;
   listSessions?(): Promise<Session[]>;
   listSessionInventory?(): Promise<RuntimeSessionInventory[]>;

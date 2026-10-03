@@ -1,7 +1,8 @@
 # ROVE-STAB-10 — Browser task ownership and handoff lifecycle
 
 **Sprint:** Rove Market-Readiness Stabilization  
-**Status:** Blocked on STAB-02/03/06  
+**Status:** Complete
+
 **Dependencies:** STAB-02, STAB-03, STAB-06  
 **Planning baseline:** `f26f2f1e7ff3bf3ff4f674ebeb234daf5fedbd2d`
 
@@ -15,8 +16,9 @@ A prior ticket handoff is **continuation state, not live repository truth**. Bef
 
 This ticket consumes the exact Task/Runtime/Codex authority model from STAB-02, bounded recovery semantics from STAB-03, and nonterminal/terminal customer execution semantics from STAB-06. Those are dependencies, not background reading.
 
-Do not add browser-specific compensating state that bypasses those established contracts. At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
+STAB-06 establishes that approval waiting, checking and human control remain nonterminal expanded work with frozen duration, while historical segments alone compact after authoritative terminality. Its process-backed approval and handoff traces are the minimum entry baseline. Preserve the exact operation-bound Stop settlement and do not reinterpret the independently unresolved preserved Task as active or stopping.
 
+Do not add browser-specific compensating state that bypasses those established contracts. At ticket start, reconcile current `main` with the continuity ledger and record the exact start SHA.
 
 ## Invariant
 

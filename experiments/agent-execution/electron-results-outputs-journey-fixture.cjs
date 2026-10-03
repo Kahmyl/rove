@@ -72,7 +72,7 @@ const snapshot = {
     ],
   },
   product: {
-    version: 9,
+    version: 10,
     host: { state: "ready", ready: true, restartAttempt: 0 },
     catalog: {
       account: { status: "logged_in", authMode: "chatgpt", planType: "Plus" },

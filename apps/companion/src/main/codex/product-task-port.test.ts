@@ -2228,6 +2228,19 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
         aggregate.codex.runtimeStatus = "active";
         aggregate.recoveryRequired =
           "Codex external truth requires authoritative reconciliation.";
+        aggregate.codexRecoveryBlockers = {
+          "codex-recovery:thread-history:recovering": {
+            blockerId: "codex-recovery:thread-history:recovering",
+            recoveryClass: "thread_history_reconstructible",
+            family: "thread_history_reconstructible",
+            threadId: "thread_seeded",
+            unresolvedAt: "2026-09-09T12:00:00.000Z",
+            lastObservedAt: "2026-09-09T12:00:01.000Z",
+            state: "unresolved",
+            attempt: 3,
+            attemptLimit: 3,
+          },
+        };
         aggregate.conversation.items = {
           [`user:${operationId}`]: {
             id: `user:${operationId}`,
@@ -2261,8 +2274,9 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     const task = await port.readTask(seededTaskId);
     expect(task?.lifecycle).toEqual({
       phase: "recovering",
-      reason: "Checking task state.",
+      reason: "Task state could not be confirmed.",
     });
+    expect(task?.customerExecution?.state).toBe("unresolved");
     expect(task?.capabilities).toMatchObject({
       canStop: true,
       canRespond: false,
@@ -2281,7 +2295,10 @@ describe("LedgerProductTaskPort protected workspace boundary", () => {
     });
     expect(stopped.command).toMatchObject({
       type: "interrupt_codex_turn",
-      payload: { turnId: "turn_recovering" },
+      payload: {
+        turnId: "turn_recovering",
+        operationId: "intent_92345678-1234-4123-8123-123456789abc",
+      },
     });
     store.close();
   });

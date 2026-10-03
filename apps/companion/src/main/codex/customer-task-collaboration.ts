@@ -1,11 +1,19 @@
 import type {
+  ProductAttentionDecision,
   ProductAttentionProjection,
+  ProductApprovalDecisionProjection,
   ProductTaskProjection,
 } from "./local-product-api.js";
 
-export type CustomerCollaborationDecision = "accept" | "decline" | "cancel";
 export type CustomerCollaborationAction =
-  | { kind: "respond"; decision: CustomerCollaborationDecision; label: string }
+  | {
+      kind: "respond";
+      decision: ProductAttentionDecision;
+      label: string;
+      id?: string;
+      description?: string;
+      scope?: ProductApprovalDecisionProjection["scope"];
+    }
   | { kind: "trusted_external"; label: string };
 
 export interface CustomerCollaborationRequest {
@@ -49,9 +57,7 @@ export interface CustomerBrowserCollaboration {
   canTakeOver: boolean;
   canReturnToRove: boolean;
   handoffGeneration?: number;
-  continuationPolicy?:
-    | "resume_after_control_return"
-    | "explicit_user_response";
+  continuationPolicy?: "resume_after_control_return" | "explicit_user_response";
 }
 
 export interface CustomerTaskCollaborationProjection {
@@ -101,9 +107,12 @@ function requestDescription(entry: ProductAttentionProjection): string {
   return {
     command_approval: "Review the command and choose whether Rove may run it.",
     file_approval: "Review the proposed file change before Rove continues.",
-    network_approval: "Choose whether Rove may use the requested network access.",
-    permission_approval: "Choose whether to grant this permission for the current work.",
-    mcp_elicitation: "A connected service needs information before work can continue.",
+    network_approval:
+      "Choose whether Rove may use the requested network access.",
+    permission_approval:
+      "Choose whether to grant this permission for the current work.",
+    mcp_elicitation:
+      "A connected service needs information before work can continue.",
     user_input: "Answer this question so Rove can continue.",
     control_handoff: "Take control of the browser to complete this step.",
   }[entry.kind];
@@ -131,24 +140,27 @@ function requestActions(
     );
     return actions;
   }
-  const allowed = entry.allowedDecisions ?? ["accept", "decline"];
-  return allowed.flatMap((decision): CustomerCollaborationAction[] => {
-    if (decision === "cancel") return [];
-    return [
-      {
-        kind: "respond",
-        decision,
-        label:
-          decision === "accept"
-            ? entry.kind === "permission_approval"
-              ? "Allow"
-              : "Approve"
-            : entry.kind === "permission_approval"
-              ? "Deny"
-              : "Decline",
-      },
-    ];
-  });
+  if (entry.approvalDecisions)
+    return entry.approvalDecisions.map((decision) => ({
+      kind: "respond" as const,
+      id: decision.id,
+      decision: decision.decision,
+      label: decision.label,
+      description: decision.description,
+      scope: decision.scope,
+    }));
+  return [
+    {
+      kind: "respond",
+      decision: "accept",
+      label: entry.kind === "permission_approval" ? "Allow" : "Approve once",
+    },
+    {
+      kind: "respond",
+      decision: "decline",
+      label: entry.kind === "permission_approval" ? "Deny" : "Decline",
+    },
+  ];
 }
 
 function projectRequest(
@@ -257,7 +269,8 @@ function projectBrowser(
     return {
       state: "human_control",
       title: "You're in control",
-      description: "Complete the browser step, then return control so Rove can continue.",
+      description:
+        "Complete the browser step, then return control so Rove can continue.",
       canTakeOver: false,
       canReturnToRove: true,
       ...(runtime?.continuationPolicy === undefined
@@ -279,7 +292,8 @@ function projectBrowser(
     return {
       state: "takeover_available",
       title: "Rove controls the browser",
-      description: "You can take over this Task's browser whenever you need to.",
+      description:
+        "You can take over this Task's browser whenever you need to.",
       canTakeOver: true,
       canReturnToRove: false,
     };

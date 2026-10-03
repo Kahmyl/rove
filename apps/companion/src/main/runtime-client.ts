@@ -27,6 +27,36 @@ export interface CompanionRuntimeClientOptions {
   token?: string;
   sessionId?: string;
   fetchImpl?: typeof fetch;
+  now?: () => number;
+  transientBaseDelayMs?: number;
+  permanentProbeDelayMs?: number;
+}
+
+export type RuntimeDependencyHealth =
+  | { state: "ready" }
+  | {
+      state: "degraded";
+      classification: "permanent_configuration" | "transient";
+      code: string;
+      status?: number;
+      retryable: boolean;
+      firstFailureAt: number;
+      lastFailureAt: number;
+      nextProbeAt: number;
+      failureCount: number;
+    };
+
+export class RuntimeRequestError extends Error {
+  readonly name = "RuntimeRequestError";
+
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly retryable: boolean,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
 }
 
 export interface RuntimeConsequentialEffect {
@@ -55,12 +85,24 @@ export class CompanionRuntimeClient {
   private readonly token: string | undefined;
   private readonly explicitSessionId: string | undefined;
   private readonly fetchImpl: typeof fetch;
+  private readonly now: () => number;
+  private readonly transientBaseDelayMs: number;
+  private readonly permanentProbeDelayMs: number;
+  private dependencyHealth: RuntimeDependencyHealth = { state: "ready" };
+  private dependencyProbeInFlight = false;
 
   constructor(options: CompanionRuntimeClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.token = options.token;
     this.explicitSessionId = options.sessionId;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.now = options.now ?? Date.now;
+    this.transientBaseDelayMs = options.transientBaseDelayMs ?? 750;
+    this.permanentProbeDelayMs = options.permanentProbeDelayMs ?? 30_000;
+  }
+
+  getDependencyHealth(): RuntimeDependencyHealth {
+    return { ...this.dependencyHealth };
   }
 
   async getActiveSession(): Promise<Session | null> {
@@ -417,18 +459,9 @@ export class CompanionRuntimeClient {
       );
     }
 
-    const [agentSessions, companionSessions, captureSessions] =
-      await Promise.all([
-        this.request<Session[]>("/sessions?mode=agent"),
-        this.request<Session[]>("/sessions?mode=companion"),
-        this.request<Session[]>("/sessions?mode=capture"),
-      ]);
-
-    const sessions = [
-      ...agentSessions,
-      ...companionSessions,
-      ...captureSessions,
-    ].filter((entry) => !["completed", "failed"].includes(entry.status));
+    const sessions = (await this.request<Session[]>("/sessions")).filter(
+      (entry) => !["completed", "failed"].includes(entry.status),
+    );
 
     if (sessions.length === 0) {
       return null;
@@ -495,6 +528,7 @@ export class CompanionRuntimeClient {
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const dependencyProbe = this.admitDependencyRequest();
     const headers = new Headers(init.headers);
 
     if (init.body !== undefined && !headers.has("content-type")) {
@@ -505,34 +539,127 @@ export class CompanionRuntimeClient {
       headers.set("authorization", `Bearer ${this.token}`);
     }
 
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      ...init,
-      headers,
-    });
-
-    if (!response.ok) {
-      let detail = response.statusText;
-
+    try {
+      let response: Response;
       try {
-        const body = (await response.json()) as {
-          error?: {
-            code?: string;
-            message?: string;
-          };
-          message?: string;
-        };
-
-        detail =
-          body.error?.code ?? body.error?.message ?? body.message ?? detail;
+        response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+          ...init,
+          headers,
+        });
       } catch {
-        // Response body is optional for transport failures.
+        const error = new RuntimeRequestError(
+          "Rove Runtime is temporarily unavailable.",
+          "RUNTIME_TRANSPORT_UNAVAILABLE",
+          true,
+        );
+        this.recordDependencyFailure(error, "transient");
+        throw error;
       }
 
-      throw new Error(
-        `Rove runtime request failed (${response.status}): ${detail}`,
-      );
-    }
+      if (!response.ok) {
+        let code = "RUNTIME_REQUEST_FAILED";
+        let detail = response.statusText || "Runtime request failed.";
+        let retryable = response.status >= 500;
+        try {
+          const body = (await response.json()) as {
+            error?: {
+              code?: string;
+              message?: string;
+              retryable?: boolean;
+            };
+            message?: string;
+          };
+          code = body.error?.code ?? code;
+          detail = body.error?.message ?? body.message ?? detail;
+          retryable = body.error?.retryable ?? retryable;
+        } catch {
+          // Response body is optional for Runtime failures.
+        }
+        const error = new RuntimeRequestError(
+          `Rove runtime request failed (${response.status}): ${detail}`,
+          code,
+          retryable,
+          response.status,
+        );
+        const method = init.method ?? "GET";
+        if (
+          response.status >= 500 ||
+          response.status === 401 ||
+          response.status === 403 ||
+          (method === "GET" && code === "INVALID_CONFIGURATION")
+        )
+          this.recordDependencyFailure(
+            error,
+            response.status < 500 && !retryable
+              ? "permanent_configuration"
+              : "transient",
+          );
+        else if (
+          dependencyProbe &&
+          this.dependencyHealth.state === "degraded" &&
+          this.dependencyHealth.classification === "transient"
+        )
+          this.dependencyHealth = { state: "ready" };
+        throw error;
+      }
 
-    return (await response.json()) as T;
+      this.dependencyHealth = { state: "ready" };
+      return (await response.json()) as T;
+    } finally {
+      if (dependencyProbe) this.dependencyProbeInFlight = false;
+    }
+  }
+
+  private admitDependencyRequest(): boolean {
+    if (this.dependencyHealth.state === "ready") return false;
+    if (
+      this.now() < this.dependencyHealth.nextProbeAt ||
+      this.dependencyProbeInFlight
+    )
+      throw new RuntimeRequestError(
+        this.dependencyHealth.classification === "permanent_configuration"
+          ? "Rove Runtime configuration requires attention."
+          : "Rove Runtime is temporarily unavailable.",
+        this.dependencyHealth.code,
+        this.dependencyHealth.retryable,
+        this.dependencyHealth.status,
+      );
+    this.dependencyProbeInFlight = true;
+    return true;
+  }
+
+  private recordDependencyFailure(
+    error: RuntimeRequestError,
+    classification: "permanent_configuration" | "transient",
+  ): void {
+    const now = this.now();
+    const previous = this.dependencyHealth;
+    const sameFailureEpisode =
+      previous.state === "degraded" &&
+      previous.classification === classification;
+    const failureCount =
+      sameFailureEpisode ? previous.failureCount + 1 : 1;
+    const delay =
+      classification === "permanent_configuration"
+        ? this.permanentProbeDelayMs
+        : Math.min(
+            30_000,
+            this.transientBaseDelayMs * 2 ** Math.min(failureCount - 1, 6),
+          );
+    this.dependencyHealth = {
+      state: "degraded",
+      classification,
+      code: sameFailureEpisode ? previous.code : error.code,
+      ...(sameFailureEpisode && previous.status !== undefined
+        ? { status: previous.status }
+        : error.status === undefined
+          ? {}
+          : { status: error.status }),
+      retryable: error.retryable,
+      firstFailureAt: sameFailureEpisode ? previous.firstFailureAt : now,
+      lastFailureAt: now,
+      nextProbeAt: now + delay,
+      failureCount,
+    };
   }
 }
