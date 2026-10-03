@@ -25,6 +25,12 @@ Unit/contract tests cover domain invariants, schema validation, context selectio
 
 Retain existing negative cases and outcome assertions during naming cleanup. Do not delete a difficult test merely because it exposes current architectural coupling. Local fixtures and recorded input data belong under `tests/fixtures`; generated runs, screenshots, and videos belong under ignored `artifacts/`, not the documentation tree.
 
+## Release harness readiness and budgets
+
+`pnpm test:release` retains four parallel file workers. A process being healthy, a browser attachment receipt, and a Runtime `startSession` action are not proof that the owning Task has committed its asynchronous session identity. Before preparing handoff, process recovery tests wait within their existing bounded state waiter for the exact returned session ID and a nonempty Codex thread ID in that Task's durable snapshot. After a full process-tree interruption, reattach/recover the same browser session before exercising live ownership. The binding-cut regression holds `bind_runtime_identity` before dispatch to prove that external acceptance can precede durable binding without issuing a second start.
+
+A cumulative recycled-list/grid browser journey keeps one session and ordered create, rename, move and remove operations. Lifecycle setup/teardown use the runner's existing hook budget (10 seconds); each authority invariant retains the existing five-second test budget. Grouping these assertions sequentially preserves their state dependency while separating launch, recycling/stale-reference checks and each off-window consequence. No fixed delay, larger test timeout, reduced worker count or weaker authority assertion substitutes for readiness.
+
 ## Product acceptance matrix
 
 | Scenario                | Required evidence                                                                                                                                                                                                                                                                            |

@@ -96,6 +96,103 @@ describe("21 real process stop/restart interruption cases", () => {
     ).not.toThrow();
   });
 
+  it("waits for durable Task browser binding rather than an external session receipt", async () => {
+    const home = await mkdtemp(join(tmpdir(), "rove-binding-cut-"));
+    const id = "intent_abcdef01-1234-4123-8123-abcdef012345";
+    const expectedTaskId = taskId(id);
+    let current = new ProcessProductHarness(home, {
+      cutPoint: "after_claim_before_dispatch",
+      cutCommand: "bind_runtime_identity",
+    });
+    try {
+      await current.start();
+      const workspace = await current.request({
+        type: "workspace.create",
+        displayName: "Durable browser binding",
+      });
+      const workspaceId = String(
+        (workspace.workspace as ProductValue | undefined)?.id ?? workspace.id,
+      );
+      await current.request(
+        launchIntent(id, {
+          browserIdentity: { mode: "workspace", workspaceId },
+        }),
+      );
+      await current.until(
+        (snapshot) =>
+          task(snapshot, expectedTaskId).bootstrapStage === "complete",
+      );
+      const attachedSessionId = String(
+        await current.request({
+          type: "browser.attach",
+          taskId: expectedTaskId,
+        }),
+      );
+      const reached = await current.waitForCut();
+      expect(reached.commandType).toBe("bind_runtime_identity");
+      const accepted = await current.request({ type: "external.actions" });
+      expect(
+        (accepted.runtime as ProductValue[]).filter(
+          (action) => action.method === "startSession",
+        ),
+      ).toHaveLength(1);
+      const unbound = task(await current.snapshot(), expectedTaskId);
+      expect(unbound.codexThreadId).toEqual(expect.any(String));
+      expect(unbound.roveSessionId).not.toBe(attachedSessionId);
+      // Deterministically exposes the former readiness assumption, regardless
+      // of worker scheduling: Runtime is accepted while ledger binding is held.
+      await expect(
+        current.request({
+          type: "handoff.prepare",
+          taskId: expectedTaskId,
+        }),
+      ).rejects.toThrow("Task is not ready for a handoff.");
+
+      await current.stopAllHard();
+      current = new ProcessProductHarness(home);
+      await current.start();
+      // The full process-tree cut also detaches Chromium. Recover that same
+      // Runtime session before exercising its live ownership boundary.
+      expect(
+        String(
+          await current.request({
+            type: "browser.attach",
+            taskId: expectedTaskId,
+          }),
+        ),
+      ).toBe(attachedSessionId);
+      await current.until((snapshot) => {
+        const owningTask = task(snapshot, expectedTaskId);
+        return (
+          owningTask.roveSessionId === attachedSessionId &&
+          typeof owningTask.codexThreadId === "string" &&
+          owningTask.codexThreadId.length > 0
+        );
+      });
+      await current.request({
+        type: "handoff.prepare",
+        taskId: expectedTaskId,
+      });
+      await current.until((snapshot) =>
+        attention(snapshot).some(
+          (request) =>
+            request.taskId === expectedTaskId &&
+            request.kind === "control_handoff" &&
+            request.status === "pending",
+        ),
+      );
+      const recovered = await current.request({ type: "external.actions" });
+      expect(
+        (recovered.runtime as ProductValue[]).filter(
+          (action) => action.method === "startSession",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await current.stop().catch(() => undefined);
+      await rm(home, { recursive: true, force: true });
+    }
+  }, 240_000);
+
   for (const [
     representativeIndex,
     representative,
@@ -189,10 +286,12 @@ describe("21 real process stop/restart interruption cases", () => {
             "ready",
           );
 
-          await current.request({
-            type: "browser.attach",
-            taskId: expectedTaskId,
-          });
+          const attachedSessionId = String(
+            await current.request({
+              type: "browser.attach",
+              taskId: expectedTaskId,
+            }),
+          );
 
           const afterRecovery = await current.untilResult(
             { type: "external.actions" },
@@ -224,6 +323,17 @@ describe("21 real process stop/restart interruption cases", () => {
               ).length,
             ).toBeGreaterThan(0);
 
+          // Runtime acceptance and its external receipt precede the Task's
+          // asynchronous bind_runtime_identity commit. Handoff needs the exact
+          // durable binding, not process health or elapsed startup time.
+          await current.until((snapshot) => {
+            const owningTask = task(snapshot, expectedTaskId);
+            return (
+              owningTask.roveSessionId === attachedSessionId &&
+              typeof owningTask.codexThreadId === "string" &&
+              owningTask.codexThreadId.length > 0
+            );
+          });
           await current.request({
             type: "handoff.prepare",
             taskId: expectedTaskId,
